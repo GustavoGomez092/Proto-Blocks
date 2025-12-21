@@ -186,6 +186,15 @@ class Commands extends WP_CLI_Command {
                 'html'            => false,
                 'anchor'          => true,
                 'customClassName' => true,
+                'align'           => [ 'wide', 'full' ],
+                'color'           => [
+                    'background' => true,
+                    'text'       => true,
+                ],
+                'spacing'         => [
+                    'padding' => true,
+                    'margin'  => true,
+                ],
             ],
             'protoBlocks' => [
                 'version'  => '1.0',
@@ -506,66 +515,199 @@ class Commands extends WP_CLI_Command {
      * @return string Template content.
      */
     private function generateTemplate( string $name, array $fields ): string {
+        $title      = ucwords( str_replace( '-', ' ', $name ) );
         $class_name = 'wp-block-proto-blocks-' . $name;
 
         $output = "<?php\n";
         $output .= "/**\n";
-        $output .= " * Block: " . ucwords( str_replace( '-', ' ', $name ) ) . "\n";
+        $output .= " * Block: {$title}\n";
         $output .= " *\n";
-        $output .= " * @var array \$attributes Block attributes.\n";
-        $output .= " * @var string \$content Inner blocks content.\n";
-        $output .= " * @var WP_Block \$block Block instance.\n";
+        $output .= " * @var array    \$attributes Block attributes.\n";
+        $output .= " * @var string   \$content    Inner blocks content.\n";
+        $output .= " * @var WP_Block \$block      Block instance.\n";
         $output .= " */\n\n";
-        $output .= "?>\n";
-        $output .= "<div class=\"{$class_name}\">\n";
+
+        // Add $is_preview detection for editor rendering
+        $output .= "// Check if we're in editor preview mode (no block instance = preview)\n";
+        $output .= "\$is_preview = ! isset( \$block ) || \$block === null;\n\n";
+
+        // Extract field variables
+        foreach ( $fields as $field_name => $config ) {
+            $type = $config['type'] ?? 'text';
+            if ( in_array( $type, [ 'image', 'link', 'repeater' ], true ) ) {
+                $output .= "\${$field_name} = \$attributes['{$field_name}'] ?? [];\n";
+            } else {
+                $output .= "\${$field_name} = \$attributes['{$field_name}'] ?? '';\n";
+            }
+        }
+
+        $output .= "\n";
+
+        // Use get_block_wrapper_attributes for proper block support
+        $output .= "\$wrapper_attributes = get_block_wrapper_attributes( [\n";
+        $output .= "    'class' => '{$class_name}',\n";
+        $output .= "] );\n";
+        $output .= "?>\n\n";
+
+        $output .= "<div <?php echo \$wrapper_attributes; ?>>\n";
 
         foreach ( $fields as $field_name => $config ) {
             $type = $config['type'] ?? 'text';
-            $tag = $config['tagName'] ?? 'div';
+            $tag  = $config['tagName'] ?? 'div';
 
             switch ( $type ) {
                 case 'text':
+                    $output .= "    <{$tag} class=\"{$class_name}__{$field_name}\" data-proto-field=\"{$field_name}\"><?php\n";
+                    $output .= "        if ( ! empty( \${$field_name} ) ) {\n";
+                    $output .= "            echo esc_html( \${$field_name} );\n";
+                    $output .= "        }\n";
+                    $output .= "    ?></{$tag}>\n\n";
+                    break;
+
                 case 'wysiwyg':
-                    $output .= "    <{$tag} data-proto-field=\"{$field_name}\"><?php echo esc_html( \$attributes['{$field_name}'] ?? '' ); ?></{$tag}>\n";
+                    $output .= "    <{$tag} class=\"{$class_name}__{$field_name}\" data-proto-field=\"{$field_name}\"><?php\n";
+                    $output .= "        if ( ! empty( \${$field_name} ) ) {\n";
+                    $output .= "            echo wp_kses_post( \${$field_name} );\n";
+                    $output .= "        }\n";
+                    $output .= "    ?></{$tag}>\n\n";
                     break;
 
                 case 'image':
-                    $output .= "    <?php if ( ! empty( \$attributes['{$field_name}']['url'] ) ) : ?>\n";
-                    $output .= "    <figure data-proto-field=\"{$field_name}\">\n";
-                    $output .= "        <img src=\"<?php echo esc_url( \$attributes['{$field_name}']['url'] ); ?>\" alt=\"<?php echo esc_attr( \$attributes['{$field_name}']['alt'] ?? '' ); ?>\" />\n";
+                    // Always show container in editor mode for editing capability
+                    $output .= "    <?php if ( ! empty( \${$field_name}['url'] ) || \$is_preview ) : ?>\n";
+                    $output .= "    <figure class=\"{$class_name}__{$field_name}\" data-proto-field=\"{$field_name}\">\n";
+                    $output .= "        <?php if ( ! empty( \${$field_name}['url'] ) ) : ?>\n";
+                    $output .= "            <img\n";
+                    $output .= "                src=\"<?php echo esc_url( \${$field_name}['url'] ); ?>\"\n";
+                    $output .= "                alt=\"<?php echo esc_attr( \${$field_name}['alt'] ?? '' ); ?>\"\n";
+                    $output .= "                loading=\"lazy\"\n";
+                    $output .= "            />\n";
+                    $output .= "        <?php endif; ?>\n";
                     $output .= "    </figure>\n";
-                    $output .= "    <?php endif; ?>\n";
+                    $output .= "    <?php endif; ?>\n\n";
                     break;
 
                 case 'link':
-                    $output .= "    <?php if ( ! empty( \$attributes['{$field_name}']['url'] ) ) : ?>\n";
-                    $output .= "    <a data-proto-field=\"{$field_name}\" href=\"<?php echo esc_url( \$attributes['{$field_name}']['url'] ); ?>\">\n";
-                    $output .= "        <?php echo esc_html( \$attributes['{$field_name}']['text'] ?? '' ); ?>\n";
-                    $output .= "    </a>\n";
-                    $output .= "    <?php endif; ?>\n";
+                    // Always show in editor mode for editing capability
+                    $output .= "    <?php if ( ! empty( \${$field_name}['url'] ) || \$is_preview ) : ?>\n";
+                    $output .= "    <a\n";
+                    $output .= "        class=\"{$class_name}__{$field_name}\"\n";
+                    $output .= "        href=\"<?php echo esc_url( \${$field_name}['url'] ?? '#' ); ?>\"\n";
+                    $output .= "        data-proto-field=\"{$field_name}\"\n";
+                    $output .= "        <?php echo ! empty( \${$field_name}['target'] ) ? 'target=\"' . esc_attr( \${$field_name}['target'] ) . '\"' : ''; ?>\n";
+                    $output .= "        <?php echo ! empty( \${$field_name}['rel'] ) ? 'rel=\"' . esc_attr( \${$field_name}['rel'] ) . '\"' : ''; ?>\n";
+                    $output .= "    ><?php echo esc_html( \${$field_name}['text'] ?? __( 'Link', 'proto-blocks' ) ); ?></a>\n";
+                    $output .= "    <?php endif; ?>\n\n";
                     break;
 
                 case 'repeater':
-                    $output .= "    <?php if ( ! empty( \$attributes['{$field_name}'] ) ) : ?>\n";
-                    $output .= "    <div data-proto-repeater=\"{$field_name}\">\n";
-                    $output .= "        <?php foreach ( \$attributes['{$field_name}'] as \$item ) : ?>\n";
-                    $output .= "        <div data-proto-repeater-item=\"{$field_name}\">\n";
-                    $output .= "            <!-- Repeater item content -->\n";
+                    $sub_fields = $config['fields'] ?? [];
+                    $output .= "    <?php if ( ! empty( \${$field_name} ) || \$is_preview ) : ?>\n";
+                    $output .= "    <?php\n";
+                    $output .= "    // For preview, show placeholder if no items\n";
+                    $output .= "    \$repeater_items = \${$field_name};\n";
+                    $output .= "    if ( empty( \$repeater_items ) && \$is_preview ) {\n";
+                    $output .= "        \$repeater_items = [\n";
+                    $output .= "            [ 'id' => 'preview-1'" . $this->generateRepeaterPreviewDefaults( $sub_fields ) . " ],\n";
+                    $output .= "            [ 'id' => 'preview-2'" . $this->generateRepeaterPreviewDefaults( $sub_fields ) . " ],\n";
+                    $output .= "        ];\n";
+                    $output .= "    }\n";
+                    $output .= "    ?>\n";
+                    $output .= "    <div class=\"{$class_name}__{$field_name}\" data-proto-repeater=\"{$field_name}\">\n";
+                    $output .= "        <?php foreach ( \$repeater_items as \$item ) : ?>\n";
+                    $output .= "        <div class=\"{$class_name}__{$field_name}-item\" data-proto-repeater-item>\n";
+                    $output .= $this->generateRepeaterItemFields( $sub_fields, $class_name, $field_name );
                     $output .= "        </div>\n";
                     $output .= "        <?php endforeach; ?>\n";
                     $output .= "    </div>\n";
-                    $output .= "    <?php endif; ?>\n";
+                    $output .= "    <?php endif; ?>\n\n";
                     break;
 
                 case 'inner-blocks':
-                    $output .= "    <div data-proto-inner-blocks>\n";
+                    $output .= "    <div class=\"{$class_name}__inner-blocks\" data-proto-inner-blocks>\n";
                     $output .= "        <?php echo \$content; ?>\n";
-                    $output .= "    </div>\n";
+                    $output .= "    </div>\n\n";
                     break;
             }
         }
 
         $output .= "</div>\n";
+
+        return $output;
+    }
+
+    /**
+     * Generate repeater preview default values.
+     *
+     * @param array $sub_fields Repeater sub-fields.
+     * @return string PHP code for default values.
+     */
+    private function generateRepeaterPreviewDefaults( array $sub_fields ): string {
+        $defaults = [];
+        foreach ( $sub_fields as $field_name => $config ) {
+            $type = $config['type'] ?? 'text';
+            switch ( $type ) {
+                case 'text':
+                case 'wysiwyg':
+                    $defaults[] = "'{$field_name}' => 'Sample " . ucfirst( $field_name ) . "'";
+                    break;
+                case 'image':
+                    $defaults[] = "'{$field_name}' => []";
+                    break;
+                case 'link':
+                    $defaults[] = "'{$field_name}' => [ 'url' => '#', 'text' => 'Link' ]";
+                    break;
+            }
+        }
+        if ( empty( $defaults ) ) {
+            return '';
+        }
+        return ', ' . implode( ', ', $defaults );
+    }
+
+    /**
+     * Generate repeater item field output.
+     *
+     * @param array  $sub_fields  Repeater sub-fields.
+     * @param string $class_name  Block class name.
+     * @param string $repeater_name Repeater field name.
+     * @return string PHP/HTML code for repeater item fields.
+     */
+    private function generateRepeaterItemFields( array $sub_fields, string $class_name, string $repeater_name ): string {
+        $output = '';
+
+        foreach ( $sub_fields as $field_name => $config ) {
+            $type = $config['type'] ?? 'text';
+            $tag  = $config['tagName'] ?? 'div';
+
+            switch ( $type ) {
+                case 'text':
+                    $output .= "            <{$tag} class=\"{$class_name}__{$repeater_name}-{$field_name}\" data-proto-field=\"{$field_name}\"><?php echo esc_html( \$item['{$field_name}'] ?? '' ); ?></{$tag}>\n";
+                    break;
+
+                case 'wysiwyg':
+                    $output .= "            <{$tag} class=\"{$class_name}__{$repeater_name}-{$field_name}\" data-proto-field=\"{$field_name}\"><?php echo wp_kses_post( \$item['{$field_name}'] ?? '' ); ?></{$tag}>\n";
+                    break;
+
+                case 'image':
+                    $output .= "            <?php if ( ! empty( \$item['{$field_name}']['url'] ) ) : ?>\n";
+                    $output .= "            <figure class=\"{$class_name}__{$repeater_name}-{$field_name}\" data-proto-field=\"{$field_name}\">\n";
+                    $output .= "                <img src=\"<?php echo esc_url( \$item['{$field_name}']['url'] ); ?>\" alt=\"<?php echo esc_attr( \$item['{$field_name}']['alt'] ?? '' ); ?>\" loading=\"lazy\" />\n";
+                    $output .= "            </figure>\n";
+                    $output .= "            <?php endif; ?>\n";
+                    break;
+
+                case 'link':
+                    $output .= "            <?php if ( ! empty( \$item['{$field_name}']['url'] ) ) : ?>\n";
+                    $output .= "            <a class=\"{$class_name}__{$repeater_name}-{$field_name}\" href=\"<?php echo esc_url( \$item['{$field_name}']['url'] ); ?>\" data-proto-field=\"{$field_name}\"><?php echo esc_html( \$item['{$field_name}']['text'] ?? '' ); ?></a>\n";
+                    $output .= "            <?php endif; ?>\n";
+                    break;
+            }
+        }
+
+        if ( empty( $output ) ) {
+            $output = "            <!-- Add your repeater item content here -->\n";
+        }
 
         return $output;
     }
@@ -578,14 +720,69 @@ class Commands extends WP_CLI_Command {
      * @return string CSS content.
      */
     private function generateStyles( string $name, array $fields ): string {
+        $title      = ucwords( str_replace( '-', ' ', $name ) );
         $class_name = 'wp-block-proto-blocks-' . $name;
 
         $output = "/**\n";
-        $output .= " * Styles for " . ucwords( str_replace( '-', ' ', $name ) ) . " block\n";
+        $output .= " * Styles for {$title} block\n";
         $output .= " */\n\n";
+
+        // Main container styles
         $output .= ".{$class_name} {\n";
-        $output .= "    /* Add your styles here */\n";
-        $output .= "}\n";
+        $output .= "    display: block;\n";
+        $output .= "}\n\n";
+
+        // Generate styles for each field type
+        foreach ( $fields as $field_name => $config ) {
+            $type = $config['type'] ?? 'text';
+
+            switch ( $type ) {
+                case 'text':
+                case 'wysiwyg':
+                    $output .= ".{$class_name}__{$field_name} {\n";
+                    $output .= "    /* Styles for {$field_name} field */\n";
+                    $output .= "}\n\n";
+                    break;
+
+                case 'image':
+                    $output .= ".{$class_name}__{$field_name} {\n";
+                    $output .= "    margin: 0;\n";
+                    $output .= "}\n\n";
+                    $output .= ".{$class_name}__{$field_name} img {\n";
+                    $output .= "    display: block;\n";
+                    $output .= "    width: 100%;\n";
+                    $output .= "    height: auto;\n";
+                    $output .= "}\n\n";
+                    break;
+
+                case 'link':
+                    $output .= ".{$class_name}__{$field_name} {\n";
+                    $output .= "    display: inline-block;\n";
+                    $output .= "    text-decoration: none;\n";
+                    $output .= "}\n\n";
+                    $output .= ".{$class_name}__{$field_name}:hover {\n";
+                    $output .= "    text-decoration: underline;\n";
+                    $output .= "}\n\n";
+                    break;
+
+                case 'repeater':
+                    $output .= ".{$class_name}__{$field_name} {\n";
+                    $output .= "    display: flex;\n";
+                    $output .= "    flex-direction: column;\n";
+                    $output .= "    gap: 1rem;\n";
+                    $output .= "}\n\n";
+                    $output .= ".{$class_name}__{$field_name}-item {\n";
+                    $output .= "    /* Styles for each repeater item */\n";
+                    $output .= "}\n\n";
+                    break;
+
+                case 'inner-blocks':
+                    $output .= ".{$class_name}__inner-blocks {\n";
+                    $output .= "    /* Styles for inner blocks container */\n";
+                    $output .= "}\n\n";
+                    break;
+            }
+        }
 
         return $output;
     }
