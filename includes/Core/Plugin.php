@@ -157,6 +157,11 @@ final class Plugin
             'default' => false,
         ]);
 
+        $registry->register('checkbox', [
+            'data_type' => 'boolean',
+            'default' => false,
+        ]);
+
         $registry->register('range', [
             'data_type' => 'number',
             'default' => 0,
@@ -168,6 +173,16 @@ final class Plugin
         ]);
 
         $registry->register('color', [
+            'data_type' => 'string',
+            'default' => '',
+        ]);
+
+        $registry->register('color-palette', [
+            'data_type' => 'string',
+            'default' => '',
+        ]);
+
+        $registry->register('radio', [
             'data_type' => 'string',
             'default' => '',
         ]);

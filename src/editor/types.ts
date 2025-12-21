@@ -138,6 +138,7 @@ export interface FieldProps<T = unknown> {
     tagName?: string;
     className?: string;
     isSelected?: boolean;
+    children?: React.ReactNode;
 }
 
 // Control component props

@@ -109,9 +109,10 @@ class Registrar
                 'editor_style' => 'proto-blocks-editor',
             ];
 
-            // Add block-specific styles if exists
+            // Add block-specific styles if exists (for both frontend and editor)
             if ($this->hasBlockStyle($path, $name)) {
                 $blockArgs['style'] = 'proto-blocks-' . $name;
+                $blockArgs['editor_style'] = ['proto-blocks-editor', 'proto-blocks-' . $name];
             }
 
             // Add block-specific scripts if exists

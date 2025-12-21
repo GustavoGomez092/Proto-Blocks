@@ -23,6 +23,7 @@
     },
     "protoBlocks": {
         "version": "1.0",
+        "isExample": true,
         "template": "template.php",
         "fields": {
             "image": {

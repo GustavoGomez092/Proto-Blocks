@@ -9,6 +9,9 @@
  * @var WP_Block $block      Block instance.
  */
 
+// Ensure $content is defined (may not be set in preview mode)
+$content = $content ?? '';
+
 $title              = $attributes['title'] ?? '';
 $subtitle           = $attributes['subtitle'] ?? '';
 $background_image   = $attributes['backgroundImage'] ?? [];
@@ -70,23 +73,3 @@ $wrapper_attributes = get_block_wrapper_attributes( [
         </div>
     </div>
 </section>
-
-<?php
-/**
- * Helper function to convert hex color to rgba
- */
-if ( ! function_exists( 'proto_blocks_hex_to_rgba' ) ) {
-    function proto_blocks_hex_to_rgba( $hex, $alpha = 1 ) {
-        $hex = ltrim( $hex, '#' );
-
-        if ( strlen( $hex ) === 3 ) {
-            $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
-        }
-
-        $r = hexdec( substr( $hex, 0, 2 ) );
-        $g = hexdec( substr( $hex, 2, 2 ) );
-        $b = hexdec( substr( $hex, 4, 2 ) );
-
-        return sprintf( 'rgba(%d, %d, %d, %s)', $r, $g, $b, $alpha );
-    }
-}

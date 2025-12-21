@@ -20,6 +20,7 @@ import { RichText } from '@wordpress/block-editor';
 interface LinkFieldProps extends FieldProps<LinkValue> {
     className?: string;
     tagName?: string;
+    children?: React.ReactNode;
 }
 
 export function LinkField({
@@ -30,6 +31,7 @@ export function LinkField({
     className = '',
     tagName = 'a',
     isSelected,
+    children,
 }: LinkFieldProps): JSX.Element {
     const [isEditing, setIsEditing] = useState(false);
     const wrapperRef = useRef<HTMLDivElement>(null);
@@ -73,6 +75,112 @@ export function LinkField({
         });
     };
 
+    // Determine if we should render as a link wrapper with children inside
+    const hasChildren = children && (Array.isArray(children) ? children.length > 0 : true);
+
+    // If we have children (like icons), wrap everything in the proper tag structure
+    if (hasChildren) {
+        return (
+            <div
+                ref={wrapperRef}
+                className="proto-blocks-link-field-wrapper"
+                style={{ display: 'inline-block', position: 'relative' }}
+            >
+                {createElement(
+                    tagName,
+                    { className: `proto-blocks-link-field ${className}` },
+                    <RichText
+                        tagName="span"
+                        value={linkValue.text || ''}
+                        onChange={handleTextChange}
+                        placeholder={__('Enter link text...', 'proto-blocks')}
+                        allowedFormats={[]}
+                        className="proto-blocks-link-field__text"
+                    />,
+                    children
+                )}
+
+                {isSelected && (
+                    <Button
+                        icon={linkIcon}
+                        label={__('Link settings', 'proto-blocks')}
+                        onClick={() => setIsEditing(!isEditing)}
+                        className="proto-blocks-link-field__settings-btn"
+                        isPressed={isEditing}
+                        style={{
+                            position: 'absolute',
+                            top: '-30px',
+                            right: '0',
+                            background: isEditing ? '#007cba' : '#fff',
+                            color: isEditing ? '#fff' : '#1e1e1e',
+                            borderRadius: '2px',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                        }}
+                    />
+                )}
+
+                {isEditing && isSelected && (
+                    <Popover
+                        anchor={wrapperRef.current}
+                        onClose={() => setIsEditing(false)}
+                        placement="bottom-start"
+                        className="proto-blocks-link-popover"
+                    >
+                        <div className="proto-blocks-link-popover__content">
+                            <TextControl
+                                label={__('URL', 'proto-blocks')}
+                                value={linkValue.url}
+                                onChange={(url) => updateLink('url', url)}
+                                placeholder="https://"
+                            />
+
+                            <TextControl
+                                label={__('Link Text', 'proto-blocks')}
+                                value={linkValue.text || ''}
+                                onChange={(text) => updateLink('text', text)}
+                                placeholder={__('Button text', 'proto-blocks')}
+                            />
+
+                            <ToggleControl
+                                label={__('Open in new tab', 'proto-blocks')}
+                                checked={linkValue.target === '_blank'}
+                                onChange={handleTargetToggle}
+                            />
+
+                            <div className="proto-blocks-link-popover__actions">
+                                <Button
+                                    variant="primary"
+                                    onClick={() => setIsEditing(false)}
+                                >
+                                    {__('Done', 'proto-blocks')}
+                                </Button>
+                                {linkValue.url && (
+                                    <Button
+                                        variant="link"
+                                        isDestructive
+                                        onClick={() => {
+                                            onChange({
+                                                url: '',
+                                                text: linkValue.text,
+                                                target: '',
+                                                rel: '',
+                                                title: '',
+                                            });
+                                            setIsEditing(false);
+                                        }}
+                                    >
+                                        {__('Remove link', 'proto-blocks')}
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    </Popover>
+                )}
+            </div>
+        );
+    }
+
+    // Default rendering without children
     return (
         <div
             ref={wrapperRef}

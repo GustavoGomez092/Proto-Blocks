@@ -62,8 +62,12 @@ $arrow_icon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width
             }
         ?></h2>
 
-        <?php if ( ! empty( $description ) ) : ?>
-            <p class="proto-cta__description"><?php echo esc_html( $description ); ?></p>
+        <?php if ( ! empty( $description ) || $is_preview ) : ?>
+            <p class="proto-cta__description" data-proto-field="description"><?php
+                if ( ! empty( $description ) ) {
+                    echo wp_kses_post( $description );
+                }
+            ?></p>
         <?php endif; ?>
     </div>
 

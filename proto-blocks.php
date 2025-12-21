@@ -43,6 +43,11 @@ if (!defined('PROTO_BLOCKS_EXAMPLE_BLOCKS')) {
     define('PROTO_BLOCKS_EXAMPLE_BLOCKS', true);
 }
 
+// Global helper functions (must use backslash to define in global namespace)
+if (!function_exists('proto_blocks_hex_to_rgba')) {
+    require_once PROTO_BLOCKS_DIR . 'includes/helpers.php';
+}
+
 // Load autoloader
 require_once PROTO_BLOCKS_DIR . 'includes/Core/Autoloader.php';
 

@@ -175,7 +175,9 @@ class Discovery
                 'hasJson' => file_exists($jsonPath),
                 'hasCSS' => file_exists($path . '/style.css') || file_exists($path . '/' . $name . '.css'),
                 'hasJS' => file_exists($path . '/view.js') || file_exists($path . '/' . $name . '.js'),
-                'isExample' => str_contains($path, PROTO_BLOCKS_DIR . 'examples'),
+                'isExample' => $metadata['protoBlocks']['isExample']
+                    ?? $metadata['isExample']
+                    ?? str_contains($path, PROTO_BLOCKS_DIR . 'examples'),
             ];
         }
 

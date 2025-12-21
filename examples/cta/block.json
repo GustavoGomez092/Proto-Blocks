@@ -19,6 +19,7 @@
     },
     "protoBlocks": {
         "version": "1.0",
+        "isExample": true,
         "template": "template.php",
         "fields": {
             "title": {
@@ -26,17 +27,19 @@
                 "tagName": "h2",
                 "format": "simple"
             },
+            "description": {
+                "type": "text",
+                "tagName": "p",
+                "format": "standard",
+                "label": "Description",
+                "default": "Take action now and discover what we can do for you. Don't miss this opportunity!"
+            },
             "link": {
                 "type": "link",
                 "tagName": "a"
             }
         },
         "controls": {
-            "description": {
-                "type": "textarea",
-                "label": "Description",
-                "default": "Take action now and discover what we can do for you. Don't miss this opportunity!"
-            },
             "backgroundColor": {
                 "type": "color-palette",
                 "label": "Background Color"

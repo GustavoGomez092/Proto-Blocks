@@ -104,6 +104,8 @@ export function renderControl(
                     min={config.min || 0}
                     max={config.max || 100}
                     step={config.step || 1}
+                    __next40pxDefaultSize
+                    __nextHasNoMarginBottom
                 />
             );
 
@@ -118,6 +120,7 @@ export function renderControl(
                     min={config.min}
                     max={config.max}
                     step={config.step}
+                    __next40pxDefaultSize
                 />
             );
 

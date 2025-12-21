@@ -58,15 +58,21 @@ export function createEditComponent(block: BlockData) {
         const [isLoading, setIsLoading] = useState(true);
         const [error, setError] = useState<string | null>(null);
 
-        // Get ALL control values that affect template rendering
-        // Any control change should trigger a preview refresh
-        const controlValues = useMemo(() => {
+        // Get ALL attribute values that affect template rendering
+        // Both controls and fields should trigger a preview refresh
+        const attributeValues = useMemo(() => {
             const values: Record<string, unknown> = {};
+            // Include all controls
             Object.entries(controls).forEach(([key]) => {
                 values[key] = attributes[key];
             });
+            // Include all fields (like repeaters)
+            const fields = block.fields || {};
+            Object.entries(fields).forEach(([key]) => {
+                values[key] = attributes[key];
+            });
             return values;
-        }, [attributes, controls]);
+        }, [attributes, controls, block.fields]);
 
         // Debounced preview fetch
         const fetchPreview = useDebouncedCallback(
@@ -115,11 +121,11 @@ export function createEditComponent(block: BlockData) {
             300
         );
 
-        // Fetch preview on mount and when control values change
+        // Fetch preview on mount and when any attribute value changes
         useEffect(() => {
             setIsLoading(!previewHtml);
             fetchPreview(attributes);
-        }, [JSON.stringify(controlValues)]);
+        }, [JSON.stringify(attributeValues)]);
 
         // Handle attribute change
         const handleAttributeChange = useCallback(

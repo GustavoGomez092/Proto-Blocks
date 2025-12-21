@@ -88,6 +88,17 @@ function processElement(
     const tagName = element.tagName.toLowerCase();
     const { attributes, setAttributes, fields, isSelected } = options;
 
+    // Handle SVG elements - render using dangerouslySetInnerHTML to preserve SVG structure
+    if (tagName === 'svg') {
+        const props = convertAttributes(element, key);
+        // Get the outer HTML and use it with dangerouslySetInnerHTML
+        const svgHtml = element.innerHTML;
+        return createElement('svg', {
+            ...props,
+            dangerouslySetInnerHTML: { __html: svgHtml },
+        });
+    }
+
     // Get proto-blocks specific attributes
     const protoField = element.getAttribute('data-proto-field');
     const protoRepeater = element.getAttribute('data-proto-repeater');
@@ -99,6 +110,29 @@ function processElement(
         const fieldConfig = fields[protoField];
         const fieldValue = attributes[protoField];
 
+        // For link fields, we need to preserve non-text children (like icons)
+        // Process all children first, then separate text content from other elements
+        let additionalChildren: ReactNode[] = [];
+        if (fieldConfig.type === 'link') {
+            const childNodes = Array.from(element.childNodes);
+            additionalChildren = childNodes
+                .filter((child) => {
+                    // Keep element nodes that are NOT the text span
+                    if (child.nodeType === Node.ELEMENT_NODE) {
+                        const el = child as Element;
+                        // Skip the text span (usually has class like __button-text)
+                        const className = el.getAttribute('class') || '';
+                        if (className.includes('button-text') || className.includes('link-text')) {
+                            return false;
+                        }
+                        return true;
+                    }
+                    return false;
+                })
+                .map((child, index) => processNode(child, options, index))
+                .filter((node): node is ReactNode => node !== null);
+        }
+
         return renderField({
             name: protoField,
             value: fieldValue,
@@ -108,6 +142,7 @@ function processElement(
             className: getClassName(element),
             isSelected,
             key,
+            children: additionalChildren.length > 0 ? additionalChildren : undefined,
         });
     }
 
@@ -262,7 +297,13 @@ function parseInlineStyles(styleString: string): Record<string, string> {
     const styles: Record<string, string> = {};
 
     styleString.split(';').forEach((declaration) => {
-        const [property, value] = declaration.split(':').map((s) => s.trim());
+        // Only split on the first colon to preserve URLs (which contain ://)
+        const colonIndex = declaration.indexOf(':');
+        if (colonIndex === -1) return;
+
+        const property = declaration.slice(0, colonIndex).trim();
+        const value = declaration.slice(colonIndex + 1).trim();
+
         if (property && value) {
             // Convert kebab-case to camelCase
             const camelProperty = property.replace(/-([a-z])/g, (_, letter) =>

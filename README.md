@@ -2,6 +2,13 @@
 
 A next-generation WordPress plugin that enables developers to create Gutenberg blocks using PHP/HTML templates instead of React.
 
+<table>
+  <tr>
+    <td><img src="examples/example-components.png" alt="Proto-Blocks Example Components" width="100%"></td>
+    <td><img src="examples/admin.png" alt="Proto-Blocks Admin Panel" width="100%"></td>
+  </tr>
+</table>
+
 ## Features
 
 - **Single Source of Truth**: Define blocks using a single `block.json` file
@@ -699,6 +706,8 @@ Proto-Blocks includes 6 demo blocks that showcase all available capabilities. Th
 
 ### Card Block
 
+![Card Block Preview](examples/card/preview.png)
+
 A versatile card with image, title, content, and call-to-action link.
 
 **Fields:**
@@ -722,6 +731,8 @@ A versatile card with image, title, content, and call-to-action link.
 ---
 
 ### Testimonial Block
+
+![Testimonial Block Preview](examples/testimonial/preview.png)
 
 Customer testimonial with rating and author information.
 
@@ -747,6 +758,8 @@ Customer testimonial with rating and author information.
 
 ### Accordion Block
 
+![Accordion Block Preview](examples/accordion/preview.png)
+
 Collapsible content sections with expand/collapse functionality.
 
 **Fields:**
@@ -771,6 +784,8 @@ Collapsible content sections with expand/collapse functionality.
 ---
 
 ### Hero Section Block
+
+![Hero Section Block Preview](examples/hero/preview.png)
 
 Full-width hero section with background image, customizable colors, and nested content.
 
@@ -801,6 +816,8 @@ Full-width hero section with background image, customizable colors, and nested c
 
 ### Stats Counter Block
 
+![Stats Counter Block Preview](examples/stats/preview.png)
+
 Display statistics and numbers with labels in a grid layout.
 
 **Fields:**
@@ -825,6 +842,8 @@ Display statistics and numbers with labels in a grid layout.
 ---
 
 ### Call to Action Block
+
+![Call to Action Block Preview](examples/cta/preview.png)
 
 Prominent call-to-action section with customizable styling.
 
