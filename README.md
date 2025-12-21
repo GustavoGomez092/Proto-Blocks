@@ -1,4 +1,4 @@
-# Proto-Blocks
+<h1><img src="proto-icon-black.svg" width="32" height="32" alt="Proto-Blocks Logo" style="vertical-align: middle; margin-right: 8px;">Proto-Blocks</h1>
 
 A next-generation WordPress plugin that enables developers to create Gutenberg blocks using PHP/HTML templates instead of React.
 
