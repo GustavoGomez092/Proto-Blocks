@@ -112,6 +112,28 @@ class AdminPage
             }
         }
 
+        // Handle remove demo blocks action
+        if (isset($_POST['proto_blocks_remove_demos']) && check_admin_referer('proto_blocks_remove_demos')) {
+            $result = $this->removeDemoBlocks();
+            if (is_wp_error($result)) {
+                echo '<div class="notice notice-error"><p>';
+                echo esc_html($result->get_error_message());
+                echo '</p></div>';
+            } else {
+                echo '<div class="notice notice-success"><p>';
+                printf(
+                    esc_html(_n(
+                        '%d demo block removed from your theme.',
+                        '%d demo blocks removed from your theme.',
+                        $result,
+                        'proto-blocks'
+                    )),
+                    esc_html($result)
+                );
+                echo '</p></div>';
+            }
+        }
+
         $discovery = Plugin::getInstance()->getDiscovery();
         $blocks = $discovery->getBlockInfo();
         $cacheStats = $this->cache->getStats();
@@ -191,6 +213,37 @@ class AdminPage
                         ?>
                     </p>
                 </div>
+
+                <!-- Remove Demo Blocks -->
+                <?php
+                $installed_demo_blocks = $this->getInstalledDemoBlocks();
+                if (!empty($installed_demo_blocks)):
+                ?>
+                <div class="proto-blocks-section proto-blocks-section--danger">
+                    <h2><?php esc_html_e('Remove Demo Blocks', 'proto-blocks'); ?></h2>
+                    <p><?php esc_html_e('Remove all demo blocks from your theme to start with a clean slate. Your custom blocks will not be affected.', 'proto-blocks'); ?></p>
+                    <p class="proto-blocks-info">
+                        <span class="dashicons dashicons-info"></span>
+                        <?php
+                        $blocks_formatted = array_map(function($name) {
+                            return '<code>' . esc_html($name) . '</code>';
+                        }, $installed_demo_blocks);
+                        printf(
+                            /* translators: %s: list of block names */
+                            __('Demo blocks that will be removed: %s', 'proto-blocks'),
+                            implode(', ', $blocks_formatted)
+                        );
+                        ?>
+                    </p>
+                    <form method="post" onsubmit="return confirm('<?php echo esc_js(__('Are you sure you want to remove all demo blocks? This action cannot be undone.', 'proto-blocks')); ?>');">
+                        <?php wp_nonce_field('proto_blocks_remove_demos'); ?>
+                        <button type="submit" name="proto_blocks_remove_demos" class="button button-link-delete">
+                            <span class="dashicons dashicons-trash" style="margin-top: 4px;"></span>
+                            <?php esc_html_e('Remove Demo Blocks', 'proto-blocks'); ?>
+                        </button>
+                    </form>
+                </div>
+                <?php endif; ?>
 
                 <!-- Cache Management -->
                 <div class="proto-blocks-section">
@@ -276,10 +329,15 @@ class AdminPage
             .proto-blocks-section { background: #fff; border: 1px solid #c3c4c7; border-radius: 4px; padding: 20px; margin: 20px 0; }
             .proto-blocks-section h2 { margin-top: 0; }
             .proto-blocks-section--highlight { border-color: #2271b1; border-left-width: 4px; }
+            .proto-blocks-section--danger { border-color: #d63638; border-left-width: 4px; }
             .proto-blocks-badge { display: inline-block; background: #e7e8ea; border-radius: 3px; padding: 2px 6px; font-size: 11px; margin-right: 4px; }
             .proto-blocks-badge.example { background: #dff0d8; color: #3c763d; }
             .proto-blocks-warning { background: #fcf9e8; border-left: 4px solid #dba617; padding: 10px 12px; margin: 10px 0; }
             .proto-blocks-warning .dashicons { color: #dba617; margin-right: 5px; }
+            .proto-blocks-info { background: #f0f6fc; border-left: 4px solid #72aee6; padding: 10px 12px; margin: 10px 0; }
+            .proto-blocks-info .dashicons { color: #72aee6; margin-right: 5px; }
+            .button-link-delete { color: #d63638 !important; border-color: #d63638 !important; }
+            .button-link-delete:hover { background: #d63638 !important; color: #fff !important; }
         </style>
         <?php
     }
@@ -377,6 +435,26 @@ class AdminPage
     }
 
     /**
+     * Get list of installed demo blocks in the theme
+     *
+     * @return array List of installed demo block names
+     */
+    public function getInstalledDemoBlocks(): array
+    {
+        $demo_block_names = $this->getDemoBlockNames();
+        $theme_blocks_dir = get_stylesheet_directory() . '/proto-blocks';
+        $installed = [];
+
+        foreach ($demo_block_names as $demo_name) {
+            if (is_dir($theme_blocks_dir . '/' . $demo_name)) {
+                $installed[] = $demo_name;
+            }
+        }
+
+        return $installed;
+    }
+
+    /**
      * Install demo blocks to the active theme
      * Only installs/overwrites demo blocks, leaves custom blocks untouched
      *
@@ -443,6 +521,52 @@ class AdminPage
         delete_transient('proto_blocks_discovered');
 
         return $installed_count;
+    }
+
+    /**
+     * Remove demo blocks from the active theme
+     * Only removes demo blocks, leaves custom blocks untouched
+     *
+     * @return int|\WP_Error Number of blocks removed or error
+     */
+    private function removeDemoBlocks(): int|\WP_Error
+    {
+        $theme_blocks_dir = get_stylesheet_directory() . '/proto-blocks';
+
+        // Check if theme blocks directory exists
+        if (!is_dir($theme_blocks_dir)) {
+            return new \WP_Error(
+                'dir_not_found',
+                __('No proto-blocks directory found in your theme.', 'proto-blocks')
+            );
+        }
+
+        // Get installed demo blocks
+        $installed_demo_blocks = $this->getInstalledDemoBlocks();
+
+        if (empty($installed_demo_blocks)) {
+            return new \WP_Error(
+                'no_demo_blocks',
+                __('No demo blocks found to remove.', 'proto-blocks')
+            );
+        }
+
+        $removed_count = 0;
+
+        foreach ($installed_demo_blocks as $block_name) {
+            $block_path = $theme_blocks_dir . '/' . $block_name;
+
+            if (is_dir($block_path)) {
+                if ($this->removeDirectory($block_path)) {
+                    $removed_count++;
+                }
+            }
+        }
+
+        // Clear the block discovery cache
+        delete_transient('proto_blocks_discovered');
+
+        return $removed_count;
     }
 
     /**

@@ -680,15 +680,222 @@ npm run format
 npm run lint:js
 ```
 
-## Examples
+## Demo Blocks
 
-See the `examples/` directory for complete block examples:
+Proto-Blocks includes 6 demo blocks that showcase all available capabilities. These can be installed to your theme via the admin panel to explore and learn from.
 
-- **Card** - A versatile card block with image, title, and content
-- **Testimonial** - Customer testimonial with rating and author info
-- **Accordion** - Collapsible sections with expand/collapse functionality
+### Block Overview
 
-> **Note:** The example blocks use the WordPress Interactivity API for their frontend JavaScript, but this is purely for demonstration purposes. You can use plain JavaScript, ES modules, jQuery, or any other approach you prefer. See the [Frontend JavaScript](#frontend-javascript-interactivity) section for alternatives.
+| Block | Purpose | Key Features Demonstrated |
+|-------|---------|--------------------------|
+| **Card** | Versatile content card | Image field, WYSIWYG, Link field, Conditional controls |
+| **Testimonial** | Customer testimonial | Range control (star rating), Toggle controls, Image sizes |
+| **Accordion** | Collapsible sections | Repeater field, Interactivity API, Drag-drop reordering |
+| **Hero** | Full-width hero section | Inner Blocks, Color control, Color-palette, Radio control, Number control, Image control |
+| **Stats** | Statistics counter | Number control, Simple repeater, Range control |
+| **CTA** | Call to action | Textarea control, Checkbox control, Radio control |
+
+---
+
+### Card Block
+
+A versatile card with image, title, content, and call-to-action link.
+
+**Fields:**
+- `image` (Image) - Featured image with size options
+- `title` (Text) - Card heading
+- `content` (WYSIWYG) - Rich text body content
+- `link` (Link) - Call-to-action button
+
+**Controls:**
+- `layout` (Select) - Vertical, Horizontal, or Overlay
+- `imagePosition` (Select) - Top, Bottom, Left, Right (conditional - only shows for certain layouts)
+- `showLink` (Toggle) - Show/hide call-to-action
+
+**Demonstrates:**
+- Image field with multiple size options
+- Link field with popover editor
+- WYSIWYG rich text editing
+- Conditional control visibility
+- WordPress block supports (colors, spacing)
+
+---
+
+### Testimonial Block
+
+Customer testimonial with rating and author information.
+
+**Fields:**
+- `quote` (WYSIWYG) - Testimonial text
+- `authorName` (Text) - Customer name
+- `authorTitle` (Text) - Customer title/role
+- `authorImage` (Image) - Customer photo
+
+**Controls:**
+- `style` (Select) - Default, Bordered, or Filled
+- `showAvatar` (Toggle) - Show/hide author photo
+- `rating` (Range) - 0-5 star rating
+- `showRating` (Toggle) - Show/hide star rating
+
+**Demonstrates:**
+- Range control for numeric values
+- Multiple toggle controls
+- Image field with thumbnail size
+- Style variations via select control
+
+---
+
+### Accordion Block
+
+Collapsible content sections with expand/collapse functionality.
+
+**Fields:**
+- `items` (Repeater) - List of accordion sections
+  - `title` (Text) - Section header
+  - `content` (WYSIWYG) - Section content
+
+**Controls:**
+- `allowMultiple` (Toggle) - Allow multiple sections open simultaneously
+- `firstOpen` (Toggle) - Open first item by default
+- `iconPosition` (Select) - Icon position (left/right)
+
+**Demonstrates:**
+- **Repeater field** with nested fields
+- Drag-drop reordering
+- Collapsible repeater items
+- Item duplication
+- Min/max item limits
+- **WordPress Interactivity API** for frontend behavior
+- Data binding with `data-wp-*` directives
+
+---
+
+### Hero Section Block
+
+Full-width hero section with background image, customizable colors, and nested content.
+
+**Fields:**
+- `title` (Text) - Main heading (h1)
+- `subtitle` (Text) - Supporting text
+- `innerContent` (Inner Blocks) - Nested WordPress blocks
+
+**Controls:**
+- `backgroundImage` (Image) - Background image selector
+- `backgroundColor` (Color) - Overlay color picker
+- `overlayOpacity` (Range) - Overlay transparency
+- `textColor` (Color-palette) - Text color from WordPress palette
+- `contentAlignment` (Radio) - Left, Center, Right alignment
+- `minHeight` (Number) - Minimum section height in vh units
+- `verticalAlignment` (Select) - Top, Center, Bottom
+
+**Demonstrates:**
+- **Inner Blocks field** for nested block content
+- **Color control** with full color picker
+- **Color-palette control** using WordPress colors
+- **Radio control** for alignment options
+- **Number control** for numeric input
+- **Image control** in inspector panel
+- Template with block appender
+
+---
+
+### Stats Counter Block
+
+Display statistics and numbers with labels in a grid layout.
+
+**Fields:**
+- `stats` (Repeater) - List of statistics
+  - `number` (Text) - The statistic value
+  - `prefix` (Text) - Optional prefix (e.g., "$")
+  - `suffix` (Text) - Optional suffix (e.g., "%", "K", "M")
+  - `label` (Text) - Description label
+
+**Controls:**
+- `columns` (Number) - Grid columns (1-6)
+- `style` (Select) - Default, Boxed, Bordered, Minimal
+- `numberSize` (Range) - Font size for numbers
+- `showDividers` (Toggle) - Show dividers between items
+
+**Demonstrates:**
+- **Number control** for column count
+- Simple repeater with multiple text fields
+- CSS custom properties for dynamic styling
+- Responsive grid layout
+
+---
+
+### Call to Action Block
+
+Prominent call-to-action section with customizable styling.
+
+**Fields:**
+- `title` (Text) - CTA heading
+- `link` (Link) - Action button
+
+**Controls:**
+- `description` (Textarea) - Multi-line description text
+- `backgroundColor` (Color-palette) - Background color
+- `textColor` (Color-palette) - Text color
+- `buttonStyle` (Radio) - Primary, Secondary, Outline
+- `layout` (Select) - Centered, Inline, Stacked
+- `showIcon` (Checkbox) - Show arrow icon on button
+- `fullWidth` (Checkbox) - Full-width button (conditional)
+
+**Demonstrates:**
+- **Textarea control** for multi-line input
+- **Checkbox control** for boolean options
+- Multiple color-palette controls
+- Conditional control visibility
+- SVG icon integration
+
+---
+
+### Installing Demo Blocks
+
+1. Go to **Proto-Blocks** in the WordPress admin menu
+2. Click **"Install Demo Blocks to Theme"**
+3. Demo blocks are copied to your theme's `proto-blocks/` directory
+4. Start customizing or use them as learning references
+
+### Removing Demo Blocks
+
+When you're ready to start fresh:
+
+1. Go to **Proto-Blocks** in the WordPress admin menu
+2. Click **"Remove Demo Blocks"**
+3. All demo blocks are removed from your theme
+4. Your custom blocks are not affected
+
+---
+
+### Capability Coverage Matrix
+
+| Capability | Card | Testimonial | Accordion | Hero | Stats | CTA |
+|------------|:----:|:-----------:|:---------:|:----:|:-----:|:---:|
+| **Fields** |
+| Text | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Image | ✓ | ✓ | | | | |
+| Link | ✓ | | | | | ✓ |
+| WYSIWYG | ✓ | ✓ | ✓ | | | |
+| Repeater | | | ✓ | | ✓ | |
+| Inner Blocks | | | | ✓ | | |
+| **Controls** |
+| Select | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Toggle | ✓ | ✓ | ✓ | | ✓ | |
+| Range | | ✓ | | ✓ | ✓ | |
+| Number | | | | ✓ | ✓ | |
+| Color | | | | ✓ | | |
+| Color-palette | | | | ✓ | | ✓ |
+| Radio | | | | ✓ | | ✓ |
+| Textarea | | | | | | ✓ |
+| Checkbox | | | | | | ✓ |
+| Image (inspector) | | | | ✓ | | |
+| **Features** |
+| Conditional controls | ✓ | | | | | ✓ |
+| Interactivity API | | | ✓ | | | |
+| Block supports | ✓ | | | | ✓ | |
+
+> **Note:** The demo blocks use the WordPress Interactivity API for their frontend JavaScript, but this is purely for demonstration purposes. You can use plain JavaScript, ES modules, jQuery, or any other approach you prefer. See the [Frontend JavaScript](#frontend-javascript-interactivity) section for alternatives.
 
 ## Troubleshooting
 

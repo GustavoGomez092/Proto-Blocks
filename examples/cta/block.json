@@ -1,0 +1,85 @@
+{
+    "$schema": "https://schemas.wp.org/trunk/block.json",
+    "apiVersion": 3,
+    "name": "proto-blocks/cta",
+    "title": "Call to Action",
+    "description": "A prominent call-to-action section with customizable styling and button options.",
+    "category": "proto-blocks",
+    "icon": "megaphone",
+    "keywords": ["cta", "call to action", "button", "banner", "promo"],
+    "supports": {
+        "html": false,
+        "anchor": true,
+        "customClassName": true,
+        "align": ["wide", "full"],
+        "spacing": {
+            "padding": true,
+            "margin": true
+        }
+    },
+    "protoBlocks": {
+        "version": "1.0",
+        "template": "template.php",
+        "fields": {
+            "title": {
+                "type": "text",
+                "tagName": "h2",
+                "format": "simple"
+            },
+            "link": {
+                "type": "link",
+                "tagName": "a"
+            }
+        },
+        "controls": {
+            "description": {
+                "type": "textarea",
+                "label": "Description",
+                "default": "Take action now and discover what we can do for you. Don't miss this opportunity!"
+            },
+            "backgroundColor": {
+                "type": "color-palette",
+                "label": "Background Color"
+            },
+            "textColor": {
+                "type": "color-palette",
+                "label": "Text Color"
+            },
+            "buttonStyle": {
+                "type": "radio",
+                "label": "Button Style",
+                "default": "primary",
+                "options": [
+                    { "key": "primary", "label": "Primary" },
+                    { "key": "secondary", "label": "Secondary" },
+                    { "key": "outline", "label": "Outline" }
+                ]
+            },
+            "layout": {
+                "type": "select",
+                "label": "Layout",
+                "default": "centered",
+                "options": [
+                    { "key": "centered", "label": "Centered" },
+                    { "key": "inline", "label": "Inline (Side by Side)" },
+                    { "key": "stacked", "label": "Stacked" }
+                ]
+            },
+            "showIcon": {
+                "type": "checkbox",
+                "label": "Show Arrow Icon",
+                "default": true
+            },
+            "fullWidth": {
+                "type": "checkbox",
+                "label": "Full Width Button",
+                "default": false,
+                "conditions": {
+                    "visible": {
+                        "layout": ["centered", "stacked"]
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,110 @@
+/**
+ * Hero Section Block Styles
+ */
+
+.proto-hero {
+    position: relative;
+    display: flex;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    overflow: hidden;
+}
+
+/* Overlay */
+.proto-hero__overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+}
+
+/* Content container */
+.proto-hero__content {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+}
+
+/* Title */
+.proto-hero__title {
+    font-size: clamp(2rem, 5vw, 4rem);
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0 0 1rem 0;
+}
+
+/* Subtitle */
+.proto-hero__subtitle {
+    font-size: clamp(1rem, 2vw, 1.5rem);
+    line-height: 1.6;
+    margin: 0 0 2rem 0;
+    opacity: 0.9;
+}
+
+/* Inner blocks container */
+.proto-hero__inner-blocks {
+    margin-top: 1.5rem;
+}
+
+/* Horizontal alignment */
+.proto-hero--align-left .proto-hero__content {
+    margin-left: 0;
+    text-align: left;
+}
+
+.proto-hero--align-center .proto-hero__content {
+    text-align: center;
+}
+
+.proto-hero--align-right .proto-hero__content {
+    margin-right: 0;
+    text-align: right;
+}
+
+/* Vertical alignment */
+.proto-hero--valign-top {
+    align-items: flex-start;
+}
+
+.proto-hero--valign-center {
+    align-items: center;
+}
+
+.proto-hero--valign-bottom {
+    align-items: flex-end;
+}
+
+/* Inner blocks buttons styling */
+.proto-hero__inner-blocks .wp-block-buttons {
+    justify-content: inherit;
+}
+
+.proto-hero--align-center .proto-hero__inner-blocks .wp-block-buttons {
+    justify-content: center;
+}
+
+.proto-hero--align-right .proto-hero__inner-blocks .wp-block-buttons {
+    justify-content: flex-end;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .proto-hero__content {
+        padding: 2rem 1.5rem;
+    }
+
+    .proto-hero__inner-blocks .wp-block-buttons {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .proto-hero__inner-blocks .wp-block-button {
+        width: 100%;
+    }
+}

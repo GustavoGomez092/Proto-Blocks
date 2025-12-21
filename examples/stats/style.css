@@ -1,0 +1,128 @@
+/**
+ * Stats Counter Block Styles
+ */
+
+.proto-stats {
+    --proto-stats-number-size: 48px;
+    --proto-stats-columns: 4;
+}
+
+/* Grid layout */
+.proto-stats__grid {
+    display: grid;
+    grid-template-columns: repeat(var(--proto-stats-columns), 1fr);
+    gap: 2rem;
+}
+
+/* Individual stat item */
+.proto-stats__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 1.5rem;
+}
+
+/* Number wrapper */
+.proto-stats__number-wrapper {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    margin-bottom: 0.5rem;
+}
+
+/* Number styling */
+.proto-stats__number {
+    font-size: var(--proto-stats-number-size);
+    font-weight: 700;
+    line-height: 1;
+}
+
+.proto-stats__prefix,
+.proto-stats__suffix {
+    font-size: calc(var(--proto-stats-number-size) * 0.5);
+    font-weight: 600;
+    opacity: 0.8;
+}
+
+.proto-stats__prefix {
+    margin-right: 0.1em;
+}
+
+.proto-stats__suffix {
+    margin-left: 0.1em;
+}
+
+/* Label */
+.proto-stats__label {
+    font-size: 1rem;
+    opacity: 0.8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Style: Boxed */
+.proto-stats--style-boxed .proto-stats__item {
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 8px;
+}
+
+/* Style: Bordered */
+.proto-stats--style-bordered .proto-stats__item {
+    border: 2px solid currentColor;
+    border-radius: 8px;
+    opacity: 0.9;
+}
+
+/* Style: Minimal */
+.proto-stats--style-minimal .proto-stats__item {
+    padding: 1rem;
+}
+
+.proto-stats--style-minimal .proto-stats__label {
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+/* Dividers */
+.proto-stats--dividers .proto-stats__item {
+    position: relative;
+}
+
+.proto-stats--dividers .proto-stats__item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    right: -1rem;
+    top: 25%;
+    height: 50%;
+    width: 1px;
+    background: currentColor;
+    opacity: 0.2;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+    .proto-stats {
+        --proto-stats-columns: min(var(--proto-stats-columns), 3);
+    }
+}
+
+@media (max-width: 768px) {
+    .proto-stats {
+        --proto-stats-columns: min(var(--proto-stats-columns), 2);
+    }
+
+    .proto-stats--dividers .proto-stats__item::after {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .proto-stats {
+        --proto-stats-columns: 1;
+    }
+
+    .proto-stats__grid {
+        gap: 1.5rem;
+    }
+}

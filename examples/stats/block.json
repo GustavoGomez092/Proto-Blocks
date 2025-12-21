@@ -1,0 +1,93 @@
+{
+    "$schema": "https://schemas.wp.org/trunk/block.json",
+    "apiVersion": 3,
+    "name": "proto-blocks/stats",
+    "title": "Stats Counter",
+    "description": "Display statistics and numbers with labels in a grid layout.",
+    "category": "proto-blocks",
+    "icon": "chart-bar",
+    "keywords": ["stats", "numbers", "counter", "metrics", "data"],
+    "supports": {
+        "html": false,
+        "anchor": true,
+        "customClassName": true,
+        "align": ["wide", "full"],
+        "color": {
+            "background": true,
+            "text": true
+        },
+        "spacing": {
+            "padding": true,
+            "margin": true
+        }
+    },
+    "protoBlocks": {
+        "version": "1.0",
+        "template": "template.php",
+        "fields": {
+            "stats": {
+                "type": "repeater",
+                "min": 1,
+                "max": 8,
+                "collapsible": true,
+                "itemLabel": "label",
+                "fields": {
+                    "number": {
+                        "type": "text",
+                        "tagName": "span",
+                        "format": "plain"
+                    },
+                    "prefix": {
+                        "type": "text",
+                        "tagName": "span",
+                        "format": "plain"
+                    },
+                    "suffix": {
+                        "type": "text",
+                        "tagName": "span",
+                        "format": "plain"
+                    },
+                    "label": {
+                        "type": "text",
+                        "tagName": "span",
+                        "format": "plain"
+                    }
+                }
+            }
+        },
+        "controls": {
+            "columns": {
+                "type": "number",
+                "label": "Columns",
+                "default": 4,
+                "min": 1,
+                "max": 6,
+                "step": 1
+            },
+            "style": {
+                "type": "select",
+                "label": "Style",
+                "default": "default",
+                "options": [
+                    { "key": "default", "label": "Default" },
+                    { "key": "boxed", "label": "Boxed" },
+                    { "key": "bordered", "label": "Bordered" },
+                    { "key": "minimal", "label": "Minimal" }
+                ]
+            },
+            "numberSize": {
+                "type": "range",
+                "label": "Number Size",
+                "default": 48,
+                "min": 24,
+                "max": 96,
+                "step": 4
+            },
+            "showDividers": {
+                "type": "toggle",
+                "label": "Show Dividers",
+                "default": false
+            }
+        }
+    }
+}
