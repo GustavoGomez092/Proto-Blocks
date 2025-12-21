@@ -47,9 +47,9 @@ class Category
         /**
          * Filter the Proto-Blocks category icon
          *
-         * @param string $icon Category icon (dashicon name without 'dashicons-' prefix)
+         * @param string|null $icon Category icon (dashicon name or null - custom SVG is set via JS)
          */
-        $icon = apply_filters('proto_blocks_category_icon', 'layout');
+        $icon = apply_filters('proto_blocks_category_icon', null);
 
         /**
          * Filter the Proto-Blocks category slug
@@ -59,6 +59,7 @@ class Category
         $slug = apply_filters('proto_blocks_category_slug', self::SLUG);
 
         // Add Proto-Blocks category at the beginning for top priority
+        // Note: Custom SVG icon is applied via JavaScript using updateCategory()
         array_unshift($categories, [
             'slug' => $slug,
             'title' => $title,

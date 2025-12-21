@@ -168,6 +168,8 @@ export interface ProtoBlocksData {
     restNonce: string;
     debug: boolean;
     version: string;
+    categorySlug?: string;
+    categoryIcon?: string;
 }
 
 // Declare global window augmentation

@@ -5,12 +5,13 @@
  */
 
 import React from 'react';
-import { registerBlockType } from '@wordpress/blocks';
+import { registerBlockType, updateCategory } from '@wordpress/blocks';
 import type { BlockConfiguration } from '@wordpress/blocks';
 import { BlockData, BlockAttributes, BlockSupports } from './types';
 import { createEditComponent } from './block-factory';
 import { InnerBlocks } from '@wordpress/block-editor';
 import { createElement } from '@wordpress/element';
+import { SVG, Path } from '@wordpress/primitives';
 import { getBlockIcon } from './utils/icon-utils';
 
 // Get data from PHP
@@ -18,6 +19,16 @@ const protoBlocksData = window.protoBlocksData;
 const debug = protoBlocksData?.debug || false;
 
 const blocks: BlockData[] = protoBlocksData?.blocks || [];
+
+// Update category icon with custom Proto-Blocks icon
+if (protoBlocksData?.categorySlug && protoBlocksData?.categoryIcon) {
+    const protoIcon = createElement(
+        SVG,
+        { xmlns: 'http://www.w3.org/2000/svg', viewBox: '0 0 512 512' },
+        createElement(Path, { d: protoBlocksData.categoryIcon })
+    );
+    updateCategory(protoBlocksData.categorySlug, { icon: protoIcon });
+}
 
 if (debug) {
     console.log('Proto-Blocks: Editor initialized with', blocks.length, 'blocks');
