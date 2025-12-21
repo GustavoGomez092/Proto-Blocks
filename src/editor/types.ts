@@ -88,6 +88,7 @@ export interface BlockData {
     fields: Record<string, FieldConfig>;
     controls: Record<string, ControlConfig>;
     attributes: Record<string, AttributeConfig>;
+    previewImage?: string | null;
     metadata: BlockMetadata;
 }
 

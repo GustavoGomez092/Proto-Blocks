@@ -27,10 +27,31 @@ export function createEditComponent(block: BlockData) {
         const { attributes, setAttributes, isSelected } = props;
         const controls = block.controls || {};
 
+        // Check if this is a preview render (from block inserter)
+        const isInserterPreview = attributes.__isPreview === true;
+        const previewImageUrl = attributes.__previewImage as string | undefined;
+
         // Block props with click handler
         const blockProps = useBlockProps({
             className: `proto-block proto-block-${block.name}`,
         });
+
+        // If this is an inserter preview with a custom preview image, render it
+        if (isInserterPreview && previewImageUrl) {
+            return (
+                <div {...blockProps}>
+                    <img
+                        src={previewImageUrl}
+                        alt={block.title + ' preview'}
+                        style={{
+                            width: '100%',
+                            height: 'auto',
+                            display: 'block',
+                        }}
+                    />
+                </div>
+            );
+        }
 
         // State for preview
         const [previewHtml, setPreviewHtml] = useState<string | null>(null);
@@ -44,25 +65,12 @@ export function createEditComponent(block: BlockData) {
             Object.entries(controls).forEach(([key]) => {
                 values[key] = attributes[key];
             });
-            if (debug) {
-                console.log('Proto-Blocks: controlValues computed:', values);
-            }
             return values;
         }, [attributes, controls]);
-
-        // Debug: log when attributes change
-        useEffect(() => {
-            if (debug) {
-                console.log('Proto-Blocks: attributes changed:', attributes);
-            }
-        }, [attributes]);
 
         // Debounced preview fetch
         const fetchPreview = useDebouncedCallback(
             async (attrs: BlockAttributes) => {
-                if (debug) {
-                    console.log('Proto-Blocks: fetchPreview called with:', attrs);
-                }
                 try {
                     const response = await fetch(ajaxUrl, {
                         method: 'POST',
@@ -109,9 +117,6 @@ export function createEditComponent(block: BlockData) {
 
         // Fetch preview on mount and when control values change
         useEffect(() => {
-            if (debug) {
-                console.log('Proto-Blocks: useEffect triggered, controlValues:', JSON.stringify(controlValues));
-            }
             setIsLoading(!previewHtml);
             fetchPreview(attributes);
         }, [JSON.stringify(controlValues)]);
@@ -127,11 +132,6 @@ export function createEditComponent(block: BlockData) {
         // Process HTML to React
         const content = useMemo(() => {
             if (!previewHtml) return null;
-
-            if (debug) {
-                console.log('Proto-Blocks: Processing HTML with fields:', Object.keys(block.fields || {}));
-                console.log('Proto-Blocks: Full fields config:', block.fields);
-            }
 
             return processHtmlToReact(previewHtml, {
                 attributes,

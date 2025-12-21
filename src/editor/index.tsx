@@ -13,40 +13,32 @@ import { InnerBlocks } from '@wordpress/block-editor';
 import { createElement } from '@wordpress/element';
 import { getBlockIcon } from './utils/icon-utils';
 
-// Log immediately to confirm script is loading
-console.log('Proto-Blocks: Editor script loaded');
-
 // Get data from PHP
 const protoBlocksData = window.protoBlocksData;
 const debug = protoBlocksData?.debug || false;
 
-// Log data availability
-console.log('Proto-Blocks: protoBlocksData exists:', !!protoBlocksData);
-console.log('Proto-Blocks: protoBlocksData value:', protoBlocksData);
-
 const blocks: BlockData[] = protoBlocksData?.blocks || [];
 
-console.log('Proto-Blocks: Found', blocks.length, 'blocks to register');
-
 if (debug) {
-    console.log('Proto-Blocks: Debug mode enabled');
-    console.log('Proto-Blocks: Block data:', blocks);
+    console.log('Proto-Blocks: Editor initialized with', blocks.length, 'blocks');
 }
 
 // Register each block
-if (blocks.length === 0) {
-    console.warn('Proto-Blocks: No blocks to register. Check that protoBlocksData.blocks is properly populated.');
-}
-
 blocks.forEach((block) => {
     try {
-        console.log(`Proto-Blocks: Registering block "${block.name}"...`);
-        console.log('Proto-Blocks: Block config:', {
-            name: block.name,
-            title: block.title,
-            category: block.category,
-            attributes: block.attributes,
-        });
+
+        // Extend attributes with internal preview attributes if preview image exists
+        const extendedAttributes = { ...block.attributes };
+        if (block.previewImage) {
+            extendedAttributes.__isPreview = {
+                type: 'boolean',
+                default: false,
+            };
+            extendedAttributes.__previewImage = {
+                type: 'string',
+                default: '',
+            };
+        }
 
         const blockConfig: BlockConfiguration<BlockAttributes> = {
             apiVersion: 3,
@@ -56,15 +48,31 @@ blocks.forEach((block) => {
             icon: getBlockIcon(block.icon),
             keywords: block.keywords || [],
             supports: normalizeSupports(block.supports),
-            attributes: block.attributes,
+            attributes: extendedAttributes,
             edit: createEditComponent(block),
             // Use createElement instead of JSX to avoid runtime issues
             save: () => createElement(InnerBlocks.Content),
         };
 
-        registerBlockType(`proto-blocks/${block.name}`, blockConfig);
+        // Add example property for block preview in inserter
+        // If a preview image exists, use it; otherwise use default example attributes
+        if (block.previewImage) {
+            blockConfig.example = {
+                attributes: {
+                    __isPreview: true,
+                    __previewImage: block.previewImage,
+                },
+                viewportWidth: 500,
+            };
+        } else {
+            // Default example with empty attributes to trigger a preview render
+            blockConfig.example = {
+                attributes: {},
+                viewportWidth: 400,
+            };
+        }
 
-        console.log(`Proto-Blocks: Successfully registered "proto-blocks/${block.name}"`);
+        registerBlockType(`proto-blocks/${block.name}`, blockConfig);
     } catch (error) {
         console.error(`Proto-Blocks: Failed to register block "${block.name}"`, error);
     }
@@ -84,9 +92,4 @@ function normalizeSupports(supports: BlockSupports = {}): BlockSupports {
         spacing: supports.spacing ?? false,
         ...supports,
     };
-}
-
-// Log completion
-if (debug) {
-    console.log('Proto-Blocks: Editor initialization complete');
 }

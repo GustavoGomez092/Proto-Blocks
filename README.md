@@ -36,7 +36,8 @@ your-theme/
     └── card/
         ├── block.json
         ├── template.php
-        └── style.css
+        ├── style.css
+        └── preview.png    (optional - block preview screenshot)
 ```
 
 ### 2. Define the Block Schema (block.json)
@@ -424,6 +425,55 @@ store('my-namespace/accordion', {
 - Plain JavaScript works perfectly fine and may be simpler for basic interactions
 - You can even use jQuery if it's already loaded on your site
 - Mix and match approaches across different blocks as needed
+
+## Block Preview Screenshots
+
+Proto-Blocks supports custom preview screenshots that appear in the block inserter. Instead of showing "No preview available" or a rendered preview, you can provide a static image that shows exactly how your block looks.
+
+### Adding a Preview Image
+
+Simply add an image file named `preview` to your block folder:
+
+```
+your-block/
+├── block.json
+├── template.php
+├── style.css
+└── preview.png    ← Your preview screenshot
+```
+
+### Supported Formats
+
+- `preview.png` (recommended)
+- `preview.jpg`
+- `preview.jpeg`
+- `preview.webp`
+
+### Recommended Dimensions
+
+- **Width**: 400px (matches the inserter preview viewport)
+- **Height**: Proportional to your block's typical appearance
+- **Format**: PNG for crisp text and UI elements, JPG/WebP for photographic content
+
+### Example
+
+```
+examples/
+└── accordion/
+    ├── block.json
+    ├── template.php
+    ├── style.css
+    ├── view.js
+    └── preview.png    ← Shows accordion in expanded state
+```
+
+When users hover over your block in the inserter, they'll see your custom preview image instead of the default "No preview available" message.
+
+### Benefits
+
+- **Visual clarity**: Users immediately see what the block looks like
+- **Faster inserter**: No need to render a live preview
+- **Design control**: Show the block in its best state (expanded, populated, styled)
 
 ## Editor Preview System
 

@@ -61,17 +61,8 @@ class Assets
      */
     public function enqueueEditorAssets(): void
     {
-        if (PROTO_BLOCKS_DEBUG) {
-            error_log('Proto-Blocks: enqueueEditorAssets() called');
-            error_log('Proto-Blocks: Script registered: ' . (wp_script_is('proto-blocks-editor', 'registered') ? 'yes' : 'no'));
-        }
-
         // Enqueue the already-registered script
         wp_enqueue_script('proto-blocks-editor');
-
-        if (PROTO_BLOCKS_DEBUG) {
-            error_log('Proto-Blocks: Script enqueued: ' . (wp_script_is('proto-blocks-editor', 'enqueued') ? 'yes' : 'no'));
-        }
 
         // Localize data for JavaScript
         $this->localizeEditorData();
@@ -162,11 +153,6 @@ class Assets
             return !str_contains($dep, '/') && !in_array($dep, $invalidDeps, true);
         });
 
-        if (PROTO_BLOCKS_DEBUG) {
-            error_log('Proto-Blocks: Asset file exists: ' . (file_exists($assetPath) ? 'yes' : 'no'));
-            error_log('Proto-Blocks: Dependencies: ' . implode(', ', $dependencies));
-        }
-
         wp_register_script(
             'proto-blocks-editor',
             PROTO_BLOCKS_URL . 'assets/js/editor.js',
@@ -206,10 +192,6 @@ class Assets
         $blocks = $this->discovery->discover();
         $data = [];
 
-        if (PROTO_BLOCKS_DEBUG) {
-            error_log('Proto-Blocks: Discovered ' . count($blocks) . ' blocks');
-        }
-
         foreach ($blocks as $name => $path) {
             try {
                 $schema = $this->schemaReader->read($path);
@@ -218,12 +200,14 @@ class Assets
                 // Resolve template path properly
                 $templatePath = $this->resolveTemplatePath($path, $name, $protoConfig);
 
-                if (PROTO_BLOCKS_DEBUG) {
-                    error_log(sprintf('Proto-Blocks: Processing block "%s" with template "%s"', $name, $templatePath));
-                }
-
                 $engine = Plugin::getInstance()->getEngine();
                 $parsedData = $engine->parse($templatePath, $schema);
+
+                // Get preview image URL if exists
+                $previewImageUrl = null;
+                if (!empty($protoConfig['previewImage'])) {
+                    $previewImageUrl = $this->pathToUrl($protoConfig['previewImage']);
+                }
 
                 $data[] = [
                     'name' => $name,
@@ -236,12 +220,9 @@ class Assets
                     'fields' => $protoConfig['fields'] ?? $parsedData['fields'] ?? [],
                     'controls' => $protoConfig['controls'] ?? [],
                     'attributes' => $this->generateAttributes($schema, $parsedData),
+                    'previewImage' => $previewImageUrl,
                     'metadata' => $schema,
                 ];
-
-                if (PROTO_BLOCKS_DEBUG) {
-                    error_log(sprintf('Proto-Blocks: Successfully loaded block "%s"', $name));
-                }
             } catch (\Throwable $e) {
                 if (PROTO_BLOCKS_DEBUG) {
                     error_log(sprintf(
@@ -337,5 +318,42 @@ class Assets
         $attributes['innerBlocksContent'] = ['type' => 'string', 'default' => ''];
 
         return $attributes;
+    }
+
+    /**
+     * Convert a file system path to a URL
+     *
+     * @param string $path File system path
+     * @return string URL
+     */
+    private function pathToUrl(string $path): string
+    {
+        $themeDir = get_template_directory();
+        $childThemeDir = get_stylesheet_directory();
+
+        // Check if in child theme
+        if (str_starts_with($path, $childThemeDir)) {
+            return get_stylesheet_directory_uri() . substr($path, strlen($childThemeDir));
+        }
+
+        // Check if in parent theme
+        if (str_starts_with($path, $themeDir)) {
+            return get_template_directory_uri() . substr($path, strlen($themeDir));
+        }
+
+        // Check if in plugin directory
+        if (str_starts_with($path, WP_PLUGIN_DIR)) {
+            $relativePath = substr($path, strlen(WP_PLUGIN_DIR));
+            return plugins_url($relativePath);
+        }
+
+        // Check if in wp-content
+        if (str_starts_with($path, WP_CONTENT_DIR)) {
+            $relativePath = substr($path, strlen(WP_CONTENT_DIR));
+            return content_url($relativePath);
+        }
+
+        // Fallback - return as-is (might not work)
+        return $path;
     }
 }

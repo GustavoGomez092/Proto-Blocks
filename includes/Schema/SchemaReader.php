@@ -145,6 +145,9 @@ class SchemaReader
         // Store block directory
         $protoBlocks['blockDir'] = $blockDir;
 
+        // Detect preview image
+        $protoBlocks['previewImage'] = $this->detectPreviewImage($blockDir);
+
         $schema['protoBlocks'] = $protoBlocks;
 
         // Ensure supports defaults
@@ -241,5 +244,27 @@ class SchemaReader
     public function clearCache(): void
     {
         $this->cache = [];
+    }
+
+    /**
+     * Detect preview image in block directory
+     *
+     * Looks for preview.png, preview.jpg, or preview.jpeg in the block folder.
+     *
+     * @param string $blockDir Block directory path
+     * @return string|null Preview image file path or null if not found
+     */
+    private function detectPreviewImage(string $blockDir): ?string
+    {
+        $extensions = ['png', 'jpg', 'jpeg', 'webp'];
+
+        foreach ($extensions as $ext) {
+            $previewPath = $blockDir . '/preview.' . $ext;
+            if (file_exists($previewPath)) {
+                return $previewPath;
+            }
+        }
+
+        return null;
     }
 }

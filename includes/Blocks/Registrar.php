@@ -273,9 +273,6 @@ class Registrar
     private function registerInteractivityStore(string $name, string $path, array $config, bool $hasViewScriptModule = false): void
     {
         if (!function_exists('wp_register_script_module')) {
-            if (PROTO_BLOCKS_DEBUG) {
-                error_log('Proto-Blocks: wp_register_script_module not available - WordPress 6.5+ required for Interactivity API');
-            }
             return;
         }
 
@@ -284,9 +281,6 @@ class Registrar
         if (!file_exists($moduleFile)) {
             $moduleFile = $path . '/' . $name . '.interactivity.js';
             if (!file_exists($moduleFile)) {
-                if (PROTO_BLOCKS_DEBUG) {
-                    error_log('Proto-Blocks: No view script found for ' . $name);
-                }
                 return;
             }
         }
@@ -302,34 +296,24 @@ class Registrar
             filemtime($moduleFile)
         );
 
-        if (PROTO_BLOCKS_DEBUG) {
-            error_log('Proto-Blocks: Registered script module ' . $moduleHandle . ' from ' . $baseUrl . '/' . basename($moduleFile));
-        }
-
         // Store module handle for later enqueueing
         $blockModuleHandles = get_option('proto_blocks_module_handles', []);
         $blockModuleHandles[$name] = $moduleHandle;
         update_option('proto_blocks_module_handles', $blockModuleHandles, false);
 
         // Enqueue the module when the block is rendered on frontend
-        add_filter('render_block_proto-blocks/' . $name, function($block_content, $block) use ($moduleHandle, $name) {
+        add_filter('render_block_proto-blocks/' . $name, function($block_content, $block) use ($moduleHandle) {
             if (!is_admin() && !empty($block_content)) {
                 wp_enqueue_script_module($moduleHandle);
-                if (defined('PROTO_BLOCKS_DEBUG') && PROTO_BLOCKS_DEBUG) {
-                    error_log('Proto-Blocks: Enqueued script module ' . $moduleHandle . ' for block ' . $name . ' via render filter');
-                }
             }
             return $block_content;
         }, 10, 2);
 
         // Also enqueue via wp_footer as backup
         $moduleUrl = $baseUrl . '/' . basename($moduleFile);
-        add_action('wp_footer', function() use ($moduleHandle, $name, $moduleUrl) {
+        add_action('wp_footer', function() use ($moduleHandle) {
             if (!is_admin()) {
                 wp_enqueue_script_module($moduleHandle);
-                if (defined('PROTO_BLOCKS_DEBUG') && PROTO_BLOCKS_DEBUG) {
-                    error_log('Proto-Blocks: Enqueued script module ' . $moduleHandle . ' for block ' . $name . ' via wp_footer');
-                }
             }
         }, 1);
 
@@ -341,10 +325,6 @@ class Registrar
                 echo '<script type="module" src="' . esc_url($moduleUrl) . '"></script>' . "\n";
             }
         }, 5);
-
-        if (PROTO_BLOCKS_DEBUG) {
-            error_log('Proto-Blocks: Setup complete for block proto-blocks/' . $name . ' with module ' . $moduleHandle);
-        }
     }
 
     /**
@@ -434,6 +414,12 @@ class Registrar
             $templatePath = $protoConfig['templatePath'] ?? $this->resolveTemplatePath($block['path'], $name);
             $parsedData = $this->engine->parse($templatePath, $schema);
 
+            // Get preview image URL if exists
+            $previewImageUrl = null;
+            if (!empty($protoConfig['previewImage'])) {
+                $previewImageUrl = $this->getAssetUrl(dirname($protoConfig['previewImage'])) . '/' . basename($protoConfig['previewImage']);
+            }
+
             $data[] = [
                 'name' => $name,
                 'title' => $schema['title'] ?? ucwords(str_replace('-', ' ', $name)),
@@ -445,6 +431,7 @@ class Registrar
                 'attributes' => $block['attributes'],
                 'fields' => $parsedData['fields'] ?? [],
                 'controls' => $protoConfig['controls'] ?? [],
+                'previewImage' => $previewImageUrl,
                 'metadata' => $schema,
             ];
         }
