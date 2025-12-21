@@ -1,0 +1,200 @@
+/**
+ * Proto-Blocks Admin Styles
+ */
+
+/* Main container */
+.proto-blocks-admin {
+    max-width: 1200px;
+    margin: 20px auto;
+    padding: 0 20px;
+}
+
+/* Header */
+.proto-blocks-admin__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.proto-blocks-admin__header h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 600;
+    color: #1e1e1e;
+}
+
+.proto-blocks-admin__version {
+    padding: 4px 8px;
+    background: #f0f0f0;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #757575;
+}
+
+/* Content grid */
+.proto-blocks-admin__content {
+    display: grid;
+    gap: 24px;
+}
+
+/* Cards */
+.proto-blocks-admin__card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.proto-blocks-admin__card .components-card__header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.proto-blocks-admin__card .components-card__header h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.proto-blocks-admin__card .components-card__body {
+    padding: 20px;
+}
+
+/* Table */
+.proto-blocks-admin__table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.proto-blocks-admin__table th,
+.proto-blocks-admin__table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.proto-blocks-admin__table th {
+    background: #f9f9f9;
+    font-weight: 600;
+    color: #1e1e1e;
+}
+
+.proto-blocks-admin__table tr:last-child td {
+    border-bottom: none;
+}
+
+.proto-blocks-admin__table code {
+    padding: 2px 6px;
+    background: #f0f0f0;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+/* Empty state */
+.proto-blocks-admin__empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: #757575;
+}
+
+/* Debug info */
+.proto-blocks-admin__debug-info {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 8px 16px;
+    margin: 0 0 16px;
+}
+
+.proto-blocks-admin__debug-info dt {
+    font-weight: 600;
+    color: #1e1e1e;
+}
+
+.proto-blocks-admin__debug-info dd {
+    margin: 0;
+    color: #50575e;
+}
+
+/* Code block */
+.proto-blocks-admin__code {
+    margin: 16px 0 0;
+    padding: 16px;
+    background: #282c34;
+    border-radius: 4px;
+    color: #abb2bf;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre;
+}
+
+/* Description */
+.proto-blocks-admin .description {
+    margin-top: 16px;
+    padding: 12px;
+    background: #f0f0f0;
+    border-radius: 4px;
+    color: #50575e;
+    font-size: 13px;
+}
+
+/* Documentation section */
+.proto-blocks-admin h3 {
+    margin: 24px 0 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e1e1e;
+}
+
+.proto-blocks-admin h3:first-child {
+    margin-top: 0;
+}
+
+.proto-blocks-admin ol {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.proto-blocks-admin ol li {
+    margin-bottom: 8px;
+    color: #50575e;
+}
+
+/* Button with spinner */
+.proto-blocks-admin .components-button .components-spinner {
+    margin-right: 8px;
+}
+
+/* Notice overrides */
+.proto-blocks-admin .components-notice {
+    margin: 0 0 24px;
+}
+
+/* Responsive */
+@media (max-width: 782px) {
+    .proto-blocks-admin {
+        padding: 0 12px;
+    }
+
+    .proto-blocks-admin__header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .proto-blocks-admin__debug-info {
+        grid-template-columns: 1fr;
+    }
+
+    .proto-blocks-admin__debug-info dt {
+        margin-top: 8px;
+    }
+
+    .proto-blocks-admin__table {
+        display: block;
+        overflow-x: auto;
+    }
+}

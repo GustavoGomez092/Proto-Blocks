@@ -1,0 +1,76 @@
+{
+    "$schema": "https://schemas.wp.org/trunk/block.json",
+    "apiVersion": 3,
+    "name": "proto-blocks/testimonial",
+    "title": "Testimonial",
+    "description": "Display customer testimonials with quote, author info, and optional rating.",
+    "category": "proto-blocks",
+    "icon": "format-quote",
+    "keywords": ["testimonial", "quote", "review", "customer"],
+    "supports": {
+        "html": false,
+        "anchor": true,
+        "customClassName": true,
+        "align": ["wide"],
+        "color": {
+            "background": true,
+            "text": true
+        },
+        "spacing": {
+            "padding": true,
+            "margin": true
+        }
+    },
+    "protoBlocks": {
+        "version": "1.0",
+        "template": "template.php",
+        "fields": {
+            "quote": {
+                "type": "wysiwyg"
+            },
+            "authorName": {
+                "type": "text",
+                "tagName": "cite"
+            },
+            "authorTitle": {
+                "type": "text",
+                "tagName": "span"
+            },
+            "authorImage": {
+                "type": "image",
+                "sizes": ["thumbnail"]
+            }
+        },
+        "controls": {
+            "style": {
+                "type": "select",
+                "label": "Style",
+                "default": "default",
+                "options": [
+                    { "key": "default", "label": "Default" },
+                    { "key": "bordered", "label": "Bordered" },
+                    { "key": "filled", "label": "Filled Background" }
+                ],
+                "affects": ["quote"]
+            },
+            "showAvatar": {
+                "type": "toggle",
+                "label": "Show Author Avatar",
+                "default": true
+            },
+            "rating": {
+                "type": "range",
+                "label": "Star Rating",
+                "default": 5,
+                "min": 0,
+                "max": 5,
+                "step": 1
+            },
+            "showRating": {
+                "type": "toggle",
+                "label": "Show Rating",
+                "default": true
+            }
+        }
+    }
+}

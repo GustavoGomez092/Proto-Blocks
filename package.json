@@ -1,0 +1,31 @@
+{
+  "name": "proto-blocks",
+  "version": "1.0.0",
+  "description": "Create Gutenberg blocks using PHP/HTML templates instead of React",
+  "author": "Your Name",
+  "license": "GPL-2.0-or-later",
+  "main": "assets/js/editor.js",
+  "scripts": {
+    "build": "wp-scripts build",
+    "start": "wp-scripts start",
+    "lint:js": "wp-scripts lint-js",
+    "lint:css": "wp-scripts lint-style",
+    "lint": "npm run lint:js && npm run lint:css",
+    "format": "wp-scripts format",
+    "packages-update": "wp-scripts packages-update",
+    "zip": "node scripts/build-zip.js",
+    "dist": "npm run build && npm run zip"
+  },
+  "devDependencies": {
+    "@wordpress/scripts": "^30.0.0",
+    "archiver": "^7.0.1",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.1.0",
+    "@dnd-kit/sortable": "^8.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@wordpress/icons": "^10.0.0"
+  }
+}

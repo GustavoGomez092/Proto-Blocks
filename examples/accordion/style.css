@@ -1,0 +1,129 @@
+/**
+ * Accordion Block Styles
+ */
+
+.proto-accordion {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Item */
+.proto-accordion__item {
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.proto-accordion__item:last-child {
+    border-bottom: none;
+}
+
+/* Header */
+.proto-accordion__header {
+    margin: 0;
+}
+
+/* Trigger */
+.proto-accordion__trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 16px 20px;
+    border: none;
+    background: #fff;
+    font-size: 1rem;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.proto-accordion__trigger:hover {
+    background-color: #f5f5f5;
+}
+
+.proto-accordion__trigger:focus {
+    outline: 2px solid #007cba;
+    outline-offset: -2px;
+}
+
+/* Title */
+.proto-accordion__title {
+    flex: 1;
+    color: #1e1e1e;
+}
+
+/* Icon */
+.proto-accordion__icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    color: #757575;
+    transition: transform 0.3s ease;
+}
+
+.proto-accordion__icon svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* Icon position left */
+.proto-accordion--icon-left .proto-accordion__trigger {
+    flex-direction: row-reverse;
+}
+
+.proto-accordion--icon-left .proto-accordion__icon {
+    margin-right: 12px;
+}
+
+/* Open state */
+.proto-accordion__item.is-open .proto-accordion__trigger {
+    background-color: #f9f9f9;
+}
+
+.proto-accordion__item.is-open .proto-accordion__icon {
+    transform: rotate(180deg);
+}
+
+/* Panel */
+.proto-accordion__panel {
+    overflow: hidden;
+}
+
+.proto-accordion__panel[hidden] {
+    display: none;
+}
+
+/* Content */
+.proto-accordion__content {
+    padding: 20px;
+    background: #fafafa;
+    color: #50575e;
+    line-height: 1.6;
+}
+
+.proto-accordion__content p:first-child {
+    margin-top: 0;
+}
+
+.proto-accordion__content p:last-child {
+    margin-bottom: 0;
+}
+
+/* Animation (optional enhancement) */
+@media (prefers-reduced-motion: no-preference) {
+    .proto-accordion__panel {
+        transition: max-height 0.3s ease-out;
+    }
+}
+
+/* Focus visible for keyboard navigation */
+.proto-accordion__trigger:focus-visible {
+    outline: 2px solid #007cba;
+    outline-offset: -2px;
+    z-index: 1;
+    position: relative;
+}

@@ -1,0 +1,73 @@
+{
+    "$schema": "https://schemas.wp.org/trunk/block.json",
+    "apiVersion": 3,
+    "name": "proto-blocks/accordion",
+    "title": "Accordion",
+    "description": "Collapsible accordion sections with customizable content using the Interactivity API.",
+    "category": "proto-blocks",
+    "icon": "list-view",
+    "keywords": ["accordion", "toggle", "collapse", "faq", "expandable"],
+    "supports": {
+        "html": false,
+        "anchor": true,
+        "customClassName": true,
+        "align": ["wide", "full"],
+        "color": {
+            "background": true,
+            "text": true
+        },
+        "spacing": {
+            "padding": true,
+            "margin": true
+        },
+        "interactivity": true
+    },
+    "protoBlocks": {
+        "version": "1.0",
+        "template": "template.php",
+        "fields": {
+            "items": {
+                "type": "repeater",
+                "min": 1,
+                "max": 20,
+                "itemLabel": "title",
+                "collapsible": true,
+                "fields": {
+                    "title": {
+                        "type": "text",
+                        "label": "Title",
+                        "tagName": "span"
+                    },
+                    "content": {
+                        "type": "wysiwyg",
+                        "label": "Content"
+                    }
+                }
+            }
+        },
+        "controls": {
+            "allowMultiple": {
+                "type": "toggle",
+                "label": "Allow Multiple Open",
+                "default": false
+            },
+            "firstOpen": {
+                "type": "toggle",
+                "label": "First Item Open by Default",
+                "default": true
+            },
+            "iconPosition": {
+                "type": "select",
+                "label": "Icon Position",
+                "default": "right",
+                "options": [
+                    { "key": "left", "label": "Left" },
+                    { "key": "right", "label": "Right" }
+                ]
+            }
+        },
+        "interactivity": {
+            "store": "proto-blocks/accordion"
+        }
+    }
+}

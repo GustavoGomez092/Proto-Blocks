@@ -1,0 +1,79 @@
+{
+    "$schema": "https://schemas.wp.org/trunk/block.json",
+    "apiVersion": 3,
+    "name": "proto-blocks/card",
+    "title": "Card",
+    "description": "A versatile card block with image, title, content, and call-to-action link.",
+    "category": "proto-blocks",
+    "icon": "admin-post",
+    "keywords": ["card", "box", "feature", "content"],
+    "supports": {
+        "html": false,
+        "anchor": true,
+        "customClassName": true,
+        "align": ["wide", "full"],
+        "color": {
+            "background": true,
+            "text": true
+        },
+        "spacing": {
+            "padding": true,
+            "margin": true
+        }
+    },
+    "protoBlocks": {
+        "version": "1.0",
+        "template": "template.php",
+        "fields": {
+            "image": {
+                "type": "image",
+                "sizes": ["medium", "large"]
+            },
+            "title": {
+                "type": "text",
+                "tagName": "h3"
+            },
+            "content": {
+                "type": "wysiwyg"
+            },
+            "link": {
+                "type": "link",
+                "tagName": "a"
+            }
+        },
+        "controls": {
+            "layout": {
+                "type": "select",
+                "label": "Layout",
+                "default": "vertical",
+                "options": [
+                    { "key": "vertical", "label": "Vertical" },
+                    { "key": "horizontal", "label": "Horizontal" },
+                    { "key": "overlay", "label": "Overlay" }
+                ],
+                "affects": ["image", "content"]
+            },
+            "imagePosition": {
+                "type": "select",
+                "label": "Image Position",
+                "default": "top",
+                "options": [
+                    { "key": "top", "label": "Top" },
+                    { "key": "bottom", "label": "Bottom" },
+                    { "key": "left", "label": "Left" },
+                    { "key": "right", "label": "Right" }
+                ],
+                "conditions": {
+                    "visible": {
+                        "layout": ["vertical", "horizontal"]
+                    }
+                }
+            },
+            "showLink": {
+                "type": "toggle",
+                "label": "Show Call to Action",
+                "default": true
+            }
+        }
+    }
+}
