@@ -14,6 +14,8 @@ use DOMElement;
 use DOMXPath;
 use ProtoBlocks\Fields\Registry as FieldRegistry;
 use ProtoBlocks\Controls\Registry as ControlRegistry;
+use ProtoBlocks\Tailwind\Manager as TailwindManager;
+use ProtoBlocks\Tailwind\Scoper as TailwindScoper;
 
 /**
  * Renders PHP templates with saved attribute values
@@ -237,6 +239,11 @@ class Renderer
         // Style attribute (colors, spacing, typography)
         if (!empty($attributes['style']) && is_array($attributes['style'])) {
             $this->processStyleAttribute($attributes['style'], $classes, $styles);
+        }
+
+        // Add Tailwind scope class if enabled
+        if (TailwindManager::getInstance()->isEnabled()) {
+            $classes[] = TailwindScoper::SCOPE_CLASS;
         }
 
         // Apply classes

@@ -1,0 +1,59 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "proto-blocks/tl-hero",
+	"version": "1.0.0",
+	"title": "Tailwind Hero",
+	"category": "proto-blocks",
+	"icon": "cover-image",
+	"description": "A dark hero section with gradient backgrounds, announcement badge, and dual CTAs. Styled entirely with Tailwind CSS.",
+	"keywords": ["hero", "tailwind", "dark", "gradient", "cta"],
+	"supports": {
+		"html": false,
+		"align": ["wide", "full"],
+		"anchor": true,
+		"customClassName": true
+	},
+	"protoBlocks": {
+		"version": "1.0",
+		"template": "template.php",
+		"fields": {
+			"badgeText": {
+				"type": "text",
+				"tagName": "span"
+			},
+			"badgeLink": {
+				"type": "link",
+				"tagName": "a"
+			},
+			"heading": {
+				"type": "text",
+				"tagName": "h1"
+			},
+			"description": {
+				"type": "text",
+				"tagName": "p"
+			},
+			"primaryButton": {
+				"type": "link",
+				"tagName": "a"
+			},
+			"secondaryLink": {
+				"type": "link",
+				"tagName": "a"
+			}
+		},
+		"controls": {
+			"showBadge": {
+				"type": "toggle",
+				"label": "Show Announcement Badge",
+				"default": true
+			},
+			"showSecondaryLink": {
+				"type": "toggle",
+				"label": "Show Secondary Link",
+				"default": true
+			}
+		}
+	}
+}

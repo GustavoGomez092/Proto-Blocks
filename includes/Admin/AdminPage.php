@@ -11,6 +11,7 @@ namespace ProtoBlocks\Admin;
 
 use ProtoBlocks\Template\Cache;
 use ProtoBlocks\Core\Plugin;
+use ProtoBlocks\Tailwind\Manager as TailwindManager;
 
 /**
  * Admin settings page for Proto-Blocks
@@ -414,6 +415,14 @@ class AdminPage
                     </tr>
                 </table>
             </div>
+
+            <?php
+            // Render Tailwind CSS settings section
+            $tailwindAdmin = Plugin::getInstance()->getTailwindAdminSettings();
+            if ($tailwindAdmin !== null) {
+                $tailwindAdmin->render();
+            }
+            ?>
         </div>
 
         <style>

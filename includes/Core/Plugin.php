@@ -21,6 +21,8 @@ use ProtoBlocks\API\RestAPI;
 use ProtoBlocks\API\AjaxHandler;
 use ProtoBlocks\Admin\AdminPage;
 use ProtoBlocks\Admin\Assets;
+use ProtoBlocks\Tailwind\Manager as TailwindManager;
+use ProtoBlocks\Tailwind\AdminSettings as TailwindAdminSettings;
 
 /**
  * Main plugin singleton class
@@ -242,6 +244,17 @@ final class Plugin
         if (is_admin()) {
             $this->services['admin_page'] = new AdminPage($this->getCache());
         }
+
+        // Tailwind Manager
+        $tailwindManager = TailwindManager::getInstance();
+        $tailwindManager->init($this->getDiscovery());
+        $this->services['tailwind_manager'] = $tailwindManager;
+
+        // Tailwind Admin Settings (only if in admin)
+        if (is_admin()) {
+            $this->services['tailwind_admin'] = new TailwindAdminSettings($tailwindManager);
+            $this->services['tailwind_admin']->init();
+        }
     }
 
     /**
@@ -267,8 +280,14 @@ final class Plugin
         // Editor assets - localize data (script already registered on init)
         add_action('enqueue_block_editor_assets', [$this->getAssets(), 'enqueueEditorAssets']);
 
+        // Add Tailwind CSS to editor via add_editor_style (for iframe support)
+        add_action('after_setup_theme', [$this->getAssets(), 'addEditorStyles']);
+
         // Frontend assets
         add_action('enqueue_block_assets', [$this->getAssets(), 'enqueueBlockAssets']);
+
+        // Tailwind CSS on all frontend pages (fallback for pages without blocks)
+        add_action('wp_enqueue_scripts', [$this->getAssets(), 'enqueueFrontendAssets']);
 
         // Admin page (if in admin)
         if (is_admin()) {
@@ -280,6 +299,12 @@ final class Plugin
         if (defined('WP_CLI') && WP_CLI) {
             $this->loadCLICommands();
         }
+
+        // Tailwind on-reload compilation (for development mode)
+        add_action('init', [$this->getTailwindManager(), 'maybeCompileOnReload'], 99);
+
+        // Disable WordPress global styles if enabled in settings
+        add_action('init', [$this->getTailwindManager(), 'maybeDisableGlobalStyles'], 10);
     }
 
     /**
@@ -351,5 +376,15 @@ final class Plugin
     public function getAdminPage(): AdminPage
     {
         return $this->services['admin_page'];
+    }
+
+    public function getTailwindManager(): TailwindManager
+    {
+        return $this->services['tailwind_manager'];
+    }
+
+    public function getTailwindAdminSettings(): ?TailwindAdminSettings
+    {
+        return $this->services['tailwind_admin'] ?? null;
     }
 }

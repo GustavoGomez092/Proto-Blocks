@@ -1,0 +1,9 @@
+/**
+ * Proto Blocks - Common Styles
+ * Shared styles for both frontend and editor
+ */
+
+/* Base styles for Proto Blocks */
+.proto-blocks-scope {
+    /* Scope container for Tailwind CSS isolation */
+}

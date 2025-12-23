@@ -32,8 +32,9 @@ export function createEditComponent(block: BlockData) {
         const previewImageUrl = attributes.__previewImage as string | undefined;
 
         // Block props with click handler
+        // Include proto-blocks-scope for Tailwind CSS support in editor
         const blockProps = useBlockProps({
-            className: `proto-block proto-block-${block.name}`,
+            className: `proto-block proto-block-${block.name} proto-blocks-scope`,
         });
 
         // If this is an inserter preview with a custom preview image, render it

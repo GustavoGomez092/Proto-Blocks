@@ -14,6 +14,7 @@ use ProtoBlocks\Schema\SchemaReader;
 use ProtoBlocks\Fields\Registry as FieldRegistry;
 use ProtoBlocks\Controls\Registry as ControlRegistry;
 use ProtoBlocks\Core\Plugin;
+use ProtoBlocks\Tailwind\Manager as TailwindManager;
 
 /**
  * Manages asset registration and enqueuing
@@ -91,6 +92,88 @@ class Assets
             [],
             PROTO_BLOCKS_VERSION
         );
+
+        // Enqueue Tailwind CSS (both frontend and editor)
+        $this->enqueueTailwindCss();
+    }
+
+    /**
+     * Enqueue frontend scripts (for Tailwind CSS on all pages)
+     */
+    public function enqueueFrontendAssets(): void
+    {
+        // Only on frontend, not admin
+        if (is_admin()) {
+            return;
+        }
+
+        $this->enqueueTailwindCss();
+    }
+
+    /**
+     * Add Tailwind CSS to block editor via add_editor_style
+     * This ensures the CSS loads in the editor iframe
+     */
+    public function addEditorStyles(): void
+    {
+        $tailwindManager = TailwindManager::getInstance();
+
+        if (!$tailwindManager->isEnabled()) {
+            return;
+        }
+
+        $cache = $tailwindManager->getCache();
+
+        if ($cache->exists()) {
+            // add_editor_style works with URLs for editor iframe
+            add_editor_style($cache->getUrl());
+        }
+    }
+
+    /**
+     * Enqueue Tailwind CSS if enabled
+     */
+    private function enqueueTailwindCss(): void
+    {
+        $tailwindManager = TailwindManager::getInstance();
+
+        if (!$tailwindManager->isEnabled()) {
+            return;
+        }
+
+        $cache = $tailwindManager->getCache();
+
+        // Only enqueue if compiled CSS exists
+        if (!$cache->exists()) {
+            return;
+        }
+
+        // Ensure common styles are registered (dependency for Tailwind)
+        if (!wp_style_is('proto-blocks-common', 'registered')) {
+            wp_register_style(
+                'proto-blocks-common',
+                PROTO_BLOCKS_URL . 'assets/css/common.css',
+                [],
+                PROTO_BLOCKS_VERSION
+            );
+        }
+
+        // Enqueue for both frontend and editor
+        wp_enqueue_style(
+            'proto-blocks-tailwind',
+            $cache->getUrl(),
+            ['proto-blocks-common'],
+            $cache->getVersion()
+        );
+
+        // Add editor-specific inline styles
+        if (is_admin()) {
+            $scoper = $tailwindManager->getScoper();
+            wp_add_inline_style(
+                'proto-blocks-tailwind',
+                $scoper->getEditorScopeCss()
+            );
+        }
     }
 
     /**

@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run build)"
+      "Bash(npm run build)",
+      "Bash(php -l:*)",
+      "Bash(for:*)",
+      "Bash(do php -l:*)",
+      "Bash(done)",
+      "Bash(cat:*)"
     ]
   }
 }
