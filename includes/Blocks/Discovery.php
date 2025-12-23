@@ -178,6 +178,7 @@ class Discovery
                 'isExample' => $metadata['protoBlocks']['isExample']
                     ?? $metadata['isExample']
                     ?? str_contains($path, PROTO_BLOCKS_DIR . 'examples'),
+                'usesTailwind' => $metadata['protoBlocks']['useTailwind'] ?? false,
             ];
         }
 

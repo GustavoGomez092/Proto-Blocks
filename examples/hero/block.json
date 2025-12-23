@@ -16,6 +16,7 @@
     "protoBlocks": {
         "version": "1.0",
         "isExample": true,
+        "useTailwind": false,
         "template": "template.php",
         "fields": {
             "title": {

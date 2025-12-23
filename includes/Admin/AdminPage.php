@@ -96,9 +96,9 @@ class AdminPage
             echo '</p></div>';
         }
 
-        // Handle install demo blocks action
-        if (isset($_POST['proto_blocks_install_demos']) && check_admin_referer('proto_blocks_install_demos')) {
-            $result = $this->installDemoBlocks();
+        // Handle install vanilla CSS demo blocks action
+        if (isset($_POST['proto_blocks_install_vanilla_demos']) && check_admin_referer('proto_blocks_install_vanilla_demos')) {
+            $result = $this->installDemoBlocks('vanilla');
             if (is_wp_error($result)) {
                 echo '<div class="notice notice-error"><p>';
                 echo esc_html($result->get_error_message());
@@ -107,14 +107,43 @@ class AdminPage
                 echo '<div class="notice notice-success"><p>';
                 printf(
                     esc_html(_n(
-                        '%d demo block installed to your theme.',
-                        '%d demo blocks installed to your theme.',
+                        '%d vanilla CSS demo block installed to your theme.',
+                        '%d vanilla CSS demo blocks installed to your theme.',
                         $result,
                         'proto-blocks'
                     )),
                     esc_html($result)
                 );
                 echo '</p></div>';
+            }
+        }
+
+        // Handle install Tailwind demo blocks action
+        if (isset($_POST['proto_blocks_install_tailwind_demos']) && check_admin_referer('proto_blocks_install_tailwind_demos')) {
+            $tailwindEnabled = TailwindManager::getInstance()->isEnabled();
+            if (!$tailwindEnabled) {
+                echo '<div class="notice notice-error"><p>';
+                esc_html_e('Cannot install Tailwind demo blocks: Tailwind CSS support is not enabled. Please enable it in Settings first.', 'proto-blocks');
+                echo '</p></div>';
+            } else {
+                $result = $this->installDemoBlocks('tailwind');
+                if (is_wp_error($result)) {
+                    echo '<div class="notice notice-error"><p>';
+                    echo esc_html($result->get_error_message());
+                    echo '</p></div>';
+                } else {
+                    echo '<div class="notice notice-success"><p>';
+                    printf(
+                        esc_html(_n(
+                            '%d Tailwind demo block installed to your theme.',
+                            '%d Tailwind demo blocks installed to your theme.',
+                            $result,
+                            'proto-blocks'
+                        )),
+                        esc_html($result)
+                    );
+                    echo '</p></div>';
+                }
             }
         }
 
@@ -168,49 +197,70 @@ class AdminPage
                 <div class="proto-blocks-section proto-blocks-section--highlight">
                     <h2><?php esc_html_e('Demo Blocks', 'proto-blocks'); ?></h2>
                     <?php
-                    $demo_block_names = $this->getDemoBlockNames();
-                    $demo_blocks_list = implode(', ', array_map(function($name) {
-                        return '<strong>' . esc_html(ucfirst($name)) . '</strong>';
-                    }, $demo_block_names));
+                    $vanilla_blocks = $this->getDemoBlockNamesByType('vanilla');
+                    $tailwind_blocks = $this->getDemoBlockNamesByType('tailwind');
+                    $tailwindEnabled = TailwindManager::getInstance()->isEnabled();
                     ?>
-                    <p><?php
-                        printf(
-                            esc_html__('Install demo blocks (%s) to your theme to quickly test Proto-Blocks. Custom blocks you create will not be affected.', 'proto-blocks'),
-                            $demo_blocks_list
-                        );
-                    ?></p>
-                    <?php
-                    $theme_blocks_dir = get_stylesheet_directory() . '/proto-blocks';
-                    $existing_demo_blocks = [];
-                    foreach ($demo_block_names as $demo_name) {
-                        if (is_dir($theme_blocks_dir . '/' . $demo_name)) {
-                            $existing_demo_blocks[] = $demo_name;
-                        }
-                    }
-                    ?>
-                    <?php if (!empty($existing_demo_blocks)): ?>
-                        <p class="proto-blocks-warning">
-                            <span class="dashicons dashicons-warning"></span>
-                            <?php
-                            $blocks_formatted = array_map(function($name) {
-                                return '<code>' . esc_html($name) . '</code>';
-                            }, $existing_demo_blocks);
-                            printf(
-                                /* translators: %s: list of block names */
-                                __('The following demo blocks already exist and will be replaced: %s', 'proto-blocks'),
-                                implode(', ', $blocks_formatted)
-                            );
-                            ?>
-                        </p>
-                    <?php endif; ?>
-                    <form method="post">
-                        <?php wp_nonce_field('proto_blocks_install_demos'); ?>
-                        <button type="submit" name="proto_blocks_install_demos" class="button button-primary">
-                            <span class="dashicons dashicons-download" style="margin-top: 4px;"></span>
-                            <?php esc_html_e('Install Demo Blocks to Theme', 'proto-blocks'); ?>
-                        </button>
-                    </form>
-                    <p class="description" style="margin-top: 10px;">
+
+                    <div class="proto-blocks-demo-grid">
+                        <!-- Vanilla CSS Blocks -->
+                        <div class="proto-blocks-demo-type">
+                            <h3>
+                                <span class="dashicons dashicons-admin-appearance"></span>
+                                <?php esc_html_e('Vanilla CSS Examples', 'proto-blocks'); ?>
+                            </h3>
+                            <p class="description"><?php esc_html_e('Classic CSS-styled demo blocks.', 'proto-blocks'); ?></p>
+                            <ul class="proto-blocks-demo-list">
+                                <?php foreach ($vanilla_blocks as $name): ?>
+                                    <li><code><?php echo esc_html($name); ?></code></li>
+                                <?php endforeach; ?>
+                            </ul>
+                            <form method="post">
+                                <?php wp_nonce_field('proto_blocks_install_vanilla_demos'); ?>
+                                <button type="submit" name="proto_blocks_install_vanilla_demos" class="button button-primary">
+                                    <span class="dashicons dashicons-download" style="margin-top: 4px;"></span>
+                                    <?php esc_html_e('Install Vanilla CSS Blocks', 'proto-blocks'); ?>
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Tailwind CSS Blocks -->
+                        <div class="proto-blocks-demo-type <?php echo !$tailwindEnabled ? 'proto-blocks-demo-disabled' : ''; ?>">
+                            <h3>
+                                <span class="dashicons dashicons-art"></span>
+                                <?php esc_html_e('Tailwind CSS Examples', 'proto-blocks'); ?>
+                                <?php if (!$tailwindEnabled): ?>
+                                    <span class="proto-blocks-badge disabled"><?php esc_html_e('Requires Tailwind', 'proto-blocks'); ?></span>
+                                <?php endif; ?>
+                            </h3>
+                            <p class="description"><?php esc_html_e('Utility-first Tailwind CSS blocks.', 'proto-blocks'); ?></p>
+                            <ul class="proto-blocks-demo-list">
+                                <?php foreach ($tailwind_blocks as $name): ?>
+                                    <li><code><?php echo esc_html($name); ?></code></li>
+                                <?php endforeach; ?>
+                            </ul>
+                            <?php if (!$tailwindEnabled): ?>
+                                <p class="proto-blocks-warning" style="margin: 10px 0;">
+                                    <span class="dashicons dashicons-warning"></span>
+                                    <?php
+                                    printf(
+                                        __('Enable Tailwind CSS support in <a href="%s">Settings</a> to install these blocks.', 'proto-blocks'),
+                                        esc_url(admin_url('admin.php?page=proto-blocks-settings'))
+                                    );
+                                    ?>
+                                </p>
+                            <?php endif; ?>
+                            <form method="post">
+                                <?php wp_nonce_field('proto_blocks_install_tailwind_demos'); ?>
+                                <button type="submit" name="proto_blocks_install_tailwind_demos" class="button button-primary" <?php disabled(!$tailwindEnabled); ?>>
+                                    <span class="dashicons dashicons-download" style="margin-top: 4px;"></span>
+                                    <?php esc_html_e('Install Tailwind Blocks', 'proto-blocks'); ?>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <p class="description" style="margin-top: 15px;">
                         <?php
                         printf(
                             esc_html__('Blocks will be installed to: %s', 'proto-blocks'),
@@ -276,6 +326,7 @@ class AdminPage
                                     <th><?php esc_html_e('Block', 'proto-blocks'); ?></th>
                                     <th><?php esc_html_e('Category', 'proto-blocks'); ?></th>
                                     <th><?php esc_html_e('Location', 'proto-blocks'); ?></th>
+                                    <th><?php esc_html_e('Type', 'proto-blocks'); ?></th>
                                     <th><?php esc_html_e('Assets', 'proto-blocks'); ?></th>
                                 </tr>
                             </thead>
@@ -293,6 +344,13 @@ class AdminPage
                                         <td><?php echo esc_html($block['category']); ?></td>
                                         <td>
                                             <code><?php echo esc_html(str_replace(ABSPATH, '', $block['path'])); ?></code>
+                                        </td>
+                                        <td>
+                                            <?php if (!empty($block['usesTailwind'])): ?>
+                                                <span class="proto-blocks-badge tailwind"><?php esc_html_e('Tailwind', 'proto-blocks'); ?></span>
+                                            <?php else: ?>
+                                                <span class="proto-blocks-badge vanilla"><?php esc_html_e('Vanilla CSS', 'proto-blocks'); ?></span>
+                                            <?php endif; ?>
                                         </td>
                                         <td>
                                             <?php if ($block['hasJson']): ?>
@@ -338,12 +396,24 @@ class AdminPage
             .proto-blocks-section--danger { border-color: #d63638; border-left-width: 4px; }
             .proto-blocks-badge { display: inline-block; background: #e7e8ea; border-radius: 3px; padding: 2px 6px; font-size: 11px; margin-right: 4px; }
             .proto-blocks-badge.example { background: #dff0d8; color: #3c763d; }
+            .proto-blocks-badge.tailwind { background: #dbeafe; color: #1e40af; }
+            .proto-blocks-badge.vanilla { background: #fef3c7; color: #92400e; }
+            .proto-blocks-badge.disabled { background: #f3f4f6; color: #6b7280; font-size: 10px; }
             .proto-blocks-warning { background: #fcf9e8; border-left: 4px solid #dba617; padding: 10px 12px; margin: 10px 0; }
             .proto-blocks-warning .dashicons { color: #dba617; margin-right: 5px; }
             .proto-blocks-info { background: #f0f6fc; border-left: 4px solid #72aee6; padding: 10px 12px; margin: 10px 0; }
             .proto-blocks-info .dashicons { color: #72aee6; margin-right: 5px; }
             .button-link-delete { color: #d63638 !important; border-color: #d63638 !important; }
             .button-link-delete:hover { background: #d63638 !important; color: #fff !important; }
+            .proto-blocks-demo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 15px; }
+            .proto-blocks-demo-type { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px; }
+            .proto-blocks-demo-type h3 { margin: 0 0 8px 0; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+            .proto-blocks-demo-type h3 .dashicons { font-size: 18px; width: 18px; height: 18px; }
+            .proto-blocks-demo-list { margin: 10px 0; padding-left: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 5px; }
+            .proto-blocks-demo-list li { margin: 0; }
+            .proto-blocks-demo-list code { background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 11px; }
+            .proto-blocks-demo-disabled { opacity: 0.7; }
+            .proto-blocks-demo-disabled h3 { color: #6b7280; }
         </style>
         <?php
     }
@@ -449,6 +519,44 @@ class AdminPage
     }
 
     /**
+     * Get list of demo block names filtered by type (vanilla or tailwind)
+     *
+     * @param string $type 'vanilla' or 'tailwind'
+     * @return array List of demo block names of the specified type
+     */
+    public function getDemoBlockNamesByType(string $type): array
+    {
+        $source_dir = \PROTO_BLOCKS_DIR . 'examples';
+        if (!is_dir($source_dir)) {
+            return [];
+        }
+
+        $all_blocks = glob($source_dir . '/*', GLOB_ONLYDIR);
+        $filtered = [];
+
+        foreach ($all_blocks as $block_path) {
+            $block_name = basename($block_path);
+            $json_file = $block_path . '/block.json';
+
+            if (!file_exists($json_file)) {
+                continue;
+            }
+
+            $content = file_get_contents($json_file);
+            $metadata = json_decode($content ?: '{}', true) ?: [];
+            $usesTailwind = $metadata['protoBlocks']['useTailwind'] ?? false;
+
+            if ($type === 'tailwind' && $usesTailwind) {
+                $filtered[] = $block_name;
+            } elseif ($type === 'vanilla' && !$usesTailwind) {
+                $filtered[] = $block_name;
+            }
+        }
+
+        return $filtered;
+    }
+
+    /**
      * Get list of installed demo blocks in the theme
      *
      * @return array List of installed demo block names
@@ -472,9 +580,10 @@ class AdminPage
      * Install demo blocks to the active theme
      * Only installs/overwrites demo blocks, leaves custom blocks untouched
      *
+     * @param string $type Type of blocks to install: 'vanilla', 'tailwind', or 'all'
      * @return int|\WP_Error Number of blocks installed or error
      */
-    private function installDemoBlocks(): int|\WP_Error
+    private function installDemoBlocks(string $type = 'all'): int|\WP_Error
     {
         // Get source and destination directories
         $source_dir = \PROTO_BLOCKS_DIR . 'examples';
@@ -512,8 +621,25 @@ class AdminPage
             );
         }
 
-        // Get demo block names - only these will be installed/overwritten
-        $demo_block_names = $this->getDemoBlockNames();
+        // Get demo block names based on type
+        if ($type === 'vanilla') {
+            $demo_block_names = $this->getDemoBlockNamesByType('vanilla');
+        } elseif ($type === 'tailwind') {
+            $demo_block_names = $this->getDemoBlockNamesByType('tailwind');
+        } else {
+            $demo_block_names = $this->getDemoBlockNames();
+        }
+
+        if (empty($demo_block_names)) {
+            return new \WP_Error(
+                'no_blocks_found',
+                sprintf(
+                    __('No %s demo blocks found to install.', 'proto-blocks'),
+                    $type === 'all' ? '' : $type
+                )
+            );
+        }
+
         $installed_count = 0;
 
         foreach ($demo_block_names as $block_name) {

@@ -17,6 +17,7 @@
 	"protoBlocks": {
 		"version": "1.0",
 		"template": "template.php",
+		"useTailwind": true,
 		"fields": {
 			"badgeText": {
 				"type": "text",
