@@ -186,10 +186,27 @@ class Assets
             return;
         }
 
+        // Enqueue Google Fonts (Inter)
+        wp_enqueue_style(
+            'proto-blocks-admin-fonts',
+            'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
+            [],
+            null
+        );
+
+        // Enqueue Material Icons
+        wp_enqueue_style(
+            'proto-blocks-admin-icons',
+            'https://fonts.googleapis.com/icon?family=Material+Icons+Outlined',
+            [],
+            null
+        );
+
+        // Enqueue admin Tailwind CSS
         wp_enqueue_style(
             'proto-blocks-admin',
             PROTO_BLOCKS_URL . 'assets/css/admin.css',
-            [],
+            ['proto-blocks-admin-fonts', 'proto-blocks-admin-icons'],
             PROTO_BLOCKS_VERSION
         );
 

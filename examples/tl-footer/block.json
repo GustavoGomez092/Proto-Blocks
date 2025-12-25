@@ -1,0 +1,92 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "proto-blocks/tl-footer",
+  "version": "1.0.0",
+  "title": "Tailwind Footer",
+  "category": "proto-blocks",
+  "icon": "align-wide",
+  "description": "A responsive footer with logo, description, navigation columns, contact info, and copyright. Styled with Tailwind CSS.",
+  "keywords": ["footer", "tailwind", "navigation", "contact", "copyright"],
+  "supports": {
+    "html": false,
+    "anchor": true,
+    "customClassName": true,
+    "align": ["wide", "full"]
+  },
+  "protoBlocks": {
+    "version": "1.0",
+    "isExample": true,
+    "useTailwind": true,
+    "template": "template.php",
+    "fields": {
+      "logo": {
+        "type": "image",
+        "sizes": ["thumbnail", "medium"]
+      },
+      "description": {
+        "type": "text",
+        "tagName": "p"
+      },
+      "column1Title": {
+        "type": "text",
+        "tagName": "h2"
+      },
+      "column1Links": {
+        "type": "repeater",
+        "min": 1,
+        "max": 10,
+        "itemLabel": "label",
+        "collapsible": true,
+        "fields": {
+          "label": {
+            "type": "text",
+            "label": "Link Text",
+            "tagName": "span"
+          },
+          "url": {
+            "type": "text",
+            "label": "URL"
+          }
+        }
+      },
+      "column2Title": {
+        "type": "text",
+        "tagName": "h2"
+      },
+      "phone": {
+        "type": "text",
+        "tagName": "p"
+      },
+      "email": {
+        "type": "text",
+        "tagName": "p"
+      },
+      "copyrightText": {
+        "type": "text",
+        "tagName": "p"
+      },
+      "copyrightLink": {
+        "type": "link",
+        "tagName": "a"
+      }
+    },
+    "controls": {
+      "showLogo": {
+        "type": "toggle",
+        "label": "Show Logo",
+        "default": true
+      },
+      "showColumn1": {
+        "type": "toggle",
+        "label": "Show Navigation Column",
+        "default": true
+      },
+      "showColumn2": {
+        "type": "toggle",
+        "label": "Show Contact Column",
+        "default": true
+      }
+    }
+  }
+}

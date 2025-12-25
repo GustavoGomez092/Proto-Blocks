@@ -18,6 +18,8 @@ A next-generation WordPress plugin that enables developers to create Gutenberg b
 - **Interactivity API Support**: Full support for WordPress Interactivity API directives
 - **WP-CLI Commands**: Scaffold, validate, and manage blocks from the command line
 - **TypeScript Editor**: Type-safe editor components for better developer experience
+- **Tailwind CSS Support**: Build blocks with Tailwind CSS using themed colors
+- **Setup Wizard**: Guided first-time configuration for quick setup
 
 ## Requirements
 
@@ -33,43 +35,113 @@ A next-generation WordPress plugin that enables developers to create Gutenberg b
 
 ## Creating Your First Block
 
+This guide walks you through creating a Proto Block from scratch. Proto Blocks use PHP templates instead of React, making them accessible to developers familiar with WordPress theme development.
+
+### Prerequisites
+
+Before creating blocks, ensure you have:
+- Proto-Blocks plugin activated
+- A theme with write permissions
+- Basic understanding of PHP and HTML
+
+> **💡 Tip:** Run the Setup Wizard first (Proto-Blocks menu) to install demo blocks. These serve as excellent references while building your own.
+
 ### 1. Create the Block Directory
 
-Create a `proto-blocks` directory in your theme:
+Create a `proto-blocks` directory in your active theme:
 
 ```
 your-theme/
 └── proto-blocks/
-    └── card/
-        ├── block.json
-        ├── template.php
-        ├── style.css
-        └── preview.png    (optional - block preview screenshot)
+    └── my-card/
+        ├── block.json       ← Required: Block configuration
+        ├── template.php     ← Required: PHP template
+        ├── style.css        ← Optional: Block styles
+        ├── view.js          ← Optional: Frontend JavaScript
+        └── preview.png      ← Optional: Block preview image
 ```
 
+> **⚠️ Warning:** The block folder name must match the block name in `block.json` (e.g., folder `my-card` → name `proto-blocks/my-card`).
+
+> **💡 Tip:** Use lowercase letters and hyphens for folder names. Avoid spaces and special characters.
+
 ### 2. Define the Block Schema (block.json)
+
+The `block.json` file is the heart of your block. It defines the block's identity, fields, and controls.
+
+#### Minimal Example (Vanilla CSS)
 
 ```json
 {
     "$schema": "https://schemas.wp.org/trunk/block.json",
     "apiVersion": 3,
-    "name": "proto-blocks/card",
-    "title": "Card",
+    "name": "proto-blocks/my-card",
+    "title": "My Card",
     "category": "proto-blocks",
     "icon": "admin-post",
+    "description": "A simple card block.",
+    "keywords": ["card", "box", "content"],
     "protoBlocks": {
         "version": "1.0",
         "template": "template.php",
         "fields": {
             "title": {
                 "type": "text",
-                "tagName": "h2"
+                "tagName": "h3"
+            },
+            "content": {
+                "type": "wysiwyg"
+            }
+        }
+    }
+}
+```
+
+#### Complete Example with All Options
+
+```json
+{
+    "$schema": "https://schemas.wp.org/trunk/block.json",
+    "apiVersion": 3,
+    "name": "proto-blocks/my-card",
+    "title": "My Card",
+    "description": "A versatile card with image, title, and content.",
+    "category": "proto-blocks",
+    "icon": "admin-post",
+    "keywords": ["card", "box", "feature"],
+    "supports": {
+        "html": false,
+        "anchor": true,
+        "customClassName": true,
+        "align": ["wide", "full"],
+        "color": {
+            "background": true,
+            "text": true
+        },
+        "spacing": {
+            "padding": true,
+            "margin": true
+        }
+    },
+    "protoBlocks": {
+        "version": "1.0",
+        "useTailwind": false,
+        "template": "template.php",
+        "fields": {
+            "image": {
+                "type": "image",
+                "sizes": ["medium", "large"]
+            },
+            "title": {
+                "type": "text",
+                "tagName": "h3"
             },
             "content": {
                 "type": "wysiwyg"
             },
-            "image": {
-                "type": "image"
+            "link": {
+                "type": "link",
+                "tagName": "a"
             }
         },
         "controls": {
@@ -81,39 +153,282 @@ your-theme/
                     { "key": "vertical", "label": "Vertical" },
                     { "key": "horizontal", "label": "Horizontal" }
                 ]
+            },
+            "showLink": {
+                "type": "toggle",
+                "label": "Show Call to Action",
+                "default": true
             }
         }
     }
 }
 ```
 
+#### Tailwind CSS Example
+
+To create a Tailwind-styled block, set `useTailwind: true`:
+
+```json
+{
+    "$schema": "https://schemas.wp.org/trunk/block.json",
+    "apiVersion": 3,
+    "name": "proto-blocks/tw-card",
+    "title": "Tailwind Card",
+    "category": "proto-blocks",
+    "icon": "admin-post",
+    "protoBlocks": {
+        "version": "1.0",
+        "useTailwind": true,
+        "template": "template.php",
+        "fields": {
+            "title": {
+                "type": "text",
+                "tagName": "h3"
+            }
+        }
+    }
+}
+```
+
+> **⚠️ Important:** Tailwind blocks require Tailwind CSS to be enabled in Proto-Blocks > Tailwind Settings.
+
+#### block.json Property Reference
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `$schema` | No | WordPress block schema URL for IDE autocompletion |
+| `apiVersion` | Yes | WordPress block API version (use `3`) |
+| `name` | Yes | Unique block identifier (`namespace/block-name`) |
+| `title` | Yes | Human-readable block name shown in inserter |
+| `category` | Yes | Block category (use `proto-blocks` or custom) |
+| `icon` | No | Dashicon name (without `dashicons-` prefix) |
+| `description` | No | Block description shown in inserter |
+| `keywords` | No | Search keywords array |
+| `supports` | No | WordPress block supports configuration |
+| `protoBlocks` | Yes | Proto-Blocks specific configuration |
+
+#### protoBlocks Property Reference
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `version` | Yes | Proto-Blocks schema version (use `"1.0"`) |
+| `template` | Yes | PHP template filename |
+| `useTailwind` | No | Enable Tailwind CSS support (`true`/`false`) |
+| `fields` | No | Editable content fields (see Field Types) |
+| `controls` | No | Inspector panel controls (see Control Types) |
+| `isExample` | No | Mark as example block (for demo blocks) |
+
 ### 3. Create the Template (template.php)
+
+The template renders your block's HTML. It receives three variables:
 
 ```php
 <?php
 /**
- * @var array    $attributes Block attributes.
- * @var string   $content    Inner blocks content.
- * @var WP_Block $block      Block instance.
+ * Block Template: My Card
+ *
+ * @var array    $attributes Block attributes (field and control values)
+ * @var string   $content    Inner blocks content (if using inner blocks)
+ * @var WP_Block $block      Block instance (null in editor preview)
  */
 
+// Always provide default values with null coalescing
 $layout = $attributes['layout'] ?? 'vertical';
+$show_link = $attributes['showLink'] ?? true;
+$title = $attributes['title'] ?? '';
+$content = $attributes['content'] ?? '';
+$image = $attributes['image'] ?? [];
+$link = $attributes['link'] ?? [];
+
+// Detect editor preview mode
+$is_preview = !isset($block) || $block === null;
+
+// Build CSS classes
+$classes = [
+    'wp-block-proto-blocks-my-card',
+    'my-card',
+    'my-card--' . esc_attr($layout),
+];
+
+// Use WordPress function for wrapper attributes
+$wrapper_attributes = get_block_wrapper_attributes([
+    'class' => implode(' ', $classes),
+]);
 ?>
 
-<div class="my-card my-card--<?php echo esc_attr($layout); ?>">
-    <?php if (!empty($attributes['image']['url'])) : ?>
-        <figure data-proto-field="image">
-            <img src="<?php echo esc_url($attributes['image']['url']); ?>" alt="" />
+<article <?php echo $wrapper_attributes; ?>>
+    <?php if (!empty($image['url']) || $is_preview): ?>
+        <figure class="my-card__image" data-proto-field="image">
+            <?php if (!empty($image['url'])): ?>
+                <img
+                    src="<?php echo esc_url($image['url']); ?>"
+                    alt="<?php echo esc_attr($image['alt'] ?? ''); ?>"
+                    loading="lazy"
+                />
+            <?php endif; ?>
         </figure>
     <?php endif; ?>
 
-    <h2 data-proto-field="title"><?php echo esc_html($attributes['title'] ?? ''); ?></h2>
+    <div class="my-card__content">
+        <h3 class="my-card__title" data-proto-field="title">
+            <?php echo esc_html($title); ?>
+        </h3>
 
-    <div data-proto-field="content">
-        <?php echo wp_kses_post($attributes['content'] ?? ''); ?>
+        <div class="my-card__body" data-proto-field="content">
+            <?php echo wp_kses_post($content); ?>
+        </div>
+
+        <?php if ($show_link): ?>
+            <a
+                href="<?php echo esc_url($link['url'] ?? '#'); ?>"
+                class="my-card__link"
+                data-proto-field="link"
+                <?php echo !empty($link['target']) ? 'target="' . esc_attr($link['target']) . '"' : ''; ?>
+            >
+                <?php echo esc_html($link['text'] ?? 'Learn More'); ?>
+            </a>
+        <?php endif; ?>
     </div>
-</div>
+</article>
 ```
+
+#### Template Best Practices
+
+> **✅ Do:** Always use `data-proto-field` on elements that should be editable in the block editor.
+
+> **✅ Do:** Always provide default values using null coalescing (`??`).
+
+> **✅ Do:** Always escape output (`esc_html()`, `esc_attr()`, `esc_url()`, `wp_kses_post()`).
+
+> **✅ Do:** Use `get_block_wrapper_attributes()` for the root element.
+
+> **❌ Don't:** Hide elements completely when empty - keep them for editor editing:
+
+```php
+<!-- ❌ BAD: Can't edit when empty -->
+<?php if (!empty($title)): ?>
+    <h3><?php echo esc_html($title); ?></h3>
+<?php endif; ?>
+
+<!-- ✅ GOOD: Always shows editable element -->
+<h3 data-proto-field="title"><?php echo esc_html($title); ?></h3>
+```
+
+> **❌ Don't:** Forget to handle preview mode for repeaters:
+
+```php
+<!-- ✅ GOOD: Provide default items for preview -->
+<?php
+if (empty($items)) {
+    if ($is_preview) {
+        $items = [
+            ['title' => 'Item 1', 'content' => 'Click to edit...'],
+            ['title' => 'Item 2', 'content' => 'Add more items...'],
+        ];
+    } else {
+        return; // Don't render empty block on frontend
+    }
+}
+?>
+```
+
+### 4. Add Styles (style.css) - Optional
+
+Create a `style.css` file for your block styles:
+
+```css
+/* Block: My Card */
+.my-card {
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.my-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.my-card--horizontal {
+    flex-direction: row;
+}
+
+.my-card__image {
+    margin: 0;
+}
+
+.my-card__image img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.my-card__content {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.my-card__title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1a1a1a;
+}
+
+.my-card__body {
+    color: #666;
+    line-height: 1.6;
+}
+
+.my-card__link {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    background: #0073aa;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 4px;
+    font-weight: 500;
+    margin-top: auto;
+    align-self: flex-start;
+}
+
+.my-card__link:hover {
+    background: #005a87;
+}
+```
+
+> **💡 Tip:** Proto-Blocks automatically enqueues `style.css` files from block directories.
+
+### 5. Add Preview Image (preview.png) - Optional
+
+Add a `preview.png` (400px wide recommended) to show in the block inserter instead of "No preview available".
+
+### Quick Start Checklist
+
+- [ ] Created `proto-blocks/` folder in theme
+- [ ] Created block subfolder with lowercase name
+- [ ] Created `block.json` with required properties
+- [ ] Created `template.php` with `data-proto-field` attributes
+- [ ] Added default values for all attributes
+- [ ] Escaped all output properly
+- [ ] Tested block in editor and frontend
+
+### Common Mistakes to Avoid
+
+| Mistake | Solution |
+|---------|----------|
+| Block not appearing | Check `block.json` syntax with JSON validator |
+| Fields not editable | Ensure `data-proto-field="fieldName"` matches field key |
+| Repeater not working | Use both `data-proto-repeater` and `data-proto-repeater-item` |
+| Styles not loading | Check file is named `style.css` in block folder |
+| Tailwind not working | Enable Tailwind in Proto-Blocks > Tailwind Settings |
+| Preview shows error | Check PHP syntax, enable `WP_DEBUG` |
 
 ## Field Types
 
@@ -537,6 +852,76 @@ wp proto-blocks cache stats
 wp proto-blocks export card --output=/path/to/export
 ```
 
+## Setup Wizard
+
+Proto-Blocks includes a guided setup wizard that appears on first activation to help you configure the plugin quickly.
+
+### Wizard Steps
+
+1. **Welcome** - Introduction to Proto-Blocks
+2. **Configure** - Choose component style (Vanilla CSS or Tailwind CSS) and set custom category name
+3. **Install** - Automatically installs demo blocks based on your style preference
+4. **Complete** - Summary of configuration and next steps
+
+### Re-running the Wizard
+
+To re-run the setup wizard:
+1. Go to **Proto-Blocks > System Status** in WordPress admin
+2. Click **"Run Setup Wizard Again"**
+
+Or delete the option programmatically:
+```php
+delete_option('proto_blocks_wizard_completed');
+```
+
+## Tailwind CSS Support
+
+Proto-Blocks includes built-in support for Tailwind CSS, allowing you to create blocks styled entirely with utility classes.
+
+### Enabling Tailwind for a Block
+
+Add `useTailwind: true` to your block's `protoBlocks` configuration:
+
+```json
+{
+    "protoBlocks": {
+        "version": "1.0",
+        "useTailwind": true,
+        "template": "template.php",
+        "fields": { ... }
+    }
+}
+```
+
+### Themed Colors
+
+Tailwind blocks have access to themed colors that can be customized in the admin:
+
+| Color | CSS Variable | Default | Usage |
+|-------|--------------|---------|-------|
+| `primary-50` to `primary-950` | `--tw-color-primary-*` | Blue shades | Brand color, buttons, links |
+| `secondary-50` to `secondary-950` | `--tw-color-secondary-*` | Teal shades | Accent elements |
+| `accent-50` to `accent-950` | `--tw-color-accent-*` | Red shades | Highlights, alerts |
+
+Use these in your templates:
+```html
+<button class="bg-primary-600 hover:bg-primary-700 text-white">
+    Click me
+</button>
+<span class="text-secondary-500">Secondary text</span>
+```
+
+### Tailwind Settings
+
+Configure Tailwind CSS options in **Proto-Blocks > Tailwind Settings**:
+
+- **Enable/Disable Tailwind** - Toggle Tailwind CSS compilation
+- **Primary Color** - Set the primary brand color
+- **Secondary Color** - Set the secondary accent color
+- **Accent Color** - Set the highlight/alert color
+- **Compile on Reload** - Enable development mode for automatic recompilation
+- **Disable Global Styles** - Remove WordPress default styles for cleaner output
+
 ## Block Category
 
 Proto-Blocks registers a custom block category that appears at the **top** of the block inserter for easy access to your custom blocks.
@@ -550,7 +935,14 @@ Proto-Blocks registers a custom block category that appears at the **top** of th
 
 ### Customizing the Category
 
-You can customize the category using WordPress filters in your theme's `functions.php` or a custom plugin:
+You can customize the category name directly in the WordPress admin:
+
+1. Go to **Proto-Blocks > System Status**
+2. Find the **"General Settings"** section
+3. Enter your custom category name
+4. Click **"Save Category Name"**
+
+Alternatively, use WordPress filters in your theme's `functions.php` or a custom plugin:
 
 #### Change the Category Title
 
@@ -689,9 +1081,11 @@ npm run lint:js
 
 ## Demo Blocks
 
-Proto-Blocks includes 6 demo blocks that showcase all available capabilities. These can be installed to your theme via the admin panel to explore and learn from.
+Proto-Blocks includes two sets of demo blocks to showcase all available capabilities. These can be installed to your theme via the admin panel or the setup wizard.
 
-### Block Overview
+### Vanilla CSS Blocks
+
+Classic CSS-styled demo blocks (6 blocks):
 
 | Block | Purpose | Key Features Demonstrated |
 |-------|---------|--------------------------|
@@ -702,9 +1096,79 @@ Proto-Blocks includes 6 demo blocks that showcase all available capabilities. Th
 | **Stats** | Statistics counter | Number control, Simple repeater, Range control |
 | **CTA** | Call to action | Textarea control, Checkbox control, Radio control |
 
+### Tailwind CSS Blocks
+
+Modern Tailwind-styled demo blocks (3 blocks):
+
+| Block | Purpose | Key Features Demonstrated |
+|-------|---------|--------------------------|
+| **Header Navigation** | Responsive header | Repeater for nav items, Logo image, Link field, Mobile menu |
+| **Tailwind Hero** | Dark gradient hero | Badge link, Dual CTAs, Toggle controls, Gradient backgrounds |
+| **Tailwind Footer** | Responsive footer | Logo, Description, Repeater for links, Contact info, Copyright |
+
+#### Header Navigation Block
+
+A responsive header with logo, navigation menu, and call-to-action button.
+
+**Fields:**
+- `logo` (Image) - Site logo
+- `siteTitle` (Text) - Site name
+- `navItems` (Repeater) - Navigation links (1-8 items)
+  - `label` (Text) - Link text
+  - `url` (Text) - Link URL
+- `ctaButton` (Link) - Call-to-action button
+
+**Controls:**
+- `showCta` (Toggle) - Show/hide CTA button
+- `fixedPosition` (Toggle) - Keep header fixed at top
+
 ---
 
-### Card Block
+#### Tailwind Hero Block
+
+A dark hero section with gradient backgrounds, announcement badge, and dual CTAs.
+
+**Fields:**
+- `badgeText` (Text) - Announcement badge text
+- `badgeLink` (Link) - Badge link
+- `heading` (Text) - Main heading (h1)
+- `description` (Text) - Supporting text
+- `primaryButton` (Link) - Primary CTA button
+- `secondaryLink` (Link) - Secondary text link
+
+**Controls:**
+- `showBadge` (Toggle) - Show/hide announcement badge
+- `showSecondaryLink` (Toggle) - Show/hide secondary link
+
+---
+
+#### Tailwind Footer Block
+
+A responsive footer with logo, description, navigation columns, contact info, and copyright.
+
+**Fields:**
+- `logo` (Image) - Footer logo
+- `description` (Text) - Company description
+- `column1Title` (Text) - Navigation column title
+- `column1Links` (Repeater) - Navigation links (1-10 items)
+  - `label` (Text) - Link text
+  - `url` (Text) - Link URL
+- `column2Title` (Text) - Contact column title
+- `phone` (Text) - Phone number
+- `email` (Text) - Email address
+- `copyrightText` (Text) - Copyright text
+- `copyrightLink` (Link) - Company link
+
+**Controls:**
+- `showLogo` (Toggle) - Show/hide logo
+- `showColumn1` (Toggle) - Show/hide navigation column
+- `showColumn2` (Toggle) - Show/hide contact column
+
+---
+
+### Vanilla CSS Block Details
+
+#### Card Block
 
 ![Card Block Preview](examples/card/preview.png)
 
@@ -730,7 +1194,7 @@ A versatile card with image, title, content, and call-to-action link.
 
 ---
 
-### Testimonial Block
+#### Testimonial Block
 
 ![Testimonial Block Preview](examples/testimonial/preview.png)
 
@@ -756,7 +1220,7 @@ Customer testimonial with rating and author information.
 
 ---
 
-### Accordion Block
+#### Accordion Block
 
 ![Accordion Block Preview](examples/accordion/preview.png)
 
@@ -783,7 +1247,7 @@ Collapsible content sections with expand/collapse functionality.
 
 ---
 
-### Hero Section Block
+#### Hero Section Block
 
 ![Hero Section Block Preview](examples/hero/preview.png)
 
@@ -814,7 +1278,7 @@ Full-width hero section with background image, customizable colors, and nested c
 
 ---
 
-### Stats Counter Block
+#### Stats Counter Block
 
 ![Stats Counter Block Preview](examples/stats/preview.png)
 
@@ -841,7 +1305,7 @@ Display statistics and numbers with labels in a grid layout.
 
 ---
 
-### Call to Action Block
+#### Call to Action Block
 
 ![Call to Action Block Preview](examples/cta/preview.png)
 
@@ -867,14 +1331,14 @@ Prominent call-to-action section with customizable styling.
 - Conditional control visibility
 - SVG icon integration
 
----
-
 ### Installing Demo Blocks
 
 1. Go to **Proto-Blocks** in the WordPress admin menu
 2. Click **"Install Demo Blocks to Theme"**
 3. Demo blocks are copied to your theme's `proto-blocks/` directory
 4. Start customizing or use them as learning references
+
+You can also use the **Setup Wizard** to install demo blocks during initial configuration.
 
 ### Removing Demo Blocks
 
@@ -888,6 +1352,8 @@ When you're ready to start fresh:
 ---
 
 ### Capability Coverage Matrix
+
+#### Vanilla CSS Blocks
 
 | Capability | Card | Testimonial | Accordion | Hero | Stats | CTA |
 |------------|:----:|:-----------:|:---------:|:----:|:-----:|:---:|
@@ -913,6 +1379,22 @@ When you're ready to start fresh:
 | Conditional controls | ✓ | | | | | ✓ |
 | Interactivity API | | | ✓ | | | |
 | Block supports | ✓ | | | | ✓ | |
+
+#### Tailwind CSS Blocks
+
+| Capability | Header | Hero | Footer |
+|------------|:------:|:----:|:------:|
+| **Fields** |
+| Text | ✓ | ✓ | ✓ |
+| Image | ✓ | | ✓ |
+| Link | ✓ | ✓ | ✓ |
+| Repeater | ✓ | | ✓ |
+| **Controls** |
+| Toggle | ✓ | ✓ | ✓ |
+| **Features** |
+| Tailwind CSS | ✓ | ✓ | ✓ |
+| Themed Colors | ✓ | ✓ | ✓ |
+| Responsive Design | ✓ | ✓ | ✓ |
 
 > **Note:** The demo blocks use the WordPress Interactivity API for their frontend JavaScript, but this is purely for demonstration purposes. You can use plain JavaScript, ES modules, jQuery, or any other approach you prefer. See the [Frontend JavaScript](#frontend-javascript-interactivity) section for alternatives.
 

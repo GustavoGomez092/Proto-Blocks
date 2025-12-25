@@ -64,277 +64,178 @@ class AdminSettings
         $configData = $this->manager->getConfigEditor()->getConfigData();
 
         ?>
-        <div class="proto-blocks-tailwind-settings" id="proto-blocks-tailwind-settings">
-            <h2><?php \esc_html_e('Tailwind CSS Support', 'proto-blocks'); ?></h2>
-            <p class="description">
-                <?php \esc_html_e('Enable Tailwind CSS utility classes in your Proto Blocks without requiring a Node.js build step.', 'proto-blocks'); ?>
-            </p>
-
-            <?php \wp_nonce_field(self::NONCE_ACTION, 'proto_blocks_tailwind_nonce'); ?>
-
-            <!-- Enable/Disable Toggle -->
-            <table class="form-table" role="presentation">
-                <tr>
-                    <th scope="row">
-                        <label for="tailwind-enabled"><?php \esc_html_e('Enable Tailwind CSS', 'proto-blocks'); ?></label>
-                    </th>
-                    <td>
-                        <label class="proto-blocks-toggle">
-                            <input type="checkbox" id="tailwind-enabled" <?php \checked($status['enabled']); ?>>
-                            <span class="proto-blocks-toggle-slider"></span>
-                        </label>
-                        <p class="description">
-                            <?php \esc_html_e('When enabled, Tailwind utility classes will be compiled and loaded for all Proto Blocks.', 'proto-blocks'); ?>
-                        </p>
-                    </td>
-                </tr>
-
-                <!-- Compilation Mode -->
-                <tr class="tailwind-option" <?php echo $status['enabled'] ? '' : 'style="display:none;"'; ?>>
-                    <th scope="row"><?php \esc_html_e('Compilation Mode', 'proto-blocks'); ?></th>
-                    <td>
-                        <fieldset>
-                            <label>
-                                <input type="radio" name="tailwind-mode" value="cached" <?php \checked($settings['mode'], 'cached'); ?>>
-                                <?php \esc_html_e('Cached (Production)', 'proto-blocks'); ?>
-                            </label>
-                            <p class="description">
-                                <?php \esc_html_e('CSS is compiled once and served from cache. Use the "Compile" button to update.', 'proto-blocks'); ?>
-                            </p>
-                            <br>
-                            <label>
-                                <input type="radio" name="tailwind-mode" value="on_reload" <?php \checked($settings['mode'], 'on_reload'); ?>>
-                                <?php \esc_html_e('On-Reload (Development)', 'proto-blocks'); ?>
-                            </label>
-                            <p class="description">
-                                <?php \esc_html_e('CSS is recompiled on each page load when logged in as admin. Not recommended for production.', 'proto-blocks'); ?>
-                            </p>
-                        </fieldset>
-                    </td>
-                </tr>
-
-                <!-- Disable Global Styles -->
-                <tr class="tailwind-option" <?php echo $status['enabled'] ? '' : 'style="display:none;"'; ?>>
-                    <th scope="row">
-                        <label for="disable-global-styles"><?php \esc_html_e('Disable WP Global Styles', 'proto-blocks'); ?></label>
-                    </th>
-                    <td>
-                        <label class="proto-blocks-toggle">
-                            <input type="checkbox" id="disable-global-styles" <?php \checked($status['disable_global_styles'] ?? false); ?>>
-                            <span class="proto-blocks-toggle-slider"></span>
-                        </label>
-                        <p class="description">
-                            <?php \esc_html_e('Disable WordPress global styles to prevent conflicts with Tailwind CSS. This removes the inline CSS that WordPress adds for theme.json styles.', 'proto-blocks'); ?>
-                        </p>
-                    </td>
-                </tr>
-
-                <!-- Status Display -->
-                <tr class="tailwind-option" <?php echo $status['enabled'] ? '' : 'style="display:none;"'; ?>>
-                    <th scope="row"><?php \esc_html_e('Status', 'proto-blocks'); ?></th>
-                    <td>
-                        <div class="proto-blocks-status-grid">
-                            <div class="status-item">
-                                <span class="status-label"><?php \esc_html_e('CLI Status:', 'proto-blocks'); ?></span>
-                                <span class="status-value" id="cli-status">
-                                    <?php if ($status['cli_installed']): ?>
-                                        <span class="dashicons dashicons-yes-alt" style="color: #46b450;"></span>
-                                        <?php printf(\esc_html__('Installed (v%s)', 'proto-blocks'), \esc_html($status['cli_version'] ?? 'unknown')); ?>
-                                    <?php else: ?>
-                                        <span class="dashicons dashicons-warning" style="color: #dc3232;"></span>
-                                        <?php \esc_html_e('Not installed', 'proto-blocks'); ?>
-                                    <?php endif; ?>
-                                </span>
-                            </div>
-                            <div class="status-item">
-                                <span class="status-label"><?php \esc_html_e('Last Compiled:', 'proto-blocks'); ?></span>
-                                <span class="status-value" id="last-compiled">
-                                    <?php
-                                    if ($settings['last_compiled']) {
-                                        echo \esc_html(
-                                            sprintf(
-                                                \__('%s ago', 'proto-blocks'),
-                                                \human_time_diff($settings['last_compiled'])
-                                            )
-                                        );
-                                    } else {
-                                        \esc_html_e('Never', 'proto-blocks');
-                                    }
-                                    ?>
-                                </span>
-                            </div>
-                            <div class="status-item">
-                                <span class="status-label"><?php \esc_html_e('CSS Size:', 'proto-blocks'); ?></span>
-                                <span class="status-value" id="css-size">
-                                    <?php echo \esc_html($this->manager->getCache()->getFormattedSize()); ?>
-                                </span>
-                            </div>
-                        </div>
-                    </td>
-                </tr>
-
-                <!-- Actions -->
-                <tr class="tailwind-option" <?php echo $status['enabled'] ? '' : 'style="display:none;"'; ?>>
-                    <th scope="row"><?php \esc_html_e('Actions', 'proto-blocks'); ?></th>
-                    <td>
-                        <div class="proto-blocks-actions">
-                            <?php if (!$status['cli_installed']): ?>
-                                <button type="button" class="button button-primary" id="download-cli">
-                                    <span class="dashicons dashicons-download"></span>
-                                    <?php \esc_html_e('Download Tailwind CLI', 'proto-blocks'); ?>
-                                </button>
-                            <?php endif; ?>
-
-                            <button type="button" class="button button-primary" id="compile-tailwind" <?php echo $status['cli_installed'] ? '' : 'disabled'; ?>>
-                                <span class="dashicons dashicons-update"></span>
-                                <?php \esc_html_e('Compile CSS', 'proto-blocks'); ?>
-                            </button>
-
-                            <button type="button" class="button" id="clear-cache">
-                                <span class="dashicons dashicons-trash"></span>
-                                <?php \esc_html_e('Clear Cache', 'proto-blocks'); ?>
-                            </button>
-                        </div>
-                        <div id="tailwind-message" class="notice inline" style="display: none; margin-top: 10px;">
-                            <p></p>
-                        </div>
-                    </td>
-                </tr>
-            </table>
-
-            <!-- Theme Configuration -->
-            <div class="tailwind-option tailwind-config-section" <?php echo $status['enabled'] ? '' : 'style="display:none;"'; ?>>
-                <h3><?php \esc_html_e('Theme Configuration', 'proto-blocks'); ?></h3>
-                <p class="description">
-                    <?php \esc_html_e('Customize your Tailwind theme using CSS variables. Changes require recompilation.', 'proto-blocks'); ?>
+        <!-- Tailwind CSS Settings Section -->
+        <div class="pb-bg-surface-light pb-rounded-lg pb-shadow-sm pb-border pb-border-border-light pb-overflow-hidden" id="proto-blocks-tailwind-settings">
+            <div class="pb-px-6 pb-py-4 pb-border-b pb-border-border-light pb-bg-gray-50">
+                <h2 class="pb-text-lg pb-font-semibold pb-flex pb-items-center pb-gap-2">
+                    <span class="material-icons-outlined pb-text-secondary">wind_power</span>
+                    <?php \esc_html_e('Tailwind CSS Support', 'proto-blocks'); ?>
+                </h2>
+            </div>
+            <div class="pb-p-6">
+                <p class="pb-text-text-muted-light pb-text-sm pb-mb-6">
+                    <?php \esc_html_e('Enable Tailwind CSS utility classes in your Proto Blocks without requiring a Node.js build step.', 'proto-blocks'); ?>
                 </p>
 
-                <div class="config-editor-toolbar">
-                    <label for="preset-select"><?php \esc_html_e('Presets:', 'proto-blocks'); ?></label>
-                    <select id="preset-select">
-                        <option value=""><?php \esc_html_e('-- Select a preset --', 'proto-blocks'); ?></option>
-                        <?php foreach ($configData['presets'] as $key => $preset): ?>
-                            <option value="<?php echo \esc_attr($key); ?>">
-                                <?php echo \esc_html($preset['name']); ?> - <?php echo \esc_html($preset['description']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <button type="button" class="button" id="reset-config">
-                        <?php \esc_html_e('Reset to Default', 'proto-blocks'); ?>
-                    </button>
+                <?php \wp_nonce_field(self::NONCE_ACTION, 'proto_blocks_tailwind_nonce'); ?>
+
+                <!-- Enable/Disable Toggle -->
+                <div class="pb-space-y-6">
+                    <div class="pb-flex pb-flex-col sm:pb-flex-row sm:pb-items-start pb-gap-4 pb-py-4 pb-border-b pb-border-border-light">
+                        <div class="sm:pb-w-48 pb-flex-shrink-0">
+                            <label for="tailwind-enabled" class="pb-font-medium pb-text-text-main-light"><?php \esc_html_e('Enable Tailwind CSS', 'proto-blocks'); ?></label>
+                        </div>
+                        <div class="pb-flex-1">
+                            <label class="pb-toggle">
+                                <input type="checkbox" id="tailwind-enabled" <?php \checked($status['enabled']); ?>>
+                                <span class="pb-toggle-slider"></span>
+                            </label>
+                            <p class="pb-text-text-muted-light pb-text-sm pb-mt-2">
+                                <?php \esc_html_e('When enabled, Tailwind utility classes will be compiled and loaded for all Proto Blocks.', 'proto-blocks'); ?>
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Compilation Mode -->
+                    <div class="tailwind-option pb-flex pb-flex-col sm:pb-flex-row sm:pb-items-start pb-gap-4 pb-py-4 pb-border-b pb-border-border-light" <?php echo $status['enabled'] ? '' : 'style="display:none;"'; ?>>
+                        <div class="sm:pb-w-48 pb-flex-shrink-0">
+                            <span class="pb-font-medium pb-text-text-main-light"><?php \esc_html_e('Compilation Mode', 'proto-blocks'); ?></span>
+                        </div>
+                        <div class="pb-flex-1 pb-space-y-3">
+                            <label class="pb-flex pb-items-start pb-gap-3 pb-cursor-pointer">
+                                <input type="radio" name="tailwind-mode" value="cached" <?php \checked($settings['mode'], 'cached'); ?> class="pb-mt-1">
+                                <div>
+                                    <span class="pb-font-medium"><?php \esc_html_e('Cached (Production)', 'proto-blocks'); ?></span>
+                                    <p class="pb-text-text-muted-light pb-text-sm"><?php \esc_html_e('CSS is compiled once and served from cache. Use the "Compile" button to update.', 'proto-blocks'); ?></p>
+                                </div>
+                            </label>
+                            <label class="pb-flex pb-items-start pb-gap-3 pb-cursor-pointer">
+                                <input type="radio" name="tailwind-mode" value="on_reload" <?php \checked($settings['mode'], 'on_reload'); ?> class="pb-mt-1">
+                                <div>
+                                    <span class="pb-font-medium"><?php \esc_html_e('On-Reload (Development)', 'proto-blocks'); ?></span>
+                                    <p class="pb-text-text-muted-light pb-text-sm"><?php \esc_html_e('CSS is recompiled on each page load when logged in as admin. Not recommended for production.', 'proto-blocks'); ?></p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Disable Global Styles -->
+                    <div class="tailwind-option pb-flex pb-flex-col sm:pb-flex-row sm:pb-items-start pb-gap-4 pb-py-4 pb-border-b pb-border-border-light" <?php echo $status['enabled'] ? '' : 'style="display:none;"'; ?>>
+                        <div class="sm:pb-w-48 pb-flex-shrink-0">
+                            <label for="disable-global-styles" class="pb-font-medium pb-text-text-main-light"><?php \esc_html_e('Disable WP Global Styles', 'proto-blocks'); ?></label>
+                        </div>
+                        <div class="pb-flex-1">
+                            <label class="pb-toggle">
+                                <input type="checkbox" id="disable-global-styles" <?php \checked($status['disable_global_styles'] ?? false); ?>>
+                                <span class="pb-toggle-slider"></span>
+                            </label>
+                            <p class="pb-text-text-muted-light pb-text-sm pb-mt-2">
+                                <?php \esc_html_e('Disable WordPress global styles to prevent conflicts with Tailwind CSS.', 'proto-blocks'); ?>
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Status Display -->
+                    <div class="tailwind-option pb-flex pb-flex-col sm:pb-flex-row sm:pb-items-start pb-gap-4 pb-py-4 pb-border-b pb-border-border-light" <?php echo $status['enabled'] ? '' : 'style="display:none;"'; ?>>
+                        <div class="sm:pb-w-48 pb-flex-shrink-0">
+                            <span class="pb-font-medium pb-text-text-main-light"><?php \esc_html_e('Status', 'proto-blocks'); ?></span>
+                        </div>
+                        <div class="pb-flex-1">
+                            <div class="pb-grid pb-grid-cols-1 sm:pb-grid-cols-3 pb-gap-4">
+                                <div class="pb-p-3 pb-bg-gray-50 pb-rounded-lg">
+                                    <div class="pb-text-xs pb-text-text-muted-light pb-uppercase pb-tracking-wide pb-mb-1"><?php \esc_html_e('CLI Status', 'proto-blocks'); ?></div>
+                                    <div class="pb-flex pb-items-center pb-gap-1" id="cli-status">
+                                        <?php if ($status['cli_installed']): ?>
+                                            <span class="material-icons-outlined pb-text-green-600 pb-text-lg">check_circle</span>
+                                            <span class="pb-text-sm"><?php printf(\esc_html__('v%s', 'proto-blocks'), \esc_html($status['cli_version'] ?? '?')); ?></span>
+                                        <?php else: ?>
+                                            <span class="material-icons-outlined pb-text-red-600 pb-text-lg">error</span>
+                                            <span class="pb-text-sm pb-text-red-600"><?php \esc_html_e('Not installed', 'proto-blocks'); ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <div class="pb-p-3 pb-bg-gray-50 pb-rounded-lg">
+                                    <div class="pb-text-xs pb-text-text-muted-light pb-uppercase pb-tracking-wide pb-mb-1"><?php \esc_html_e('Last Compiled', 'proto-blocks'); ?></div>
+                                    <div class="pb-text-sm pb-font-medium" id="last-compiled">
+                                        <?php
+                                        if ($settings['last_compiled']) {
+                                            echo \esc_html(sprintf(\__('%s ago', 'proto-blocks'), \human_time_diff($settings['last_compiled'])));
+                                        } else {
+                                            \esc_html_e('Never', 'proto-blocks');
+                                        }
+                                        ?>
+                                    </div>
+                                </div>
+                                <div class="pb-p-3 pb-bg-gray-50 pb-rounded-lg">
+                                    <div class="pb-text-xs pb-text-text-muted-light pb-uppercase pb-tracking-wide pb-mb-1"><?php \esc_html_e('CSS Size', 'proto-blocks'); ?></div>
+                                    <div class="pb-text-sm pb-font-medium" id="css-size">
+                                        <?php echo \esc_html($this->manager->getCache()->getFormattedSize()); ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="tailwind-option pb-flex pb-flex-col sm:pb-flex-row sm:pb-items-start pb-gap-4 pb-py-4" <?php echo $status['enabled'] ? '' : 'style="display:none;"'; ?>>
+                        <div class="sm:pb-w-48 pb-flex-shrink-0">
+                            <span class="pb-font-medium pb-text-text-main-light"><?php \esc_html_e('Actions', 'proto-blocks'); ?></span>
+                        </div>
+                        <div class="pb-flex-1">
+                            <div class="pb-flex pb-flex-wrap pb-gap-3">
+                                <?php if (!$status['cli_installed']): ?>
+                                    <button type="button" id="download-cli" class="pb-bg-primary hover:pb-bg-primary-hover pb-text-white pb-px-4 pb-py-2 pb-rounded pb-shadow-sm pb-text-sm pb-font-medium pb-flex pb-items-center pb-gap-2 pb-transition-colors">
+                                        <span class="material-icons-outlined pb-text-sm">download</span>
+                                        <?php \esc_html_e('Download Tailwind CLI', 'proto-blocks'); ?>
+                                    </button>
+                                <?php endif; ?>
+                                <button type="button" id="compile-tailwind" class="pb-bg-primary hover:pb-bg-primary-hover pb-text-white pb-px-4 pb-py-2 pb-rounded pb-shadow-sm pb-text-sm pb-font-medium pb-flex pb-items-center pb-gap-2 pb-transition-colors disabled:pb-opacity-50 disabled:pb-cursor-not-allowed" <?php echo $status['cli_installed'] ? '' : 'disabled'; ?>>
+                                    <span class="material-icons-outlined pb-text-sm">sync</span>
+                                    <?php \esc_html_e('Compile CSS', 'proto-blocks'); ?>
+                                </button>
+                                <button type="button" id="clear-cache" class="pb-bg-white pb-border pb-border-gray-300 pb-text-gray-700 hover:pb-bg-gray-50 pb-px-4 pb-py-2 pb-rounded pb-shadow-sm pb-text-sm pb-font-medium pb-flex pb-items-center pb-gap-2 pb-transition-colors">
+                                    <span class="material-icons-outlined pb-text-sm">delete_outline</span>
+                                    <?php \esc_html_e('Clear Cache', 'proto-blocks'); ?>
+                                </button>
+                            </div>
+                            <div id="tailwind-message" class="pb-mt-4 pb-p-3 pb-rounded pb-text-sm" style="display: none;"></div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="config-editor-wrapper">
-                    <textarea id="theme-config" rows="15" class="large-text code"><?php echo \esc_textarea($configData['current']); ?></textarea>
-                </div>
+                <!-- Theme Configuration -->
+                <div class="tailwind-option pb-mt-8 pb-pt-6 pb-border-t pb-border-border-light" <?php echo $status['enabled'] ? '' : 'style="display:none;"'; ?>>
+                    <h3 class="pb-font-semibold pb-text-lg pb-mb-2"><?php \esc_html_e('Theme Configuration', 'proto-blocks'); ?></h3>
+                    <p class="pb-text-text-muted-light pb-text-sm pb-mb-4">
+                        <?php \esc_html_e('Customize your Tailwind theme using CSS variables. Changes require recompilation.', 'proto-blocks'); ?>
+                    </p>
 
-                <div class="config-editor-footer">
-                    <button type="button" class="button button-primary" id="save-config">
-                        <?php \esc_html_e('Save Configuration', 'proto-blocks'); ?>
-                    </button>
-                    <span class="config-status" id="config-status"></span>
+                    <div class="pb-flex pb-flex-wrap pb-items-center pb-gap-3 pb-mb-4">
+                        <label for="preset-select" class="pb-text-sm pb-font-medium"><?php \esc_html_e('Presets:', 'proto-blocks'); ?></label>
+                        <select id="preset-select" class="pb-border pb-border-gray-300 pb-rounded pb-px-3 pb-py-1.5 pb-text-sm">
+                            <option value=""><?php \esc_html_e('-- Select a preset --', 'proto-blocks'); ?></option>
+                            <?php foreach ($configData['presets'] as $key => $preset): ?>
+                                <option value="<?php echo \esc_attr($key); ?>">
+                                    <?php echo \esc_html($preset['name']); ?> - <?php echo \esc_html($preset['description']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button type="button" id="reset-config" class="pb-bg-white pb-border pb-border-gray-300 pb-text-gray-700 hover:pb-bg-gray-50 pb-px-3 pb-py-1.5 pb-rounded pb-text-sm pb-font-medium pb-transition-colors">
+                            <?php \esc_html_e('Reset to Default', 'proto-blocks'); ?>
+                        </button>
+                    </div>
+
+                    <textarea id="theme-config" rows="12" class="pb-w-full pb-border pb-border-gray-300 pb-rounded-lg pb-p-4 pb-font-mono pb-text-sm pb-bg-gray-50 focus:pb-border-primary focus:pb-ring-1 focus:pb-ring-primary pb-outline-none"><?php echo \esc_textarea($configData['current']); ?></textarea>
+
+                    <div class="pb-flex pb-items-center pb-gap-4 pb-mt-4">
+                        <button type="button" id="save-config" class="pb-bg-primary hover:pb-bg-primary-hover pb-text-white pb-px-4 pb-py-2 pb-rounded pb-shadow-sm pb-text-sm pb-font-medium pb-transition-colors">
+                            <?php \esc_html_e('Save Configuration', 'proto-blocks'); ?>
+                        </button>
+                        <span id="config-status" class="pb-text-sm pb-text-green-600 pb-italic"></span>
+                    </div>
                 </div>
             </div>
         </div>
-
-        <style>
-            .proto-blocks-tailwind-settings {
-                max-width: 800px;
-            }
-            .proto-blocks-toggle {
-                position: relative;
-                display: inline-block;
-                width: 50px;
-                height: 26px;
-            }
-            .proto-blocks-toggle input {
-                opacity: 0;
-                width: 0;
-                height: 0;
-            }
-            .proto-blocks-toggle-slider {
-                position: absolute;
-                cursor: pointer;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background-color: #ccc;
-                transition: .4s;
-                border-radius: 26px;
-            }
-            .proto-blocks-toggle-slider:before {
-                position: absolute;
-                content: "";
-                height: 18px;
-                width: 18px;
-                left: 4px;
-                bottom: 4px;
-                background-color: white;
-                transition: .4s;
-                border-radius: 50%;
-            }
-            .proto-blocks-toggle input:checked + .proto-blocks-toggle-slider {
-                background-color: #2271b1;
-            }
-            .proto-blocks-toggle input:checked + .proto-blocks-toggle-slider:before {
-                transform: translateX(24px);
-            }
-            .proto-blocks-status-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 10px;
-            }
-            .status-item {
-                display: flex;
-                gap: 8px;
-                align-items: center;
-            }
-            .status-label {
-                font-weight: 600;
-            }
-            .proto-blocks-actions {
-                display: flex;
-                gap: 10px;
-                flex-wrap: wrap;
-            }
-            .proto-blocks-actions .button .dashicons {
-                margin-right: 5px;
-                vertical-align: middle;
-                line-height: 1.4;
-            }
-            .tailwind-config-section {
-                margin-top: 30px;
-                padding-top: 20px;
-                border-top: 1px solid #dcdcde;
-            }
-            .config-editor-toolbar {
-                display: flex;
-                gap: 10px;
-                align-items: center;
-                margin-bottom: 10px;
-            }
-            .config-editor-wrapper {
-                margin-bottom: 10px;
-            }
-            .config-editor-wrapper textarea {
-                font-family: Consolas, Monaco, monospace;
-                font-size: 13px;
-                line-height: 1.5;
-            }
-            .config-editor-footer {
-                display: flex;
-                gap: 10px;
-                align-items: center;
-            }
-            .config-status {
-                font-style: italic;
-                color: #666;
-            }
-            .notice.inline {
-                padding: 8px 12px;
-            }
-        </style>
 
         <script>
         jQuery(document).ready(function($) {
@@ -343,9 +244,17 @@ class AdminSettings
 
             function showMessage(message, type) {
                 const $msg = $('#tailwind-message');
-                $msg.removeClass('notice-success notice-error notice-warning')
-                    .addClass('notice-' + type)
-                    .find('p').text(message);
+                // Remove old type classes
+                $msg.removeClass('pb-bg-green-100 pb-text-green-800 pb-bg-red-100 pb-text-red-800 pb-bg-yellow-100 pb-text-yellow-800');
+                // Add new type classes
+                if (type === 'success') {
+                    $msg.addClass('pb-bg-green-100 pb-text-green-800');
+                } else if (type === 'error') {
+                    $msg.addClass('pb-bg-red-100 pb-text-red-800');
+                } else {
+                    $msg.addClass('pb-bg-yellow-100 pb-text-yellow-800');
+                }
+                $msg.text(message);
                 $msg.slideDown();
                 setTimeout(() => $msg.slideUp(), 5000);
             }

@@ -98,8 +98,13 @@ register_activation_hook(__FILE__, function (): void {
     // Flush rewrite rules
     flush_rewrite_rules();
 
-    // Set activation flag for welcome message
+    // Set activation flag for wizard redirect
     set_transient('proto_blocks_activated', true, 30);
+
+    // Set wizard flag for fresh installations (only if option doesn't exist)
+    if (get_option('proto_blocks_wizard_completed') === false) {
+        update_option('proto_blocks_wizard_completed', false);
+    }
 });
 
 // Deactivation hook

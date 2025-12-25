@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom scrollbar styling */
+.proto-blocks-admin-ui ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.proto-blocks-admin-ui ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.proto-blocks-admin-ui ::-webkit-scrollbar-thumb {
+    background-color: #CBD5E1;
+    border-radius: 4px;
+}
+
+/* Custom component classes */
+@layer components {
+    /* Toggle switch component */
+    .pb-toggle {
+        @apply pb-relative pb-inline-block pb-w-12 pb-h-6;
+    }
+
+    .pb-toggle input {
+        @apply pb-opacity-0 pb-w-0 pb-h-0;
+    }
+
+    .pb-toggle-slider {
+        @apply pb-absolute pb-cursor-pointer pb-inset-0 pb-bg-gray-300 pb-rounded-full pb-transition-colors pb-duration-300;
+    }
+
+    .pb-toggle-slider::before {
+        content: "";
+        @apply pb-absolute pb-h-4 pb-w-4 pb-left-1 pb-bottom-1 pb-bg-white pb-rounded-full pb-transition-transform pb-duration-300;
+    }
+
+    .pb-toggle input:checked + .pb-toggle-slider {
+        @apply pb-bg-primary;
+    }
+
+    .pb-toggle input:checked + .pb-toggle-slider::before {
+        transform: translateX(24px);
+    }
+}

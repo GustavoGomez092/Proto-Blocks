@@ -1,4 +1,5 @@
 const defaultConfig = require('@wordpress/scripts/config/webpack.config');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const path = require('path');
 
 module.exports = {
@@ -21,7 +22,10 @@ module.exports = {
     module: {
         ...defaultConfig.module,
         rules: [
-            ...defaultConfig.module.rules,
+            // Filter out default CSS rules to replace with our own
+            ...defaultConfig.module.rules.filter(
+                (rule) => !rule.test || !rule.test.toString().includes('css')
+            ),
             {
                 test: /\.tsx?$/,
                 use: [
@@ -34,6 +38,33 @@ module.exports = {
                 ],
                 exclude: /node_modules/,
             },
+            // CSS processing with PostCSS and Tailwind
+            {
+                test: /\.css$/,
+                use: [
+                    MiniCssExtractPlugin.loader,
+                    'css-loader',
+                    {
+                        loader: 'postcss-loader',
+                        options: {
+                            postcssOptions: {
+                                plugins: [
+                                    require('tailwindcss'),
+                                    require('autoprefixer'),
+                                ],
+                            },
+                        },
+                    },
+                ],
+            },
         ],
     },
+    plugins: [
+        ...defaultConfig.plugins.filter(
+            (plugin) => plugin.constructor.name !== 'MiniCssExtractPlugin'
+        ),
+        new MiniCssExtractPlugin({
+            filename: '../css/[name].css',
+        }),
+    ],
 };

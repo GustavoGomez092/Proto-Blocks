@@ -4,6 +4,7 @@
  * Handles the admin settings page functionality
  */
 
+import './admin.css';
 import { createRoot, render, createElement } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { AdminApp } from './AdminApp';

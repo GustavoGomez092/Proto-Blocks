@@ -525,7 +525,7 @@ video {
 .pb-toggle-slider::before {
         content: "";
         position: absolute;
-        left: 0.25rem;
+        right: 0.25rem;
         bottom: 0.25rem;
         height: 1rem;
         width: 1rem;
@@ -541,15 +541,15 @@ video {
   background-color: rgb(0 42 92 / var(--tw-bg-opacity, 1));
 }
 .pb-toggle input:checked + .pb-toggle-slider::before {
-        transform: translateX(24px);
+        transform: translateX(-24px);
     }
 .proto-blocks-admin-ui .pb-mx-2 {
-  margin-left: 0.5rem;
   margin-right: 0.5rem;
+  margin-left: 0.5rem;
 }
 .proto-blocks-admin-ui .pb-mx-auto {
-  margin-left: auto;
   margin-right: auto;
+  margin-left: auto;
 }
 .proto-blocks-admin-ui .pb-mb-1 {
   margin-bottom: 0.25rem;
@@ -570,7 +570,7 @@ video {
   margin-bottom: 2rem;
 }
 .proto-blocks-admin-ui .pb-ml-2 {
-  margin-left: 0.5rem;
+  margin-right: 0.5rem;
 }
 .proto-blocks-admin-ui .pb-mt-0\.5 {
   margin-top: 0.125rem;
@@ -766,7 +766,7 @@ video {
   border-bottom-width: 1px;
 }
 .proto-blocks-admin-ui .pb-border-l-4 {
-  border-left-width: 4px;
+  border-right-width: 4px;
 }
 .proto-blocks-admin-ui .pb-border-t {
   border-top-width: 1px;
@@ -816,7 +816,7 @@ video {
 }
 .proto-blocks-admin-ui .pb-border-l-red-500 {
   --tw-border-opacity: 1;
-  border-left-color: rgb(239 68 68 / var(--tw-border-opacity, 1));
+  border-right-color: rgb(239 68 68 / var(--tw-border-opacity, 1));
 }
 .proto-blocks-admin-ui .pb-bg-amber-50 {
   --tw-bg-opacity: 1;
@@ -905,32 +905,32 @@ video {
   padding: 2rem;
 }
 .proto-blocks-admin-ui .pb-px-1 {
-  padding-left: 0.25rem;
   padding-right: 0.25rem;
+  padding-left: 0.25rem;
 }
 .proto-blocks-admin-ui .pb-px-1\.5 {
-  padding-left: 0.375rem;
   padding-right: 0.375rem;
+  padding-left: 0.375rem;
 }
 .proto-blocks-admin-ui .pb-px-2 {
-  padding-left: 0.5rem;
   padding-right: 0.5rem;
+  padding-left: 0.5rem;
 }
 .proto-blocks-admin-ui .pb-px-3 {
-  padding-left: 0.75rem;
   padding-right: 0.75rem;
+  padding-left: 0.75rem;
 }
 .proto-blocks-admin-ui .pb-px-4 {
-  padding-left: 1rem;
   padding-right: 1rem;
+  padding-left: 1rem;
 }
 .proto-blocks-admin-ui .pb-px-6 {
-  padding-left: 1.5rem;
   padding-right: 1.5rem;
+  padding-left: 1.5rem;
 }
 .proto-blocks-admin-ui .pb-px-8 {
-  padding-left: 2rem;
   padding-right: 2rem;
+  padding-left: 2rem;
 }
 .proto-blocks-admin-ui .pb-py-0\.5 {
   padding-top: 0.125rem;
@@ -961,13 +961,13 @@ video {
   padding-bottom: 1rem;
 }
 .proto-blocks-admin-ui .pb-pl-12 {
-  padding-left: 3rem;
+  padding-right: 3rem;
 }
 .proto-blocks-admin-ui .pb-pl-20 {
-  padding-left: 5rem;
+  padding-right: 5rem;
 }
 .proto-blocks-admin-ui .pb-pl-4 {
-  padding-left: 1rem;
+  padding-right: 1rem;
 }
 .proto-blocks-admin-ui .pb-pt-4 {
   padding-top: 1rem;
@@ -976,7 +976,7 @@ video {
   padding-top: 1.5rem;
 }
 .proto-blocks-admin-ui .pb-text-left {
-  text-align: left;
+  text-align: right;
 }
 .proto-blocks-admin-ui .pb-text-center {
   text-align: center;
@@ -1356,7 +1356,7 @@ video {
   }
 
   .proto-blocks-admin-ui .md\:pb-text-left {
-    text-align: left;
+    text-align: right;
   }
 }
 

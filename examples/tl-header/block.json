@@ -1,0 +1,68 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "proto-blocks/tl-header",
+  "version": "1.0.0",
+  "title": "Header Navigation",
+  "category": "proto-blocks",
+  "icon": "menu",
+  "description": "A responsive header with logo, navigation menu, and call-to-action button.",
+  "keywords": ["header", "navigation", "menu", "navbar", "tailwind"],
+  "supports": {
+    "html": false,
+    "anchor": true,
+    "customClassName": true,
+    "align": ["wide", "full"]
+  },
+  "protoBlocks": {
+    "version": "1.0",
+    "isExample": true,
+    "useTailwind": true,
+    "template": "template.php",
+    "fields": {
+      "logo": {
+        "type": "image",
+        "sizes": ["thumbnail", "medium"]
+      },
+      "siteTitle": {
+        "type": "text",
+        "tagName": "span"
+      },
+      "navItems": {
+        "type": "repeater",
+        "min": 1,
+        "max": 8,
+        "itemLabel": "label",
+        "collapsible": true,
+        "fields": {
+          "label": {
+            "type": "text",
+            "label": "Link Text",
+            "tagName": "span"
+          },
+          "url": {
+            "type": "text",
+            "label": "URL"
+          }
+        }
+      },
+      "ctaButton": {
+        "type": "link",
+        "tagName": "a"
+      }
+    },
+    "controls": {
+      "showCta": {
+        "type": "toggle",
+        "label": "Show CTA Button",
+        "default": true
+      },
+      "fixedPosition": {
+        "type": "toggle",
+        "label": "Fixed Position",
+        "default": true,
+        "help": "Keep header fixed at top of page"
+      }
+    }
+  }
+}

@@ -21,6 +21,7 @@ use ProtoBlocks\API\RestAPI;
 use ProtoBlocks\API\AjaxHandler;
 use ProtoBlocks\Admin\AdminPage;
 use ProtoBlocks\Admin\Assets;
+use ProtoBlocks\Admin\SetupWizard;
 use ProtoBlocks\Tailwind\Manager as TailwindManager;
 use ProtoBlocks\Tailwind\AdminSettings as TailwindAdminSettings;
 
@@ -243,6 +244,10 @@ final class Plugin
         // Admin Page (only if in admin)
         if (is_admin()) {
             $this->services['admin_page'] = new AdminPage($this->getCache());
+
+            // Setup Wizard
+            $this->services['setup_wizard'] = new SetupWizard();
+            $this->services['setup_wizard']->register();
         }
 
         // Tailwind Manager
@@ -264,6 +269,9 @@ final class Plugin
     {
         // Register editor script EARLY (priority 5) - before blocks are registered
         add_action('init', [$this->getAssets(), 'registerEditorScript'], 5);
+
+        // Apply custom category name from settings
+        add_filter('proto_blocks_category_title', [$this, 'filterCategoryTitle']);
 
         // Block category registration (priority 8)
         add_action('init', [new Category(), 'register'], 8);
@@ -386,5 +394,22 @@ final class Plugin
     public function getTailwindAdminSettings(): ?TailwindAdminSettings
     {
         return $this->services['tailwind_admin'] ?? null;
+    }
+
+    /**
+     * Filter the category title based on saved settings
+     *
+     * @param string $title Default category title
+     * @return string Modified category title
+     */
+    public function filterCategoryTitle(string $title): string
+    {
+        $custom_title = get_option(AdminPage::OPTION_CATEGORY_NAME, '');
+
+        if (!empty($custom_title)) {
+            return $custom_title;
+        }
+
+        return $title;
     }
 }
