@@ -165,6 +165,43 @@ function SortableRepeaterItem({
                     const isEditing = editingField === fieldName;
                     const value = item[fieldName];
 
+                    // Image fields render their own component directly --
+                    // they're already visual and ship with built-in
+                    // Replace/Remove controls, so the preview/edit toggle
+                    // adds nothing visually but DOES introduce a race
+                    // condition with WordPress' media frame:
+                    //
+                    //   1. User clicks the image preview -> mounts ImageField
+                    //      -> mounts MediaUpload.
+                    //   2. User clicks Add Image -> media modal opens.
+                    //   3. Focus shifts to the modal -> the editing wrapper's
+                    //      onBlur fires -> setEditingField(null) -> unmounts
+                    //      ImageField -> unmounts MediaUpload.
+                    //   4. Plupload is mid-init in the now-orphaned modal and
+                    //      crashes inside Moxie's HTML5 file-input shim with
+                    //      "Cannot read properties of null (reading 'style')".
+                    //
+                    // Always-mounting the ImageField keeps the WordPress media
+                    // frame stable through the upload flow and removes the
+                    // crash entirely.
+                    if (fieldConfig.type === 'image') {
+                        return (
+                            <div
+                                key={fieldName}
+                                className="proto-blocks-repeater__field-editing proto-blocks-repeater__field-editing--image"
+                            >
+                                {renderField({
+                                    name: fieldName,
+                                    value: value,
+                                    onChange: (newValue: unknown) =>
+                                        onFieldChange(fieldName, newValue),
+                                    config: fieldConfig,
+                                    isSelected: Boolean(isSelected),
+                                })}
+                            </div>
+                        );
+                    }
+
                     if (isEditing) {
                         return (
                             <div
@@ -202,24 +239,16 @@ function SortableRepeaterItem({
                                 }
                             }}
                         >
-                            {fieldConfig.type === 'image' && value && (value as Record<string, string>).url ? (
-                                <img
-                                    src={(value as Record<string, string>).url}
-                                    alt=""
-                                    className="proto-blocks-repeater__field-image"
-                                />
-                            ) : (
-                                <span
-                                    className={`proto-blocks-repeater__field-value proto-blocks-repeater__field-value--${fieldName}`}
-                                    data-placeholder={fieldConfig.label || fieldName}
-                                >
-                                    {renderPreviewValue(value, fieldConfig) || (
-                                        <span className="proto-blocks-repeater__placeholder">
-                                            {fieldConfig.label || fieldName}
-                                        </span>
-                                    )}
-                                </span>
-                            )}
+                            <span
+                                className={`proto-blocks-repeater__field-value proto-blocks-repeater__field-value--${fieldName}`}
+                                data-placeholder={fieldConfig.label || fieldName}
+                            >
+                                {renderPreviewValue(value, fieldConfig) || (
+                                    <span className="proto-blocks-repeater__placeholder">
+                                        {fieldConfig.label || fieldName}
+                                    </span>
+                                )}
+                            </span>
                         </div>
                     );
                 })}
