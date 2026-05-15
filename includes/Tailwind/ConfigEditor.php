@@ -285,22 +285,173 @@ CSS,
      */
     public function generateInputCss(string $contentPath): string
     {
-        $themeConfig = $this->getThemeConfig();
+        $themeConfig    = $this->getThemeConfig();
+        $preflightLayer = $this->getPreflightLayer();
 
+        // Tailwind v4's `@import "tailwindcss"` shorthand pulls in theme + preflight
+        // + utilities, but its bundled preflight resets html/body/* globally which
+        // conflicts with WordPress themes. Use the modular form so we can swap
+        // preflight for our scoped variant (see getPreflightLayer()).
+        //
+        // Note: utilities are imported UNLAYERED, not into @layer utilities.
+        // Block themes' theme.json emits unlayered rules like
+        //   a:where(:not(.wp-element-button)) { text-decoration: underline }
+        // and unlayered rules always beat layered ones regardless of specificity.
+        // Keeping our utilities + scoped preflight unlayered lets specificity
+        // (which the Scoper boosts via the scope class) decide the cascade.
         return <<<CSS
 /* Proto Blocks Tailwind v4 - Auto-generated input.css */
-@import "tailwindcss";
+@layer theme;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css";
 
 /* Content source for JIT compilation */
 @source "{$contentPath}";
 
-/* Disable preflight to avoid CSS reset conflicts */
-@layer base {
-  /* Preflight disabled - Proto Blocks uses WordPress styles */
-}
+{$preflightLayer}
 
 /* User theme customizations */
 {$themeConfig}
+CSS;
+    }
+
+    /**
+     * Build the @layer base block.
+     *
+     * Tailwind v4's bundled preflight resets html/body/* globally, which
+     * conflicts with WordPress themes. Instead we emit a preflight scoped to
+     * the Proto-Blocks scope class so it only resets browser defaults
+     * *inside* blocks. Site owners can opt out (back to the historical "no
+     * preflight at all" behavior) via:
+     *
+     *   add_filter('proto_blocks_preflight', '__return_false');
+     */
+    private function getPreflightLayer(): string
+    {
+        $enabled = (bool) apply_filters('proto_blocks_preflight', true);
+
+        if (! $enabled) {
+            return "/* Preflight disabled via proto_blocks_preflight filter */";
+        }
+
+        $scope = Scoper::SCOPE_CLASS;
+
+        return <<<CSS
+/* Scoped preflight: resets browser defaults inside .{$scope} only.
+   Emitted unlayered so its specificity beats WordPress' unlayered global
+   styles (eg. theme.json link decoration). */
+.{$scope},
+.{$scope} *,
+.{$scope} *::before,
+.{$scope} *::after {
+  box-sizing: border-box;
+  border: 0 solid;
+}
+
+.{$scope} h1,
+.{$scope} h2,
+.{$scope} h3,
+.{$scope} h4,
+.{$scope} h5,
+.{$scope} h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.{$scope} a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+.{$scope} b,
+.{$scope} strong {
+  font-weight: bolder;
+}
+
+.{$scope} code,
+.{$scope} kbd,
+.{$scope} samp,
+.{$scope} pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 1em;
+}
+
+.{$scope} small {
+  font-size: 80%;
+}
+
+.{$scope} sub,
+.{$scope} sup {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+.{$scope} sub { bottom: -0.25em; }
+.{$scope} sup { top: -0.5em; }
+
+.{$scope} table {
+  border-collapse: collapse;
+  border-color: inherit;
+  text-indent: 0;
+}
+
+.{$scope} button,
+.{$scope} input,
+.{$scope} optgroup,
+.{$scope} select,
+.{$scope} textarea {
+  font: inherit;
+  font-feature-settings: inherit;
+  font-variation-settings: inherit;
+  color: inherit;
+  margin: 0;
+  padding: 0;
+}
+
+.{$scope} button,
+.{$scope} select {
+  text-transform: none;
+}
+
+.{$scope} button,
+.{$scope} input:where([type="button"], [type="reset"], [type="submit"]) {
+  -webkit-appearance: button;
+  background-color: transparent;
+  background-image: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.{$scope} ol,
+.{$scope} ul,
+.{$scope} menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.{$scope} img,
+.{$scope} svg,
+.{$scope} video,
+.{$scope} canvas,
+.{$scope} audio,
+.{$scope} iframe,
+.{$scope} embed,
+.{$scope} object {
+  display: block;
+  vertical-align: middle;
+}
+.{$scope} img,
+.{$scope} video {
+  max-width: 100%;
+  height: auto;
+}
+
+.{$scope} [hidden] {
+  display: none;
+}
 CSS;
     }
 
