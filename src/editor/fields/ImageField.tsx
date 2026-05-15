@@ -6,7 +6,7 @@
  * in a portal, preventing any parent overflow clipping issues.
  */
 
-import React, { useRef } from 'react';
+import React, { useCallback, useState } from 'react';
 import { createElement } from '@wordpress/element';
 import { MediaUpload, MediaUploadCheck } from '@wordpress/block-editor';
 import { Button, Popover } from '@wordpress/components';
@@ -36,7 +36,17 @@ export function ImageField({
 }: ImageFieldProps): JSX.Element {
     const imageValue = value || { url: '', id: null, alt: '' };
     const hasImage = Boolean(imageValue.url);
-    const containerRef = useRef<HTMLDivElement>(null);
+
+    // useState + callback ref so the Popover anchor below re-evaluates as
+    // soon as React commits the wrapper element to the DOM. A bare useRef
+    // would stay null on the first render (refs are set after JSX returns
+    // and don't trigger a re-render), and the Popover would never appear --
+    // which is why Replace / Remove controls didn't show after picking an
+    // image.
+    const [container, setContainer] = useState<HTMLDivElement | null>(null);
+    const setContainerRef = useCallback((node: HTMLDivElement | null) => {
+        setContainer(node);
+    }, []);
 
     // Get preferred size from config or default to 'large'
     const preferredSize = (config as { size?: string }).size || 'large';
@@ -81,7 +91,7 @@ export function ImageField({
                 value={imageValue.id || undefined}
                 render={({ open }: { open: () => void }) => (
                     <div
-                        ref={containerRef}
+                        ref={setContainerRef}
                         className={`proto-blocks-image-field ${className}`}
                     >
                         {hasImage ? (
@@ -99,9 +109,9 @@ export function ImageField({
                                     tabIndex={0}
                                 />
                                 {/* Floating controls - rendered in portal via Popover */}
-                                {isSelected && containerRef.current && (
+                                {isSelected && container && (
                                     <Popover
-                                        anchor={containerRef.current}
+                                        anchor={container}
                                         placement="top-end"
                                         offset={8}
                                         className="proto-blocks-image-field__popover"
