@@ -338,70 +338,70 @@ CSS;
         $scope = Scoper::SCOPE_CLASS;
 
         return <<<CSS
-/* Scoped preflight: resets browser defaults inside .{$scope} only.
+/* Scoped preflight: resets browser defaults inside :where(.{$scope}) only.
    Emitted unlayered so its specificity beats WordPress' unlayered global
    styles (eg. theme.json link decoration). */
-.{$scope},
-.{$scope} *,
-.{$scope} *::before,
-.{$scope} *::after {
+:where(.{$scope}),
+:where(.{$scope}) *,
+:where(.{$scope}) *::before,
+:where(.{$scope}) *::after {
   box-sizing: border-box;
   border: 0 solid;
 }
 
-.{$scope} h1,
-.{$scope} h2,
-.{$scope} h3,
-.{$scope} h4,
-.{$scope} h5,
-.{$scope} h6 {
+:where(.{$scope}) h1,
+:where(.{$scope}) h2,
+:where(.{$scope}) h3,
+:where(.{$scope}) h4,
+:where(.{$scope}) h5,
+:where(.{$scope}) h6 {
   font-size: inherit;
   font-weight: inherit;
 }
 
-.{$scope} a {
+:where(.{$scope}) a {
   color: inherit;
   text-decoration: inherit;
 }
 
-.{$scope} b,
-.{$scope} strong {
+:where(.{$scope}) b,
+:where(.{$scope}) strong {
   font-weight: bolder;
 }
 
-.{$scope} code,
-.{$scope} kbd,
-.{$scope} samp,
-.{$scope} pre {
+:where(.{$scope}) code,
+:where(.{$scope}) kbd,
+:where(.{$scope}) samp,
+:where(.{$scope}) pre {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 1em;
 }
 
-.{$scope} small {
+:where(.{$scope}) small {
   font-size: 80%;
 }
 
-.{$scope} sub,
-.{$scope} sup {
+:where(.{$scope}) sub,
+:where(.{$scope}) sup {
   font-size: 75%;
   line-height: 0;
   position: relative;
   vertical-align: baseline;
 }
-.{$scope} sub { bottom: -0.25em; }
-.{$scope} sup { top: -0.5em; }
+:where(.{$scope}) sub { bottom: -0.25em; }
+:where(.{$scope}) sup { top: -0.5em; }
 
-.{$scope} table {
+:where(.{$scope}) table {
   border-collapse: collapse;
   border-color: inherit;
   text-indent: 0;
 }
 
-.{$scope} button,
-.{$scope} input,
-.{$scope} optgroup,
-.{$scope} select,
-.{$scope} textarea {
+:where(.{$scope}) button,
+:where(.{$scope}) input,
+:where(.{$scope}) optgroup,
+:where(.{$scope}) select,
+:where(.{$scope}) textarea {
   font: inherit;
   font-feature-settings: inherit;
   font-variation-settings: inherit;
@@ -410,13 +410,13 @@ CSS;
   padding: 0;
 }
 
-.{$scope} button,
-.{$scope} select {
+:where(.{$scope}) button,
+:where(.{$scope}) select {
   text-transform: none;
 }
 
-.{$scope} button,
-.{$scope} input:where([type="button"], [type="reset"], [type="submit"]) {
+:where(.{$scope}) button,
+:where(.{$scope}) input:where([type="button"], [type="reset"], [type="submit"]) {
   -webkit-appearance: button;
   background-color: transparent;
   background-image: none;
@@ -424,32 +424,32 @@ CSS;
   cursor: pointer;
 }
 
-.{$scope} ol,
-.{$scope} ul,
-.{$scope} menu {
+:where(.{$scope}) ol,
+:where(.{$scope}) ul,
+:where(.{$scope}) menu {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.{$scope} img,
-.{$scope} svg,
-.{$scope} video,
-.{$scope} canvas,
-.{$scope} audio,
-.{$scope} iframe,
-.{$scope} embed,
-.{$scope} object {
+:where(.{$scope}) img,
+:where(.{$scope}) svg,
+:where(.{$scope}) video,
+:where(.{$scope}) canvas,
+:where(.{$scope}) audio,
+:where(.{$scope}) iframe,
+:where(.{$scope}) embed,
+:where(.{$scope}) object {
   display: block;
   vertical-align: middle;
 }
-.{$scope} img,
-.{$scope} video {
+:where(.{$scope}) img,
+:where(.{$scope}) video {
   max-width: 100%;
   height: auto;
 }
 
-.{$scope} [hidden] {
+:where(.{$scope}) [hidden] {
   display: none;
 }
 CSS;
