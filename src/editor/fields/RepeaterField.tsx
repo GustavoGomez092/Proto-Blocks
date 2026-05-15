@@ -165,30 +165,45 @@ function SortableRepeaterItem({
                     const isEditing = editingField === fieldName;
                     const value = item[fieldName];
 
-                    // Image fields render their own component directly --
-                    // they're already visual and ship with built-in
-                    // Replace/Remove controls, so the preview/edit toggle
-                    // adds nothing visually but DOES introduce a race
-                    // condition with WordPress' media frame:
+                    // Field types that ship with their own portal-rendered
+                    // UI (image fields open WP's media frame; link fields
+                    // open a Popover with URL inputs) must be ALWAYS-mounted
+                    // rather than wrapped in the preview/edit toggle.
                     //
-                    //   1. User clicks the image preview -> mounts ImageField
-                    //      -> mounts MediaUpload.
-                    //   2. User clicks Add Image -> media modal opens.
-                    //   3. Focus shifts to the modal -> the editing wrapper's
-                    //      onBlur fires -> setEditingField(null) -> unmounts
-                    //      ImageField -> unmounts MediaUpload.
-                    //   4. Plupload is mid-init in the now-orphaned modal and
-                    //      crashes inside Moxie's HTML5 file-input shim with
-                    //      "Cannot read properties of null (reading 'style')".
+                    // The toggle's onBlur tears the field down whenever focus
+                    // leaves the editing wrapper. Portal-rendered popovers
+                    // render at document.body and steal focus the moment they
+                    // mount, so onBlur fires immediately and the field
+                    // unmounts before the popover is usable:
                     //
-                    // Always-mounting the ImageField keeps the WordPress media
-                    // frame stable through the upload flow and removes the
-                    // crash entirely.
-                    if (fieldConfig.type === 'image') {
+                    //   image fields  ->  WP media modal opens
+                    //                     focus -> modal
+                    //                     onBlur -> setEditingField(null)
+                    //                     -> unmount mid-init
+                    //                     -> Moxie shim crashes with
+                    //                        "Cannot read properties of null
+                    //                         (reading 'style')"
+                    //
+                    //   link fields   ->  link Popover opens
+                    //                     focus -> URL input
+                    //                     onBlur -> setEditingField(null)
+                    //                     -> Popover unmounts before the
+                    //                        user can type a URL (the popover
+                    //                        simply appears to do nothing)
+                    //
+                    // Both field components are already visual on their own
+                    // (image renders the picture + Replace/Remove popover;
+                    // link renders the inline text + Link Settings button)
+                    // so the click-to-edit affordance adds nothing visually.
+                    if (fieldConfig.type === 'image' || fieldConfig.type === 'link') {
+                        const variantClass =
+                            fieldConfig.type === 'image'
+                                ? 'proto-blocks-repeater__field-editing--image'
+                                : 'proto-blocks-repeater__field-editing--link';
                         return (
                             <div
                                 key={fieldName}
-                                className="proto-blocks-repeater__field-editing proto-blocks-repeater__field-editing--image"
+                                className={`proto-blocks-repeater__field-editing ${variantClass}`}
                             >
                                 {renderField({
                                     name: fieldName,
