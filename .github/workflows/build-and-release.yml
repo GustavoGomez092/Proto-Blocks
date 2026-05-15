@@ -27,7 +27,9 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        # Prefer reproducible `npm ci`; fall back to `npm install` if the
+        # lock file drifts (resilient against contributor lock churn).
+        run: npm ci || npm install --no-audit --no-fund
 
       - name: Build plugin and create zip
         run: npm run dist
