@@ -18,7 +18,8 @@ A next-generation WordPress plugin that enables developers to create Gutenberg b
 - **Interactivity API Support**: Full support for WordPress Interactivity API directives
 - **WP-CLI Commands**: Scaffold, validate, and manage blocks from the command line
 - **TypeScript Editor**: Type-safe editor components for better developer experience
-- **Tailwind CSS Support**: Build blocks with Tailwind CSS using themed colors
+- **Tailwind v4 Support**: Build blocks with Tailwind utilities; design tokens (`@theme`) live in your theme repo
+- **Scoped Preflight**: Tailwind reset is wrapped in `:where(.proto-blocks-scope)` so it only applies inside blocks -- no global resets bleeding into the rest of WP
 - **Setup Wizard**: Guided first-time configuration for quick setup
 
 ## Requirements
@@ -1397,6 +1398,77 @@ When you're ready to start fresh:
 | Responsive Design | ✓ | ✓ | ✓ |
 
 > **Note:** The demo blocks use the WordPress Interactivity API for their frontend JavaScript, but this is purely for demonstration purposes. You can use plain JavaScript, ES modules, jQuery, or any other approach you prefer. See the [Frontend JavaScript](#frontend-javascript-interactivity) section for alternatives.
+
+## Tailwind Theme Tokens
+
+Proto-Blocks compiles Tailwind v4 at runtime. The design tokens (colors, fonts, shadows, type scale) are read from a **CSS file in your active theme**, not from the database. This keeps your brand palette in version control and out of the volatile WP options table.
+
+### Where the file lives
+
+By default Proto-Blocks looks for:
+
+```
+wp-content/themes/<active-theme>/tailwind-theme.css
+```
+
+The file should contain a single Tailwind v4 [`@theme { … }`](https://tailwindcss.com/docs/theme) block. Anything you declare there becomes a utility class on the next compile.
+
+```css
+/* themes/your-theme/tailwind-theme.css */
+@theme {
+  --color-brand:     #D1001D;
+  --color-brand-700: #A0001A;
+
+  --font-display: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-glow:
+    0 38px 41.5px rgba(208, 0, 29, 0.10),
+    0 151px 75.5px rgba(208, 0, 29, 0.09);
+}
+```
+
+The above generates `bg-brand`, `text-brand`, `border-brand`, `bg-brand-700`, `font-display`, `font-body`, `shadow-glow`, etc. -- all of which can be used inside any block template.
+
+### Creating the file
+
+In **Settings → Proto-Blocks → Tailwind Settings**, if the file doesn't exist yet, click **"Create starter file"**. Proto-Blocks writes a minimal `tailwind-theme.css` into your active theme directory so you can start editing immediately. The button is hidden once the file exists.
+
+### Recompiling
+
+Recompile happens automatically on every front-end page load when the cache hash is stale. To force a recompile from the CLI:
+
+```bash
+wp eval 'ProtoBlocks\Core\Plugin::getInstance()->getTailwindManager()->compile();'
+```
+
+### Filters
+
+| Filter | Default | Purpose |
+| --- | --- | --- |
+| `proto_blocks_theme_css_path` | `wp-content/themes/<active>/tailwind-theme.css` | Override the location Proto-Blocks reads the `@theme` block from. Useful for monorepos where the tokens live outside the theme dir. |
+| `proto_blocks_preflight` | `true` | Toggle the scoped Tailwind preflight (`:where(.proto-blocks-scope)` resets). Set to `false` if your theme already provides equivalent resets. |
+| `proto_blocks_category_slug` | `proto-blocks` | Rename the block-inserter category slug. |
+| `proto_blocks_category_title` | `Proto Blocks` | Rename the displayed category label. |
+| `proto_blocks_category_icon` | `null` | Override the inserter category icon. |
+
+Example:
+
+```php
+// functions.php
+add_filter('proto_blocks_theme_css_path', fn() => WP_CONTENT_DIR . '/design-tokens.css');
+add_filter('proto_blocks_preflight', '__return_false');
+```
+
+### Scoped preflight
+
+Tailwind's stock preflight resets `html`, `body`, `*`, `a`, `ul`, etc. globally -- which clobbers WordPress theme defaults. Proto-Blocks emits its preflight wrapped in `:where(.proto-blocks-scope)` and at zero specificity (`:where()` always contributes `0`), so:
+
+- Resets only apply **inside** rendered blocks.
+- Your theme's `a:where(:not(.wp-element-button)) { text-decoration: underline }` style rules still win outside blocks.
+- Author utility classes (`text-brand`, `no-underline`, etc.) always beat preflight on specificity.
+
+Opt out per-site via `add_filter('proto_blocks_preflight', '__return_false')` if you maintain your own reset.
 
 ## Troubleshooting
 

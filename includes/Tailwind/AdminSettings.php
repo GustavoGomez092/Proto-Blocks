@@ -50,6 +50,7 @@ class AdminSettings
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'download_cli', [$this, 'handleDownloadCli']);
         // Theme config is now file-based (see ConfigEditor::getThemeCssPath).
         // The save_config and load_preset AJAX endpoints have been removed.
+        \add_action('wp_ajax_' . self::ACTION_PREFIX . 'create_theme_file', [$this, 'handleCreateThemeFile']);
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'get_status', [$this, 'handleGetStatus']);
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'toggle_global_styles', [$this, 'handleToggleGlobalStyles']);
     }
@@ -211,7 +212,7 @@ class AdminSettings
                     </p>
 
                     <div class="pb-bg-gray-50 pb-border pb-border-gray-200 pb-rounded-lg pb-p-4 pb-mb-4">
-                        <div class="pb-flex pb-items-center pb-gap-2 pb-mb-2">
+                        <div class="pb-flex pb-flex-wrap pb-items-center pb-gap-2 pb-mb-2">
                             <span class="pb-text-sm pb-font-semibold"><?php \esc_html_e('Theme file:', 'proto-blocks'); ?></span>
                             <code class="pb-text-xs pb-font-mono pb-bg-white pb-px-2 pb-py-1 pb-rounded pb-border pb-border-gray-200"><?php echo \esc_html($configData['path']); ?></code>
                             <?php if ($configData['exists']): ?>
@@ -220,7 +221,7 @@ class AdminSettings
                                 <span class="pb-text-xs pb-bg-yellow-100 pb-text-yellow-800 pb-px-2 pb-py-0.5 pb-rounded"><?php \esc_html_e('not found', 'proto-blocks'); ?></span>
                             <?php endif; ?>
                         </div>
-                        <p class="pb-text-xs pb-text-text-muted-light pb-mb-0">
+                        <p class="pb-text-xs pb-text-text-muted-light pb-mb-3">
                             <?php
                             printf(
                                 /* translators: %s: filter name in <code> */
@@ -229,6 +230,15 @@ class AdminSettings
                             );
                             ?>
                         </p>
+                        <?php if (!$configData['exists']): ?>
+                            <button type="button" id="create-theme-file"
+                                class="pb-bg-primary hover:pb-bg-primary-hover pb-text-white pb-px-3 pb-py-1.5 pb-rounded pb-shadow-sm pb-text-sm pb-font-medium pb-transition-colors">
+                                <?php \esc_html_e('Create starter file', 'proto-blocks'); ?>
+                            </button>
+                            <span class="pb-text-xs pb-text-text-muted-light pb-ml-2">
+                                <?php \esc_html_e('Writes a minimal tailwind-theme.css into the active theme so you can start editing tokens.', 'proto-blocks'); ?>
+                            </span>
+                        <?php endif; ?>
                     </div>
 
                     <?php if (!empty($configData['preview'])): ?>
@@ -382,7 +392,26 @@ class AdminSettings
                 });
             });
 
-            // Theme config UI is read-only; no save / preset / reset handlers.
+            // Theme config UI is read-only. The only mutating action is
+            // 'Create starter file', shown when the file is missing.
+            $('#create-theme-file').on('click', function() {
+                const $btn = $(this);
+                $btn.prop('disabled', true).text('<?php \esc_html_e('Creating...', 'proto-blocks'); ?>');
+
+                $.post(ajaxurl, {
+                    action: actionPrefix + 'create_theme_file',
+                    nonce: nonce
+                }, function(response) {
+                    if (response.success) {
+                        showMessage(response.data.message, 'success');
+                        // Reload to surface the now-existing file preview.
+                        setTimeout(() => location.reload(), 800);
+                    } else {
+                        showMessage(response.data.message, 'error');
+                        $btn.prop('disabled', false).text('<?php \esc_html_e('Create starter file', 'proto-blocks'); ?>');
+                    }
+                });
+            });
         });
         </script>
         <?php
@@ -501,6 +530,96 @@ class AdminSettings
         } else {
             \wp_send_json_error(['message' => $result['message']]);
         }
+    }
+
+    /**
+     * Handle the "Create starter file" action: writes a minimal
+     * tailwind-theme.css into the active theme so developers don't have
+     * to remember the file name / template / location.
+     */
+    public function handleCreateThemeFile(): void
+    {
+        $this->verifyNonce();
+
+        $configEditor = $this->manager->getConfigEditor();
+        $path         = $configEditor->getThemeCssPath();
+
+        if (file_exists($path)) {
+            \wp_send_json_error([
+                'message' => sprintf(
+                    /* translators: %s: filesystem path */
+                    \__('Theme file already exists at %s -- not overwriting.', 'proto-blocks'),
+                    $path
+                ),
+            ]);
+        }
+
+        $dir = dirname($path);
+        if (!is_dir($dir) || !is_writable($dir)) {
+            \wp_send_json_error([
+                'message' => sprintf(
+                    /* translators: %s: directory path */
+                    \__('Active theme directory is not writable: %s', 'proto-blocks'),
+                    $dir
+                ),
+            ]);
+        }
+
+        $contents = $this->getStarterThemeCss();
+
+        $bytes = file_put_contents($path, $contents);
+        if ($bytes === false) {
+            \wp_send_json_error([
+                'message' => sprintf(
+                    /* translators: %s: filesystem path */
+                    \__('Failed to write theme file at %s.', 'proto-blocks'),
+                    $path
+                ),
+            ]);
+        }
+
+        \wp_send_json_success([
+            'message' => sprintf(
+                /* translators: %s: filesystem path */
+                \__('Created starter theme file at %s. Edit it in your theme repo and recompile.', 'proto-blocks'),
+                $path
+            ),
+        ]);
+    }
+
+    /**
+     * Starter @theme template copied into the active theme on the
+     * "Create starter file" action. Intentionally minimal -- it's a
+     * jumping-off point, not a full color system.
+     */
+    private function getStarterThemeCss(): string
+    {
+        return <<<'CSS'
+/*
+ * Tailwind v4 design tokens.
+ *
+ * Each --color-*, --font-*, --shadow-* etc. exposed here is compiled into a
+ * matching utility class (bg-brand, text-brand, font-display, ...) on every
+ * Tailwind recompile. Edit this file in your theme repo -- nothing is read
+ * from the database.
+ *
+ * Recompile happens on any front-end page load, or run:
+ *   wp eval 'ProtoBlocks\Core\Plugin::getInstance()->getTailwindManager()->compile();'
+ *
+ * Docs:
+ *   https://tailwindcss.com/docs/theme
+ */
+
+@theme {
+  /* Brand colors -- replace with yours */
+  --color-brand:     #3B82F6;
+  --color-brand-700: #1D4ED8;
+
+  /* Typography */
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+CSS;
     }
 
     /**
