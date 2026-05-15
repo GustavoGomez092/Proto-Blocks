@@ -1,0 +1,83 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-release-main
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build plugin and create zip
+        run: npm run dist
+
+      - name: Confirm artifact exists
+        run: |
+          ls -la dist/
+          test -f dist/proto-blocks.zip || { echo "::error::dist/proto-blocks.zip missing after build"; exit 1; }
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: proto-blocks-${{ github.sha }}
+          path: dist/proto-blocks.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Update rolling 'latest' release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          SHA_SHORT="${GITHUB_SHA::7}"
+          COMMIT_MSG=$(git log -1 --format='%s')
+          BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+          NOTES=$(cat <<EOF
+          Automatic build of \`main\` at commit [\`$SHA_SHORT\`](https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA).
+
+          **Latest commit:** $COMMIT_MSG
+
+          **Built:** $BUILD_TIME
+
+          ---
+
+          Download \`proto-blocks.zip\` below, then in WordPress go to **Plugins -> Add New -> Upload Plugin** to install.
+          EOF
+          )
+
+          # Idempotent: delete the previous rolling release + its tag if either exists
+          gh release delete latest \
+            --yes \
+            --cleanup-tag \
+            --repo "$GITHUB_REPOSITORY" \
+            2>/dev/null || true
+
+          gh release create latest \
+            dist/proto-blocks.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Latest build (main)" \
+            --notes "$NOTES" \
+            --target "$GITHUB_SHA"
