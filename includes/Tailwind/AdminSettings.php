@@ -48,8 +48,8 @@ class AdminSettings
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'compile', [$this, 'handleCompile']);
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'clear_cache', [$this, 'handleClearCache']);
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'download_cli', [$this, 'handleDownloadCli']);
-        \add_action('wp_ajax_' . self::ACTION_PREFIX . 'save_config', [$this, 'handleSaveConfig']);
-        \add_action('wp_ajax_' . self::ACTION_PREFIX . 'load_preset', [$this, 'handleLoadPreset']);
+        // Theme config is now file-based (see ConfigEditor::getThemeCssPath).
+        // The save_config and load_preset AJAX endpoints have been removed.
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'get_status', [$this, 'handleGetStatus']);
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'toggle_global_styles', [$this, 'handleToggleGlobalStyles']);
     }
@@ -203,36 +203,40 @@ class AdminSettings
                     </div>
                 </div>
 
-                <!-- Theme Configuration -->
+                <!-- Theme Configuration (file-based, read-only) -->
                 <div class="tailwind-option pb-mt-8 pb-pt-6 pb-border-t pb-border-border-light" <?php echo $status['enabled'] ? '' : 'style="display:none;"'; ?>>
                     <h3 class="pb-font-semibold pb-text-lg pb-mb-2"><?php \esc_html_e('Theme Configuration', 'proto-blocks'); ?></h3>
                     <p class="pb-text-text-muted-light pb-text-sm pb-mb-4">
-                        <?php \esc_html_e('Customize your Tailwind theme using CSS variables. Changes require recompilation.', 'proto-blocks'); ?>
+                        <?php \esc_html_e('Tailwind theme tokens (@theme block) are read from a CSS file in the active theme. Edit the file directly and commit it to your repo -- nothing is stored in the database.', 'proto-blocks'); ?>
                     </p>
 
-                    <div class="pb-flex pb-flex-wrap pb-items-center pb-gap-3 pb-mb-4">
-                        <label for="preset-select" class="pb-text-sm pb-font-medium"><?php \esc_html_e('Presets:', 'proto-blocks'); ?></label>
-                        <select id="preset-select" class="pb-border pb-border-gray-300 pb-rounded pb-px-3 pb-py-1.5 pb-text-sm">
-                            <option value=""><?php \esc_html_e('-- Select a preset --', 'proto-blocks'); ?></option>
-                            <?php foreach ($configData['presets'] as $key => $preset): ?>
-                                <option value="<?php echo \esc_attr($key); ?>">
-                                    <?php echo \esc_html($preset['name']); ?> - <?php echo \esc_html($preset['description']); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <button type="button" id="reset-config" class="pb-bg-white pb-border pb-border-gray-300 pb-text-gray-700 hover:pb-bg-gray-50 pb-px-3 pb-py-1.5 pb-rounded pb-text-sm pb-font-medium pb-transition-colors">
-                            <?php \esc_html_e('Reset to Default', 'proto-blocks'); ?>
-                        </button>
+                    <div class="pb-bg-gray-50 pb-border pb-border-gray-200 pb-rounded-lg pb-p-4 pb-mb-4">
+                        <div class="pb-flex pb-items-center pb-gap-2 pb-mb-2">
+                            <span class="pb-text-sm pb-font-semibold"><?php \esc_html_e('Theme file:', 'proto-blocks'); ?></span>
+                            <code class="pb-text-xs pb-font-mono pb-bg-white pb-px-2 pb-py-1 pb-rounded pb-border pb-border-gray-200"><?php echo \esc_html($configData['path']); ?></code>
+                            <?php if ($configData['exists']): ?>
+                                <span class="pb-text-xs pb-bg-green-100 pb-text-green-800 pb-px-2 pb-py-0.5 pb-rounded"><?php \esc_html_e('found', 'proto-blocks'); ?></span>
+                            <?php else: ?>
+                                <span class="pb-text-xs pb-bg-yellow-100 pb-text-yellow-800 pb-px-2 pb-py-0.5 pb-rounded"><?php \esc_html_e('not found', 'proto-blocks'); ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <p class="pb-text-xs pb-text-text-muted-light pb-mb-0">
+                            <?php
+                            printf(
+                                /* translators: %s: filter name in <code> */
+                                \esc_html__('Override the path with the %s filter.', 'proto-blocks'),
+                                '<code>proto_blocks_theme_css_path</code>'
+                            );
+                            ?>
+                        </p>
                     </div>
 
-                    <textarea id="theme-config" rows="12" class="pb-w-full pb-border pb-border-gray-300 pb-rounded-lg pb-p-4 pb-font-mono pb-text-sm pb-bg-gray-50 focus:pb-border-primary focus:pb-ring-1 focus:pb-ring-primary pb-outline-none"><?php echo \esc_textarea($configData['current']); ?></textarea>
-
-                    <div class="pb-flex pb-items-center pb-gap-4 pb-mt-4">
-                        <button type="button" id="save-config" class="pb-bg-primary hover:pb-bg-primary-hover pb-text-white pb-px-4 pb-py-2 pb-rounded pb-shadow-sm pb-text-sm pb-font-medium pb-transition-colors">
-                            <?php \esc_html_e('Save Configuration', 'proto-blocks'); ?>
-                        </button>
-                        <span id="config-status" class="pb-text-sm pb-text-green-600 pb-italic"></span>
-                    </div>
+                    <?php if (!empty($configData['preview'])): ?>
+                        <details class="pb-mt-2">
+                            <summary class="pb-text-sm pb-font-medium pb-cursor-pointer pb-py-1"><?php \esc_html_e('Show file contents', 'proto-blocks'); ?></summary>
+                            <pre class="pb-w-full pb-border pb-border-gray-200 pb-rounded pb-p-3 pb-font-mono pb-text-xs pb-bg-gray-50 pb-overflow-auto pb-max-h-96 pb-mt-2"><?php echo \esc_html($configData['preview']); ?></pre>
+                        </details>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -378,52 +382,7 @@ class AdminSettings
                 });
             });
 
-            // Save config
-            $('#save-config').on('click', function() {
-                const $btn = $(this);
-                const config = $('#theme-config').val();
-                $btn.prop('disabled', true);
-
-                $.post(ajaxurl, {
-                    action: actionPrefix + 'save_config',
-                    config: config,
-                    nonce: nonce
-                }, function(response) {
-                    $btn.prop('disabled', false);
-                    if (response.success) {
-                        $('#config-status').text('<?php \esc_html_e('Saved!', 'proto-blocks'); ?>').fadeIn().delay(2000).fadeOut();
-                    } else {
-                        showMessage(response.data.message, 'error');
-                    }
-                });
-            });
-
-            // Load preset
-            $('#preset-select').on('change', function() {
-                const preset = $(this).val();
-                if (!preset) return;
-
-                $.post(ajaxurl, {
-                    action: actionPrefix + 'load_preset',
-                    preset: preset,
-                    nonce: nonce
-                }, function(response) {
-                    if (response.success) {
-                        $('#theme-config').val(response.data.config);
-                        $('#preset-select').val('');
-                    } else {
-                        showMessage(response.data.message, 'error');
-                    }
-                });
-            });
-
-            // Reset config
-            $('#reset-config').on('click', function() {
-                if (!confirm('<?php \esc_html_e('Reset to default configuration?', 'proto-blocks'); ?>')) {
-                    return;
-                }
-                $('#theme-config').val(<?php echo json_encode($configData['default']); ?>);
-            });
+            // Theme config UI is read-only; no save / preset / reset handlers.
         });
         </script>
         <?php
@@ -541,54 +500,6 @@ class AdminSettings
             \wp_send_json_success(['message' => $result['message']]);
         } else {
             \wp_send_json_error(['message' => $result['message']]);
-        }
-    }
-
-    /**
-     * Handle config save request
-     */
-    public function handleSaveConfig(): void
-    {
-        $this->verifyNonce();
-
-        $config = \wp_unslash($_POST['config'] ?? '');
-
-        $configEditor = $this->manager->getConfigEditor();
-        $validation = $configEditor->validateConfig($config);
-
-        if (!$validation['valid']) {
-            \wp_send_json_error([
-                'message' => implode(' ', $validation['errors']),
-            ]);
-        }
-
-        if ($configEditor->saveThemeConfig($config)) {
-            \wp_send_json_success([
-                'message' => \__('Configuration saved.', 'proto-blocks'),
-            ]);
-        } else {
-            \wp_send_json_error([
-                'message' => \__('Failed to save configuration.', 'proto-blocks'),
-            ]);
-        }
-    }
-
-    /**
-     * Handle preset load request
-     */
-    public function handleLoadPreset(): void
-    {
-        $this->verifyNonce();
-
-        $preset = \sanitize_text_field($_POST['preset'] ?? '');
-        $config = $this->manager->getConfigEditor()->loadPreset($preset);
-
-        if ($config !== null) {
-            \wp_send_json_success(['config' => $config]);
-        } else {
-            \wp_send_json_error([
-                'message' => \__('Invalid preset.', 'proto-blocks'),
-            ]);
         }
     }
 
