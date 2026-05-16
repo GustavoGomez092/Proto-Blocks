@@ -215,7 +215,7 @@
 
 /* WYSIWYG field */
 .proto-blocks-wysiwyg-field {
-  min-height: 100px;
+  min-height: 24px;
 }
 
 .proto-blocks-wysiwyg-field [data-rich-text-placeholder] {
