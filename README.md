@@ -496,12 +496,50 @@ Add a `preview.png` (400px wide recommended) to show in the block inserter inste
 
 ### Inner Blocks Field
 
+Lets a block host nested WordPress blocks. The field type **must be
+`"inner-blocks"` with a hyphen** — Proto-Blocks does not recognise
+`"innerblocks"` (no hyphen) and will silently skip the slot, so the
+editor renders the block as a leaf with no `+` appender and no
+drop target. Only **one** inner-blocks field per block is supported.
+
 ```json
 {
     "innerContent": {
         "type": "inner-blocks",
         "allowedBlocks": ["core/paragraph", "core/heading"],
-        "template": [["core/paragraph", {}]]
+        "template": [["core/paragraph", {}]],
+        "templateLock": false,
+        "orientation": "vertical",
+        "renderAppender": "default"
+    }
+}
+```
+
+| Option | Type | Description |
+|---|---|---|
+| `allowedBlocks` | `string[]` | Whitelist of block names. Omit to allow every block. |
+| `template` | `array` | Default blocks inserted when the parent block is first added. Format: `[blockName, attrs?]`. |
+| `templateLock` | `"all" \| "insert" \| "contentOnly" \| false` | Lock mode. Default `false`. |
+| `orientation` | `"vertical" \| "horizontal"` | Layout direction. Default `"vertical"`. |
+| `renderAppender` | `"default" \| "button" \| false` | Which appender UI to show. Default `"default"` (the standard plus button). |
+
+Pair the field with the `data-proto-inner-blocks` attribute in the
+template — see the [Inner Blocks template markup section](#inner-blocks)
+for the matching template snippet.
+
+**Container / wrapper blocks** (a block whose primary purpose is to
+host other blocks, à la `core/group`) should also enable
+`supports.layout` so the editor renders the native Layout controls
+(content width, wide width, justification) alongside the inner-blocks
+slot:
+
+```json
+"supports": {
+    "layout": {
+        "default": { "type": "constrained" },
+        "allowSwitching": false,
+        "allowEditing": true,
+        "allowInheriting": true
     }
 }
 ```
@@ -581,13 +619,23 @@ Use `data-proto-repeater` for repeater containers:
 
 ### Inner Blocks
 
-Use `data-proto-inner-blocks` for nested block content:
+Mark the element where nested blocks should render with
+`data-proto-inner-blocks`, and **echo `$content` with a null-coalescing
+fallback**. `$content` is only populated when the block has been
+rendered with nested content; an unsaved instance, a freshly inserted
+block, or a block with an empty inner-blocks slot can leave `$content`
+undefined and a bare `echo $content` will throw an
+`Undefined variable $content` warning on the front end:
 
 ```php
 <div class="my-block__content" data-proto-inner-blocks>
-    <?php echo $content; ?>
+    <?php echo $content ?? ''; ?>
 </div>
 ```
+
+The matching field in `block.json` must use `"type": "inner-blocks"`
+(with the hyphen). See [Inner Blocks Field](#inner-blocks-field) for
+the full schema. Only one inner-blocks slot per block is allowed.
 
 ### Important Template Tips
 
@@ -1502,6 +1550,44 @@ Opt out per-site via `add_filter('proto_blocks_preflight', '__return_false')` if
 1. **Clear browser cache** - The block inserter caches categories
 2. **Check for filter conflicts** - Another plugin might be modifying `block_categories_all`
 3. **Verify hook priority** - Proto-Blocks uses priority 1, ensure no plugin overrides at priority 0
+
+### Inner Blocks Not Nestable / No `+` Appender
+
+Symptoms: the block renders but the editor offers no way to insert
+nested blocks; the list view shows it as a leaf instead of a
+container; dragging a block over it does nothing.
+
+Fixes, in order of likelihood:
+
+1. **Field-type spelling.** The schema type must be `"inner-blocks"`
+   (hyphenated). Plain `"innerblocks"` is silently ignored by the
+   HTML-to-React parser, the `<InnerBlocks>` slot never gets injected,
+   and the editor falls back to rendering the static template.
+2. **Missing template marker.** The rendered template must contain an
+   element carrying the `data-proto-inner-blocks` attribute. Without
+   it Proto-Blocks has no anchor to inject the slot.
+3. **Stale block instance.** If the block was inserted into a post
+   before the inner-blocks field existed (or while the type was
+   misspelled), the saved markup has no inner-blocks structure.
+   The editor reads the stored markup, not the new schema — delete
+   the existing instance and re-insert a fresh one.
+4. **(Optional) `supports.layout`.** Container/wrapper blocks (a la
+   `core/group`) feel more natural with `supports.layout.default =
+   { "type": "constrained" }` — that enables the same Layout controls
+   the Group block has and gives the inserter slot WP's expected
+   shape.
+
+### Front-End "Undefined variable `$content`" Warning
+
+`$content` is only populated when the block has rendered inner blocks
+present. A freshly inserted instance, an empty slot, or some preview
+contexts can leave `$content` unset. Always guard the echo:
+
+```php
+<div data-proto-inner-blocks>
+    <?php echo $content ?? ''; ?>
+</div>
+```
 
 ## Attribute Reference
 
