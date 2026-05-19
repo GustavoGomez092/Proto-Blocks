@@ -620,16 +620,21 @@ Use `data-proto-repeater` for repeater containers:
 ### Inner Blocks
 
 Mark the element where nested blocks should render with
-`data-proto-inner-blocks`, and **echo `$content` with a null-coalescing
-fallback**. `$content` is only populated when the block has been
-rendered with nested content; an unsaved instance, a freshly inserted
-block, or a block with an empty inner-blocks slot can leave `$content`
-undefined and a bare `echo $content` will throw an
-`Undefined variable $content` warning on the front end:
+`data-proto-inner-blocks`, and echo **`$innerBlocksContent`** (not
+`$content`). The Proto-Blocks engine receives WP's `$content` from the
+render callback and stores it as `$attributes['innerBlocksContent']`
+before `extract()`ing attributes into the template scope, so the
+nested-block HTML arrives as `$innerBlocksContent`. `$content` is
+never made available — a template that echoes it will produce empty
+output (and a PHP warning if `display_errors` is on).
+
+Always null-coalesce: an unsaved or empty instance leaves
+`$innerBlocksContent` undefined and a bare echo throws an
+`Undefined variable` warning on the front end.
 
 ```php
 <div class="my-block__content" data-proto-inner-blocks>
-    <?php echo $content ?? ''; ?>
+    <?php echo $innerBlocksContent ?? ''; ?>
 </div>
 ```
 
@@ -1577,17 +1582,26 @@ Fixes, in order of likelihood:
    the Group block has and gives the inserter slot WP's expected
    shape.
 
-### Front-End "Undefined variable `$content`" Warning
+### Inner Blocks Render Empty on the Front End
 
-`$content` is only populated when the block has rendered inner blocks
-present. A freshly inserted instance, an empty slot, or some preview
-contexts can leave `$content` unset. Always guard the echo:
+Symptoms: the editor shows the nested blocks correctly, but the front
+end emits an empty `data-proto-inner-blocks` container.
+
+Cause: the template is echoing the wrong variable. The Proto-Blocks
+engine stores WP's `$content` argument as
+`$attributes['innerBlocksContent']`, which gets `extract()`ed into the
+template as `$innerBlocksContent`. The plain `$content` variable is
+**never** passed through. Echo the right one:
 
 ```php
 <div data-proto-inner-blocks>
-    <?php echo $content ?? ''; ?>
+    <?php echo $innerBlocksContent ?? ''; ?>
 </div>
 ```
+
+The null-coalescing fallback also suppresses
+`Undefined variable $innerBlocksContent` warnings for freshly
+inserted / empty instances.
 
 ## Attribute Reference
 
