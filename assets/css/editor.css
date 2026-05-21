@@ -222,6 +222,23 @@
   opacity: 0.6;
 }
 
+/* Repeater field editing color override.
+ *
+ * Inside the inline repeater UI, a field being edited is wrapped with
+ * `.proto-blocks-repeater__field-editing`, which paints a white
+ * background under it (see the rule above). That white box collides
+ * with rendered colors like Tailwind's `text-white` on the field
+ * itself: white text on a white edit background = invisible caret.
+ *
+ * Scope the override strictly to that editing-mode wrapper so it
+ * fires only inside the white edit box. Non-repeater fields and
+ * unfocused repeater previews keep their natural rendered color --
+ * which is what authors want on dark surfaces. */
+.proto-blocks-repeater__field-editing,
+.proto-blocks-repeater__field-editing * {
+  color: #000 !important;
+}
+
 /* Repeater field - Inline Preview Mode */
 .proto-blocks-repeater--inline {
   position: relative;
