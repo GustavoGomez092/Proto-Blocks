@@ -31,10 +31,28 @@ export function createEditComponent(block: BlockData) {
         const isInserterPreview = attributes.__isPreview === true;
         const previewImageUrl = attributes.__previewImage as string | undefined;
 
+        // Prevent <a> elements rendered inside the block preview from
+        // navigating the editor away. Templates that mark only the
+        // inner text node as a proto-field (e.g. a CTA pattern with
+        // `<a href="..."><span data-proto-field="cta">…</span></a>`)
+        // leave the outer anchor's href intact through the server-
+        // rendered preview HTML. Without this guard, clicking the
+        // styled button area triggers an actual link navigation and
+        // tears down the editor's React tree. preventDefault stops the
+        // navigation only; the click still bubbles so RichText/focus
+        // handlers and Gutenberg's block selection continue to work.
+        const handleBlockClick = useCallback((e: React.MouseEvent) => {
+            const target = e.target as HTMLElement | null;
+            if (target && target.closest('a')) {
+                e.preventDefault();
+            }
+        }, []);
+
         // Block props with click handler
         // Include proto-blocks-scope for Tailwind CSS support in editor
         const blockProps = useBlockProps({
             className: `proto-block proto-block-${block.name} proto-blocks-scope`,
+            onClick: handleBlockClick,
         });
 
         // If this is an inserter preview with a custom preview image, render it
