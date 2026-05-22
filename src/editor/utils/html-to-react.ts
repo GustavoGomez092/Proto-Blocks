@@ -27,6 +27,23 @@ interface ParsedElement {
 }
 
 /**
+ * Process a single DOM Element to a React tree.
+ *
+ * Used by RepeaterField to mount the actual server-rendered <li>
+ * markup for each repeater item directly, with scoped attributes +
+ * setAttributes so field edits route through the parent repeater's
+ * handleFieldChange. The exported wrapper keeps processElement
+ * internal while exposing a stable entry point.
+ */
+export function processElementNode(
+    element: Element,
+    options: ProcessOptions,
+    key?: number
+): ReactNode {
+    return processElement(element, options, key);
+}
+
+/**
  * Process HTML string to React components
  */
 export function processHtmlToReact(

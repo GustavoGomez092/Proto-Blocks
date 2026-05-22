@@ -222,248 +222,128 @@
   opacity: 0.6;
 }
 
-/* Repeater field editing color override.
+/* Repeater field -- inline real-markup editor.
  *
- * Inside the inline repeater UI, a field being edited is wrapped with
- * `.proto-blocks-repeater__field-editing`, which paints a white
- * background under it (see the rule above). That white box collides
- * with rendered colors like Tailwind's `text-white` on the field
- * itself: white text on a white edit background = invisible caret.
+ * The repeater renders each item's actual server-rendered <li>
+ * (or whatever tag the template used) directly, with field editors
+ * mounted on its data-proto-field children. Drag handle + duplicate
+ * + trash + add-between live in an absolutely-positioned overlay
+ * that appears on hover and never participates in the item's layout.
  *
- * Scope the override strictly to that editing-mode wrapper so it
- * fires only inside the white edit box. Non-repeater fields and
- * unfocused repeater previews keep their natural rendered color --
- * which is what authors want on dark surfaces. */
-.proto-blocks-repeater__field-editing,
-.proto-blocks-repeater__field-editing * {
-  color: #000 !important;
-}
+ * Therefore: no `.proto-blocks-repeater__item-wrapper`, no
+ * `.proto-blocks-repeater__item-preview`, no `__field-preview` /
+ * `__field-editing` rules. The legacy ones were removed when the
+ * abstract preview UI was retired -- search the plugin git history
+ * if you need to recover them. */
 
-/* Repeater field - Inline Preview Mode */
 .proto-blocks-repeater--inline {
   position: relative;
 }
 
-/* Items container inherits layout from original element's className */
-/* Don't set display - let the original class (e.g., proto-stats__grid) handle it */
+/* Items container inherits all layout from the original element's
+ * className + inline style (grid templates, flex directions,
+ * --custom CSS variables for column counts, etc.). Don't set
+ * `display` here -- the template's own classes/utility-CSS handle
+ * that, and forcing a value would break grid/flex layouts. */
 .proto-blocks-repeater--inline .proto-blocks-repeater__items {
-  /* Layout comes from the applied className */
+  /* intentionally empty */
 }
 
-.proto-blocks-repeater--inline .proto-blocks-repeater__item-wrapper {
-  position: relative;
+/* Each sortable item IS the template-rendered element (not a
+ * wrapper). We add `position: relative` via inline style as a
+ * fallback so the floating toolbar can absolute-position to it; the
+ * template's own `position: *` declaration overrides if set. */
+.proto-blocks-repeater--inline .proto-blocks-repeater__sortable-item {
+  /* highlight when being dragged or hovered for editor visibility */
+  outline-offset: 2px;
+  transition: outline-color 0.15s ease;
 }
 
-.proto-blocks-repeater--inline .proto-blocks-repeater__item {
-  position: relative;
-  display: flex;
-  align-items: stretch;
-  background: transparent;
-  border-radius: 4px;
-  transition: all 0.2s ease;
+/* Lift the hovered / focused item above its siblings so the floating
+ * toolbar AND the bottom-center "add between" button (which sits at
+ * bottom: -12px, half outside the item) draw over any neighboring
+ * item that follows it in document order. Without this the next
+ * item's content covers the bottom half of the add-between button. */
+.proto-blocks-repeater--inline .proto-blocks-repeater__sortable-item:hover,
+.proto-blocks-repeater--inline .proto-blocks-repeater__sortable-item:focus-within {
+  outline: 1px dashed rgba(0, 124, 186, 0.45);
+  z-index: 30;
 }
 
-.proto-blocks-repeater--inline .proto-blocks-repeater__item:hover {
-  background: rgba(0, 124, 186, 0.05);
-}
-
-.proto-blocks-repeater--inline .proto-blocks-repeater__item.is-dragging {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 100;
-  background: #fff;
-}
-
-/* Drag handle - left side */
-.proto-blocks-repeater--inline .proto-blocks-repeater__item-drag {
-  position: absolute;
-  left: -4px;
-  top: 50%;
-  transform: translateY(-50%);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  z-index: 10;
-}
-
-.proto-blocks-repeater--inline
-  .proto-blocks-repeater__item:hover
-  .proto-blocks-repeater__item-drag {
-  opacity: 1;
-}
-
-.proto-blocks-repeater--inline .proto-blocks-repeater__drag-handle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  background: #fff;
-  border-radius: 4px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
-  color: #757575;
-  cursor: grab;
-}
-
-.proto-blocks-repeater--inline .proto-blocks-repeater__drag-handle:hover {
-  color: #1e1e1e;
-  background: #f0f0f0;
-}
-
-.proto-blocks-repeater--inline .proto-blocks-repeater__drag-handle:active {
-  cursor: grabbing;
-}
-
-/* Content area */
-.proto-blocks-repeater--inline .proto-blocks-repeater__item-content {
-  flex: 1;
-  padding: 8px;
-  min-width: 0;
-}
-
-/* Item preview */
-.proto-blocks-repeater--inline .proto-blocks-repeater__item-preview {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 4px;
-}
-
-/* Field preview - clickable to edit */
-.proto-blocks-repeater--inline .proto-blocks-repeater__field-preview {
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 2px;
-  transition: background 0.15s ease;
-  width: 100%;
-}
-
-.proto-blocks-repeater--inline .proto-blocks-repeater__field-preview:hover {
-  background: rgba(0, 124, 186, 0.1);
-}
-
-.proto-blocks-repeater--inline .proto-blocks-repeater__field-preview:focus {
+.proto-blocks-repeater--inline .proto-blocks-repeater__sortable-item.is-dragging {
   outline: 2px solid #007cba;
-  outline-offset: 1px;
+  z-index: 100;
 }
 
-/* Field value styling based on field name */
-.proto-blocks-repeater--inline .proto-blocks-repeater__field-value--number,
-.proto-blocks-repeater--inline .proto-blocks-repeater__field-value--prefix,
-.proto-blocks-repeater--inline .proto-blocks-repeater__field-value--suffix {
-  font-size: 48px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.proto-blocks-repeater--inline .proto-blocks-repeater__field-value--prefix,
-.proto-blocks-repeater--inline .proto-blocks-repeater__field-value--suffix {
-  font-size: 24px;
-  opacity: 0.8;
-}
-
-.proto-blocks-repeater--inline .proto-blocks-repeater__field-value--label {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  opacity: 0.8;
-}
-
-/* Number wrapper styling for stats */
-.proto-blocks-repeater--inline
-  .proto-blocks-repeater__field-preview--text:has(
-    .proto-blocks-repeater__field-value--prefix
-  ),
-.proto-blocks-repeater--inline
-  .proto-blocks-repeater__field-preview--text:has(
-    .proto-blocks-repeater__field-value--number
-  ),
-.proto-blocks-repeater--inline
-  .proto-blocks-repeater__field-preview--text:has(
-    .proto-blocks-repeater__field-value--suffix
-  ) {
-  display: inline;
-}
-
-/* Placeholder styling */
-.proto-blocks-repeater--inline .proto-blocks-repeater__placeholder {
-  color: #a0a0a0;
-  font-style: italic;
-}
-
-/* Field editing mode */
-.proto-blocks-repeater--inline .proto-blocks-repeater__field-editing {
-  background: #fff;
-  padding: 4px;
-  border-radius: 4px;
-  box-shadow: 0 0 0 2px #007cba;
-}
-
-/* Image field in repeater */
-.proto-blocks-repeater--inline .proto-blocks-repeater__field-image {
-  max-width: 60px;
-  max-height: 60px;
-  border-radius: 4px;
-  object-fit: cover;
-}
-
-/* Actions - right side */
-.proto-blocks-repeater--inline .proto-blocks-repeater__item-actions {
+/* Floating toolbar -- drag handle + duplicate + trash, top-right of
+ * the item. Hidden until the item is hovered, focused, or being
+ * dragged. Pointer-events off while hidden so clicks fall through
+ * to the field editors underneath. */
+.proto-blocks-repeater--inline .proto-blocks-repeater__item-toolbar {
   position: absolute;
-  right: -4px;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 6px;
+  right: 6px;
+  z-index: 20;
   display: flex;
-  flex-direction: column;
   gap: 2px;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   opacity: 0;
-  transition: opacity 0.2s ease;
-  z-index: 10;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
 }
 
-.proto-blocks-repeater--inline
-  .proto-blocks-repeater__item:hover
-  .proto-blocks-repeater__item-actions {
+.proto-blocks-repeater--inline .proto-blocks-repeater__sortable-item:hover .proto-blocks-repeater__item-toolbar,
+.proto-blocks-repeater--inline .proto-blocks-repeater__sortable-item:focus-within .proto-blocks-repeater__item-toolbar,
+.proto-blocks-repeater--inline .proto-blocks-repeater__sortable-item.is-dragging .proto-blocks-repeater__item-toolbar {
   opacity: 1;
+  pointer-events: auto;
 }
 
-.proto-blocks-repeater--inline .proto-blocks-repeater__action {
-  min-width: 28px !important;
-  height: 28px !important;
+.proto-blocks-repeater--inline .proto-blocks-repeater__item-toolbar-btn.components-button {
+  min-width: 24px !important;
+  height: 24px !important;
   padding: 0 !important;
-  background: #fff !important;
   border-radius: 4px !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15) !important;
+  background: transparent !important;
+  color: #1e1e1e !important;
+  box-shadow: none !important;
 }
 
-.proto-blocks-repeater--inline .proto-blocks-repeater__action:hover {
+.proto-blocks-repeater--inline .proto-blocks-repeater__item-toolbar-btn.components-button:hover {
   background: #f0f0f0 !important;
 }
 
-.proto-blocks-repeater--inline .proto-blocks-repeater__action:disabled {
-  opacity: 0.5;
+.proto-blocks-repeater--inline .proto-blocks-repeater__item-toolbar-btn.components-button:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-/* Add between items button */
-.proto-blocks-repeater--inline .proto-blocks-repeater__add-between {
+.proto-blocks-repeater--inline .proto-blocks-repeater__item-toolbar-btn.is-destructive:hover {
+  background: #fcf0f1 !important;
+  color: #d63638 !important;
+}
+
+.proto-blocks-repeater--inline .proto-blocks-repeater__drag-handle.components-button {
+  cursor: grab;
+}
+
+.proto-blocks-repeater--inline .proto-blocks-repeater__drag-handle.components-button:active {
+  cursor: grabbing;
+}
+
+/* "+" between items, anchored at bottom-center of each item. Same
+ * hover-fade behavior as the toolbar so it never clutters the
+ * preview during quiet states. */
+.proto-blocks-repeater--inline .proto-blocks-repeater__add-between-btn {
   position: absolute;
   bottom: -12px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 5;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.proto-blocks-repeater--inline
-  .proto-blocks-repeater__item-wrapper:hover
-  .proto-blocks-repeater__add-between {
-  opacity: 1;
-}
-
-.proto-blocks-repeater--inline .proto-blocks-repeater__add-button {
+  z-index: 25;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -476,19 +356,23 @@
   color: #fff;
   cursor: pointer;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  pointer-events: none;
   transition:
+    opacity 0.15s ease,
     transform 0.15s ease,
     background 0.15s ease;
 }
 
-.proto-blocks-repeater--inline .proto-blocks-repeater__add-button:hover {
-  background: #006ba1;
-  transform: scale(1.1);
+.proto-blocks-repeater--inline .proto-blocks-repeater__sortable-item:hover .proto-blocks-repeater__add-between-btn,
+.proto-blocks-repeater--inline .proto-blocks-repeater__sortable-item:focus-within .proto-blocks-repeater__add-between-btn {
+  opacity: 1;
+  pointer-events: auto;
 }
 
-.proto-blocks-repeater--inline .proto-blocks-repeater__add-button svg {
-  width: 14px;
-  height: 14px;
+.proto-blocks-repeater--inline .proto-blocks-repeater__add-between-btn:hover {
+  background: #006ba1;
+  transform: translateX(-50%) scale(1.1);
 }
 
 /* Add popover */
