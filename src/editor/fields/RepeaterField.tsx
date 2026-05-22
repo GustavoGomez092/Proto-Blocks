@@ -17,7 +17,14 @@
  */
 
 import React from 'react';
-import { createElement, useState, useCallback, useMemo, useRef } from '@wordpress/element';
+import {
+    createElement,
+    useState,
+    useCallback,
+    useMemo,
+    useRef,
+    useEffect,
+} from '@wordpress/element';
 import { Button, Popover } from '@wordpress/components';
 import { __ } from '@wordpress/i18n';
 import {
@@ -65,10 +72,15 @@ interface SortableItemProps {
     fields: Record<string, FieldConfig>;
     canRemove: boolean;
     canAdd: boolean;
-    onRemove: () => void;
-    onDuplicate: () => void;
-    onAddAfter: () => void;
-    onFieldChange: (fieldName: string, value: unknown) => void;
+    // All callbacks are id-based and stable. The item component
+    // binds them with `useCallback(..., [id, fn])` so each operation
+    // re-uses the same closure across renders, and the per-item
+    // `processElementNode` useMemo only re-runs when this item's
+    // own value changes -- not whenever a sibling is edited.
+    onRemove: (id: string) => void;
+    onDuplicate: (id: string) => void;
+    onAddAfter: (id: string) => void;
+    onFieldChange: (id: string, fieldName: string, value: unknown) => void;
     isSelected?: boolean;
 }
 
@@ -243,6 +255,22 @@ function SortableRepeaterItem({
         isDragging,
     } = useSortable({ id });
 
+    // Id-bound callbacks. Each one is stable for the lifetime of this
+    // item because `id` is stable per item and the parent passes the
+    // same `onFieldChange` / `onRemove` / etc. function reference on
+    // every render. That stability is what makes the per-item useMemo
+    // below only re-run when THIS item's value changes -- not when a
+    // sibling is edited.
+    const setItemField = useCallback(
+        (fieldName: string, value: unknown) => {
+            onFieldChange(id, fieldName, value);
+        },
+        [id, onFieldChange]
+    );
+    const removeMe = useCallback(() => onRemove(id), [id, onRemove]);
+    const duplicateMe = useCallback(() => onDuplicate(id), [id, onDuplicate]);
+    const addAfterMe = useCallback(() => onAddAfter(id), [id, onAddAfter]);
+
     // Process the server-rendered <li> with this item's scoped
     // attributes. Memoized on the item's value so field edits inside
     // the item trigger a re-render without re-processing every other
@@ -250,12 +278,11 @@ function SortableRepeaterItem({
     const itemReact = useMemo(() => {
         return processElementNode(itemElement, {
             attributes: item as Record<string, unknown>,
-            setAttributes: (fieldName: string, value: unknown) =>
-                onFieldChange(fieldName, value),
+            setAttributes: setItemField,
             fields,
             isSelected: Boolean(isSelected),
         });
-    }, [itemElement, item, fields, isSelected, onFieldChange]);
+    }, [itemElement, item, fields, isSelected, setItemField]);
 
     if (!React.isValidElement(itemReact)) {
         return null;
@@ -294,8 +321,8 @@ function SortableRepeaterItem({
             key="__proto_toolbar"
             dragAttributes={dndAttributes as Record<string, unknown>}
             dragListeners={listeners}
-            onRemove={onRemove}
-            onDuplicate={onDuplicate}
+            onRemove={removeMe}
+            onDuplicate={duplicateMe}
             canAdd={canAdd}
             canRemove={canRemove}
         />
@@ -304,7 +331,7 @@ function SortableRepeaterItem({
     const addBetween = (
         <RepeaterItemAddBetween
             key="__proto_add_between"
-            onAddAfter={onAddAfter}
+            onAddAfter={addAfterMe}
             canAdd={canAdd}
         />
     );
@@ -350,16 +377,37 @@ export function RepeaterField({
     // Resolve each item's matching server-rendered <li> from the
     // original repeater element. The server iterates the attribute
     // array in order, so positional matching is correct as long as
-    // the array length matches. If the server renders fewer items
-    // than the attribute array (e.g. after a fresh add before the
-    // debounced preview returns), trailing items skip rendering
-    // until the preview catches up.
+    // the array length matches.
     const renderedItemElements = useMemo(() => {
         if (!element) return [];
         return Array.from(
             element.querySelectorAll(':scope > [data-proto-repeater-item]')
         );
     }, [element]);
+
+    // First-item template, used as the fallback element when a freshly-
+    // added item shows up in the attribute array before the debounced
+    // server preview returns its matching <li>. Without this fallback
+    // newly-added items vanish for ~300ms until the next preview fetch.
+    // With it, the new item renders an instant stub using the same
+    // markup shape as the existing items, then is replaced by the
+    // real server-rendered <li> on the next refresh.
+    const itemTemplate = useMemo(() => {
+        return renderedItemElements[0] || null;
+    }, [renderedItemElements]);
+
+    // Refs that always hold the latest items array and onChange
+    // callback. The handlers below close over the refs (not over
+    // `items` / `onChange` directly), so they stay reference-stable
+    // for the lifetime of the component. Stable handlers + id-based
+    // operations + per-item useMemo on `item` = only the edited item
+    // re-processes its HTML; sibling items stay memoized.
+    const itemsRef = useRef(items);
+    const onChangeRef = useRef(onChange);
+    useEffect(() => {
+        itemsRef.current = items;
+        onChangeRef.current = onChange;
+    });
 
     // Configure DnD sensors. PointerSensor's `distance` activation
     // constraint means a small click on the drag handle doesn't
@@ -382,114 +430,114 @@ export function RepeaterField({
     const canRemove = items.length > minItems;
 
     /**
-     * Handle drag end
+     * Handle drag end. Reads the latest items from the ref so the
+     * callback can be stable across renders.
      */
-    const handleDragEnd = useCallback(
-        (event: DragEndEvent) => {
-            const { active, over } = event;
-
-            if (over && active.id !== over.id) {
-                const oldIndex = items.findIndex((item) => item.id === active.id);
-                const newIndex = items.findIndex((item) => item.id === over.id);
-
-                onChange(arrayMove(items, oldIndex, newIndex));
-            }
-        },
-        [items, onChange]
-    );
+    const handleDragEnd = useCallback((event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const current = itemsRef.current;
+        const oldIndex = current.findIndex((it) => it.id === active.id);
+        const newIndex = current.findIndex((it) => it.id === over.id);
+        if (oldIndex === -1 || newIndex === -1) return;
+        onChangeRef.current(arrayMove(current, oldIndex, newIndex));
+    }, []);
 
     /**
-     * Create a new item with default values
+     * Create a new item with default values. Reads field defaults
+     * from `repeaterConfig.fields` (the config object reference is
+     * stable for the block's lifetime).
      */
+    const fieldsConfig = repeaterConfig.fields;
     const createNewItem = useCallback((): RepeaterItem => {
         const newItem: RepeaterItem = { id: generateId() };
-
-        // Initialize default values for each field
-        const fields = repeaterConfig.fields || {};
-        Object.entries(fields).forEach(([fieldName, fieldConfig]) => {
+        const localFields = fieldsConfig || {};
+        Object.entries(localFields).forEach(([fieldName, fieldConfig]) => {
             if (fieldConfig.default !== undefined) {
                 newItem[fieldName] = fieldConfig.default;
             }
         });
-
         return newItem;
-    }, [repeaterConfig.fields]);
+    }, [fieldsConfig]);
 
     /**
      * Add a new item at the end
      */
     const handleAddItem = useCallback(() => {
-        if (!canAdd) return;
-        const newItem = createNewItem();
-        onChange([...items, newItem]);
-    }, [items, canAdd, createNewItem, onChange]);
+        const current = itemsRef.current;
+        if (current.length >= maxItems) return;
+        onChangeRef.current([...current, createNewItem()]);
+    }, [maxItems, createNewItem]);
 
     /**
-     * Add a new item after a specific index
+     * Add a new item after the item with the given id.
      */
     const handleAddItemAfter = useCallback(
-        (index: number) => {
-            if (!canAdd) return;
+        (itemId: string) => {
+            const current = itemsRef.current;
+            if (current.length >= maxItems) return;
+            const index = current.findIndex((it) => it.id === itemId);
+            if (index === -1) return;
             const newItem = createNewItem();
-            const newItems = [
-                ...items.slice(0, index + 1),
+            onChangeRef.current([
+                ...current.slice(0, index + 1),
                 newItem,
-                ...items.slice(index + 1),
-            ];
-            onChange(newItems);
+                ...current.slice(index + 1),
+            ]);
         },
-        [items, canAdd, createNewItem, onChange]
+        [maxItems, createNewItem]
     );
 
     /**
-     * Remove an item
+     * Remove an item by id
      */
     const handleRemoveItem = useCallback(
-        (index: number) => {
-            if (!canRemove) return;
-            const newItems = items.filter((_, i) => i !== index);
-            onChange(newItems);
+        (itemId: string) => {
+            const current = itemsRef.current;
+            if (current.length <= minItems) return;
+            onChangeRef.current(current.filter((it) => it.id !== itemId));
         },
-        [items, canRemove, onChange]
+        [minItems]
     );
 
     /**
-     * Duplicate an item
+     * Duplicate an item by id
      */
     const handleDuplicateItem = useCallback(
-        (index: number) => {
-            if (!canAdd) return;
-
-            const itemToDuplicate = items[index];
+        (itemId: string) => {
+            const current = itemsRef.current;
+            if (current.length >= maxItems) return;
+            const index = current.findIndex((it) => it.id === itemId);
+            if (index === -1) return;
             const newItem: RepeaterItem = {
-                ...itemToDuplicate,
+                ...current[index],
                 id: generateId(),
             };
-
-            const newItems = [
-                ...items.slice(0, index + 1),
+            onChangeRef.current([
+                ...current.slice(0, index + 1),
                 newItem,
-                ...items.slice(index + 1),
-            ];
-            onChange(newItems);
+                ...current.slice(index + 1),
+            ]);
         },
-        [items, canAdd, onChange]
+        [maxItems]
     );
 
     /**
-     * Update a field within an item
+     * Update a field within an item, by item id. Stable closure --
+     * reads items from the ref so per-item useMemo doesn't have to
+     * re-run when this function "changes" on parent re-renders.
      */
     const handleFieldChange = useCallback(
-        (itemIndex: number, fieldName: string, fieldValue: unknown) => {
-            const newItems = items.map((item, index) => {
-                if (index === itemIndex) {
-                    return { ...item, [fieldName]: fieldValue };
-                }
-                return item;
-            });
-            onChange(newItems);
+        (itemId: string, fieldName: string, fieldValue: unknown) => {
+            const current = itemsRef.current;
+            const newItems = current.map((it) =>
+                it.id === itemId
+                    ? { ...it, [fieldName]: fieldValue }
+                    : it
+            );
+            onChangeRef.current(newItems);
         },
-        [items, onChange]
+        []
     );
 
     // The container element inherits the original <ul>/<div>'s
@@ -521,12 +569,17 @@ export function RepeaterField({
                             style: containerStyle,
                         },
                         ...items.map((item, index) => {
-                            const itemEl = renderedItemElements[index];
-                            // The server-rendered HTML lags one
-                            // preview-fetch behind a fresh add; skip
-                            // until the matching <li> is available
-                            // (the next preview refresh will populate
-                            // it within ~300ms).
+                            // Use the server-rendered <li> for this
+                            // index when available; otherwise fall
+                            // back to the first item's template so a
+                            // freshly-added item renders an instant
+                            // stub instead of vanishing for ~300ms.
+                            // The fallback gets replaced by the real
+                            // server-rendered <li> on the next
+                            // preview refresh -- transparent to the
+                            // author.
+                            const itemEl =
+                                renderedItemElements[index] || itemTemplate;
                             if (!itemEl) return null;
 
                             return (
@@ -538,12 +591,10 @@ export function RepeaterField({
                                     fields={fields}
                                     canRemove={canRemove}
                                     canAdd={canAdd}
-                                    onRemove={() => handleRemoveItem(index)}
-                                    onDuplicate={() => handleDuplicateItem(index)}
-                                    onAddAfter={() => handleAddItemAfter(index)}
-                                    onFieldChange={(fieldName, fieldValue) =>
-                                        handleFieldChange(index, fieldName, fieldValue)
-                                    }
+                                    onRemove={handleRemoveItem}
+                                    onDuplicate={handleDuplicateItem}
+                                    onAddAfter={handleAddItemAfter}
+                                    onFieldChange={handleFieldChange}
                                     isSelected={isSelected}
                                 />
                             );
