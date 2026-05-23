@@ -20,6 +20,7 @@ use ProtoBlocks\Blocks\Category;
 use ProtoBlocks\API\RestAPI;
 use ProtoBlocks\API\AjaxHandler;
 use ProtoBlocks\Admin\AdminPage;
+use ProtoBlocks\Admin\PreviewCapture;
 use ProtoBlocks\Admin\Assets;
 use ProtoBlocks\Admin\SetupWizard;
 use ProtoBlocks\Tailwind\Manager as TailwindManager;
@@ -301,7 +302,23 @@ final class Plugin
         if (is_admin()) {
             add_action('admin_menu', [$this->getAdminPage(), 'addMenuPage']);
             add_action('admin_enqueue_scripts', [$this->getAssets(), 'enqueueAdminAssets']);
+
+            // Preview Capture submenu + its own enqueue.
+            add_action('admin_menu', [$this->getPreviewCapture(), 'addMenuPage']);
+            add_action('admin_enqueue_scripts', [$this->getPreviewCapture(), 'enqueueAssets']);
         }
+
+        // Preview Capture iframe render target -- served via
+        // admin-ajax so it bypasses admin chrome entirely.
+        add_action(
+            'wp_ajax_' . PreviewCapture::RENDER_ACTION,
+            [$this->getPreviewCapture(), 'handleRender']
+        );
+
+        // Preview Capture REST route -- registered unconditionally so
+        // the iframe target works (it's served via admin.php so admin
+        // context, but the REST route lives off the front of the site).
+        add_action('rest_api_init', [$this->getPreviewCapture(), 'registerRestRoute']);
 
         // Load CLI commands if WP-CLI is available
         if (defined('WP_CLI') && WP_CLI) {
@@ -384,6 +401,14 @@ final class Plugin
     public function getAdminPage(): AdminPage
     {
         return $this->services['admin_page'];
+    }
+
+    public function getPreviewCapture(): PreviewCapture
+    {
+        if (!isset($this->services['preview_capture'])) {
+            $this->services['preview_capture'] = new PreviewCapture();
+        }
+        return $this->services['preview_capture'];
     }
 
     public function getTailwindManager(): TailwindManager

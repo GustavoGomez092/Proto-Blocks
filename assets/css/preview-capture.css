@@ -1,0 +1,110 @@
+/*
+ * Proto-Blocks Preview Capture -- admin page styles.
+ *
+ * The iframe sits off-screen but kept in the layout (display: block,
+ * height: auto) so html2canvas can read accurate computed styles on
+ * its body. Visually concealed by clipping.
+ */
+
+.proto-blocks-capture__intro {
+    color: #6c7079;
+    margin-bottom: 16px;
+    max-width: 720px;
+}
+
+.proto-blocks-capture__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 16px 0;
+}
+
+.proto-blocks-capture__status {
+    margin-left: 12px;
+    color: #50575e;
+    font-style: italic;
+}
+
+.proto-blocks-capture__table {
+    margin-top: 12px;
+}
+
+.proto-blocks-capture__table th {
+    font-weight: 600;
+}
+
+.proto-blocks-capture__thumb-cell {
+    width: 220px;
+}
+
+.proto-blocks-capture__thumb {
+    display: block;
+    width: 200px;
+    height: auto;
+    max-height: 120px;
+    object-fit: cover;
+    background: #f3f4f6;
+    border: 1px solid #e2e4e7;
+    border-radius: 4px;
+}
+
+.proto-blocks-capture__thumb--empty {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 200px;
+    height: 90px;
+    color: #8a8a8a;
+    background: #f3f4f6;
+    border: 1px dashed #c3c4c7;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.proto-blocks-capture__badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.proto-blocks-capture__badge--ok {
+    background: #e3f7e3;
+    color: #1f7a1f;
+}
+
+.proto-blocks-capture__badge--missing {
+    background: #fce9e9;
+    color: #b32d2e;
+}
+
+.proto-blocks-capture__row-status {
+    display: inline-block;
+    margin-left: 10px;
+    font-size: 12px;
+    color: #50575e;
+}
+
+.proto-blocks-capture__row-status[data-level="error"] {
+    color: #b32d2e;
+}
+
+.proto-blocks-capture__row-status[data-level="ok"] {
+    color: #1f7a1f;
+}
+
+/* Off-screen capture surface. Width = 1280px is forced in JS and PHP
+ * so html2canvas sees a desktop layout. We clip rather than hide so
+ * computed styles stay live. */
+.proto-blocks-capture__frame {
+    position: fixed;
+    left: -10000px;
+    top: 0;
+    width: 1280px;
+    height: 800px;
+    border: 0;
+    visibility: hidden;
+}
