@@ -544,6 +544,57 @@ slot:
 }
 ```
 
+#### Pattern: composable content slots
+
+Inner-blocks is more than a "container" field — it's the escape hatch
+that turns a block from a fixed shape into a **composable surface**.
+When a content area can't be enumerated up-front (free-form copy with
+mixed paragraphs / lists / headings, ad-hoc CTAs, embedded media,
+authoring decisions you don't know yet), expose one inner-blocks slot
+instead of a stack of typed fields. The block keeps its layout chrome;
+the slot hosts whatever the author drags in.
+
+**Why this scales**
+
+- **One block, many shapes.** Instead of inventing `bullets`,
+  `bulletsLabel`, `bodyParagraph`, `bodyHeading`… expose one slot and
+  let authors compose. Adding a feature next quarter doesn't require
+  editing the block.
+- **Free reuse of every core feature.** Text color, alignment, lists,
+  columns, cover blocks, embeds — all of Gutenberg's editing chrome
+  works inside the slot without you wiring anything.
+- **Brand semantics layer cleanly.** Style the slot's typography once
+  and every author-composed body inherits it. For example, you can
+  paint `<strong>` red site-wide inside that slot so authors get an
+  inline "callout" look just by bolding.
+
+**Restoring typography inside the slot**
+
+Tailwind v4's preflight (and many design-system resets) strip list
+markers, paragraph margins, heading weights. Restore them **inside the
+slot only** with low-specificity rules so block-level overrides still
+win:
+
+```css
+.my-block__body :where(p)            { margin: 0 0 0.75em; }
+.my-block__body :where(p:last-child) { margin-bottom: 0; }
+.my-block__body :where(ul)           { list-style: disc;    padding-left: 1.5rem; margin: 0 0 0.75em; }
+.my-block__body :where(ol)           { list-style: decimal; padding-left: 1.5rem; margin: 0 0 0.75em; }
+.my-block__body :where(h2, h3, h4)   { font-family: "Space Grotesk", sans-serif; font-weight: 700; }
+.my-block__body :where(a)            { color: #d1001d; text-decoration: underline; }
+.my-block__body :where(strong, b)    { font-weight: 700; color: #d1001d; }
+```
+
+The `:where()` wrapper keeps specificity at 0,0,0 so anything the
+author sets in a child block's own settings panel beats these defaults.
+
+**When NOT to use it**
+
+If the slot has a strict shape (exactly 3 cards, exactly a title +
+image + button), keep typed fields — they validate the layout and stop
+authors from breaking it. Reach for `inner-blocks` when the slot's
+*purpose* is variability.
+
 ## Control Types
 
 - `text` - Text input
