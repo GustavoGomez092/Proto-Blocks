@@ -1,0 +1,23 @@
+{
+  "name": "proto-blocks/proto-blocks",
+  "description": "Dev tooling for Proto-Blocks unit tests.",
+  "license": "GPL-2.0-or-later",
+  "require": {
+    "php": "^8.1"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10.5"
+  },
+  "autoload": {
+    "psr-4": { "ProtoBlocks\\": "includes/" }
+  },
+  "autoload-dev": {
+    "psr-4": { "ProtoBlocks\\Tests\\": "tests/php/" }
+  },
+  "scripts": {
+    "test": "phpunit"
+  },
+  "config": {
+    "optimize-autoloader": true
+  }
+}
