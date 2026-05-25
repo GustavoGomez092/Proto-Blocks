@@ -1,0 +1,32 @@
+{
+    "$schema": "https://schemas.wp.org/trunk/block.json",
+    "apiVersion": 3,
+    "name": "proto-blocks/dynamic-select",
+    "title": "Dynamic Select Demo",
+    "category": "proto-blocks",
+    "icon": "admin-links",
+    "supports": { "html": false },
+    "protoBlocks": {
+        "version": "1.0",
+        "isExample": true,
+        "template": "template.php",
+        "useTailwind": false,
+        "fields": {
+            "heading": { "type": "text", "tagName": "h3" }
+        },
+        "controls": {
+            "relatedPage": {
+                "type": "select",
+                "label": "Related Page",
+                "optionsSource": "wp:posts",
+                "sourceArgs": { "post_type": "page", "per_page": 50 }
+            },
+            "category": {
+                "type": "select",
+                "label": "Category",
+                "optionsSource": "wp:terms",
+                "sourceArgs": { "taxonomy": "category" }
+            }
+        }
+    }
+}
