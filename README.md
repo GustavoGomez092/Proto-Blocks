@@ -599,7 +599,7 @@ authors from breaking it. Reach for `inner-blocks` when the slot's
 
 - `text` - Text input
 - `textarea` - Multi-line text input
-- `select` - Dropdown selection
+- `select` - Dropdown selection (static `options`, or server-loaded via `optionsSource` — see [Dynamic / Server-Provided Options](#dynamic--server-provided-options))
 - `toggle` - Boolean toggle
 - `checkbox` - Boolean checkbox
 - `range` - Slider with min/max
@@ -627,6 +627,64 @@ Controls can be conditionally shown based on other control values:
     }
 }
 ```
+
+### Dynamic / Server-Provided Options
+
+A `select` control normally lists a fixed `options` array. When the choices come
+from your site's data — existing pages, categories, users — or from a value that
+only the server knows, declare an **`optionsSource`** instead. The control fetches
+its options live in the editor (via REST) and renders an async dropdown (a spinner
+while loading), so newly created content appears without rebuilding the block.
+
+```json
+{
+    "controls": {
+        "relatedPage": {
+            "type": "select",
+            "label": "Related Page",
+            "optionsSource": "wp:posts",
+            "sourceArgs": { "post_type": "page", "per_page": 50 }
+        },
+        "category": {
+            "type": "select",
+            "label": "Category",
+            "optionsSource": "wp:terms",
+            "sourceArgs": { "taxonomy": "category" }
+        }
+    }
+}
+```
+
+A control is "dynamic" the moment it has an `optionsSource`; `options` is then
+optional and ignored. `sourceArgs` is an optional object passed to the provider
+(only keys the provider allow-lists are forwarded).
+
+The stored value is the option **key** (e.g. a post ID as a string). Read it in
+your template like any other control and resolve it as needed:
+
+```php
+$relatedPage = $attributes['relatedPage'] ?? '';
+$pageTitle   = $relatedPage ? get_the_title( (int) $relatedPage ) : '';
+```
+
+**Built-in sources:**
+
+| `optionsSource` | Returns | `sourceArgs` |
+|-----------------|---------|--------------|
+| `wp:posts` | Published posts of a type | `post_type` (default `post`), `per_page` (default 50), `search` |
+| `wp:terms` | Terms of a taxonomy | `taxonomy` (default `category`), `per_page` (default 100), `search` |
+| `wp:users` | Site users | `per_page` (default 50), `search` |
+
+`per_page` is clamped server-side to **1–200**. Option keys are post IDs, term IDs,
+and user IDs respectively. To expose your own data (an external API, plugin
+settings, a static table), register a custom provider — see
+[Register a Custom Options Provider](#register-a-custom-options-provider).
+
+> **Permissions / REST:** the editor loads options from
+> `GET /wp-json/proto-blocks/v1/controls/options?source=<id>&args=<json>`, gated by
+> the `edit_posts` capability. A working example block ships in
+> `examples/dynamic-select/`, and the full developer reference lives in
+> [`docs/dynamic-control-options.md`](docs/dynamic-control-options.md).
 
 ## Template Markup
 
@@ -1094,6 +1152,7 @@ Proto-Blocks provides several hooks for customization:
 | Hook | Description | Parameters |
 |------|-------------|------------|
 | `proto_blocks_init` | Fires after Proto-Blocks is initialized | `$plugin` (Plugin instance) |
+| `proto_blocks_register_options_providers` | Fires so you can register custom dynamic-control options providers | `$providers` (OptionsProviders registry) |
 | `proto_blocks_registered` | Fires after all blocks are registered | `$blocks` (array of registered block names) |
 
 #### Filters
@@ -1116,6 +1175,43 @@ add_action('proto_blocks_init', function($plugin) {
     ]);
 });
 ```
+
+### Register a Custom Options Provider
+
+Provide options for a dynamic `select` control (see
+[Dynamic / Server-Provided Options](#dynamic--server-provided-options)) from any
+source — an external API, plugin settings, or a static table. Register a provider
+on `proto_blocks_register_options_providers`; the name you give it is the value
+authors put in `optionsSource`:
+
+```php
+add_action('proto_blocks_register_options_providers', function ($providers) {
+    // Static table — usable as "optionsSource": "currencies"
+    $providers->register('currencies', function (array $args): array {
+        return [
+            ['key' => 'usd', 'label' => 'US Dollar'],
+            ['key' => 'eur', 'label' => 'Euro'],
+        ];
+    });
+
+    // Computed/whitelisted args — third arg lists the sourceArgs keys that
+    // are forwarded to the callback (omit it to allow all).
+    $providers->register('product_categories', function (array $args): array {
+        $terms = get_terms([
+            'taxonomy'   => 'product_cat',
+            'hide_empty' => empty($args['include_empty']),
+        ]);
+        return array_map(
+            fn($t) => ['key' => (string) $t->term_id, 'label' => $t->name],
+            is_wp_error($terms) ? [] : $terms
+        );
+    }, ['include_empty']);
+});
+```
+
+The callback receives the (allow-listed) `sourceArgs` and returns a
+`{ key, label }[]` list — a `key => label` map also works and is normalized
+automatically.
 
 ### Add Custom Block Discovery Paths
 
