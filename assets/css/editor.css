@@ -101,6 +101,31 @@
   margin: 0;
 }
 
+/* Dynamic select control (server-loaded options) */
+.proto-blocks-dynamic-select {
+  margin-bottom: 16px;
+}
+
+.proto-blocks-dynamic-select label.components-base-control__label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.proto-blocks-dynamic-select.is-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.proto-blocks-dynamic-select.is-loading label.components-base-control__label {
+  margin-bottom: 0;
+}
+
+.proto-blocks-dynamic-select.has-error .components-base-control__help {
+  margin: 0;
+  color: #d63638;
+}
+
 /* Image field container */
 .proto-blocks-image-field {
   position: relative;

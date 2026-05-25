@@ -19,6 +19,8 @@ export interface ControlConfig {
     label: string;
     default?: unknown;
     options?: Array<{ key: string; label: string }>;
+    optionsSource?: string;
+    sourceArgs?: Record<string, unknown>;
     min?: number;
     max?: number;
     step?: number;

@@ -20,6 +20,7 @@ import {
 import { MediaUpload, MediaUploadCheck } from '@wordpress/block-editor';
 import { ControlConfig, BlockAttributes } from '../types';
 import { __ } from '@wordpress/i18n';
+import { DynamicSelectControl } from './DynamicSelectControl';
 
 interface MediaItem {
     id: number;
@@ -59,6 +60,17 @@ export function renderControl(
             );
 
         case 'select':
+            if (config.optionsSource) {
+                return (
+                    <DynamicSelectControl
+                        label={config.label}
+                        value={(value as string) || ''}
+                        source={config.optionsSource}
+                        sourceArgs={config.sourceArgs}
+                        onChange={onChange}
+                    />
+                );
+            }
             return (
                 <SelectControl
                     label={config.label}
