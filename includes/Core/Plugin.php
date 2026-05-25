@@ -12,6 +12,7 @@ namespace ProtoBlocks\Core;
 use ProtoBlocks\Schema\SchemaReader;
 use ProtoBlocks\Fields\Registry as FieldRegistry;
 use ProtoBlocks\Controls\Registry as ControlRegistry;
+use ProtoBlocks\Controls\OptionsProviders;
 use ProtoBlocks\Template\Engine;
 use ProtoBlocks\Template\Cache;
 use ProtoBlocks\Blocks\Registrar;
@@ -90,6 +91,12 @@ final class Plugin
 
         // Register core control types
         $this->registerCoreControlTypes();
+
+        // Register built-in options providers for dynamic controls
+        $this->registerCoreOptionsProviders();
+
+        // Allow extensions to register custom options providers
+        do_action('proto_blocks_register_options_providers', $this->getOptionsProviders());
 
         // Fire init action for extensions to register field types
         do_action('proto_blocks_init', $this);
@@ -195,6 +202,83 @@ final class Plugin
             'data_type' => 'object',
             'default' => [],
         ]);
+    }
+
+    /**
+     * Register built-in options providers (WP relationships).
+     */
+    private function registerCoreOptionsProviders(): void
+    {
+        $providers = $this->getOptionsProviders();
+
+        $providers->register('wp:posts', function (array $args): array {
+            $query = new \WP_Query([
+                'post_type'      => $args['post_type'] ?? 'post',
+                'post_status'    => 'publish',
+                'posts_per_page' => self::clampPerPage($args['per_page'] ?? null, 50),
+                's'              => (string) ($args['search'] ?? ''),
+                'orderby'        => 'title',
+                'order'          => 'ASC',
+                'no_found_rows'  => true,
+            ]);
+
+            return array_map(
+                static fn(\WP_Post $post): array => [
+                    'key'   => (string) $post->ID,
+                    'label' => $post->post_title !== '' ? $post->post_title : __('(no title)', 'proto-blocks'),
+                ],
+                $query->posts
+            );
+        }, ['post_type', 'per_page', 'search']);
+
+        $providers->register('wp:terms', function (array $args): array {
+            $terms = get_terms([
+                'taxonomy'   => $args['taxonomy'] ?? 'category',
+                'hide_empty' => false,
+                'number'     => self::clampPerPage($args['per_page'] ?? null, 100),
+                'search'     => (string) ($args['search'] ?? ''),
+            ]);
+
+            if (is_wp_error($terms)) {
+                return [];
+            }
+
+            return array_map(
+                static fn($term): array => [
+                    'key'   => (string) $term->term_id,
+                    'label' => $term->name !== '' ? $term->name : __('(no name)', 'proto-blocks'),
+                ],
+                $terms
+            );
+        }, ['taxonomy', 'per_page', 'search']);
+
+        $providers->register('wp:users', function (array $args): array {
+            $users = get_users([
+                'number'  => self::clampPerPage($args['per_page'] ?? null, 50),
+                'search'  => !empty($args['search']) ? '*' . $args['search'] . '*' : '',
+                'orderby' => 'display_name',
+                'order'   => 'ASC',
+            ]);
+
+            return array_map(
+                static fn(\WP_User $user): array => [
+                    'key'   => (string) $user->ID,
+                    'label' => $user->display_name !== '' ? $user->display_name : (string) $user->user_login,
+                ],
+                $users
+            );
+        }, ['per_page', 'search']);
+    }
+
+    /**
+     * Clamp a requested per-page count to a sane bounded range (1-200),
+     * preventing an editor from triggering an unbounded or oversized query.
+     */
+    private static function clampPerPage(mixed $value, int $default): int
+    {
+        $count = ($value === null || $value === '') ? $default : (int) $value;
+
+        return max(1, min($count, 200));
     }
 
     /**
@@ -356,6 +440,14 @@ final class Plugin
             $this->services['control_registry'] = new ControlRegistry();
         }
         return $this->services['control_registry'];
+    }
+
+    public function getOptionsProviders(): OptionsProviders
+    {
+        if (!isset($this->services['options_providers'])) {
+            $this->services['options_providers'] = new OptionsProviders();
+        }
+        return $this->services['options_providers'];
     }
 
     public function getSchemaReader(): SchemaReader
