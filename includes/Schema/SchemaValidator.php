@@ -179,10 +179,10 @@ class SchemaValidator
             );
         }
 
-        // Select controls must have options
-        if ($type === 'select' && empty($control['options'])) {
+        // Select controls must have static options OR a dynamic options source
+        if ($type === 'select' && empty($control['options']) && empty($control['optionsSource'])) {
             $this->errors[] = sprintf(
-                'Select control "%s" must have options defined',
+                'Select control "%s" must have options or an optionsSource defined',
                 $name
             );
         }
