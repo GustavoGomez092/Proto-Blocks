@@ -16,6 +16,7 @@ use WP_Error;
 use ProtoBlocks\Template\Engine;
 use ProtoBlocks\Template\Cache;
 use ProtoBlocks\Blocks\Registrar;
+use ProtoBlocks\Controls\OptionsProviders;
 
 /**
  * REST API endpoints for Proto-Blocks
@@ -43,13 +44,23 @@ class RestAPI
     private Cache $cache;
 
     /**
+     * Options providers
+     */
+    private OptionsProviders $optionsProviders;
+
+    /**
      * Constructor
      */
-    public function __construct(Engine $engine, Registrar $registrar, Cache $cache)
-    {
+    public function __construct(
+        Engine $engine,
+        Registrar $registrar,
+        Cache $cache,
+        OptionsProviders $optionsProviders
+    ) {
         $this->engine = $engine;
         $this->registrar = $registrar;
         $this->cache = $cache;
+        $this->optionsProviders = $optionsProviders;
     }
 
     /**
@@ -107,6 +118,24 @@ class RestAPI
                 'methods' => WP_REST_Server::DELETABLE,
                 'callback' => [$this, 'clearCache'],
                 'permission_callback' => [$this, 'canManageOptions'],
+            ],
+        ]);
+
+        // Dynamic control options
+        register_rest_route(self::NAMESPACE, '/controls/options', [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'getControlOptions'],
+            'permission_callback' => [$this, 'canEditPosts'],
+            'args' => [
+                'source' => [
+                    'required' => true,
+                    'type' => 'string',
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
+                'args' => [
+                    'required' => false,
+                    'type' => 'string',
+                ],
             ],
         ]);
     }
@@ -190,6 +219,52 @@ class RestAPI
             'path' => $block['path'],
             'schema' => $block['schema'],
             'attributes' => $block['attributes'],
+        ], 200);
+    }
+
+    /**
+     * Get options for a dynamic control source.
+     */
+    public function getControlOptions(WP_REST_Request $request): WP_REST_Response|WP_Error
+    {
+        $source = (string) $request->get_param('source');
+        $rawArgs = $request->get_param('args');
+
+        $args = [];
+        if (is_string($rawArgs) && $rawArgs !== '') {
+            $decoded = json_decode($rawArgs, true);
+            if (is_array($decoded)) {
+                $args = $decoded;
+            }
+        } elseif (is_array($rawArgs)) {
+            $args = $rawArgs;
+        }
+
+        if (!$this->optionsProviders->has($source)) {
+            return new WP_Error(
+                'proto_blocks_unknown_source',
+                __('Unknown options source.', 'proto-blocks'),
+                ['status' => 400]
+            );
+        }
+
+        // The unknown-source case is already handled above; this guards against
+        // failures inside third-party provider callbacks (registered via the
+        // proto_blocks_register_options_providers action) so one bad provider
+        // returns a clean error instead of a fatal.
+        try {
+            $options = $this->optionsProviders->resolve($source, $args);
+        } catch (\Throwable $e) {
+            return new WP_Error(
+                'proto_blocks_options_error',
+                $e->getMessage(),
+                ['status' => 500]
+            );
+        }
+
+        return new WP_REST_Response([
+            'options' => $options,
+            'total' => count($options),
         ], 200);
     }
 

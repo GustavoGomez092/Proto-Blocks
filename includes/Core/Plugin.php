@@ -312,7 +312,8 @@ final class Plugin
         $this->services['rest_api'] = new RestAPI(
             $this->getEngine(),
             $this->getRegistrar(),
-            $this->getCache()
+            $this->getCache(),
+            $this->getOptionsProviders()
         );
 
         // AJAX Handler
