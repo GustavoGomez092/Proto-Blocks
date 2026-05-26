@@ -76,22 +76,20 @@ class Cache
     }
 
     /**
-     * Get compiled CSS URL.
+     * Get compiled CSS URL (protocol-relative).
      *
-     * WP Engine and other SSL-terminating proxies can report an http uploads
-     * baseurl on an https site (is_ssl() is false behind the proxy), which makes
-     * the browser block this stylesheet as mixed content. Align the scheme with
-     * the site's configured scheme so an https site always serves it over https.
+     * SSL-terminating hosts (e.g. WP Engine) can report an http scheme in
+     * wp_upload_dir(), get_option('home'), and is_ssl() even when the site is
+     * actually served over https through the proxy — which makes the browser
+     * block this stylesheet as mixed content. Rather than guess the scheme, we
+     * strip it so the browser loads the file over the SAME scheme as the page.
+     * On an https page that's https; on http it's http. Never mixed content.
      */
     public function getUrl(): string
     {
         $url = $this->cacheUrl . self::CSS_FILE;
 
-        if (strpos((string) \get_option('home'), 'https://') === 0) {
-            $url = \set_url_scheme($url, 'https');
-        }
-
-        return $url;
+        return preg_replace('#^https?://#', '//', $url);
     }
 
     /**

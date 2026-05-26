@@ -9,31 +9,20 @@ use ProtoBlocks\Tailwind\Cache;
 
 /**
  * The uploads baseurl (from wp_upload_dir) is http in the test bootstrap, mirroring
- * an SSL-terminating host like WP Engine where is_ssl() is false behind the proxy.
+ * an SSL-terminating host like WP Engine where WordPress reports an http scheme even
+ * though the site is served over https. getUrl() must not emit that http scheme.
  */
 final class CacheUrlTest extends TestCase
 {
-    protected function tearDown(): void
+    public function test_url_is_protocol_relative(): void
     {
-        unset($GLOBALS['pb_test_options']);
-    }
-
-    public function test_url_is_forced_to_https_when_site_is_https(): void
-    {
-        $GLOBALS['pb_test_options']['home'] = 'https://example.test';
-
         $url = (new Cache())->getUrl();
 
-        $this->assertStringStartsWith('https://', $url);
+        // Protocol-relative: the browser uses the page's scheme, so it can never
+        // be blocked as mixed content on an https page.
+        $this->assertStringStartsWith('//', $url);
+        $this->assertStringNotContainsString('http://', $url);
+        $this->assertStringNotContainsString('https://', $url);
         $this->assertStringContainsString('tailwind.css', $url);
-    }
-
-    public function test_url_left_http_when_site_is_http(): void
-    {
-        $GLOBALS['pb_test_options']['home'] = 'http://example.test';
-
-        $url = (new Cache())->getUrl();
-
-        $this->assertStringStartsWith('http://', $url);
     }
 }
