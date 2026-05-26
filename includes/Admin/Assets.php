@@ -182,14 +182,7 @@ JS;
             return;
         }
 
-        wp_enqueue_script('jquery');
-        wp_enqueue_script(
-            'proto-blocks-tailwind-compiler',
-            PROTO_BLOCKS_URL . 'assets/js/tailwind-compiler.js',
-            ['jquery'],
-            PROTO_BLOCKS_VERSION,
-            true
-        );
+        $this->enqueueTailwindCompiler();
 
         $config = wp_json_encode([
             'ajaxUrl'        => admin_url('admin-ajax.php'),
@@ -203,6 +196,34 @@ JS;
             'proto-blocks-tailwind-compiler',
             'window.ProtoBlocksAutoTailwind = ' . $config . ';' . self::AUTO_COMPILE_JS,
             'after'
+        );
+    }
+
+    /**
+     * Enqueue the in-browser Tailwind compiler bundle (+ jQuery) and tell its
+     * webpack runtime the absolute base URL for its emitted assets.
+     *
+     * The compiler bundle loads the Lightning CSS `.wasm` via webpack's asset
+     * loader. webpack's 'auto' publicPath can resolve that `.wasm` against the
+     * current page URL and 404 — the server then returns an HTML error page,
+     * so `WebAssembly.instantiate` sees `<!DO…` instead of the wasm magic word
+     * `00 61 73 6d`. Printing `protoBlocksAssetBase` *before* the bundle lets
+     * it pin `__webpack_public_path__` to the real plugin assets URL.
+     */
+    private function enqueueTailwindCompiler(): void
+    {
+        wp_enqueue_script('jquery');
+        wp_enqueue_script(
+            'proto-blocks-tailwind-compiler',
+            PROTO_BLOCKS_URL . 'assets/js/tailwind-compiler.js',
+            ['jquery'],
+            PROTO_BLOCKS_VERSION,
+            true
+        );
+        wp_add_inline_script(
+            'proto-blocks-tailwind-compiler',
+            'window.protoBlocksAssetBase=' . wp_json_encode(PROTO_BLOCKS_URL . 'assets/js/') . ';',
+            'before'
         );
     }
 
@@ -314,13 +335,7 @@ JS;
             true
         );
 
-        wp_enqueue_script(
-            'proto-blocks-tailwind-compiler',
-            PROTO_BLOCKS_URL . 'assets/js/tailwind-compiler.js',
-            ['jquery'],
-            PROTO_BLOCKS_VERSION,
-            true
-        );
+        $this->enqueueTailwindCompiler();
 
         wp_localize_script('proto-blocks-admin', 'protoBlocksAdmin', [
             'apiNamespace' => 'proto-blocks/v1',

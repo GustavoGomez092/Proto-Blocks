@@ -6,6 +6,22 @@
  * hosts without shell access (e.g. WP Engine).
  */
 
+// Point webpack's runtime asset loader (used for the Lightning CSS .wasm that
+// the engine loads) at the plugin's real assets URL. WordPress enqueues this
+// bundle from wp-content/plugins/.../assets/js/, but webpack's 'auto'
+// publicPath can mis-resolve the .wasm against the page URL and 404 (the
+// server returns an HTML error page, so WebAssembly.instantiate sees `<!DO`
+// instead of the wasm magic bytes). The PHP side prints `protoBlocksAssetBase`
+// just before this script; honor it. Must run before any wasm URL is built.
+declare let __webpack_public_path__: string;
+if (typeof window !== 'undefined') {
+    const base = (window as unknown as { protoBlocksAssetBase?: string })
+        .protoBlocksAssetBase;
+    if (base) {
+        __webpack_public_path__ = base;
+    }
+}
+
 import { compileTailwind } from './engine';
 
 interface AjaxResponse<T = unknown> {
