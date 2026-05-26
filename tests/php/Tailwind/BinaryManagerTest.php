@@ -65,4 +65,23 @@ final class BinaryManagerTest extends TestCase
         $this->assertNull($bm->getVersion());    // cannot read a version
         $this->assertFalse($bm->isFunctional()); // therefore not usable
     }
+
+    public function test_shell_is_available_when_exec_works(): void
+    {
+        // This asserts the happy path on environments where exec() runs. Skip
+        // (don't fail) where exec is disabled — that is exactly the managed-host
+        // scenario this feature handles, and CI containers may forbid exec.
+        $output = [];
+        $exitCode = 1;
+        if (!function_exists('exec')) {
+            $this->markTestSkipped('exec() is not available in this environment.');
+        }
+        @exec('echo proto', $output, $exitCode);
+        if ($exitCode !== 0) {
+            $this->markTestSkipped('exec() is disabled in this environment.');
+        }
+
+        $bm = new BinaryManager($this->binDir);
+        $this->assertTrue($bm->isShellAvailable());
+    }
 }

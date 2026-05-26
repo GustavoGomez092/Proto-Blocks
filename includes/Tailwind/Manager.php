@@ -347,6 +347,14 @@ final class Manager
     }
 
     /**
+     * Whether the server can run the Tailwind CLI (has shell access).
+     */
+    public function isShellAvailable(): bool
+    {
+        return $this->getBinaryManager()->isShellAvailable();
+    }
+
+    /**
      * Get status information
      *
      * @return array<string, mixed>
@@ -361,11 +369,18 @@ final class Manager
         // getStatus() on each load), reading the version once.
         $cliInstalled = $binaryManager->isInstalled();
         $cliVersion = $cliInstalled ? $binaryManager->getVersion() : null;
+        $shellAvailable = $binaryManager->isShellAvailable();
 
         return [
             'enabled' => $this->isEnabled(),
             'mode' => $this->getMode(),
             'disable_global_styles' => !empty($settings['disable_global_styles']),
+            'shell_available' => $shellAvailable,
+            // Which compile engine to use, by environment. 'cli' when the server
+            // has shell access (the CLI path self-heals — it auto-downloads the
+            // binary if missing); 'browser' otherwise. Binary readiness for the
+            // CLI path is reported separately via 'cli_functional'.
+            'engine' => $shellAvailable ? 'cli' : 'browser',
             'cli_installed' => $cliInstalled,
             'cli_functional' => $cliInstalled && $cliVersion !== null,
             'cli_version' => $cliVersion,

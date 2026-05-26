@@ -67,6 +67,15 @@ class BinaryManager
     }
 
     /**
+     * Whether PHP can execute shell commands. False on managed hosts (e.g.
+     * WP Engine) that disable exec/shell_exec — those must use browser compile.
+     */
+    public function isShellAvailable(): bool
+    {
+        return function_exists('exec') && $this->isExecAvailable();
+    }
+
+    /**
      * Get binary path
      */
     public function getBinaryPath(): string
