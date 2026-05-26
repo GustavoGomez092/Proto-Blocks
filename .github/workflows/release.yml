@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need full history + tags to diff commits since last release
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci || npm install --no-audit --no-fund
+
+      - name: Test version logic
+        run: npm run test:scripts
+
+      - name: Determine version bump
+        id: bump
+        run: |
+          set -euo pipefail
+
+          # Loop guard: never release off our own release commit. The commit
+          # carries [skip ci], which GitHub honors for push events; this subject
+          # check additionally covers manual workflow_dispatch runs (which
+          # [skip ci] does NOT skip).
+          SUBJECT=$(git log -1 --format=%s)
+          if printf '%s' "$SUBJECT" | grep -q '^chore(release):'; then
+            echo "Release commit detected; skipping."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          LAST_TAG=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          if [ -n "$LAST_TAG" ]; then
+            RANGE="${LAST_TAG}..HEAD"
+          else
+            RANGE="HEAD"
+          fi
+
+          CURRENT=$(node -p "require('./package.json').version")
+
+          # Pipe full commit messages (record-separated by 0x1e) to the resolver.
+          OUT=$(git log "$RANGE" --format='%B%x1e' \
+            | CURRENT_VERSION="$CURRENT" node scripts/next-version.mjs)
+
+          if [ -z "$OUT" ]; then
+            echo "No release-worthy commits since ${LAST_TAG:-start}; skipping."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "$OUT" >> "$GITHUB_OUTPUT"   # version=X.Y.Z and type=...
+            echo "Bumping ${CURRENT} -> $(echo "$OUT" | sed -n 's/^version=//p')"
+          fi
+
+      - name: Bump version files
+        if: steps.bump.outputs.release == 'true'
+        env:
+          NEW: ${{ steps.bump.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          npm version "$NEW" --no-git-tag-version --allow-same-version
+
+          sed -i -E "s/^( \* Version:[[:space:]]*).*/\1${NEW}/" proto-blocks.php
+          sed -i -E "s/(define\('PROTO_BLOCKS_VERSION', ')[^']*('\);)/\1${NEW}\2/" proto-blocks.php
+
+          # Fail loudly if either replacement did not land (no half-bumped state).
+          grep -q "Version: ${NEW}" proto-blocks.php
+          grep -q "PROTO_BLOCKS_VERSION', '${NEW}'" proto-blocks.php
+
+      - name: Commit, tag, and push
+        if: steps.bump.outputs.release == 'true'
+        env:
+          NEW: ${{ steps.bump.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add package.json package-lock.json proto-blocks.php
+          git commit -m "chore(release): v${NEW} [skip ci]"
+          git tag "v${NEW}"
+
+          git push origin HEAD:main
+          git push origin "v${NEW}"
+
+      - name: Build plugin zip
+        if: steps.bump.outputs.release == 'true'
+        run: npm run dist
+
+      - name: Create versioned release
+        if: steps.bump.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEW: ${{ steps.bump.outputs.version }}
+        run: |
+          set -euo pipefail
+          test -f dist/proto-blocks.zip || { echo "::error::dist/proto-blocks.zip missing"; exit 1; }
+          gh release create "v${NEW}" \
+            dist/proto-blocks.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "v${NEW}" \
+            --generate-notes
