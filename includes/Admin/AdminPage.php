@@ -255,14 +255,14 @@ class AdminPage
                                     <label for="proto_blocks_example_blocks" class="pb-font-medium pb-text-sm"><?php esc_html_e('Register Example Blocks', 'proto-blocks'); ?></label>
                                     <p class="pb-text-text-muted-light pb-text-xs pb-mt-1"><?php esc_html_e('Make the bundled example blocks available in the block inserter for testing and learning.', 'proto-blocks'); ?></p>
                                 </div>
-                                <div class="pb-flex-1">
-                                    <label class="pb-toggle">
+                                <div class="pb-flex-1 pb-flex pb-items-center pb-gap-3">
+                                    <label class="pb-toggle pb-flex-shrink-0">
                                         <input type="hidden" name="proto_blocks_example_blocks" value="0">
                                         <input type="checkbox" id="proto_blocks_example_blocks" name="proto_blocks_example_blocks" value="1" <?php checked($exampleBlocksEnabled); ?> <?php disabled($exampleBlocksFromConfig); ?>>
                                         <span class="pb-toggle-slider"></span>
                                     </label>
                                     <?php if ($exampleBlocksFromConfig): ?>
-                                        <div class="pb-bg-amber-50 pb-border-l-4 pb-border-amber-400 pb-p-3 pb-mt-3 pb-text-sm pb-text-amber-800">
+                                        <div class="pb-flex-1 pb-bg-amber-50 pb-border-l-4 pb-border-amber-400 pb-p-3 pb-text-sm pb-text-amber-800">
                                             <?php
                                             printf(
                                                 /* translators: %s: constant name */
