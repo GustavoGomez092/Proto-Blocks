@@ -13,6 +13,7 @@
     "lint": "npm run lint:js && npm run lint:css",
     "format": "wp-scripts format",
     "test:js": "wp-scripts test-unit-js",
+    "test:scripts": "node --test scripts/*.test.mjs",
     "packages-update": "wp-scripts packages-update",
     "zip": "node scripts/build-zip.js",
     "dist": "npm run build && npm run zip"
