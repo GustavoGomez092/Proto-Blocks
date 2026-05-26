@@ -28,6 +28,7 @@
  */
 
 import { compile } from 'tailwindcss-v4';
+import initLightning, { transform as lightningTransform, Features } from 'lightningcss-wasm';
 
 // The Tailwind v4 engine is installed under the `tailwindcss-v4` npm alias
 // (package.json) so it does not collide with the project's existing Tailwind v3
@@ -136,5 +137,67 @@ export async function compileTailwind(
 	});
 
 	const candidates = extractCandidates(content);
-	return compiler.build(candidates);
+	const rawCss = compiler.build(candidates);
+
+	// Match the standalone CLI byte-for-byte. The CLI compiles with `--minify`,
+	// which runs the output through Lightning CSS (Tailwind's `optimizeCss`).
+	// That pass FLATTENS Tailwind v4's native nested CSS (e.g. a responsive
+	// variant emits `.lg\:ml-0 { @media (width>=64rem) { … } }`) into the
+	// classic flat form `@media (min-width:64rem) { .lg\:ml-0 { … } }` and
+	// minifies. The server-side scoper only understands that flat form, so the
+	// browser engine MUST apply the same pass — otherwise nested variants are
+	// mangled (the bug this fixes). We replicate Tailwind v4.3.0's exact
+	// `optimizeCss` options so both engines produce identical CSS.
+	return optimizeCss(rawCss);
+}
+
+/**
+ * Lazily initialise the Lightning CSS WebAssembly module (once).
+ */
+let lightningReady: Promise<unknown> | null = null;
+function ensureLightning(): Promise<unknown> {
+	if (lightningReady === null) {
+		lightningReady = initLightning();
+	}
+	return lightningReady;
+}
+
+/**
+ * Run CSS through Lightning CSS with the EXACT options Tailwind v4.3.0's
+ * `@tailwindcss/node` `optimizeCss` uses (see the v4.3.0 source). Critically:
+ *   - `include: Nesting | MediaQueries` lowers native nesting + range media
+ *     queries to the classic flat form the scoper expects.
+ *   - run twice, so adjacent rules merge after nesting is applied.
+ *   - `minify: true` to match the CLI's `--minify`.
+ * lightningcss-wasm is pinned to 1.32.0 to match the `lightningcss` the
+ * Tailwind v4.3.0 npm engine (and the standalone CLI binary) bundle.
+ */
+async function optimizeCss(css: string): Promise<string> {
+	await ensureLightning();
+
+	const options = {
+		filename: 'input.css',
+		minify: true,
+		sourceMap: false,
+		drafts: { customMedia: true },
+		nonStandard: { deepSelectorCombinator: true },
+		include: Features.Nesting | Features.MediaQueries,
+		exclude: Features.LogicalProperties | Features.DirSelector | Features.LightDark,
+		targets: {
+			safari: (16 << 16) | (4 << 8),
+			ios_saf: (16 << 16) | (4 << 8),
+			firefox: 128 << 16,
+			chrome: 111 << 16,
+		},
+		errorRecovery: true,
+	} as const;
+
+	const encoder = new TextEncoder();
+	const decoder = new TextDecoder();
+
+	// First pass applies nesting; second pass optimizes the merged rules.
+	let code = lightningTransform({ ...options, code: encoder.encode(css) }).code;
+	code = lightningTransform({ ...options, code }).code;
+
+	return decoder.decode(code);
 }

@@ -24,6 +24,13 @@ module.exports = {
         alias: {
             '@': path.resolve(__dirname, 'src'),
         },
+        // lightningcss-wasm's loader tries `import('fs')` and falls back to
+        // `fetch()` in the browser. Stub `fs` to false so webpack doesn't warn
+        // about the unresolved Node module and the browser cleanly uses fetch.
+        fallback: {
+            ...(defaultConfig.resolve && defaultConfig.resolve.fallback),
+            fs: false,
+        },
     },
     module: {
         ...defaultConfig.module,
