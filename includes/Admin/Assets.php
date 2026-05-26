@@ -218,6 +218,14 @@ class Assets
             true
         );
 
+        wp_enqueue_script(
+            'proto-blocks-tailwind-compiler',
+            PROTO_BLOCKS_URL . 'assets/js/tailwind-compiler.js',
+            ['jquery'],
+            PROTO_BLOCKS_VERSION,
+            true
+        );
+
         wp_localize_script('proto-blocks-admin', 'protoBlocksAdmin', [
             'apiNamespace' => 'proto-blocks/v1',
             'nonce' => wp_create_nonce('wp_rest'),

@@ -148,9 +148,12 @@ class AdminSettings
                                 <div class="pb-p-3 pb-bg-gray-50 pb-rounded-lg">
                                     <div class="pb-text-xs pb-text-text-muted-light pb-uppercase pb-tracking-wide pb-mb-1"><?php \esc_html_e('CLI Status', 'proto-blocks'); ?></div>
                                     <div class="pb-flex pb-items-center pb-gap-1" id="cli-status">
-                                        <?php if ($status['cli_functional']): ?>
+                                        <?php if ($status['engine'] === 'browser'): ?>
+                                            <span class="material-icons-outlined pb-text-green-600 pb-text-lg">cloud_done</span>
+                                            <span class="pb-text-sm"><?php \esc_html_e('Browser compiler', 'proto-blocks'); ?></span>
+                                        <?php elseif ($status['cli_functional']): ?>
                                             <span class="material-icons-outlined pb-text-green-600 pb-text-lg">check_circle</span>
-                                            <span class="pb-text-sm"><?php printf(\esc_html__('v%s', 'proto-blocks'), \esc_html($status['cli_version'])); ?></span>
+                                            <span class="pb-text-sm"><?php printf(\esc_html__('Server CLI v%s', 'proto-blocks'), \esc_html($status['cli_version'])); ?></span>
                                         <?php elseif ($status['cli_installed']): ?>
                                             <span class="material-icons-outlined pb-text-orange-500 pb-text-lg">warning</span>
                                             <span class="pb-text-sm pb-text-orange-600"><?php \esc_html_e('Installed but not runnable — re-download', 'proto-blocks'); ?></span>
@@ -189,6 +192,7 @@ class AdminSettings
                         </div>
                         <div class="pb-flex-1">
                             <div class="pb-flex pb-flex-wrap pb-gap-3">
+                                <?php if ($status['shell_available']): ?>
                                 <button type="button" id="download-cli" class="pb-bg-primary hover:pb-bg-primary-hover pb-text-white pb-px-4 pb-py-2 pb-rounded pb-shadow-sm pb-text-sm pb-font-medium pb-flex pb-items-center pb-gap-2 pb-transition-colors">
                                     <span class="material-icons-outlined pb-text-sm">download</span>
                                     <?php
@@ -201,7 +205,8 @@ class AdminSettings
                                     }
                                     ?>
                                 </button>
-                                <button type="button" id="compile-tailwind" class="pb-bg-primary hover:pb-bg-primary-hover pb-text-white pb-px-4 pb-py-2 pb-rounded pb-shadow-sm pb-text-sm pb-font-medium pb-flex pb-items-center pb-gap-2 pb-transition-colors disabled:pb-opacity-50 disabled:pb-cursor-not-allowed" <?php echo $status['cli_functional'] ? '' : 'disabled'; ?>>
+                                <?php endif; ?>
+                                <button type="button" id="compile-tailwind" class="pb-bg-primary hover:pb-bg-primary-hover pb-text-white pb-px-4 pb-py-2 pb-rounded pb-shadow-sm pb-text-sm pb-font-medium pb-flex pb-items-center pb-gap-2 pb-transition-colors disabled:pb-opacity-50 disabled:pb-cursor-not-allowed" <?php echo ($status['engine'] === 'browser' || $status['cli_functional']) ? '' : 'disabled'; ?>>
                                     <span class="material-icons-outlined pb-text-sm">sync</span>
                                     <?php \esc_html_e('Compile CSS', 'proto-blocks'); ?>
                                 </button>
@@ -266,6 +271,7 @@ class AdminSettings
         jQuery(document).ready(function($) {
             const nonce = $('#proto_blocks_tailwind_nonce').val();
             const actionPrefix = '<?php echo self::ACTION_PREFIX; ?>';
+            const compileEngine = '<?php echo \esc_js($status['engine']); ?>';
 
             function showMessage(message, type) {
                 const $msg = $('#tailwind-message');
@@ -364,14 +370,35 @@ class AdminSettings
             $('#compile-tailwind').on('click', function() {
                 const $btn = $(this);
                 $btn.prop('disabled', true);
-                $btn.find('.dashicons').addClass('spin');
+                $btn.find('.material-icons-outlined').addClass('spin');
+
+                if (compileEngine === 'browser') {
+                    window.ProtoBlocksTailwind.runBrowserCompile({
+                        ajaxUrl: ajaxurl,
+                        actionPrefix: actionPrefix,
+                        nonce: nonce
+                    }).then(function(result) {
+                        showMessage(result.message, result.success ? 'success' : 'error');
+                        if (result.success) {
+                            location.reload();
+                        } else {
+                            $btn.prop('disabled', false);
+                            $btn.find('.material-icons-outlined').removeClass('spin');
+                        }
+                    }).catch(function(err) {
+                        showMessage(String(err && err.message ? err.message : err), 'error');
+                        $btn.prop('disabled', false);
+                        $btn.find('.material-icons-outlined').removeClass('spin');
+                    });
+                    return;
+                }
 
                 $.post(ajaxurl, {
                     action: actionPrefix + 'compile',
                     nonce: nonce
                 }, function(response) {
                     $btn.prop('disabled', false);
-                    $btn.find('.dashicons').removeClass('spin');
+                    $btn.find('.material-icons-outlined').removeClass('spin');
 
                     if (response.success) {
                         showMessage(response.data.message, 'success');

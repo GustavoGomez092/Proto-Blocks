@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Spinner for busy buttons (e.g. Compile CSS while the browser engine runs) */
+@keyframes pb-spin {
+    to { transform: rotate(360deg); }
+}
+
+.spin {
+    animation: pb-spin 1s linear infinite;
+}
+
 /* Custom scrollbar styling */
 .proto-blocks-admin-ui ::-webkit-scrollbar {
     width: 8px;
