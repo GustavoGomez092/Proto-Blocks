@@ -116,9 +116,10 @@ jobs:
           NEW: ${{ steps.bump.outputs.version }}
         run: |
           set -euo pipefail
-          test -f dist/proto-blocks.zip || { echo "::error::dist/proto-blocks.zip missing"; exit 1; }
+          ZIP="dist/proto-blocks-${NEW}.zip"
+          test -f "$ZIP" || { echo "::error::$ZIP missing"; exit 1; }
           gh release create "v${NEW}" \
-            dist/proto-blocks.zip \
+            "$ZIP" \
             --repo "$GITHUB_REPOSITORY" \
             --title "v${NEW}" \
             --generate-notes
