@@ -105,6 +105,27 @@ class AdminPage
             echo '</p></div>';
         }
 
+        // Handle example blocks toggle save action (ignored if forced via wp-config.php)
+        if (isset($_POST['proto_blocks_save_example_blocks']) && check_admin_referer('proto_blocks_save_example_blocks')) {
+            if (defined('PROTO_BLOCKS_EXAMPLE_BLOCKS_FROM_CONFIG') && \PROTO_BLOCKS_EXAMPLE_BLOCKS_FROM_CONFIG) {
+                echo '<div class="notice notice-warning is-dismissible"><p>';
+                esc_html_e('Example blocks are controlled by the PROTO_BLOCKS_EXAMPLE_BLOCKS constant in wp-config.php and cannot be changed here.', 'proto-blocks');
+                echo '</p></div>';
+            } else {
+                $enabled = isset($_POST['proto_blocks_example_blocks']) && $_POST['proto_blocks_example_blocks'] === '1';
+                update_option(self::OPTION_EXAMPLE_BLOCKS, $enabled);
+                // Block registration depends on this value; clear cached templates so the change takes effect.
+                $this->cache->clear();
+                echo '<div class="notice notice-success is-dismissible"><p>';
+                if ($enabled) {
+                    esc_html_e('Example blocks enabled. Reload the editor to see them in the inserter.', 'proto-blocks');
+                } else {
+                    esc_html_e('Example blocks disabled.', 'proto-blocks');
+                }
+                echo '</p></div>';
+            }
+        }
+
         // Handle install vanilla CSS demo blocks action
         if (isset($_POST['proto_blocks_install_vanilla_demos']) && check_admin_referer('proto_blocks_install_vanilla_demos')) {
             $result = $this->installDemoBlocks('vanilla');
@@ -185,6 +206,12 @@ class AdminPage
         $tailwind_blocks = $this->getDemoBlockNamesByType('tailwind');
         $tailwindEnabled = TailwindManager::getInstance()->isEnabled();
         $installed_demo_blocks = $this->getInstalledDemoBlocks();
+
+        // Example blocks toggle state. When forced via wp-config.php the constant wins and the toggle is read-only.
+        $exampleBlocksFromConfig = defined('PROTO_BLOCKS_EXAMPLE_BLOCKS_FROM_CONFIG') && \PROTO_BLOCKS_EXAMPLE_BLOCKS_FROM_CONFIG;
+        $exampleBlocksEnabled = $exampleBlocksFromConfig
+            ? (bool) \PROTO_BLOCKS_EXAMPLE_BLOCKS
+            : (bool) get_option(self::OPTION_EXAMPLE_BLOCKS, false);
         ?>
         <div class="wrap proto-blocks-admin-ui pb-bg-background-light pb-font-display pb-text-text-main-light pb-min-h-screen">
             <div class="pb-max-w-7xl pb-mx-auto pb-p-6 lg:pb-p-10 pb-space-y-8">
@@ -209,6 +236,52 @@ class AdminPage
                     <div class="pb-bg-surface-light pb-p-6 pb-rounded-lg pb-shadow-sm pb-border pb-border-border-light pb-flex pb-flex-col pb-items-center pb-justify-center pb-text-center pb-transition-all hover:pb-shadow-md">
                         <div class="pb-text-4xl pb-font-bold pb-text-accent pb-mb-1"><?php echo esc_html(size_format($cacheStats['total_size'])); ?></div>
                         <div class="pb-text-sm pb-font-medium pb-text-text-muted-light pb-uppercase pb-tracking-wide"><?php esc_html_e('Cache Size', 'proto-blocks'); ?></div>
+                    </div>
+                </div>
+
+                <!-- Example Blocks Section -->
+                <div class="pb-bg-surface-light pb-rounded-lg pb-shadow-sm pb-border pb-border-border-light pb-overflow-hidden">
+                    <div class="pb-px-6 pb-py-4 pb-border-b pb-border-border-light pb-bg-gray-50">
+                        <h2 class="pb-text-lg pb-font-semibold pb-flex pb-items-center pb-gap-2">
+                            <span class="material-icons-outlined pb-text-primary">science</span>
+                            <?php esc_html_e('Example Blocks', 'proto-blocks'); ?>
+                        </h2>
+                    </div>
+                    <div class="pb-p-6">
+                        <form method="post">
+                            <?php wp_nonce_field('proto_blocks_save_example_blocks'); ?>
+                            <div class="pb-flex pb-flex-col sm:pb-flex-row sm:pb-items-start pb-gap-4">
+                                <div class="sm:pb-w-64 pb-flex-shrink-0">
+                                    <label for="proto_blocks_example_blocks" class="pb-font-medium pb-text-sm"><?php esc_html_e('Register Example Blocks', 'proto-blocks'); ?></label>
+                                    <p class="pb-text-text-muted-light pb-text-xs pb-mt-1"><?php esc_html_e('Make the bundled example blocks available in the block inserter for testing and learning.', 'proto-blocks'); ?></p>
+                                </div>
+                                <div class="pb-flex-1">
+                                    <label class="pb-toggle">
+                                        <input type="hidden" name="proto_blocks_example_blocks" value="0">
+                                        <input type="checkbox" id="proto_blocks_example_blocks" name="proto_blocks_example_blocks" value="1" <?php checked($exampleBlocksEnabled); ?> <?php disabled($exampleBlocksFromConfig); ?>>
+                                        <span class="pb-toggle-slider"></span>
+                                    </label>
+                                    <?php if ($exampleBlocksFromConfig): ?>
+                                        <div class="pb-bg-amber-50 pb-border-l-4 pb-border-amber-400 pb-p-3 pb-mt-3 pb-text-sm pb-text-amber-800">
+                                            <?php
+                                            printf(
+                                                /* translators: %s: constant name */
+                                                esc_html__('This setting is locked because %s is defined in wp-config.php. Remove the constant to manage it here.', 'proto-blocks'),
+                                                'PROTO_BLOCKS_EXAMPLE_BLOCKS'
+                                            );
+                                            ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <?php if (!$exampleBlocksFromConfig): ?>
+                                <div class="pb-mt-6 pb-pt-4 pb-border-t pb-border-border-light">
+                                    <button type="submit" name="proto_blocks_save_example_blocks" class="pb-bg-primary hover:pb-bg-primary-hover pb-text-white pb-px-4 pb-py-2 pb-rounded pb-shadow-sm pb-text-sm pb-font-medium pb-transition-colors">
+                                        <?php esc_html_e('Save Settings', 'proto-blocks'); ?>
+                                    </button>
+                                </div>
+                            <?php endif; ?>
+                        </form>
                     </div>
                 </div>
 
@@ -485,6 +558,11 @@ class AdminPage
     public const OPTION_CATEGORY_NAME = 'proto_blocks_category_name';
 
     /**
+     * Option key for enabling the bundled example blocks
+     */
+    public const OPTION_EXAMPLE_BLOCKS = 'proto_blocks_example_blocks';
+
+    /**
      * Render system status page
      */
     public function renderSystemStatusPage(): void
@@ -575,7 +653,18 @@ class AdminPage
                                 </div>
                                 <div class="pb-flex-1">
                                     <code class="pb-text-sm <?php echo \PROTO_BLOCKS_EXAMPLE_BLOCKS ? 'pb-text-green-600' : 'pb-text-gray-500'; ?>"><?php echo \PROTO_BLOCKS_EXAMPLE_BLOCKS ? 'true' : 'false'; ?></code>
-                                    <p class="pb-text-text-muted-light pb-text-sm pb-mt-1"><?php esc_html_e('Register example blocks for testing.', 'proto-blocks'); ?></p>
+                                    <p class="pb-text-text-muted-light pb-text-sm pb-mt-1">
+                                        <?php esc_html_e('Register example blocks for testing.', 'proto-blocks'); ?>
+                                        <?php if (!(defined('PROTO_BLOCKS_EXAMPLE_BLOCKS_FROM_CONFIG') && \PROTO_BLOCKS_EXAMPLE_BLOCKS_FROM_CONFIG)): ?>
+                                            <?php
+                                            printf(
+                                                /* translators: %s: link to the Blocks dashboard */
+                                                ' ' . esc_html__('Managed from the %s page (default off).', 'proto-blocks'),
+                                                '<a href="' . esc_url(admin_url('admin.php?page=' . self::SLUG)) . '" class="pb-underline pb-text-primary">' . esc_html__('Blocks', 'proto-blocks') . '</a>'
+                                            );
+                                            ?>
+                                        <?php endif; ?>
+                                    </p>
                                 </div>
                             </div>
                         </div>
