@@ -146,9 +146,12 @@ class AdminSettings
                                 <div class="pb-p-3 pb-bg-gray-50 pb-rounded-lg">
                                     <div class="pb-text-xs pb-text-text-muted-light pb-uppercase pb-tracking-wide pb-mb-1"><?php \esc_html_e('CLI Status', 'proto-blocks'); ?></div>
                                     <div class="pb-flex pb-items-center pb-gap-1" id="cli-status">
-                                        <?php if ($status['cli_installed']): ?>
+                                        <?php if ($status['cli_functional']): ?>
                                             <span class="material-icons-outlined pb-text-green-600 pb-text-lg">check_circle</span>
-                                            <span class="pb-text-sm"><?php printf(\esc_html__('v%s', 'proto-blocks'), \esc_html($status['cli_version'] ?? '?')); ?></span>
+                                            <span class="pb-text-sm"><?php printf(\esc_html__('v%s', 'proto-blocks'), \esc_html($status['cli_version'])); ?></span>
+                                        <?php elseif ($status['cli_installed']): ?>
+                                            <span class="material-icons-outlined pb-text-orange-500 pb-text-lg">warning</span>
+                                            <span class="pb-text-sm pb-text-orange-600"><?php \esc_html_e('Installed but not runnable — re-download', 'proto-blocks'); ?></span>
                                         <?php else: ?>
                                             <span class="material-icons-outlined pb-text-red-600 pb-text-lg">error</span>
                                             <span class="pb-text-sm pb-text-red-600"><?php \esc_html_e('Not installed', 'proto-blocks'); ?></span>
@@ -184,13 +187,19 @@ class AdminSettings
                         </div>
                         <div class="pb-flex-1">
                             <div class="pb-flex pb-flex-wrap pb-gap-3">
-                                <?php if (!$status['cli_installed']): ?>
-                                    <button type="button" id="download-cli" class="pb-bg-primary hover:pb-bg-primary-hover pb-text-white pb-px-4 pb-py-2 pb-rounded pb-shadow-sm pb-text-sm pb-font-medium pb-flex pb-items-center pb-gap-2 pb-transition-colors">
-                                        <span class="material-icons-outlined pb-text-sm">download</span>
-                                        <?php \esc_html_e('Download Tailwind CLI', 'proto-blocks'); ?>
-                                    </button>
-                                <?php endif; ?>
-                                <button type="button" id="compile-tailwind" class="pb-bg-primary hover:pb-bg-primary-hover pb-text-white pb-px-4 pb-py-2 pb-rounded pb-shadow-sm pb-text-sm pb-font-medium pb-flex pb-items-center pb-gap-2 pb-transition-colors disabled:pb-opacity-50 disabled:pb-cursor-not-allowed" <?php echo $status['cli_installed'] ? '' : 'disabled'; ?>>
+                                <button type="button" id="download-cli" class="pb-bg-primary hover:pb-bg-primary-hover pb-text-white pb-px-4 pb-py-2 pb-rounded pb-shadow-sm pb-text-sm pb-font-medium pb-flex pb-items-center pb-gap-2 pb-transition-colors">
+                                    <span class="material-icons-outlined pb-text-sm">download</span>
+                                    <?php
+                                    // Always offer a (re-)download so a missing, broken, or outdated
+                                    // binary can be replaced — never gate this on "installed".
+                                    if ($status['cli_functional']) {
+                                        \esc_html_e('Re-download / Update CLI', 'proto-blocks');
+                                    } else {
+                                        \esc_html_e('Download Tailwind CLI', 'proto-blocks');
+                                    }
+                                    ?>
+                                </button>
+                                <button type="button" id="compile-tailwind" class="pb-bg-primary hover:pb-bg-primary-hover pb-text-white pb-px-4 pb-py-2 pb-rounded pb-shadow-sm pb-text-sm pb-font-medium pb-flex pb-items-center pb-gap-2 pb-transition-colors disabled:pb-opacity-50 disabled:pb-cursor-not-allowed" <?php echo $status['cli_functional'] ? '' : 'disabled'; ?>>
                                     <span class="material-icons-outlined pb-text-sm">sync</span>
                                     <?php \esc_html_e('Compile CSS', 'proto-blocks'); ?>
                                 </button>
@@ -332,6 +341,7 @@ class AdminSettings
             // Download CLI
             $('#download-cli').on('click', function() {
                 const $btn = $(this);
+                const originalHtml = $btn.html();
                 $btn.prop('disabled', true).text('<?php \esc_html_e('Downloading...', 'proto-blocks'); ?>');
 
                 $.post(ajaxurl, {
@@ -343,7 +353,7 @@ class AdminSettings
                         location.reload();
                     } else {
                         showMessage(response.data.message, 'error');
-                        $btn.prop('disabled', false).html('<span class="dashicons dashicons-download"></span> <?php \esc_html_e('Download Tailwind CLI', 'proto-blocks'); ?>');
+                        $btn.prop('disabled', false).html(originalHtml);
                     }
                 });
             });

@@ -357,12 +357,18 @@ final class Manager
         $cache = $this->getCache();
         $binaryManager = $this->getBinaryManager();
 
+        // Resolve the binary state live on every call (the settings page calls
+        // getStatus() on each load), reading the version once.
+        $cliInstalled = $binaryManager->isInstalled();
+        $cliVersion = $cliInstalled ? $binaryManager->getVersion() : null;
+
         return [
             'enabled' => $this->isEnabled(),
             'mode' => $this->getMode(),
             'disable_global_styles' => !empty($settings['disable_global_styles']),
-            'cli_installed' => $binaryManager->isInstalled(),
-            'cli_version' => $binaryManager->getVersion(),
+            'cli_installed' => $cliInstalled,
+            'cli_functional' => $cliInstalled && $cliVersion !== null,
+            'cli_version' => $cliVersion,
             'cache_exists' => $cache->exists(),
             'cache_size' => $cache->getSize(),
             'cache_url' => $cache->getUrl(),

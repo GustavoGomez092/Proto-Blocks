@@ -34,17 +34,36 @@ class BinaryManager
      */
     public function __construct(?string $binDir = null)
     {
+        if ($binDir !== null) {
+            $this->binDir = $binDir;
+            return;
+        }
+
         $uploadDir = \wp_upload_dir();
-        $this->binDir = $binDir ?? $uploadDir['basedir'] . '/proto-blocks/bin/';
+        $this->binDir = $uploadDir['basedir'] . '/proto-blocks/bin/';
     }
 
     /**
-     * Check if CLI is installed
+     * Check if the binary file is present.
+     *
+     * This only confirms the file exists with the executable bit — NOT that it
+     * actually runs. A wrong-arch, corrupt, or partially-downloaded binary can
+     * be "installed" yet unusable; use isFunctional() to confirm it runs.
      */
     public function isInstalled(): bool
     {
         $binaryPath = $this->getBinaryPath();
         return file_exists($binaryPath) && is_executable($binaryPath);
+    }
+
+    /**
+     * Check if a usable binary is present — it exists, is executable, AND its
+     * version can actually be read. This is the check the UI should trust when
+     * deciding whether Tailwind can compile.
+     */
+    public function isFunctional(): bool
+    {
+        return $this->isInstalled() && $this->getVersion() !== null;
     }
 
     /**
