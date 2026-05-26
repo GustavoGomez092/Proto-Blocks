@@ -45,6 +45,7 @@ class AdminSettings
         // Register AJAX handlers
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'toggle', [$this, 'handleToggle']);
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'set_mode', [$this, 'handleSetMode']);
+        \add_action('wp_ajax_' . self::ACTION_PREFIX . 'set_engine', [$this, 'handleSetEngine']);
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'compile', [$this, 'handleCompile']);
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'clear_cache', [$this, 'handleClearCache']);
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'download_cli', [$this, 'handleDownloadCli']);
@@ -117,6 +118,50 @@ class AdminSettings
                                 <div>
                                     <span class="pb-font-medium"><?php \esc_html_e('On-Reload (Development)', 'proto-blocks'); ?></span>
                                     <p class="pb-text-text-muted-light pb-text-sm"><?php \esc_html_e('CSS is recompiled on each page load when logged in as admin. Not recommended for production.', 'proto-blocks'); ?></p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Compile Engine -->
+                    <div class="tailwind-option pb-flex pb-flex-col sm:pb-flex-row sm:pb-items-start pb-gap-4 pb-py-4 pb-border-b pb-border-border-light" <?php echo $status['enabled'] ? '' : 'style="display:none;"'; ?>>
+                        <div class="sm:pb-w-48 pb-flex-shrink-0">
+                            <span class="pb-font-medium pb-text-text-main-light"><?php \esc_html_e('Compile Engine', 'proto-blocks'); ?></span>
+                            <p class="pb-text-text-muted-light pb-text-xs pb-mt-1">
+                                <?php
+                                printf(
+                                    /* translators: %s: resolved engine name */
+                                    \esc_html__('Currently using: %s', 'proto-blocks'),
+                                    '<strong>' . \esc_html($status['engine'] === 'browser' ? \__('Browser', 'proto-blocks') : \__('CLI binary', 'proto-blocks')) . '</strong>'
+                                );
+                                ?>
+                            </p>
+                        </div>
+                        <div class="pb-flex-1 pb-space-y-3">
+                            <label class="pb-flex pb-items-start pb-gap-3 pb-cursor-pointer">
+                                <input type="radio" name="tailwind-engine" value="auto" <?php \checked($status['engine_setting'], 'auto'); ?> class="pb-mt-1">
+                                <div>
+                                    <span class="pb-font-medium"><?php \esc_html_e('Automatic (recommended)', 'proto-blocks'); ?></span>
+                                    <p class="pb-text-text-muted-light pb-text-sm"><?php \esc_html_e('Use the CLI binary when the server has shell access, otherwise the browser compiler. Best default for most sites.', 'proto-blocks'); ?></p>
+                                </div>
+                            </label>
+                            <label class="pb-flex pb-items-start pb-gap-3 pb-cursor-pointer">
+                                <input type="radio" name="tailwind-engine" value="cli" <?php \checked($status['engine_setting'], 'cli'); ?> class="pb-mt-1">
+                                <div>
+                                    <span class="pb-font-medium"><?php \esc_html_e('CLI binary (server)', 'proto-blocks'); ?></span>
+                                    <p class="pb-text-text-muted-light pb-text-sm">
+                                        <?php \esc_html_e('Pros: compiles on the server, fast, supports true on-reload regeneration on every front-end request, and full Tailwind features (JS config/plugins). Cons: requires PHP shell access (exec) and a downloaded platform binary — unavailable on many managed hosts.', 'proto-blocks'); ?>
+                                        <?php if (!$status['shell_available']): ?>
+                                        <strong class="pb-text-red-600"><?php \esc_html_e('Shell access is not available in this environment, so CLI will not work here.', 'proto-blocks'); ?></strong>
+                                        <?php endif; ?>
+                                    </p>
+                                </div>
+                            </label>
+                            <label class="pb-flex pb-items-start pb-gap-3 pb-cursor-pointer">
+                                <input type="radio" name="tailwind-engine" value="browser" <?php \checked($status['engine_setting'], 'browser'); ?> class="pb-mt-1">
+                                <div>
+                                    <span class="pb-font-medium"><?php \esc_html_e('Browser compiler', 'proto-blocks'); ?></span>
+                                    <p class="pb-text-text-muted-light pb-text-sm"><?php \esc_html_e('Pros: no server requirements — works where shell access (exec) is disabled, e.g. many managed hosts. Cons: runs in an admin browser; no JS config/plugin modules (browser-safe subset); heavier on the client. With On-Reload mode it auto-regenerates while you author (editor + admin) and on front-end loads for logged-in admins — convenient but intensive, so dev only.', 'proto-blocks'); ?></p>
                                 </div>
                             </label>
                         </div>
@@ -330,6 +375,23 @@ class AdminSettings
                 });
             });
 
+            // Engine change
+            $('input[name="tailwind-engine"]').on('change', function() {
+                $.post(ajaxurl, {
+                    action: actionPrefix + 'set_engine',
+                    engine: $(this).val(),
+                    nonce: nonce
+                }, function(response) {
+                    if (response.success) {
+                        showMessage(response.data.message, 'success');
+                        // Reload so the "currently using" line + compile path reflect the new engine.
+                        setTimeout(function() { location.reload(); }, 600);
+                    } else {
+                        showMessage(response.data.message, 'error');
+                    }
+                });
+            });
+
             // Disable Global Styles toggle
             $('#disable-global-styles').on('change', function() {
                 const disabled = $(this).is(':checked');
@@ -492,6 +554,26 @@ class AdminSettings
         } else {
             \wp_send_json_error([
                 'message' => \__('Invalid mode specified.', 'proto-blocks'),
+            ]);
+        }
+    }
+
+    /**
+     * Handle compile-engine change
+     */
+    public function handleSetEngine(): void
+    {
+        $this->verifyNonce();
+
+        $engine = \sanitize_text_field($_POST['engine'] ?? '');
+
+        if ($this->manager->setEngine($engine)) {
+            \wp_send_json_success([
+                'message' => sprintf(\__('Compile engine set to %s.', 'proto-blocks'), $engine),
+            ]);
+        } else {
+            \wp_send_json_error([
+                'message' => \__('Invalid engine specified.', 'proto-blocks'),
             ]);
         }
     }

@@ -22,6 +22,38 @@ use ProtoBlocks\Tailwind\Manager as TailwindManager;
 class Assets
 {
     /**
+     * Inline trigger for the browser-engine on-reload auto-compile. Reads the
+     * config object printed just before it (window.ProtoBlocksAutoTailwind),
+     * and only recompiles when the cache is stale. On the front end it
+     * cache-busts the Tailwind <link> so the fresh CSS swaps in.
+     */
+    private const AUTO_COMPILE_JS = <<<'JS'
+(function(){
+  var cfg = window.ProtoBlocksAutoTailwind || {};
+  if (!cfg.needsRecompile) { return; }
+  function run(){
+    if (!window.ProtoBlocksTailwind || !window.jQuery) { return; }
+    window.ProtoBlocksTailwind.runBrowserCompile({
+      ajaxUrl: cfg.ajaxUrl, actionPrefix: cfg.actionPrefix, nonce: cfg.nonce
+    }).then(function(res){
+      if (res && res.success && cfg.context === 'frontend') {
+        var link = document.getElementById('proto-blocks-tailwind-css');
+        if (link) {
+          var base = (link.getAttribute('href') || '').split('?')[0];
+          if (base) { link.setAttribute('href', base + '?pbtw=' + Date.now()); }
+        }
+      }
+    }).catch(function(){});
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', run);
+  } else {
+    setTimeout(run, 0);
+  }
+})();
+JS;
+
+    /**
      * Block discovery
      */
     private Discovery $discovery;
@@ -67,6 +99,9 @@ class Assets
 
         // Localize data for JavaScript
         $this->localizeEditorData();
+
+        // Browser-engine on-reload: regenerate Tailwind as you author.
+        $this->maybeEnqueueAutoCompiler('editor');
     }
 
     /**
@@ -108,6 +143,67 @@ class Assets
         }
 
         $this->enqueueTailwindCss();
+
+        // Browser-engine on-reload: regenerate Tailwind on front-end loads for
+        // logged-in admins (dev only — see maybeEnqueueAutoCompiler).
+        $this->maybeEnqueueAutoCompiler('frontend');
+    }
+
+    /**
+     * Enqueue the in-browser Tailwind compiler + an auto-run trigger so the
+     * browser engine can regenerate "on reload", like the CLI on-reload mode.
+     *
+     * Active only when ALL hold: Tailwind enabled, mode = on_reload, the
+     * resolved engine = browser, and the current user can manage options. It
+     * loads the already-built browser compiler and a small inline script that,
+     * on load, recompiles in the background IF the cache is stale
+     * (needs_recompilation) and posts the CSS back through the existing
+     * AJAX actions (get_compile_inputs / store_css). On the front end it then
+     * cache-busts the Tailwind <link> so the fresh CSS swaps in.
+     *
+     * Intentionally intensive (compiles in the browser) and gated to admins --
+     * intended for development only.
+     *
+     * @param string $context 'editor' | 'frontend' (where the trigger runs)
+     */
+    private function maybeEnqueueAutoCompiler(string $context): void
+    {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+
+        $manager = TailwindManager::getInstance();
+        if (!$manager->isEnabled()) {
+            return;
+        }
+
+        $status = $manager->getStatus();
+        if (($status['mode'] ?? '') !== 'on_reload' || ($status['engine'] ?? '') !== 'browser') {
+            return;
+        }
+
+        wp_enqueue_script('jquery');
+        wp_enqueue_script(
+            'proto-blocks-tailwind-compiler',
+            PROTO_BLOCKS_URL . 'assets/js/tailwind-compiler.js',
+            ['jquery'],
+            PROTO_BLOCKS_VERSION,
+            true
+        );
+
+        $config = wp_json_encode([
+            'ajaxUrl'        => admin_url('admin-ajax.php'),
+            'actionPrefix'   => 'proto_blocks_tailwind_',
+            'nonce'          => wp_create_nonce('proto_blocks_tailwind_nonce'),
+            'needsRecompile' => !empty($status['needs_recompilation']),
+            'context'        => $context,
+        ]);
+
+        wp_add_inline_script(
+            'proto-blocks-tailwind-compiler',
+            'window.ProtoBlocksAutoTailwind = ' . $config . ';' . self::AUTO_COMPILE_JS,
+            'after'
+        );
     }
 
     /**

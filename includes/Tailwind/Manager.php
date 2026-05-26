@@ -32,6 +32,7 @@ final class Manager
     private const DEFAULT_SETTINGS = [
         'enabled' => false,
         'mode' => 'cached', // 'cached' or 'on_reload'
+        'engine' => 'auto', // 'auto' (by environment), 'cli', or 'browser'
         'last_compiled' => null,
         'content_hash' => null,
         'theme_config' => '',
@@ -167,6 +168,28 @@ final class Manager
             return false;
         }
         return $this->updateSettings(['mode' => $mode]);
+    }
+
+    /**
+     * Get the saved compile-engine preference ('auto' | 'cli' | 'browser').
+     * 'auto' resolves to the environment default in getStatus().
+     */
+    public function getEngine(): string
+    {
+        $settings = $this->getSettings();
+        $engine = $settings['engine'] ?? 'auto';
+        return in_array($engine, ['auto', 'cli', 'browser'], true) ? $engine : 'auto';
+    }
+
+    /**
+     * Set the compile-engine preference.
+     */
+    public function setEngine(string $engine): bool
+    {
+        if (!in_array($engine, ['auto', 'cli', 'browser'], true)) {
+            return false;
+        }
+        return $this->updateSettings(['engine' => $engine]);
     }
 
     /**
@@ -335,6 +358,15 @@ final class Manager
             return;
         }
 
+        // Server-side on-reload compilation is the CLI engine's job. When the
+        // resolved engine is 'browser', regeneration happens in the admin
+        // browser (see Assets::maybeEnqueueAutoCompiler) instead, so skip the
+        // CLI path here — otherwise it would run (and fail) the binary on every
+        // request despite the browser engine being selected.
+        if (($this->getStatus()['engine'] ?? 'cli') !== 'cli') {
+            return;
+        }
+
         // Only for admins
         if (!\current_user_can('manage_options')) {
             return;
@@ -371,16 +403,35 @@ final class Manager
         $cliVersion = $cliInstalled ? $binaryManager->getVersion() : null;
         $shellAvailable = $binaryManager->isShellAvailable();
 
+        // Which compile engine to use. Resolution order (highest wins):
+        //   1. proto_blocks_tailwind_engine filter
+        //   2. PROTO_BLOCKS_TAILWIND_ENGINE constant (wp-config.php)
+        //   3. the saved 'engine' setting (auto | cli | browser)
+        //   4. environment auto: 'cli' when the server has shell access (the
+        //      CLI path self-heals — it auto-downloads the binary if missing),
+        //      'browser' otherwise.
+        // Binary readiness for the CLI path is reported separately via
+        // 'cli_functional'. 'engine_setting' exposes the saved preference so
+        // the settings UI can show the chosen option vs the resolved engine.
+        $engineSetting = $this->getEngine();
+        $engine = $engineSetting === 'auto'
+            ? ($shellAvailable ? 'cli' : 'browser')
+            : $engineSetting;
+        if (defined('PROTO_BLOCKS_TAILWIND_ENGINE')) {
+            $forced = (string) \PROTO_BLOCKS_TAILWIND_ENGINE;
+            if (in_array($forced, ['cli', 'browser'], true)) {
+                $engine = $forced;
+            }
+        }
+        $engine = (string) \apply_filters('proto_blocks_tailwind_engine', $engine, $shellAvailable);
+
         return [
             'enabled' => $this->isEnabled(),
             'mode' => $this->getMode(),
             'disable_global_styles' => !empty($settings['disable_global_styles']),
             'shell_available' => $shellAvailable,
-            // Which compile engine to use, by environment. 'cli' when the server
-            // has shell access (the CLI path self-heals — it auto-downloads the
-            // binary if missing); 'browser' otherwise. Binary readiness for the
-            // CLI path is reported separately via 'cli_functional'.
-            'engine' => $shellAvailable ? 'cli' : 'browser',
+            'engine' => $engine,
+            'engine_setting' => $engineSetting,
             'cli_installed' => $cliInstalled,
             'cli_functional' => $cliInstalled && $cliVersion !== null,
             'cli_version' => $cliVersion,
