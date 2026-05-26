@@ -11,7 +11,10 @@ const archiver = require('archiver');
 const PLUGIN_SLUG = 'proto-blocks';
 const ROOT_DIR = path.resolve(__dirname, '..');
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
-const OUTPUT_FILE = path.join(DIST_DIR, `${PLUGIN_SLUG}.zip`);
+// Stamp the plugin version into the zip name, e.g. proto-blocks-2.0.1.zip.
+const VERSION = require(path.join(ROOT_DIR, 'package.json')).version;
+const ZIP_NAME = `${PLUGIN_SLUG}-${VERSION}.zip`;
+const OUTPUT_FILE = path.join(DIST_DIR, ZIP_NAME);
 
 // Files and directories to include
 const INCLUDE_PATTERNS = [
@@ -20,6 +23,7 @@ const INCLUDE_PATTERNS = [
     'includes/**/*',
     'assets/js/*.js',
     'assets/js/*.php',
+    'assets/js/*.wasm', // Lightning CSS wasm used by the browser compile engine
     'assets/css/**/*',
     'examples/**/*',
 ];
@@ -164,7 +168,7 @@ async function buildZip() {
     return new Promise((resolve, reject) => {
         output.on('close', () => {
             const sizeKB = (archive.pointer() / 1024).toFixed(2);
-            console.log(`\nCreated: dist/${PLUGIN_SLUG}.zip (${sizeKB} KB)`);
+            console.log(`\nCreated: dist/${ZIP_NAME} (${sizeKB} KB)`);
             resolve();
         });
 
