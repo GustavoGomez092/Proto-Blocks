@@ -1642,6 +1642,8 @@ Recompile happens automatically on every front-end page load when the cache hash
 wp eval 'ProtoBlocks\Core\Plugin::getInstance()->getTailwindManager()->compile();'
 ```
 
+> **Managed hosts (WP Engine, etc.):** On hosts that disable PHP shell functions, Proto-Blocks automatically switches to a browser-based Tailwind engine — no binary, no build step required. Click **Compile CSS** in **Proto-Blocks → Tailwind Settings** and the browser compiles and POSTs the CSS back to the server. See [docs/tailwind-browser-compile.md](docs/tailwind-browser-compile.md) for details.
+
 ### Filters
 
 | Filter | Default | Purpose |
