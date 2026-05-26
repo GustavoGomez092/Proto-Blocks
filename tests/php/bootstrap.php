@@ -23,3 +23,16 @@ if (!function_exists('wp_upload_dir')) {
 if (!function_exists('wp_mkdir_p')) {
     function wp_mkdir_p($dir) { return is_dir($dir) || mkdir($dir, 0777, true); }
 }
+if (!function_exists('get_option')) {
+    // Tests set $GLOBALS['pb_test_options'][$name] to control return values.
+    function get_option($name, $default = false) {
+        return $GLOBALS['pb_test_options'][$name] ?? $default;
+    }
+}
+if (!function_exists('set_url_scheme')) {
+    // Minimal stand-in for WP's set_url_scheme: rewrite the leading scheme.
+    function set_url_scheme($url, $scheme = null) {
+        $scheme = $scheme ?: 'http';
+        return preg_replace('#^\w+://#', $scheme . '://', (string) $url);
+    }
+}
