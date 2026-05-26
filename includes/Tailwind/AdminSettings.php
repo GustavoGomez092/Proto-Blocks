@@ -48,6 +48,8 @@ class AdminSettings
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'compile', [$this, 'handleCompile']);
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'clear_cache', [$this, 'handleClearCache']);
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'download_cli', [$this, 'handleDownloadCli']);
+        \add_action('wp_ajax_' . self::ACTION_PREFIX . 'get_compile_inputs', [$this, 'handleGetCompileInputs']);
+        \add_action('wp_ajax_' . self::ACTION_PREFIX . 'store_css', [$this, 'handleStoreCss']);
         // Theme config is now file-based (see ConfigEditor::getThemeCssPath).
         // The save_config and load_preset AJAX endpoints have been removed.
         \add_action('wp_ajax_' . self::ACTION_PREFIX . 'create_theme_file', [$this, 'handleCreateThemeFile']);
@@ -540,6 +542,71 @@ class AdminSettings
         } else {
             \wp_send_json_error(['message' => $result['message']]);
         }
+    }
+
+    /**
+     * Return the inputs the browser compiler needs: the generated input.css
+     * and the aggregated block content to scan. Pure PHP (no exec).
+     */
+    public function handleGetCompileInputs(): void
+    {
+        $this->verifyNonce();
+
+        $scanner = $this->manager->getScanner();
+        $scanner->refresh();
+
+        $content = $scanner->scanAllBlocks();
+        // The browser scans `content` directly, so reference it by a stable
+        // virtual name rather than a real file path.
+        $inputCss = $this->manager->getConfigEditor()->generateInputCss('proto-blocks-content.html');
+
+        \wp_send_json_success([
+            'inputCss' => $inputCss,
+            'content' => $content,
+            'hash' => $scanner->getContentHash(),
+        ]);
+    }
+
+    /**
+     * Receive browser-compiled CSS, scope + save it, and record the hash.
+     */
+    public function handleStoreCss(): void
+    {
+        $this->verifyNonce();
+
+        // CSS can contain characters WP slashes on input; unslash before use.
+        $css = isset($_POST['css']) ? \wp_unslash((string) $_POST['css']) : '';
+        $hash = isset($_POST['hash']) ? \sanitize_text_field((string) $_POST['hash']) : '';
+
+        $compiler = new \ProtoBlocks\Tailwind\BrowserCompiler(
+            $this->manager->getScoper(),
+            $this->manager->getCache()
+        );
+
+        if (!$compiler->store($css)) {
+            \wp_send_json_error([
+                'message' => \__('No CSS was produced by the browser compiler.', 'proto-blocks'),
+            ]);
+            return; // wp_send_json_error exits, but be explicit (and testable).
+        }
+
+        // Record the content hash the same way the CLI path does, so
+        // Manager::needsRecompilation() (which compares settings['content_hash'])
+        // stays consistent across both compile engines.
+        if ($hash !== '') {
+            $this->manager->getCache()->saveHash($hash);
+        }
+        $this->manager->updateSettings([
+            'last_compiled' => time(),
+            'content_hash' => $hash !== '' ? $hash : null,
+        ]);
+
+        $cache = $this->manager->getCache();
+        \wp_send_json_success([
+            'message' => \__('Tailwind CSS compiled in the browser and saved.', 'proto-blocks'),
+            'css_size' => $cache->getSize(),
+            'css_size_formatted' => $cache->getFormattedSize(),
+        ]);
     }
 
     /**
