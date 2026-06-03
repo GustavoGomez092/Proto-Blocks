@@ -254,8 +254,9 @@ final class GitHubUpdater
         $response = wp_remote_get($url, [
             'timeout' => 8,
             'headers' => [
-                'Accept'     => 'application/vnd.github+json',
-                'User-Agent' => 'Proto-Blocks-Updater',
+                'Accept'               => 'application/vnd.github+json',
+                'User-Agent'           => 'Proto-Blocks-Updater',
+                'X-GitHub-Api-Version' => '2022-11-28',
             ],
         ]);
 
