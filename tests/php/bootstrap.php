@@ -36,3 +36,7 @@ if (!function_exists('set_url_scheme')) {
         return preg_replace('#^\w+://#', $scheme . '://', (string) $url);
     }
 }
+if (!class_exists('WP_Block')) {
+    /** Minimal stub: the real WP_Block isn't loaded in unit tests. */
+    class WP_Block {}
+}

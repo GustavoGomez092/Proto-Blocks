@@ -99,9 +99,9 @@ class Engine
      * @param array $metadata Block metadata
      * @return string Rendered HTML
      */
-    public function render(string $templatePath, array $attributes, array $metadata = []): string
+    public function render(string $templatePath, array $attributes, array $metadata = [], ?\WP_Block $block = null): string
     {
-        return $this->getRenderer()->render($templatePath, $attributes, $metadata);
+        return $this->getRenderer()->render($templatePath, $attributes, $metadata, $block);
     }
 
     /**
@@ -204,7 +204,7 @@ class Engine
         $templatePath = $this->resolveTemplatePath($blockPath);
 
         try {
-            return $this->render($templatePath, $attributes, $metadata);
+            return $this->render($templatePath, $attributes, $metadata, $block);
         } catch (\Throwable $e) {
             if (PROTO_BLOCKS_DEBUG) {
                 return sprintf(

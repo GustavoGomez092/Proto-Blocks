@@ -49,7 +49,7 @@ class Renderer
      * @param array $metadata Block metadata
      * @return string Rendered HTML
      */
-    public function render(string $templatePath, array $attributes, array $metadata = []): string
+    public function render(string $templatePath, array $attributes, array $metadata = [], ?\WP_Block $block = null): string
     {
         $protoConfig = $metadata['protoBlocks'] ?? [];
 
@@ -57,7 +57,7 @@ class Renderer
         $processedAttributes = $this->processControlValues($attributes, $protoConfig);
 
         // Execute template with attributes
-        $html = $this->executeTemplate($templatePath, $processedAttributes, $protoConfig);
+        $html = $this->executeTemplate($templatePath, $processedAttributes, $protoConfig, $block);
 
         // Parse and update DOM with attribute values
         $dom = new DOMDocument('1.0', 'UTF-8');
@@ -101,7 +101,7 @@ class Renderer
     /**
      * Execute the template file
      */
-    private function executeTemplate(string $templatePath, array $attributes, array $protoConfig): string
+    private function executeTemplate(string $templatePath, array $attributes, array $protoConfig, ?\WP_Block $block = null): string
     {
         if (!file_exists($templatePath)) {
             throw new \RuntimeException(
@@ -114,8 +114,15 @@ class Renderer
         // Transform attribute keys to PHP-safe variable names
         $variables = $this->transformAttributeKeys($attributes);
 
+        // Preserve $block across extract() (an attribute named "block" would clobber it).
+        $protoBlockInstance = $block;
+
         // Extract variables
         extract($variables);
+
+        // Documented contract: $block is the WP_Block on the frontend, null in
+        // the editor preview. Templates branch via $is_preview = !isset($block) || $block === null;
+        $block = $protoBlockInstance;
 
         // Create template helper
         $template = new class($attributes) {
