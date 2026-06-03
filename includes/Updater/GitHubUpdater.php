@@ -20,6 +20,17 @@ final class GitHubUpdater
     private const SLUG      = 'proto-blocks';
     private const TRANSIENT = 'proto_blocks_github_release';
 
+    private string $file;     // absolute plugin file (PROTO_BLOCKS_FILE)
+    private string $basename; // 'Proto-Blocks/proto-blocks.php'
+    private string $dir;      // 'Proto-Blocks' (install folder name)
+
+    public function __construct(string $plugin_file)
+    {
+        $this->file     = $plugin_file;
+        $this->basename = plugin_basename($plugin_file);
+        $this->dir      = dirname($this->basename);
+    }
+
     /**
      * Choose the newest STABLE release from GitHub's /releases JSON.
      *
@@ -212,5 +223,132 @@ final class GitHubUpdater
         }
 
         return $fallback;
+    }
+
+    /**
+     * pre_set_site_transient_update_plugins: inject our update entry when
+     * a newer trusted release exists; otherwise mark the plugin as
+     * up to date so WordPress doesn't show an unknown state.
+     *
+     * @param mixed $transient
+     * @return mixed
+     */
+    public function check_update($transient)
+    {
+        if (!is_object($transient) || empty($transient->checked)) {
+            return $transient;
+        }
+
+        $force   = !empty($_GET['force-check']); // phpcs:ignore WordPress.Security.NonceVerification
+        $release = self::get_remote($force);
+        $current = defined('PROTO_BLOCKS_VERSION') ? PROTO_BLOCKS_VERSION : '0.0.0';
+
+        if (is_array($release)
+            && version_compare($release['version'], $current, '>')
+            && self::is_trusted_package($release['package'])
+        ) {
+            $transient->response[$this->basename] = (object) [
+                'slug'        => self::SLUG,
+                'plugin'      => $this->basename,
+                'new_version' => $release['version'],
+                'package'     => $release['package'],
+                'url'         => $release['html_url'],
+                'tested'      => '',
+            ];
+        } else {
+            $transient->no_update[$this->basename] = (object) [
+                'slug'        => self::SLUG,
+                'plugin'      => $this->basename,
+                'new_version' => $current,
+                'url'         => 'https://github.com/' . self::OWNER . '/' . self::REPO,
+                'package'     => '',
+            ];
+        }
+
+        return $transient;
+    }
+
+    /**
+     * plugins_api: provide the "View details" modal data for our slug.
+     *
+     * @param mixed  $result
+     * @param string $action
+     * @param object $args
+     * @return mixed
+     */
+    public function plugins_api_handler($result, $action, $args)
+    {
+        if ($action !== 'plugin_information' || !isset($args->slug) || $args->slug !== self::SLUG) {
+            return $result;
+        }
+
+        $release = self::get_remote();
+        if (!is_array($release)) {
+            return $result;
+        }
+
+        return (object) [
+            'name'          => 'Proto-Blocks',
+            'slug'          => self::SLUG,
+            'version'       => $release['version'],
+            'author'        => '<a href="https://github.com/' . self::OWNER . '">Gustavo Gomez</a>',
+            'homepage'      => 'https://github.com/' . self::OWNER . '/' . self::REPO,
+            'download_link' => $release['package'],
+            'trunk'         => $release['package'],
+            'requires'      => '6.3',
+            'requires_php'  => '8.0',
+            'last_updated'  => $release['published_at'],
+            'sections'      => [
+                'changelog' => self::changelog_html($release['body']),
+            ],
+        ];
+    }
+
+    /**
+     * upgrader_source_selection: the release zip unpacks to a lowercase
+     * "proto-blocks" folder, but the plugin may be installed under a
+     * different folder (it is "Proto-Blocks" here). Rename the unpacked
+     * source to match the installed folder so WordPress updates in place
+     * and the plugin stays active. Scoped to our plugin only.
+     *
+     * @param string $source        Unpacked subfolder path.
+     * @param string $remote_source Temp parent dir.
+     * @param object $upgrader      WP_Upgrader instance (unused).
+     * @param array  $hook_extra    Upgrade context.
+     * @return string|\WP_Error
+     */
+    public function rename_source($source, $remote_source, $upgrader, $hook_extra = [])
+    {
+        if (!is_array($hook_extra) || ($hook_extra['plugin'] ?? '') !== $this->basename) {
+            return $source;
+        }
+
+        $source = untrailingslashit($source);
+        if (basename($source) === $this->dir) {
+            return trailingslashit($source);
+        }
+
+        $desired = trailingslashit($remote_source) . $this->dir;
+
+        global $wp_filesystem;
+        if (!$wp_filesystem) {
+            return new \WP_Error(
+                'proto_blocks_no_filesystem',
+                __('Proto-Blocks update failed: the filesystem is not initialised.', 'proto-blocks')
+            );
+        }
+
+        if ($wp_filesystem->move($source, $desired, true)) {
+            return trailingslashit($desired);
+        }
+
+        return new \WP_Error(
+            'proto_blocks_rename_failed',
+            sprintf(
+                /* translators: %s: target plugin folder name */
+                __('Proto-Blocks update failed: could not rename the unpacked folder to %s.', 'proto-blocks'),
+                $this->dir
+            )
+        );
     }
 }
