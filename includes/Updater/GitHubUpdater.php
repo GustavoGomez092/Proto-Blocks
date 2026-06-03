@@ -50,6 +50,7 @@ final class GitHubUpdater
         add_filter('pre_set_site_transient_update_plugins', [$this, 'check_update']);
         add_filter('plugins_api', [$this, 'plugins_api_handler'], 10, 3);
         add_filter('upgrader_source_selection', [$this, 'rename_source'], 10, 4);
+        add_action('upgrader_process_complete', [$this, 'after_update'], 10, 2);
 
         // Admin-only UI affordances.
         if (is_admin()) {
@@ -102,6 +103,39 @@ final class GitHubUpdater
 
         wp_safe_redirect(add_query_arg('proto_blocks_checked', '1', admin_url('plugins.php')));
         exit;
+    }
+
+    /**
+     * After an update finishes, if it was this plugin, drop our cached
+     * release and WordPress's plugin-update cache so a stale "update
+     * available" prompt doesn't linger post-update. Runs in admin and
+     * cron (auto-update) contexts.
+     *
+     * @param \WP_Upgrader $upgrader
+     * @param array        $hook_extra
+     */
+    public function after_update($upgrader, $hook_extra): void
+    {
+        if (!is_array($hook_extra)) {
+            return;
+        }
+        if (($hook_extra['action'] ?? '') !== 'update' || ($hook_extra['type'] ?? '') !== 'plugin') {
+            return;
+        }
+
+        // Bulk updates pass 'plugins' (array); single updates pass 'plugin'.
+        $plugins = (array) ($hook_extra['plugins'] ?? []);
+        if (isset($hook_extra['plugin'])) {
+            $plugins[] = $hook_extra['plugin'];
+        }
+        if (!in_array($this->basename, $plugins, true)) {
+            return;
+        }
+
+        delete_transient(self::TRANSIENT);
+        if (function_exists('wp_clean_plugins_cache')) {
+            wp_clean_plugins_cache();
+        }
     }
 
     /**
