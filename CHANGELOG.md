@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- GitHub self-updater: surfaces stable `vX.Y.Z` releases through WordPress's
+  native plugin-update flow (transient-cached, no API key, no third-party
+  library). Adds a "Check for updates" link on the Plugins screen and a
+  git-checkout safety guard (the updater no-ops on a git working copy). On
+  update, the release zip's lowercase `proto-blocks` folder is renamed to the
+  installed folder so the plugin stays active.
+
 ## 2.4.0 — 2026-06-03
 
 ### Fixed

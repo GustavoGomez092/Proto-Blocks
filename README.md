@@ -22,6 +22,7 @@ A next-generation WordPress plugin that enables developers to create Gutenberg b
 - **Scoped Preflight**: Tailwind reset is wrapped in `:where(.proto-blocks-scope)` so it only applies inside blocks -- no global resets bleeding into the rest of WP
 - **Setup Wizard**: Guided first-time configuration for quick setup
 - **Scroll-Reveal Animations**: `data-proto-animate` lifecycle with a safe-by-default reveal runtime (scroll-in reveal, `prefers-reduced-motion`, no-JS fallback, watchdog) — content is never left hidden. See `docs/animation.md`
+- **Self-Updating**: Pulls plugin updates from GitHub releases through the native WordPress update flow (stable releases only; no API key). Disabled automatically on git checkouts.
 
 ## Requirements
 
