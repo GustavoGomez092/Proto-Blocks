@@ -285,10 +285,9 @@
 }
 
 /* Lift the hovered / focused item above its siblings so the floating
- * toolbar AND the bottom-center "add between" button (which sits at
- * bottom: -12px, half outside the item) draw over any neighboring
- * item that follows it in document order. Without this the next
- * item's content covers the bottom half of the add-between button. */
+ * toolbar draws over any neighboring item that follows it in document
+ * order. (The "add between" button no longer needs this -- it's
+ * teleported to a top-level Popover -- but the toolbar still benefits.) */
 .proto-blocks-repeater--inline .proto-blocks-repeater__sortable-item:hover,
 .proto-blocks-repeater--inline .proto-blocks-repeater__sortable-item:focus-within {
   outline: 1px dashed rgba(0, 124, 186, 0.45);
@@ -360,15 +359,32 @@
   cursor: grabbing;
 }
 
-/* "+" between items, anchored at bottom-center of each item. Same
- * hover-fade behavior as the toolbar so it never clutters the
- * preview during quiet states. */
-.proto-blocks-repeater--inline .proto-blocks-repeater__add-between-btn {
-  position: absolute;
-  bottom: -12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 25;
+/* "+" between items. The button is TELEPORTED through a WordPress
+ * <Popover> (see RepeaterItemAddBetween) so it escapes the card's
+ * overflow:hidden and is always drawn on top. Positioning + show/hide
+ * are handled by the Popover + React hover state, not CSS -- so these
+ * rules only style the button's appearance, not its placement.
+ *
+ * The popover content box itself is made transparent (no background,
+ * border, shadow, or clipping) so only the round button shows. */
+.proto-blocks-repeater__add-between-popover.components-popover > .components-popover__content {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  min-width: 0 !important;
+}
+
+.proto-blocks-repeater__add-between-wrap {
+  /* Slight padding gives a forgiving hover target around the button so
+   * the pointer-bridge between card and button is easy to traverse. */
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.proto-blocks-repeater__add-between-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -381,23 +397,14 @@
   color: #fff;
   cursor: pointer;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  opacity: 0;
-  pointer-events: none;
   transition:
-    opacity 0.15s ease,
     transform 0.15s ease,
     background 0.15s ease;
 }
 
-.proto-blocks-repeater--inline .proto-blocks-repeater__sortable-item:hover .proto-blocks-repeater__add-between-btn,
-.proto-blocks-repeater--inline .proto-blocks-repeater__sortable-item:focus-within .proto-blocks-repeater__add-between-btn {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.proto-blocks-repeater--inline .proto-blocks-repeater__add-between-btn:hover {
+.proto-blocks-repeater__add-between-btn:hover {
   background: #006ba1;
-  transform: translateX(-50%) scale(1.1);
+  transform: scale(1.1);
 }
 
 /* Add popover */

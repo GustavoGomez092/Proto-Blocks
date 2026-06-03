@@ -15,3 +15,21 @@
   no-JS `<noscript>` fallback, and a watchdog for failed/absent block JS).
 - `docs/animation.md` — authoring guide for the convention.
 - Legacy `data-animate` accepted as an alias of `data-proto-animate`.
+- Repeater item-level link editing. When a repeater declares a `link`
+  sub-field that is **not** bound to an inline `data-proto-field` element,
+  a link button now appears in the item's overlay toolbar (URL + "open in
+  new tab"). This makes whole-card links (the entire item is the `<a>`)
+  and icon-only links (an `<a>` with no editable text) editable, where
+  previously there was no UI to set the URL. Inline `data-proto-field="link"`
+  binding continues to work as before; the toolbar control is suppressed
+  when the link is already bound inline, so a field never gets two editors.
+
+### Changed
+- The repeater "add between" (`+`) button is now teleported through a
+  portal into the editor's top-level popover layer instead of living
+  inside the item. An item with `overflow: hidden` (rounded corners,
+  inner shadows) can no longer clip it.
+- The "add between" button placement now follows the repeater's rendered
+  flow direction — right edge for items laid out in a row, bottom edge for
+  stacked items — measured from geometry, so flex rows, CSS grids, and
+  wrapped grids all place it sensibly.

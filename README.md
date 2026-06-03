@@ -14,7 +14,7 @@ A next-generation WordPress plugin that enables developers to create Gutenberg b
 - **Single Source of Truth**: Define blocks using a single `block.json` file
 - **Template Caching**: Compiled templates are cached for optimal performance
 - **Extensible Field Types**: Plugin architecture for custom field types
-- **Enhanced Repeater**: Drag-drop reordering, collapse/expand, duplicate, min/max limits
+- **Enhanced Repeater**: Drag-drop reordering, collapse/expand, duplicate, min/max limits, item-level link editing, and a flow-aware "add between" button that's never clipped by item styling
 - **Interactivity API Support**: Full support for WordPress Interactivity API directives
 - **WP-CLI Commands**: Scaffold, validate, and manage blocks from the command line
 - **TypeScript Editor**: Type-safe editor components for better developer experience
@@ -726,6 +726,49 @@ Use `data-proto-repeater` for repeater containers:
     <?php endforeach; ?>
 </ul>
 ```
+
+#### Repeater editor UX: links & the add button
+
+Each item gets a floating overlay toolbar (drag handle, duplicate, remove)
+on hover, plus an "add between" (`+`) button. Two behaviors are worth
+knowing when authoring:
+
+**Item-level link editing.** When a repeater declares a `link` sub-field,
+how you edit it depends on the markup:
+
+- **Inline** — if the element carrying the link is bound with
+  `data-proto-field="link"` (so it has editable link text), you edit it
+  inline as usual via the link-settings popover.
+- **Toolbar** — if the item *is* or *contains* an `<a>` but the link
+  field is **not** bound to an inline `data-proto-field` element, a link
+  button appears in the item's overlay toolbar. Clicking it opens a
+  URL + "open in new tab" popover. This is how you make a **whole-card
+  link** (the entire item is the `<a>`) or an **icon-only link** (an `<a>`
+  with no editable text) editable — there's no text node to bind inline,
+  so the URL is edited from the toolbar instead. The toolbar control is
+  suppressed when the link is already bound inline, so you never get two
+  editors for the same field.
+
+```php
+<!-- Whole-card link: the item IS the <a>. No inner data-proto-field for
+     the link, so the URL is editable from the item's toolbar. -->
+<a data-proto-repeater-item
+   class="card"
+   href="<?php echo esc_url($item['cardLink']['url'] ?? '#'); ?>"
+   <?php echo !empty($item['cardLink']['target']) ? 'target="' . esc_attr($item['cardLink']['target']) . '"' : ''; ?>>
+    <span data-proto-field="title"><?php echo esc_html($item['title'] ?? ''); ?></span>
+</a>
+```
+
+**The "add between" button is teleported and flow-aware.** It renders
+through a portal into the editor's top-level popover layer rather than
+inside the item, so an item with `overflow: hidden` (rounded corners,
+inner shadows, etc.) can never clip it. Its position follows the
+repeater's rendered flow direction: items laid out in a **row** get the
+`+` on the **right edge** (between this item and the next); **stacked**
+items get it on the **bottom edge**. This is measured from geometry, so
+flex rows, CSS grids, and wrapped grids all place it sensibly with no
+configuration.
 
 ### Inner Blocks
 
