@@ -69,6 +69,54 @@ final class GitHubUpdater
     }
 
     /**
+     * Minimal markdown -> HTML for the release notes shown in the
+     * "View details" modal. Handles headings (#), bullet lists (-, *),
+     * and paragraphs. Everything is escaped via esc_html(); no external
+     * parser.
+     */
+    public static function changelog_html(string $body): string
+    {
+        $body = trim($body);
+        if ($body === '') {
+            return '<p>No release notes.</p>';
+        }
+
+        $out     = [];
+        $in_list = false;
+
+        foreach (preg_split('/\r\n|\r|\n/', $body) as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+
+            $is_li = (bool) preg_match('/^[-*]\s+(.*)$/', $line, $li);
+
+            if ($is_li && !$in_list) {
+                $out[]   = '<ul>';
+                $in_list = true;
+            } elseif (!$is_li && $in_list) {
+                $out[]   = '</ul>';
+                $in_list = false;
+            }
+
+            if ($is_li) {
+                $out[] = '<li>' . esc_html($li[1]) . '</li>';
+            } elseif (preg_match('/^#{1,6}\s+(.*)$/', $line, $h)) {
+                $out[] = '<h4>' . esc_html($h[1]) . '</h4>';
+            } else {
+                $out[] = '<p>' . esc_html($line) . '</p>';
+            }
+        }
+
+        if ($in_list) {
+            $out[] = '</ul>';
+        }
+
+        return implode("\n", $out);
+    }
+
+    /**
      * Find the download URL of the release's plugin zip.
      *
      * Prefers proto-blocks-<version>.zip; falls back to the first .zip
