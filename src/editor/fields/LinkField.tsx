@@ -109,12 +109,13 @@ export function LinkField({
                         isPressed={isEditing}
                         style={{
                             position: 'absolute',
-                            top: '-30px',
-                            right: '0',
+                            top: '4px',
+                            right: '4px',
+                            zIndex: 20,
                             background: isEditing ? '#007cba' : '#fff',
                             color: isEditing ? '#fff' : '#1e1e1e',
                             borderRadius: '2px',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                         }}
                     />
                 )}
