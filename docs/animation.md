@@ -26,6 +26,22 @@ editor so content is visible/editable; the runtime handles the rest on the front
 Set the root to `manual`, hide children in CSS while not `done`, run your
 timeline in `view.js`, then set `data-proto-animate="done"`.
 
+## Hooking the reveal moment (`proto-blocks:reveal` event)
+When the runtime reveals an element (sets it to `done`), it dispatches a bubbling
+`proto-blocks:reveal` CustomEvent on that element. Listen for it if you want to
+start a `view.js` animation exactly when an element comes into view, without
+wiring your own IntersectionObserver:
+```js
+document.querySelectorAll('[data-proto-animate]').forEach((el) => {
+  el.addEventListener('proto-blocks:reveal', () => {
+    // el just flipped to done — kick off your animation here
+  });
+});
+```
+The event fires once per element. It fires for `pending` (runtime-triggered),
+`manual` (when you or the watchdog set `done`), and the reduced-motion / no-IO
+fast path — so a listener always runs regardless of how the element was revealed.
+
 ## Guarantees (you get these for free)
 - Scrolls into view → revealed.
 - `prefers-reduced-motion` → revealed instantly, no motion.

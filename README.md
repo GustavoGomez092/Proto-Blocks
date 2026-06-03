@@ -21,6 +21,7 @@ A next-generation WordPress plugin that enables developers to create Gutenberg b
 - **Tailwind v4 Support**: Build blocks with Tailwind utilities; design tokens (`@theme`) live in your theme repo
 - **Scoped Preflight**: Tailwind reset is wrapped in `:where(.proto-blocks-scope)` so it only applies inside blocks -- no global resets bleeding into the rest of WP
 - **Setup Wizard**: Guided first-time configuration for quick setup
+- **Scroll-Reveal Animations**: `data-proto-animate` lifecycle with a safe-by-default reveal runtime (scroll-in reveal, `prefers-reduced-motion`, no-JS fallback, watchdog) — content is never left hidden. See `docs/animation.md`
 
 ## Requirements
 
@@ -910,6 +911,34 @@ store('my-namespace/accordion', {
 - Plain JavaScript works perfectly fine and may be simpler for basic interactions
 - You can even use jQuery if it's already loaded on your site
 - Mix and match approaches across different blocks as needed
+
+## Scroll-Reveal Animations (`data-proto-animate`)
+
+Proto-Blocks ships a frontend reveal runtime that owns a simple reveal lifecycle and **guarantees content is never left hidden**. Mark an element and the runtime reveals it when it scrolls into view.
+
+**Lifecycle states** (set on the element's `data-proto-animate` attribute):
+
+| State | Meaning |
+|-------|---------|
+| `pending` | Author's pre-reveal state. The runtime flips it to `done` when it scrolls into view (use for CSS-only reveals). |
+| `manual` | Your block's own `view.js` owns the motion. The runtime does not trigger it, only backstops it. |
+| `done` | Revealed. The runtime sets this; your CSS/JS react to it. |
+
+Emit the attribute **only on the frontend** (gate on `$is_preview` so the editor stays at a visible, editable resting state).
+
+**CSS-only reveal (no JS):**
+```php
+<section <?php echo get_block_wrapper_attributes(['class' => 'my-block']); ?>
+  <?php echo $is_preview ? '' : 'data-proto-animate="pending"'; ?>>
+```
+```css
+.my-block[data-proto-animate="pending"] { opacity: 0; transform: translateY(16px); }
+.my-block[data-proto-animate="done"]    { opacity: 1; transform: none; transition: opacity .6s, transform .6s; }
+```
+
+**JS reveal:** set the root to `manual`, run your timeline in `view.js`, then set `data-proto-animate="done"`. To start exactly on reveal, listen for the bubbling `proto-blocks:reveal` CustomEvent the runtime dispatches on the element instead of wiring your own IntersectionObserver.
+
+**Guarantees (free):** scroll-in reveal · `prefers-reduced-motion` reveals instantly · JS-disabled `<noscript>` fallback · watchdog reveals if block JS fails/absent · editor shows resting state. Legacy `data-animate` is accepted as an alias. Full guide: [`docs/animation.md`](docs/animation.md).
 
 ## Block Preview Screenshots
 
