@@ -1,0 +1,14 @@
+/**
+ * Proto-Blocks reveal runtime — safety styles only (no motion opinion).
+ * Blocks own their pending/done visuals. This file only guarantees that
+ * reduced-motion users get an instant, motionless reveal.
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-proto-animate],
+  [data-proto-animate] *,
+  [data-animate],
+  [data-animate] * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

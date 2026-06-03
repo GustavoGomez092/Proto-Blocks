@@ -8,6 +8,8 @@ assets/js/*.js
 assets/js/*.php
 assets/js/*.map
 assets/js/*.wasm
+# Hand-authored runtime (not a webpack build output)
+!assets/js/reveal-runtime.js
 
 # IDE and editors
 .idea/

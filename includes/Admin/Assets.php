@@ -137,6 +137,22 @@ JS;
      */
     public function enqueueFrontendAssets(): void
     {
+        // Reveal runtime — frontend only, dependency-free. Owns the
+        // data-proto-animate lifecycle and guarantees content reveals.
+        wp_enqueue_style(
+            'proto-blocks-reveal',
+            PROTO_BLOCKS_URL . 'assets/css/reveal-runtime.css',
+            [],
+            PROTO_BLOCKS_VERSION
+        );
+        wp_enqueue_script(
+            'proto-blocks-reveal',
+            PROTO_BLOCKS_URL . 'assets/js/reveal-runtime.js',
+            [],
+            PROTO_BLOCKS_VERSION,
+            true
+        );
+
         // Only on frontend, not admin
         if (is_admin()) {
             return;
@@ -147,6 +163,21 @@ JS;
         // Browser-engine on-reload: regenerate Tailwind on front-end loads for
         // logged-in admins (dev only — see maybeEnqueueAutoCompiler).
         $this->maybeEnqueueAutoCompiler('frontend');
+    }
+
+    /**
+     * No-JS fallback: ensure data-proto-animate pre-state content is visible
+     * when JavaScript is disabled. Printed in wp_head on the frontend.
+     */
+    public function printRevealNoscript(): void
+    {
+        echo '<noscript><style>'
+            . '[data-proto-animate]:not([data-proto-animate="done"]),'
+            . '[data-proto-animate]:not([data-proto-animate="done"]) *,'
+            . '[data-animate]:not([data-animate="done"]),'
+            . '[data-animate]:not([data-animate="done"]) *'
+            . '{opacity:1!important;transform:none!important;visibility:visible!important;}'
+            . '</style></noscript>' . "\n";
     }
 
     /**
