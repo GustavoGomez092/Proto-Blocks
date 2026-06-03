@@ -15,7 +15,11 @@
   var LOAD_BACKSTOP = 2000; // ms after window load before force-revealing in/above-viewport stragglers
   var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  function stateOf(el) { return el.getAttribute(ATTR) || el.getAttribute(LEGACY); }
+  function stateOf(el) {
+    if (el.hasAttribute(ATTR)) return el.getAttribute(ATTR);
+    if (el.hasAttribute(LEGACY)) return el.getAttribute(LEGACY);
+    return null;
+  }
 
   function setDone(el) {
     if (stateOf(el) === 'done') return;
@@ -54,7 +58,7 @@
     // Final safety: anything still hidden that is in/above the viewport after load
     // (e.g. IO never fired, manual block JS missing) gets revealed. Far-below
     // content stays pending so genuine scroll reveals still happen.
-    window.addEventListener('load', function () {
+    function scheduleBackstop() {
       window.setTimeout(function () {
         var vh = window.innerHeight || document.documentElement.clientHeight;
         Array.prototype.forEach.call(all(), function (el) {
@@ -62,7 +66,12 @@
           if (el.getBoundingClientRect().top < vh) setDone(el);
         });
       }, LOAD_BACKSTOP);
-    });
+    }
+    if (document.readyState === 'complete') {
+      scheduleBackstop();
+    } else {
+      window.addEventListener('load', scheduleBackstop);
+    }
   }
 
   if (document.readyState === 'loading') {

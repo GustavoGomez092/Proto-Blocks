@@ -137,6 +137,11 @@ JS;
      */
     public function enqueueFrontendAssets(): void
     {
+        // Only on frontend, not admin
+        if (is_admin()) {
+            return;
+        }
+
         // Reveal runtime — frontend only, dependency-free. Owns the
         // data-proto-animate lifecycle and guarantees content reveals.
         wp_enqueue_style(
@@ -146,17 +151,12 @@ JS;
             PROTO_BLOCKS_VERSION
         );
         wp_enqueue_script(
-            'proto-blocks-reveal',
+            'proto-blocks-reveal-js',
             PROTO_BLOCKS_URL . 'assets/js/reveal-runtime.js',
             [],
             PROTO_BLOCKS_VERSION,
             true
         );
-
-        // Only on frontend, not admin
-        if (is_admin()) {
-            return;
-        }
 
         $this->enqueueTailwindCss();
 
@@ -171,6 +171,9 @@ JS;
      */
     public function printRevealNoscript(): void
     {
+        if (is_admin()) {
+            return;
+        }
         echo '<noscript><style>'
             . '[data-proto-animate]:not([data-proto-animate="done"]),'
             . '[data-proto-animate]:not([data-proto-animate="done"]) *,'
