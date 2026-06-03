@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.5.0 — 2026-06-03
 
 ### Added
 - GitHub self-updater: surfaces stable `vX.Y.Z` releases through WordPress's
