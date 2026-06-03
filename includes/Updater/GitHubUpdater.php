@@ -32,6 +32,86 @@ final class GitHubUpdater
     }
 
     /**
+     * Wire the WordPress hooks. No-op on a git checkout: WordPress's
+     * updater deletes + replaces the plugin folder, which would destroy
+     * a development working copy (.git, src/, node_modules). Dev installs
+     * update via git, not this updater.
+     */
+    public function register(): void
+    {
+        if (is_dir(dirname($this->file) . '/.git')) {
+            return;
+        }
+
+        add_filter('pre_set_site_transient_update_plugins', [$this, 'check_update']);
+        add_filter('plugins_api', [$this, 'plugins_api_handler'], 10, 3);
+        add_filter('upgrader_source_selection', [$this, 'rename_source'], 10, 4);
+        add_filter('plugin_action_links_' . $this->basename, [$this, 'action_links']);
+        add_action('admin_init', [$this, 'maybe_force_check']);
+        add_action('admin_notices', [$this, 'checked_notice']);
+    }
+
+    /**
+     * Add a "Check for updates" link to the plugin's row on the Plugins
+     * screen.
+     *
+     * @param array<string,string> $links
+     * @return array<string,string>
+     */
+    public function action_links(array $links): array
+    {
+        $url = wp_nonce_url(
+            add_query_arg('proto_blocks_check_update', '1', admin_url('plugins.php')),
+            'proto_blocks_check_update'
+        );
+        $links['pb_check_update'] = '<a href="' . esc_url($url) . '">'
+            . esc_html__('Check for updates', 'proto-blocks') . '</a>';
+
+        return $links;
+    }
+
+    /**
+     * Handle the "Check for updates" link: bust our cache + WP's plugin
+     * update cache, then redirect back to the Plugins screen.
+     */
+    public function maybe_force_check(): void
+    {
+        if (empty($_GET['proto_blocks_check_update'])) {
+            return;
+        }
+        check_admin_referer('proto_blocks_check_update');
+        if (!current_user_can('update_plugins')) {
+            wp_die(
+                esc_html__('You do not have permission to check for updates.', 'proto-blocks'),
+                '',
+                ['response' => 403]
+            );
+        }
+
+        delete_transient(self::TRANSIENT);
+        self::get_remote(true);
+        delete_site_transient('update_plugins');
+
+        wp_safe_redirect(add_query_arg('proto_blocks_checked', '1', admin_url('plugins.php')));
+        exit;
+    }
+
+    /**
+     * Show a one-time "update check complete" notice after the manual
+     * "Check for updates" link redirects back to the Plugins screen.
+     */
+    public function checked_notice(): void
+    {
+        if (empty($_GET['proto_blocks_checked'])) { // phpcs:ignore WordPress.Security.NonceVerification
+            return;
+        }
+
+        echo '<div class="notice notice-success is-dismissible"><p>'
+            . esc_html__('Proto-Blocks: update check complete.', 'proto-blocks')
+            . '</p></div>';
+    }
+
+    /**
      * Choose the newest STABLE release from GitHub's /releases JSON.
      *
      * Stable = non-draft, non-prerelease, semver tag (vX.Y.Z). This

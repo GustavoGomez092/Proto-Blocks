@@ -26,6 +26,7 @@ use ProtoBlocks\Admin\Assets;
 use ProtoBlocks\Admin\SetupWizard;
 use ProtoBlocks\Tailwind\Manager as TailwindManager;
 use ProtoBlocks\Tailwind\AdminSettings as TailwindAdminSettings;
+use ProtoBlocks\Updater\GitHubUpdater;
 
 /**
  * Main plugin singleton class
@@ -334,6 +335,10 @@ final class Plugin
             // Setup Wizard
             $this->services['setup_wizard'] = new SetupWizard();
             $this->services['setup_wizard']->register();
+
+            // GitHub self-updater (admin only; no-ops on git checkouts)
+            $this->services['updater'] = new GitHubUpdater(PROTO_BLOCKS_FILE);
+            $this->services['updater']->register();
         }
 
         // Tailwind Manager
