@@ -117,6 +117,71 @@ final class GitHubUpdater
     }
 
     /**
+     * Resolve the newest stable release, cached for 12h in a transient.
+     *
+     * The cache stores ['release' => array|null] so a failed/empty fetch
+     * is also remembered (no API hammering, no false update). Pass
+     * $force = true to bypass the cache (force-check / manual recheck).
+     *
+     * @return array{version:string,package:string,html_url:string,body:string,published_at:string}|null
+     */
+    public static function get_remote(bool $force = false): ?array
+    {
+        if (!$force) {
+            $cached = get_transient(self::TRANSIENT);
+            if (is_array($cached) && array_key_exists('release', $cached)) {
+                return is_array($cached['release']) ? $cached['release'] : null;
+            }
+        }
+
+        $releases = self::fetch_releases();
+        $release  = is_array($releases) ? self::select_latest_stable($releases) : null;
+
+        set_transient(self::TRANSIENT, ['release' => $release], 12 * HOUR_IN_SECONDS);
+
+        return $release;
+    }
+
+    /**
+     * GET the repository's releases list. Returns the decoded array, or
+     * null on any network / status / decode failure.
+     *
+     * @return array<int,mixed>|null
+     */
+    private static function fetch_releases(): ?array
+    {
+        $url = 'https://api.github.com/repos/' . self::OWNER . '/' . self::REPO . '/releases?per_page=30';
+
+        $response = wp_remote_get($url, [
+            'timeout' => 8,
+            'headers' => [
+                'Accept'     => 'application/vnd.github+json',
+                'User-Agent' => 'Proto-Blocks-Updater',
+            ],
+        ]);
+
+        if (is_wp_error($response) || (int) wp_remote_retrieve_response_code($response) !== 200) {
+            return null;
+        }
+
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+
+        return is_array($data) ? $data : null;
+    }
+
+    /**
+     * Guard the download URL to GitHub hosts before WordPress fetches it.
+     */
+    private static function is_trusted_package(string $url): bool
+    {
+        $host = strtolower((string) wp_parse_url($url, PHP_URL_HOST));
+
+        return $host === 'github.com'
+            || $host === 'objects.githubusercontent.com'
+            || substr($host, -11) === '.github.com';
+    }
+
+    /**
      * Find the download URL of the release's plugin zip.
      *
      * Prefers proto-blocks-<version>.zip; falls back to the first .zip
