@@ -114,15 +114,15 @@ class Renderer
         // Transform attribute keys to PHP-safe variable names
         $variables = $this->transformAttributeKeys($attributes);
 
-        // Preserve $block across extract() (an attribute named "block" would clobber it).
-        $protoBlockInstance = $block;
+        // Extract attribute variables WITHOUT overwriting the method's own
+        // parameters that are already in scope ($templatePath, $attributes,
+        // $protoConfig, $block). EXTR_SKIP guarantees an attribute key that
+        // collides with one of those names can't clobber it.
+        extract($variables, EXTR_SKIP);
 
-        // Extract variables
-        extract($variables);
-
-        // Documented contract: $block is the WP_Block on the frontend, null in
-        // the editor preview. Templates branch via $is_preview = !isset($block) || $block === null;
-        $block = $protoBlockInstance;
+        // Documented contract: $block is the WP_Block instance on the frontend,
+        // null in the editor preview. Templates branch on it via
+        //   $is_preview = !isset($block) || $block === null;
 
         // Create template helper
         $template = new class($attributes) {
