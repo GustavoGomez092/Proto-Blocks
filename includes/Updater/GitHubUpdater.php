@@ -43,12 +43,20 @@ final class GitHubUpdater
             return;
         }
 
+        // Core update mechanism. Registered in ALL contexts (admin AND the
+        // WP-Cron auto-update path, which is non-admin) so background
+        // auto-updates also see the release and get the install folder
+        // renamed correctly.
         add_filter('pre_set_site_transient_update_plugins', [$this, 'check_update']);
         add_filter('plugins_api', [$this, 'plugins_api_handler'], 10, 3);
         add_filter('upgrader_source_selection', [$this, 'rename_source'], 10, 4);
-        add_filter('plugin_action_links_' . $this->basename, [$this, 'action_links']);
-        add_action('admin_init', [$this, 'maybe_force_check']);
-        add_action('admin_notices', [$this, 'checked_notice']);
+
+        // Admin-only UI affordances.
+        if (is_admin()) {
+            add_filter('plugin_action_links_' . $this->basename, [$this, 'action_links']);
+            add_action('admin_init', [$this, 'maybe_force_check']);
+            add_action('admin_notices', [$this, 'checked_notice']);
+        }
     }
 
     /**
