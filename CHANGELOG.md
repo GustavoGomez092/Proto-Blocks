@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.5.3 — 2026-06-03
+
+### Fixed
+- Template cache now stores its files under `wp-content/uploads`
+  (`uploads/proto-blocks/templates/`, alongside the Tailwind cache) instead
+  of `wp-content/cache`. Managed hosts such as WP Engine own and purge
+  `wp-content/cache`, so cached templates never persisted there (the
+  dashboard showed 0). Falls back to `wp-content/cache` if the uploads dir
+  is unavailable, and the location is filterable via `proto_blocks_cache_dir`.
+
+## 2.5.2 — 2026-06-03
+
+### Fixed
+- The self-updater now clears its cached release and WordPress's
+  plugin-update cache after the plugin updates (via `upgrader_process_complete`),
+  so a stale "update available" prompt doesn't linger after a successful update.
+
+## 2.5.1 — 2026-06-03
+
+### Fixed
+- Pin the GitHub REST API version (`X-GitHub-Api-Version: 2022-11-28`) on the
+  self-updater's releases request, guarding against future API default changes.
+
 ## 2.5.0 — 2026-06-03
 
 ### Added
