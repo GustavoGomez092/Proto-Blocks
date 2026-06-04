@@ -31,12 +31,38 @@ class Cache
      */
     public function __construct(?string $cacheDir = null)
     {
-        $this->cacheDir = $cacheDir ?? WP_CONTENT_DIR . '/cache/proto-blocks/';
+        $this->cacheDir = $cacheDir ?? self::defaultCacheDir();
 
         // Ensure cache directory exists
         if (!is_dir($this->cacheDir)) {
             wp_mkdir_p($this->cacheDir);
         }
+    }
+
+    /**
+     * Resolve the default cache directory.
+     *
+     * Stored under wp-content/uploads (alongside the Tailwind cache) rather
+     * than wp-content/cache. Managed hosts such as WP Engine own and
+     * periodically purge wp-content/cache, so template cache files written
+     * there don't persist -- the dashboard then shows 0 cached templates.
+     * The uploads directory is writable and persistent across hosts. Falls
+     * back to wp-content/cache if the uploads dir is unavailable, and is
+     * filterable via `proto_blocks_cache_dir` for hosts that need a custom
+     * writable location.
+     */
+    private static function defaultCacheDir(): string
+    {
+        $dir = WP_CONTENT_DIR . '/cache/proto-blocks/';
+
+        if (function_exists('wp_upload_dir')) {
+            $upload = wp_upload_dir(null, false);
+            if (empty($upload['error']) && !empty($upload['basedir'])) {
+                $dir = trailingslashit($upload['basedir']) . 'proto-blocks/templates/';
+            }
+        }
+
+        return apply_filters('proto_blocks_cache_dir', $dir);
     }
 
     /**
