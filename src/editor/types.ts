@@ -122,6 +122,13 @@ export interface ImageValue {
     size?: string;
 }
 
+// Video value
+export interface VideoValue {
+    id?: number | null;
+    url: string;
+    mime?: string;
+}
+
 // Link value
 export interface LinkValue {
     url: string;

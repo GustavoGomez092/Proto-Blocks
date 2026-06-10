@@ -6,6 +6,7 @@
 
 export { TextField } from './TextField';
 export { ImageField } from './ImageField';
+export { VideoField } from './VideoField';
 export { LinkField } from './LinkField';
 export { WysiwygField } from './WysiwygField';
 export { RepeaterField } from './RepeaterField';

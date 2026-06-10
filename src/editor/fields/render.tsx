@@ -9,6 +9,7 @@ import { createElement } from '@wordpress/element';
 import { FieldProps, FieldConfig } from '../types';
 import { TextField } from './TextField';
 import { ImageField } from './ImageField';
+import { VideoField } from './VideoField';
 import { LinkField } from './LinkField';
 import { WysiwygField } from './WysiwygField';
 import { RepeaterField } from './RepeaterField';
@@ -29,6 +30,7 @@ const fieldComponents: Record<
     text: TextField as React.ComponentType<FieldProps<unknown>>,
     'rich-text': TextField as React.ComponentType<FieldProps<unknown>>,
     image: ImageField as React.ComponentType<FieldProps<unknown>>,
+    video: VideoField as React.ComponentType<FieldProps<unknown>>,
     link: LinkField as React.ComponentType<FieldProps<unknown>>,
     wysiwyg: WysiwygField as React.ComponentType<FieldProps<unknown>>,
     repeater: RepeaterField as React.ComponentType<FieldProps<unknown>>,

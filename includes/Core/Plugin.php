@@ -126,6 +126,11 @@ final class Plugin
             'attribute_schema' => ['type' => 'object', 'default' => []],
         ]);
 
+        $registry->register('video', [
+            'php_class' => \ProtoBlocks\Fields\Types\VideoField::class,
+            'attribute_schema' => ['type' => 'object', 'default' => []],
+        ]);
+
         $registry->register('link', [
             'php_class' => \ProtoBlocks\Fields\Types\LinkField::class,
             'attribute_schema' => ['type' => 'object', 'default' => []],
