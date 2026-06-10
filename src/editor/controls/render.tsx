@@ -26,6 +26,8 @@ interface MediaItem {
     id: number;
     url: string;
     alt?: string;
+    mime?: string;
+    subtype?: string;
 }
 
 /**
@@ -170,6 +172,9 @@ export function renderControl(
         case 'image':
             return renderImageControl(name, config, value, setAttributes);
 
+        case 'video':
+            return renderVideoControl(name, config, value, setAttributes);
+
         case 'radio':
             return (
                 <div className="proto-blocks-radio-control">
@@ -263,6 +268,88 @@ function renderImageControl(
                                     onClick={open}
                                 >
                                     {__('Select Image', 'proto-blocks')}
+                                </button>
+                            )}
+                        </div>
+                    )}
+                />
+            </MediaUploadCheck>
+        </div>
+    );
+}
+
+/**
+ * Render a video control with media library (filtered to video).
+ */
+function renderVideoControl(
+    name: string,
+    config: ControlConfig,
+    value: unknown,
+    setAttributes: (attrs: Partial<BlockAttributes>) => void
+): JSX.Element {
+    const videoValue = value as { id?: number; url?: string } | undefined;
+    const allowedTypes = (config as { allowedTypes?: string[] }).allowedTypes || [
+        'video',
+    ];
+
+    return (
+        <div className="proto-blocks-image-control proto-blocks-video-control">
+            <label className="components-base-control__label">{config.label}</label>
+            <MediaUploadCheck>
+                <MediaUpload
+                    onSelect={(media: MediaItem) => {
+                        setAttributes({
+                            [name]: {
+                                id: media.id,
+                                url: media.url,
+                                mime:
+                                    media.mime ||
+                                    (media.subtype ? `video/${media.subtype}` : ''),
+                            },
+                        });
+                    }}
+                    allowedTypes={allowedTypes}
+                    value={videoValue?.id}
+                    render={({ open }: { open: () => void }) => (
+                        <div className="proto-blocks-image-control__preview">
+                            {videoValue?.url ? (
+                                <>
+                                    {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                                    <video
+                                        src={videoValue.url}
+                                        muted
+                                        playsInline
+                                        preload="metadata"
+                                        className="proto-blocks-image-control__image"
+                                    />
+                                    <div className="proto-blocks-image-control__buttons">
+                                        <button
+                                            type="button"
+                                            className="components-button is-secondary is-small"
+                                            onClick={open}
+                                        >
+                                            {__('Replace', 'proto-blocks')}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="components-button is-link is-destructive is-small"
+                                            onClick={() =>
+                                                setAttributes({
+                                                    [name]: { id: null, url: '', mime: '' },
+                                                })
+                                            }
+                                        >
+                                            {__('Remove', 'proto-blocks')}
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <button
+                                    type="button"
+                                    className="components-button is-secondary"
+                                    onClick={open}
+                                >
+                                    {__('Select Video', 'proto-blocks')}
                                 </button>
                             )}
                         </div>

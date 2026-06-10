@@ -208,6 +208,11 @@ final class Plugin
             'data_type' => 'object',
             'default' => [],
         ]);
+
+        $registry->register('video', [
+            'data_type' => 'object',
+            'default' => [],
+        ]);
     }
 
     /**

@@ -629,7 +629,27 @@ authors from breaking it. Reach for `inner-blocks` when the slot's
 - `color` - Color picker
 - `color-palette` - Color palette selection
 - `image` - Image selection from media library
+- `video` - Video selection from media library (stores `{ id, url, mime }`; optional `allowedTypes`, defaults to `["video"]`)
 - `radio` - Radio button group
+
+> **Media in the inspector:** `image` and `video` are available **both** as field
+> types (rendered inline via `data-proto-field`) and as **control** types (rendered
+> in the inspector panel). Use the **control** form when the picker should live in
+> the sidebar rather than inline in the block preview.
+
+```json
+{
+    "controls": {
+        "videoFile": {
+            "type": "video",
+            "label": "Video file",
+            "allowedTypes": ["video"]
+        }
+    }
+}
+```
+
+The value is read in the template as `$attributes['videoFile']['url']`.
 
 ### Conditional Controls
 
