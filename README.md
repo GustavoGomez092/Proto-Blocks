@@ -457,6 +457,26 @@ Add a `preview.png` (400px wide recommended) to show in the block inserter inste
 }
 ```
 
+### Video Field
+
+Opens the media library filtered to **video** attachments and stores
+`{ id, url, mime }`. Use it for self-hosted video (e.g. an MP4 source).
+Optionally narrow (or widen) the picker with `allowedTypes`.
+
+```json
+{
+    "videoFile": {
+        "type": "video",
+        "allowedTypes": ["video"]
+    }
+}
+```
+
+**Value shape:** `[ 'id' => int|null, 'url' => string, 'mime' => string ]`.
+Bind `data-proto-field` to a `<video>` or `<source>` element to write the
+`src` (and `type` on a `<source>`), or read `$attributes['videoFile']['url']`
+directly in the template.
+
 ### Link Field
 
 ```json
