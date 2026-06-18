@@ -299,35 +299,41 @@
   z-index: 100;
 }
 
-/* Floating toolbar -- drag handle + duplicate + trash, top-right of
- * the item. Hidden until the item is hovered, focused, or being
- * dragged. Pointer-events off while hidden so clicks fall through
- * to the field editors underneath. */
-.proto-blocks-repeater--inline .proto-blocks-repeater__item-toolbar {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  z-index: 20;
+/* Action toolbar -- drag handle + (link) + duplicate + trash. It is
+ * TELEPORTED to the item's bottom-left through a <Popover> (see
+ * RepeaterItemToolbarOverlay) so it sits OUTSIDE the item box: it never
+ * covers a small item's own controls (e.g. a logo cell's "add image"
+ * button) and is never clipped by a card's overflow:hidden. Positioning
+ * and show/hide are owned by the Popover + React hover state, so these
+ * rules only style the bar's appearance.
+ *
+ * NOT scoped under `.proto-blocks-repeater--inline`: the Popover portals the
+ * toolbar OUT of that container into the editor's top-level popover slot, so
+ * the styles must match it there. A horizontal flex row is forced explicitly
+ * so the buttons never stack vertically. */
+.proto-blocks-repeater__item-toolbar {
   display: flex;
+  flex-direction: row;
+  align-items: center;
   gap: 2px;
   padding: 3px;
   background: rgba(255, 255, 255, 0.97);
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
 }
 
-.proto-blocks-repeater--inline .proto-blocks-repeater__sortable-item:hover .proto-blocks-repeater__item-toolbar,
-.proto-blocks-repeater--inline .proto-blocks-repeater__sortable-item:focus-within .proto-blocks-repeater__item-toolbar,
-.proto-blocks-repeater--inline .proto-blocks-repeater__sortable-item.is-dragging .proto-blocks-repeater__item-toolbar {
-  opacity: 1;
-  pointer-events: auto;
+/* Make the teleported toolbar's popover content box transparent so only the
+ * bar itself shows (mirrors the add-between popover reset). */
+.proto-blocks-repeater__item-toolbar-popover.components-popover > .components-popover__content {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  min-width: 0 !important;
 }
 
-.proto-blocks-repeater--inline .proto-blocks-repeater__item-toolbar-btn.components-button {
+.proto-blocks-repeater__item-toolbar-btn.components-button {
   min-width: 24px !important;
   height: 24px !important;
   padding: 0 !important;
@@ -337,21 +343,21 @@
   box-shadow: none !important;
 }
 
-.proto-blocks-repeater--inline .proto-blocks-repeater__item-toolbar-btn.components-button:hover {
+.proto-blocks-repeater__item-toolbar-btn.components-button:hover {
   background: #f0f0f0 !important;
 }
 
-.proto-blocks-repeater--inline .proto-blocks-repeater__item-toolbar-btn.components-button:disabled {
+.proto-blocks-repeater__item-toolbar-btn.components-button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.proto-blocks-repeater--inline .proto-blocks-repeater__item-toolbar-btn.is-destructive:hover {
+.proto-blocks-repeater__item-toolbar-btn.is-destructive:hover {
   background: #fcf0f1 !important;
   color: #d63638 !important;
 }
 
-.proto-blocks-repeater--inline .proto-blocks-repeater__drag-handle.components-button {
+.proto-blocks-repeater__drag-handle.components-button {
   cursor: grab;
 }
 

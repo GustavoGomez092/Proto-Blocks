@@ -325,6 +325,54 @@ function RepeaterItemToolbar({
 }
 
 /**
+ * Teleports the item toolbar through a WordPress <Popover> anchored at the
+ * item's bottom-left -- like RepeaterItemAddBetween. This keeps the toolbar
+ * OUTSIDE the item's box so it never overlaps the item's own controls (e.g. a
+ * small logo cell's "add image" button) and never gets clipped by a card's
+ * overflow:hidden. Placement is `bottom-start` (horizontal bar, bottom-left)
+ * with the Popover's built-in auto-flip near viewport edges.
+ *
+ * Visibility is React-driven (a portaled toolbar can't use CSS :hover) and is
+ * kept up during a drag so the drag handle never unmounts mid-reorder. A
+ * pointer-bridge (onPointerEnter/Leave on the wrap) keeps it open while the
+ * cursor travels from the item up onto the toolbar.
+ */
+function RepeaterItemToolbarOverlay({
+    visible,
+    isDragging,
+    anchor,
+    onPointerEnter,
+    onPointerLeave,
+    children,
+}: {
+    visible: boolean;
+    isDragging: boolean;
+    anchor: HTMLElement | null;
+    onPointerEnter: () => void;
+    onPointerLeave: () => void;
+    children: React.ReactNode;
+}): JSX.Element | null {
+    if (!anchor || (!visible && !isDragging)) return null;
+    return (
+        <Popover
+            anchor={anchor}
+            placement="bottom-start"
+            offset={6}
+            focusOnMount={false}
+            className="proto-blocks-repeater__item-toolbar-popover"
+        >
+            <div
+                className="proto-blocks-repeater__item-toolbar-wrap"
+                onPointerEnter={onPointerEnter}
+                onPointerLeave={onPointerLeave}
+            >
+                {children}
+            </div>
+        </Popover>
+    );
+}
+
+/**
  * Floating "add item between" button for each item.
  *
  * Rendered through a WordPress <Popover> anchored to the item's
@@ -562,22 +610,32 @@ function SortableRepeaterItem({
         .filter(Boolean)
         .join(' ');
 
-    const toolbar = (
-        <RepeaterItemToolbar
-            key="__proto_toolbar"
-            dragAttributes={dndAttributes as Record<string, unknown>}
-            dragListeners={listeners}
-            onRemove={removeMe}
-            onDuplicate={duplicateMe}
-            canAdd={canAdd}
-            canRemove={canRemove}
-            linkValue={
-                showToolbarLink && linkFieldName
-                    ? (item[linkFieldName] as LinkValue | undefined)
-                    : undefined
-            }
-            onLinkChange={showToolbarLink ? setItemLink : undefined}
-        />
+    // Teleported action toolbar. Anchored ABOVE the item via a Popover so it
+    // sits outside the item box (never covering small items' own controls) and
+    // escapes any overflow:hidden. Shares the add-between hover state.
+    const toolbarOverlay = (
+        <RepeaterItemToolbarOverlay
+            visible={addVisible}
+            isDragging={isDragging}
+            anchor={itemNodeRef.current}
+            onPointerEnter={showAdd}
+            onPointerLeave={hideAdd}
+        >
+            <RepeaterItemToolbar
+                dragAttributes={dndAttributes as Record<string, unknown>}
+                dragListeners={listeners}
+                onRemove={removeMe}
+                onDuplicate={duplicateMe}
+                canAdd={canAdd}
+                canRemove={canRemove}
+                linkValue={
+                    showToolbarLink && linkFieldName
+                        ? (item[linkFieldName] as LinkValue | undefined)
+                        : undefined
+                }
+                onLinkChange={showToolbarLink ? setItemLink : undefined}
+            />
+        </RepeaterItemToolbarOverlay>
     );
 
     // Teleported "add between" button. Rendered as a SIBLING of the item
@@ -610,21 +668,20 @@ function SortableRepeaterItem({
             ref: setItemRef,
             className: mergedClassName,
             style: mergedStyle,
-            // Drive the teleported add-between button's visibility. The
-            // toolbar still uses CSS :hover (it's inside the card and not
-            // clipped); only the half-outside add button needs JS hover.
+            // Drive the teleported toolbar + add-between visibility. Both are
+            // portaled out of the item, so neither can use CSS :hover.
             onMouseEnter: showAdd,
             onMouseLeave: hideAdd,
             onFocusCapture: showAdd,
             onBlurCapture: hideAdd,
         },
         ...originalChildren,
-        toolbar,
     );
 
     return (
         <>
             {clonedItem}
+            {toolbarOverlay}
             {addBetween}
         </>
     );
