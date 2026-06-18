@@ -1,6 +1,6 @@
 {
   "name": "proto-blocks",
-  "version": "2.8.0",
+  "version": "2.8.1",
   "description": "Create Gutenberg blocks using PHP/HTML templates instead of React",
   "author": "Your Name",
   "license": "GPL-2.0-or-later",
