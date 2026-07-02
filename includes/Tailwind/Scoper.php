@@ -134,8 +134,14 @@ class Scoper
      */
     private function scopeSelectors(string $selectorsString): string
     {
-        // Split by comma to handle multiple selectors
-        $selectors = array_map('trim', explode(',', $selectorsString));
+        // Split into individual selectors on TOP-LEVEL commas only. A naive
+        // explode(',') shreds selectors that carry commas inside functional
+        // pseudo-classes -- e.g. Tailwind v4's group-open variant compiles to
+        // `:is([open],:popover-open,:open)` -- leaving paren-unbalanced
+        // fragments. Browsers hit the unclosed `(` and silently consume the
+        // REST OF THE STYLESHEET as part of that selector, dropping every
+        // rule after it.
+        $selectors = $this->splitTopLevelCommas($selectorsString);
         $scopedSelectors = [];
 
         foreach ($selectors as $selector) {
@@ -143,6 +149,51 @@ class Scoper
         }
 
         return implode(',', $scopedSelectors);
+    }
+
+    /**
+     * Split a selector list on commas that are not nested inside (), [] or
+     * escaped (e.g. the `\,` in an arbitrary-value utility class name).
+     *
+     * @return string[]
+     */
+    private function splitTopLevelCommas(string $selectorsString): array
+    {
+        $out   = [];
+        $buf   = '';
+        $depth = 0;
+        $len   = strlen($selectorsString);
+
+        for ($i = 0; $i < $len; $i++) {
+            $c = $selectorsString[$i];
+
+            if ($c === '\\') {
+                // Keep escape sequences intact (escaped char is never a delimiter).
+                $buf .= $c;
+                if ($i + 1 < $len) {
+                    $buf .= $selectorsString[++$i];
+                }
+                continue;
+            }
+
+            if ($c === '(' || $c === '[') {
+                $depth++;
+            } elseif ($c === ')' || $c === ']') {
+                $depth--;
+            } elseif ($c === ',' && $depth === 0) {
+                $out[] = trim($buf);
+                $buf   = '';
+                continue;
+            }
+
+            $buf .= $c;
+        }
+
+        if (trim($buf) !== '') {
+            $out[] = trim($buf);
+        }
+
+        return $out;
     }
 
     /**
@@ -182,8 +233,13 @@ class Scoper
         // For class selectors (utility classes), create both:
         // 1. .proto-blocks-scope.utility - for when utility is on wrapper itself
         // 2. .proto-blocks-scope .utility - for when utility is on descendants
-        if (strpos($selector, '.') === 0 && strpos($selector, ' ') === false && strpos($selector, ':') === false) {
-            // Simple class selector like .rounded-full - match both wrapper and descendants
+        //
+        // Applies to any single compound selector (no descendant/child/sibling
+        // combinators). Escaped colons in Tailwind variant classes (e.g.
+        // .lg\:h-\[640px\], .hover\:bg-red) are part of the class name, NOT a
+        // combinator -- a plain strpos(':') check would wrongly exclude them
+        // and leave variant utilities unable to match the block wrapper itself.
+        if (strpos($selector, '.') === 0 && !preg_match('/[\s>+~]/', $selector)) {
             return '.' . self::SCOPE_CLASS . $selector . ',.' . self::SCOPE_CLASS . ' ' . $selector;
         }
 
