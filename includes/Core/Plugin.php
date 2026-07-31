@@ -96,8 +96,19 @@ final class Plugin
         // Register built-in options providers for dynamic controls
         $this->registerCoreOptionsProviders();
 
-        // Allow extensions to register custom options providers
-        do_action('proto_blocks_register_options_providers', $this->getOptionsProviders());
+        // Allow extensions to register custom options providers.
+        //
+        // Deferred to after_setup_theme rather than fired here: boot() runs on
+        // plugins_loaded, which is before WordPress loads the active theme's
+        // functions.php, so a theme could never hook this action in time and its
+        // optionsSource would 400 as an unknown source. Plugins are unaffected —
+        // they are already loaded and their callback is registered either way.
+        //
+        // Nothing resolves a provider this early; the registry is read by the
+        // REST controls/options route and by block rendering, both far later.
+        add_action('after_setup_theme', function (): void {
+            do_action('proto_blocks_register_options_providers', $this->getOptionsProviders());
+        }, 0);
 
         // Fire init action for extensions to register field types
         do_action('proto_blocks_init', $this);
