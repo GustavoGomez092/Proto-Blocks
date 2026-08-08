@@ -16,15 +16,20 @@ const VERSION = require(path.join(ROOT_DIR, 'package.json')).version;
 const ZIP_NAME = `${PLUGIN_SLUG}-${VERSION}.zip`;
 const OUTPUT_FILE = path.join(DIST_DIR, ZIP_NAME);
 
-// Files and directories to include
+// Files and directories to include.
+//
+// `assets/**/*` rather than a per-directory list: the previous allow-list named
+// assets/js and assets/css only, so when Preview Capture added assets/admin and
+// assets/vendor those were silently left out of every zip and the feature 404'd
+// on install while working fine from a git checkout. Everything under assets/ is
+// build output or vendored runtime, so shipping all of it is correct — and it
+// cannot go stale the next time a directory is added. verifyReferencedAssets()
+// below is the backstop.
 const INCLUDE_PATTERNS = [
     'proto-blocks.php',
     'README.md',
     'includes/**/*',
-    'assets/js/*.js',
-    'assets/js/*.php',
-    'assets/js/*.wasm', // Lightning CSS wasm used by the browser compile engine
-    'assets/css/**/*',
+    'assets/**/*',
     'examples/**/*',
 ];
 
@@ -117,6 +122,54 @@ function shouldExclude(filePath) {
 }
 
 /**
+ * Fail the build if the PHP references an asset the zip does not carry.
+ *
+ * The include list is an allow-list, so anything not named in it is dropped
+ * silently — a zip builds cleanly, uploads, installs, and only then 404s in the
+ * browser. That is exactly how assets/admin and assets/vendor went missing.
+ *
+ * Rather than hard-coding a manifest that would drift in the same way, this
+ * reads the truth out of the source: every 'assets/…' literal the PHP enqueues
+ * must exist on disk AND be in the file list. Add a new asset directory and the
+ * check picks it up with no edit here.
+ *
+ * Only literal paths can be checked; a path built from variables is invisible
+ * to a regex. That is a best-effort floor, not a ceiling.
+ */
+function verifyReferencedAssets(files) {
+    const shipped = new Set(files.map(f => f.split(path.sep).join('/')));
+    const sources = [];
+
+    walkDirectory(path.join(ROOT_DIR, 'includes'), p => {
+        if (p.endsWith('.php')) sources.push(p);
+    });
+    sources.push(path.join(ROOT_DIR, 'proto-blocks.php'));
+
+    const referenced = new Set();
+    sources.forEach(file => {
+        if (!fs.existsSync(file)) return;
+        const text = fs.readFileSync(file, 'utf8');
+        const re = /assets\/[A-Za-z0-9_./-]+\.(?:js|css|php|wasm)/g;
+        let m;
+        while ((m = re.exec(text)) !== null) referenced.add(m[0]);
+    });
+
+    const missing = [...referenced]
+        .filter(rel => fs.existsSync(path.join(ROOT_DIR, rel)))  // on disk…
+        .filter(rel => !shipped.has(rel))                        // …but not packaged
+        .sort();
+
+    if (missing.length) {
+        console.error('\nThese assets are referenced by the PHP but would not ship:\n');
+        missing.forEach(f => console.error(`  - ${f}`));
+        console.error('\nAdd them to INCLUDE_PATTERNS in scripts/build-zip.js.\n');
+        process.exit(1);
+    }
+
+    console.log(`Verified ${referenced.size} referenced asset path(s) are packaged.`);
+}
+
+/**
  * Build the zip file
  */
 async function buildZip() {
@@ -139,6 +192,9 @@ async function buildZip() {
         console.error('No files found to include in zip!');
         process.exit(1);
     }
+
+    // Before anything is written: would this zip actually run once installed?
+    verifyReferencedAssets(files);
 
     console.log(`Including ${files.length} files:\n`);
 
