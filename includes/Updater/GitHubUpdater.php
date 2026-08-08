@@ -349,6 +349,40 @@ final class GitHubUpdater
     }
 
     /**
+     * The version actually installed on disk right now.
+     *
+     * Deliberately NOT PROTO_BLOCKS_VERSION. That constant is fixed when the
+     * plugin file is loaded, at the very start of the request. WordPress re-runs
+     * the update check inside the SAME request that just swapped the plugin
+     * files, so by then disk holds the new version while the constant still
+     * holds the old one — the comparison sees "newer release available" and
+     * re-offers the version that was only just installed. That is why the
+     * prompt survived the update and only cleared after two or three rounds:
+     * each subsequent request booted the new constant, but the stale entry had
+     * already been written to the update_plugins transient.
+     *
+     * $transient->checked is WordPress's own scan of the plugin headers, and
+     * after_update() calls wp_clean_plugins_cache() so it re-reads from disk.
+     * It is therefore the honest answer to "what is installed".
+     *
+     * @param mixed $transient
+     */
+    private function installed_version($transient): string
+    {
+        $checked = is_object($transient) && is_array($transient->checked ?? null)
+            ? $transient->checked
+            : [];
+        $version = $checked[$this->basename] ?? '';
+
+        if (is_string($version) && $version !== '') {
+            return $version;
+        }
+
+        // No entry for us (plugin not scanned yet): fall back to the constant.
+        return defined('PROTO_BLOCKS_VERSION') ? PROTO_BLOCKS_VERSION : '0.0.0';
+    }
+
+    /**
      * pre_set_site_transient_update_plugins: inject our update entry when
      * a newer trusted release exists; otherwise mark the plugin as
      * up to date so WordPress doesn't show an unknown state.
@@ -364,7 +398,7 @@ final class GitHubUpdater
 
         $force   = !empty($_GET['force-check']); // phpcs:ignore WordPress.Security.NonceVerification
         $release = self::get_remote($force);
-        $current = defined('PROTO_BLOCKS_VERSION') ? PROTO_BLOCKS_VERSION : '0.0.0';
+        $current = $this->installed_version($transient);
 
         if (is_array($release)
             && version_compare($release['version'], $current, '>')
