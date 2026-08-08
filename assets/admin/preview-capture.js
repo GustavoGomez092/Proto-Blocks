@@ -60,11 +60,33 @@
         if ( status ) status.textContent = message || '';
     }
 
+    // Upper bound on any single wait. Nothing here is worth stalling the whole
+    // queue for: a capture that renders slightly early beats one that never
+    // returns and leaves the row stuck on "Rendering…".
+    const LOAD_TIMEOUT_MS = 15000;
+    const ASSET_TIMEOUT_MS = 5000;
+
+    /** Resolve on `event`, or after `ms`, whichever comes first. */
+    function raceTimeout( attach, ms ) {
+        return new Promise( ( resolve ) => {
+            let settled = false;
+            const finish = () => {
+                if ( settled ) return;
+                settled = true;
+                clearTimeout( timer );
+                resolve();
+            };
+            const timer = setTimeout( finish, ms );
+            attach( finish );
+        } );
+    }
+
     /** Resolve when the iframe document fires `load`. */
     function waitForLoad( frame ) {
-        return new Promise( ( resolve ) => {
-            frame.addEventListener( 'load', () => resolve(), { once: true } );
-        } );
+        return raceTimeout(
+            ( done ) => frame.addEventListener( 'load', done, { once: true } ),
+            LOAD_TIMEOUT_MS
+        );
     }
 
     /** Wait for fonts + images inside the iframe to settle. */
@@ -74,7 +96,10 @@
 
         try {
             if ( doc.fonts && doc.fonts.ready ) {
-                await doc.fonts.ready;
+                await Promise.race( [
+                    doc.fonts.ready,
+                    new Promise( ( r ) => setTimeout( r, ASSET_TIMEOUT_MS ) ),
+                ] );
             }
         } catch ( e ) {
             // Font loading API can throw inside cross-origin iframes;
@@ -84,11 +109,22 @@
         const images = Array.from( doc.images || [] );
         await Promise.all(
             images.map( ( img ) => {
+                // Already decoded.
                 if ( img.complete && img.naturalWidth > 0 ) return null;
-                return new Promise( ( resolve ) => {
-                    img.addEventListener( 'load', resolve, { once: true } );
-                    img.addEventListener( 'error', resolve, { once: true } );
-                } );
+
+                // No usable source. Blocks render `<img src="">` routinely — an
+                // image field the author has not filled in yet — and the browser
+                // treats that as nothing to fetch: complete is true, naturalWidth
+                // is 0, and it fires NEITHER load NOR error. Waiting on one never
+                // returns, which hung the whole capture on the first block whose
+                // image field was empty.
+                const src = ( img.getAttribute( 'src' ) || '' ).trim();
+                if ( src === '' ) return null;
+
+                return raceTimeout( ( done ) => {
+                    img.addEventListener( 'load', done, { once: true } );
+                    img.addEventListener( 'error', done, { once: true } );
+                }, ASSET_TIMEOUT_MS );
             } )
         );
 
