@@ -62,6 +62,7 @@ final class ControlTypeValidationTest extends TestCase
         } catch (\InvalidArgumentException $e) {
             $this->assertCount(1, $validator->getErrors());
             $this->assertStringContainsString('picks', $validator->getErrors()[0]);
+            $this->assertStringContainsString('of type "multiselect"', $validator->getErrors()[0]);
         }
     }
 
@@ -105,33 +106,16 @@ final class ControlTypeValidationTest extends TestCase
         $constant = new \ReflectionClassConstant(SchemaValidator::class, 'VALID_CONTROL_TYPES');
         $validTypes = $constant->getValue();
 
-        // Parse Plugin.php to extract registered types from registerCoreControlTypes()
-        $pluginFile = \dirname(\dirname(\dirname(__DIR__))) . '/includes/Core/Plugin.php';
-        $this->assertFileExists($pluginFile, 'Plugin.php not found');
-
-        $source = file_get_contents($pluginFile);
-        $this->assertIsString($source, 'Failed to read Plugin.php');
-
-        // Extract the registerCoreControlTypes method content
-        if (!preg_match(
-            '/private function registerCoreControlTypes\(\): void\s*\{(.*?)\n    \}/s',
-            $source,
-            $matches
-        )) {
-            $this->fail('Could not parse registerCoreControlTypes() method');
-        }
-
-        $methodBody = $matches[1];
-
-        // Extract all register() calls: find patterns like $registry->register('type',
-        $registeredTypes = [];
-        if (preg_match_all(
-            "/\\\$registry->register\('([^']+)'/",
-            $methodBody,
-            $matches
-        )) {
-            $registeredTypes = $matches[1];
-        }
+        // Actually invoke registerCoreControlTypes() and read back what it registered,
+        // rather than parsing the source. A regex over the method's source text has a
+        // silent-pass mode: a commented-out registration still matches the pattern, so
+        // a type could be listed as valid, fail to register, and the guard would not
+        // notice. registerCoreControlTypes() is private and touches no WordPress
+        // functions, so it can be invoked directly under this WP-less bootstrap.
+        $plugin = \ProtoBlocks\Core\Plugin::getInstance();
+        (new \ReflectionMethod(\ProtoBlocks\Core\Plugin::class, 'registerCoreControlTypes'))
+            ->invoke($plugin);
+        $registeredTypes = array_keys($plugin->getControlRegistry()->getAll());
 
         $this->assertNotEmpty($registeredTypes, 'No registered control types found in Plugin.php');
 

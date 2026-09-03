@@ -99,6 +99,17 @@ class Registry
     /**
      * Sanitize a control value
      *
+     * This is a registered-control-type extension point: a caller opts in by
+     * invoking it explicitly for a given value. The block render path does not
+     * currently do so -- Template\Renderer::processControlValues() calls
+     * processValue() only -- so registering a `sanitize` callback (or relying
+     * on the default per-data-type sanitisation below, including the `array`
+     * arm) does not by itself sanitise a block's stored attribute values.
+     * Wiring this into the render path would run default string sanitisation
+     * over every existing `text`/`textarea` control's value on every block,
+     * stripping markup site-wide, so that is left as a deliberate decision
+     * for a future change rather than done here as a side effect.
+     *
      * @param string $type Control type
      * @param mixed $value Raw value
      * @param array $config Control configuration
