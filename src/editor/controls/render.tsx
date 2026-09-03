@@ -21,6 +21,7 @@ import { MediaUpload, MediaUploadCheck } from '@wordpress/block-editor';
 import { ControlConfig, BlockAttributes } from '../types';
 import { __ } from '@wordpress/i18n';
 import { DynamicSelectControl } from './DynamicSelectControl';
+import { MultiSelectControl } from './MultiSelectControl';
 
 interface MediaItem {
     id: number;
@@ -86,6 +87,18 @@ export function renderControl(
                     onChange={onChange}
                     __next40pxDefaultSize
                     __nextHasNoMarginBottom
+                />
+            );
+
+        case 'multiselect':
+            return (
+                <MultiSelectControl
+                    label={config.label}
+                    value={Array.isArray(value) ? (value as string[]) : []}
+                    options={config.options}
+                    source={config.optionsSource}
+                    sourceArgs={config.sourceArgs}
+                    onChange={onChange as (value: string[]) => void}
                 />
             );
 

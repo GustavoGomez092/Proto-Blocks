@@ -156,3 +156,9 @@ Details:
    ```
 
    Expect an HTTP `400` with code `proto_blocks_unknown_source`.
+
+## Selecting more than one
+
+`optionsSource` also drives the [`multiselect`](./multiselect-control.md)
+control, which stores an ordered array of keys instead of a single one. Same
+providers, same `sourceArgs`, no extra server code.
