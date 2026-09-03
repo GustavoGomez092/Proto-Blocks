@@ -43,6 +43,7 @@ class SchemaValidator
         'radio',
         'image',
         'video',
+        'gallery',
     ];
 
     /**

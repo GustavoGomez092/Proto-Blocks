@@ -525,3 +525,78 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+
+/* Gallery control
+   ------------------------------------------------------------------ */
+
+.proto-blocks-gallery__grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 6px;
+	list-style: none;
+	margin: 8px 0;
+	padding: 0;
+}
+
+.proto-blocks-gallery__item {
+	position: relative;
+	margin: 0;
+	aspect-ratio: 1;
+}
+
+.proto-blocks-gallery__item.is-dragging {
+	opacity: 0.7;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+	z-index: 1;
+}
+
+/* The thumbnail is the drag handle, so it has to shed every button default
+   that would otherwise draw a chrome-styled box around the picture. */
+.proto-blocks-gallery__grip {
+	display: block;
+	width: 100%;
+	height: 100%;
+	padding: 0;
+	border: 0;
+	background: none;
+	cursor: grab;
+}
+
+.proto-blocks-gallery__grip:active {
+	cursor: grabbing;
+}
+
+.proto-blocks-gallery__grip:focus-visible {
+	outline: 2px solid var(--wp-admin-theme-color, #3858e9);
+	outline-offset: 2px;
+}
+
+.proto-blocks-gallery__image {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	border-radius: 2px;
+	display: block;
+	pointer-events: none;
+}
+
+.proto-blocks-gallery__remove {
+	position: absolute;
+	top: 2px;
+	inset-inline-end: 2px;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: rgba(0, 0, 0, 0.6);
+	color: #fff;
+	font-size: 14px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.proto-blocks-gallery__remove:hover,
+.proto-blocks-gallery__remove:focus-visible {
+	background: #b32d2e;
+}

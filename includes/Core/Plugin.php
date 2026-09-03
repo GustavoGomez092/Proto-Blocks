@@ -236,6 +236,13 @@ final class Plugin
             'data_type' => 'object',
             'default' => [],
         ]);
+
+        // `image`'s multiple-value counterpart: an ordered list of
+        // { id, url, alt } objects rather than one of them.
+        $registry->register('gallery', [
+            'data_type' => 'array',
+            'default' => [],
+        ]);
     }
 
     /**
