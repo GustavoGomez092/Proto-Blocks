@@ -23,9 +23,13 @@ describe('mergeOptions', () => {
     });
 
     it('does not move a key that reappears in the incoming page', () => {
-        const result = mergeOptions(opts(['1', 'One'], ['2', 'Two']), opts(['2', 'Two']));
+        const result = mergeOptions(
+            opts(['1', 'One'], ['2', 'Two'], ['3', 'Three']),
+            opts(['2', 'Two Updated'])
+        );
 
-        expect(result.map((o) => o.value)).toEqual(['1', '2']);
+        expect(result.map((o) => o.value)).toEqual(['1', '2', '3']);
+        expect(result[1].label).toBe('Two Updated');
     });
 });
 
