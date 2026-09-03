@@ -31,12 +31,18 @@ class SchemaValidator
      */
     private const VALID_CONTROL_TYPES = [
         'text',
+        'textarea',
         'select',
+        'multiselect',
         'toggle',
+        'checkbox',
         'range',
         'number',
         'color',
+        'color-palette',
+        'radio',
         'image',
+        'video',
     ];
 
     /**
@@ -179,11 +185,16 @@ class SchemaValidator
             );
         }
 
-        // Select controls must have static options OR a dynamic options source
-        if ($type === 'select' && empty($control['options']) && empty($control['optionsSource'])) {
+        // Select and multiselect must have static options OR a dynamic source
+        if (
+            in_array($type, ['select', 'multiselect'], true)
+            && empty($control['options'])
+            && empty($control['optionsSource'])
+        ) {
             $this->errors[] = sprintf(
-                'Select control "%s" must have options or an optionsSource defined',
-                $name
+                'Control "%s" of type "%s" must have options or an optionsSource defined',
+                $name,
+                $type
             );
         }
 

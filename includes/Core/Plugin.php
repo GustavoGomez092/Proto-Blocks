@@ -175,9 +175,21 @@ final class Plugin
             'default' => '',
         ]);
 
+        $registry->register('textarea', [
+            'data_type' => 'string',
+            'default' => '',
+        ]);
+
         $registry->register('select', [
             'data_type' => 'string',
             'default' => '',
+        ]);
+
+        // Same config contract as `select` -- static `options` or a server
+        // `optionsSource` -- but stores an ordered list of keys rather than one.
+        $registry->register('multiselect', [
+            'data_type' => 'array',
+            'default' => [],
         ]);
 
         $registry->register('toggle', [

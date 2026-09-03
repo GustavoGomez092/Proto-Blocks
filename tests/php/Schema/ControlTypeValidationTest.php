@@ -1,0 +1,154 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ProtoBlocks\Tests\Schema;
+
+use PHPUnit\Framework\TestCase;
+use ProtoBlocks\Schema\SchemaValidator;
+
+final class ControlTypeValidationTest extends TestCase
+{
+    /** @param array<string, mixed> $controls */
+    private function schema(array $controls): array
+    {
+        return [
+            'name'         => 'proto-blocks/demo',
+            'protoBlocks'  => ['controls' => $controls],
+        ];
+    }
+
+    public function test_multiselect_with_an_options_source_is_valid_and_silent(): void
+    {
+        $validator = new SchemaValidator();
+
+        $this->assertTrue($validator->validate($this->schema([
+            'picks' => [
+                'type'          => 'multiselect',
+                'label'         => 'Picks',
+                'optionsSource' => 'wp:posts',
+                'sourceArgs'    => ['post_type' => 'product'],
+            ],
+        ])));
+
+        $this->assertSame([], $validator->getErrors());
+        $this->assertSame([], $validator->getWarnings());
+    }
+
+    public function test_multiselect_with_static_options_is_valid(): void
+    {
+        $validator = new SchemaValidator();
+
+        $this->assertTrue($validator->validate($this->schema([
+            'picks' => [
+                'type'    => 'multiselect',
+                'label'   => 'Picks',
+                'options' => [['key' => 'a', 'label' => 'A']],
+            ],
+        ])));
+
+        $this->assertSame([], $validator->getWarnings());
+    }
+
+    public function test_multiselect_without_options_or_source_is_a_hard_error(): void
+    {
+        $validator = new SchemaValidator();
+
+        try {
+            $validator->validate($this->schema([
+                'picks' => ['type' => 'multiselect', 'label' => 'Picks'],
+            ]));
+            $this->fail('Expected InvalidArgumentException for a multiselect with no options.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertCount(1, $validator->getErrors());
+            $this->assertStringContainsString('picks', $validator->getErrors()[0]);
+        }
+    }
+
+    /**
+     * VALID_CONTROL_TYPES listed 7 of the 12 types registerCoreControlTypes()
+     * registers, so these five warned spuriously on every validate.
+     *
+     * @dataProvider previouslyUnlistedTypes
+     */
+    public function test_registered_control_types_do_not_warn(string $type): void
+    {
+        $validator = new SchemaValidator();
+        $validator->validate($this->schema([
+            'thing' => ['type' => $type, 'label' => 'Thing', 'options' => [['key' => 'a', 'label' => 'A']]],
+        ]));
+
+        $this->assertSame([], $validator->getWarnings(), "Control type '{$type}' should be recognised");
+    }
+
+    /** @return array<string, array{string}> */
+    public static function previouslyUnlistedTypes(): array
+    {
+        return [
+            'textarea'      => ['textarea'],
+            'checkbox'      => ['checkbox'],
+            'color-palette' => ['color-palette'],
+            'radio'         => ['radio'],
+            'video'         => ['video'],
+        ];
+    }
+
+    /**
+     * Drift guard: verify that every entry in VALID_CONTROL_TYPES is actually
+     * registered in Plugin::registerCoreControlTypes(). Prevents silent bugs
+     * where a type is listed as valid but produces null from the registry,
+     * leading to unsanitised values with no diagnostic.
+     */
+    public function test_every_valid_control_type_is_actually_registered(): void
+    {
+        // Extract VALID_CONTROL_TYPES from SchemaValidator using reflection
+        $constant = new \ReflectionClassConstant(SchemaValidator::class, 'VALID_CONTROL_TYPES');
+        $validTypes = $constant->getValue();
+
+        // Parse Plugin.php to extract registered types from registerCoreControlTypes()
+        $pluginFile = \dirname(\dirname(\dirname(__DIR__))) . '/includes/Core/Plugin.php';
+        $this->assertFileExists($pluginFile, 'Plugin.php not found');
+
+        $source = file_get_contents($pluginFile);
+        $this->assertIsString($source, 'Failed to read Plugin.php');
+
+        // Extract the registerCoreControlTypes method content
+        if (!preg_match(
+            '/private function registerCoreControlTypes\(\): void\s*\{(.*?)\n    \}/s',
+            $source,
+            $matches
+        )) {
+            $this->fail('Could not parse registerCoreControlTypes() method');
+        }
+
+        $methodBody = $matches[1];
+
+        // Extract all register() calls: find patterns like $registry->register('type',
+        $registeredTypes = [];
+        if (preg_match_all(
+            "/\\\$registry->register\('([^']+)'/",
+            $methodBody,
+            $matches
+        )) {
+            $registeredTypes = $matches[1];
+        }
+
+        $this->assertNotEmpty($registeredTypes, 'No registered control types found in Plugin.php');
+
+        // Sort for consistent comparison
+        sort($validTypes);
+        sort($registeredTypes);
+
+        $this->assertSame(
+            $validTypes,
+            $registeredTypes,
+            sprintf(
+                "VALID_CONTROL_TYPES mismatch:\nValid list: %s\nRegistered: %s\nMissing from registration: %s\nExtra in registration: %s",
+                implode(', ', $validTypes),
+                implode(', ', $registeredTypes),
+                implode(', ', array_diff($validTypes, $registeredTypes)),
+                implode(', ', array_diff($registeredTypes, $validTypes))
+            )
+        );
+    }
+}
