@@ -446,6 +446,43 @@ Add a `preview.png` (400px wide recommended) to show in the block inserter inste
 }
 ```
 
+#### Inline formats
+
+`format` decides which inline formatting the field's toolbar offers. It
+defaults to `standard`.
+
+| `format` | Toolbar offers |
+|----------|----------------|
+| `plain` | Nothing — formatting is disabled entirely |
+| `simple` | Bold, italic |
+| `standard` | Bold, italic, link |
+| `full` | Everything a `wysiwyg` field offers, including **text colour**, underline, inline image, strikethrough, sub/superscript, inline code and keyboard |
+
+```json
+{
+    "heading": {
+        "type": "text",
+        "tagName": "h2",
+        "format": "full"
+    }
+}
+```
+
+Reach for `full` when a phrase inside an otherwise plain heading needs its own
+treatment — colouring two words of a headline in a brand colour, say. The
+colour tool lives under the **⌄** (More) button in the block toolbar, as
+**Highlight**, and its swatches come from the theme's `theme.json` palette.
+
+> **Colouring text writes a `<mark>` tag**, and browsers give `<mark>` a yellow
+> background by default. Core suppresses that with an inline
+> `background-color: rgba(0,0,0,0)`, but `wp_kses_post()` — which templates
+> should run text fields through — strips `background-color` from inline
+> styles, so the yellow comes back on the front end. A theme rule fixes it once:
+>
+> ```css
+> mark.has-inline-color { background-color: transparent; }
+> ```
+
 ### Image Field
 
 ```json
