@@ -622,6 +622,7 @@ authors from breaking it. Reach for `inner-blocks` when the slot's
 - `text` - Text input
 - `textarea` - Multi-line text input
 - `select` - Dropdown selection (static `options`, or server-loaded via `optionsSource` — see [Dynamic / Server-Provided Options](#dynamic--server-provided-options))
+- `multiselect` - Ordered multi-selection storing an array of keys (same `options` / `optionsSource` contract as `select` — see [The multiselect Control](docs/multiselect-control.md))
 - `toggle` - Boolean toggle
 - `checkbox` - Boolean checkbox
 - `range` - Slider with min/max
