@@ -123,6 +123,21 @@ class Registry
             'number' => is_numeric($value) ? (float) $value : 0,
             'integer' => (int) $value,
             'string' => sanitize_text_field((string) $value),
+            // A list of scalar keys. Re-indexed with array_values() so it
+            // serialises as a JSON array rather than an object -- a block
+            // attribute typed `array` that arrives as `{"1":"a"}` is rejected
+            // by the editor's attribute validation and the control renders
+            // empty. Duplicates are collapsed because the UI cannot produce
+            // them, so a repeat means a hand-edited payload.
+            'array' => is_array($value)
+                ? array_values(array_unique(array_filter(
+                    array_map(
+                        static fn($item) => sanitize_text_field((string) $item),
+                        array_filter($value, 'is_scalar')
+                    ),
+                    static fn($item) => $item !== ''
+                )))
+                : [],
             'object' => is_array($value) ? $value : [],
             default => $value,
         };
