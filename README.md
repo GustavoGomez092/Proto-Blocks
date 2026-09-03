@@ -667,6 +667,7 @@ authors from breaking it. Reach for `inner-blocks` when the slot's
 - `color` - Color picker
 - `color-palette` - Color palette selection
 - `image` - Image selection from media library
+- `gallery` - Ordered list of images from the media library (stores `[{ id, url, alt }]` — see [The gallery Control](docs/gallery-control.md))
 - `video` - Video selection from media library (stores `{ id, url, mime }`; optional `allowedTypes`, defaults to `["video"]`)
 - `radio` - Radio button group
 
