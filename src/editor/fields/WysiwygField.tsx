@@ -8,28 +8,12 @@ import React from 'react';
 import { createElement } from '@wordpress/element';
 import { RichText } from '@wordpress/block-editor';
 import { FieldProps } from '../types';
+import { ALL_FORMATS } from './formats';
 
 interface WysiwygFieldProps extends FieldProps<string> {
     className?: string;
     tagName?: string;
 }
-
-/**
- * All available RichText formats
- */
-const ALL_FORMATS = [
-    'core/bold',
-    'core/italic',
-    'core/link',
-    'core/strikethrough',
-    'core/underline',
-    'core/subscript',
-    'core/superscript',
-    'core/code',
-    'core/image',
-    'core/text-color',
-    'core/keyboard',
-];
 
 export function WysiwygField({
     name,
