@@ -18,6 +18,21 @@ final class ControlTypeValidationTest extends TestCase
         ];
     }
 
+    public function test_gallery_is_valid_with_nothing_but_a_label(): void
+    {
+        // Unlike select/multiselect, a gallery has no option list to declare:
+        // its source is the media library. Requiring `options` here would make
+        // the only sensible configuration invalid.
+        $validator = new SchemaValidator();
+
+        $this->assertTrue($validator->validate($this->schema([
+            'images' => ['type' => 'gallery', 'label' => 'Images'],
+        ])));
+
+        $this->assertSame([], $validator->getErrors());
+        $this->assertSame([], $validator->getWarnings());
+    }
+
     public function test_multiselect_with_an_options_source_is_valid_and_silent(): void
     {
         $validator = new SchemaValidator();

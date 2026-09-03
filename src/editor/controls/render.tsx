@@ -22,6 +22,7 @@ import { ControlConfig, BlockAttributes } from '../types';
 import { __ } from '@wordpress/i18n';
 import { DynamicSelectControl } from './DynamicSelectControl';
 import { MultiSelectControl } from './MultiSelectControl';
+import { GalleryControl } from './GalleryControl';
 
 interface MediaItem {
     id: number;
@@ -187,6 +188,15 @@ export function renderControl(
 
         case 'video':
             return renderVideoControl(name, config, value, setAttributes);
+
+        case 'gallery':
+            return (
+                <GalleryControl
+                    label={config.label}
+                    value={value}
+                    onChange={onChange}
+                />
+            );
 
         case 'radio':
             return (
