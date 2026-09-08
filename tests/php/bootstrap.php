@@ -40,3 +40,7 @@ if (!class_exists('WP_Block')) {
     /** Minimal stub: the real WP_Block isn't loaded in unit tests. */
     class WP_Block {}
 }
+if (!class_exists('WP_CLI_Command')) {
+    /** Minimal stub so ProtoBlocks\CLI\Commands can be loaded without WP-CLI. */
+    class WP_CLI_Command {}
+}

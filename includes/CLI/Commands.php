@@ -256,6 +256,76 @@ class Commands extends WP_CLI_Command {
      * @param array $args       Positional arguments.
      * @param array $assoc_args Associative arguments.
      */
+
+    /**
+     * Validate the block in one directory and describe the outcome.
+     *
+     * Split out of validate() so it can be tested without WP-CLI: the command
+     * itself needs the plugin singleton and WP_CLI's output helpers, while the
+     * decision it makes per block needs neither.
+     *
+     * SchemaValidator does not return a result object -- validate() returns
+     * true and THROWS on error, keeping the messages on the validator itself.
+     * Reading it as a result object is what made this command fatal on its
+     * first block with "Call to a member function isValid() on bool".
+     *
+     * @param string          $block_path Directory holding the block.
+     * @param SchemaValidator $validator  Validator to run the schema through.
+     * @return array{block: string, status: string, message: string}
+     */
+    public static function validateBlockAt( string $block_path, SchemaValidator $validator ): array {
+        $name      = basename( $block_path );
+        $json_file = $block_path . '/block.json';
+
+        if ( ! file_exists( $json_file ) ) {
+            return [
+                'block'   => $name,
+                'status'  => 'error',
+                'message' => 'Missing block.json',
+            ];
+        }
+
+        $schema = json_decode( (string) file_get_contents( $json_file ), true );
+
+        if ( JSON_ERROR_NONE !== json_last_error() ) {
+            return [
+                'block'   => $name,
+                'status'  => 'error',
+                'message' => 'Invalid JSON: ' . json_last_error_msg(),
+            ];
+        }
+
+        try {
+            $validator->validate( (array) $schema, $json_file );
+        } catch ( \InvalidArgumentException $e ) {
+            // The validator collects every error before throwing, so prefer
+            // that list; the exception message is the fallback if it is empty.
+            $errors = $validator->getErrors();
+
+            return [
+                'block'   => $name,
+                'status'  => 'error',
+                'message' => $errors ? implode( '; ', $errors ) : $e->getMessage(),
+            ];
+        }
+
+        $warnings = $validator->getWarnings();
+
+        if ( ! empty( $warnings ) ) {
+            return [
+                'block'   => $name,
+                'status'  => 'warning',
+                'message' => implode( '; ', $warnings ),
+            ];
+        }
+
+        return [
+            'block'   => $name,
+            'status'  => 'valid',
+            'message' => 'OK',
+        ];
+    }
+
     public function validate( array $args, array $assoc_args ): void {
         $plugin    = Plugin::getInstance();
         $discovery = $plugin->getDiscovery();
@@ -293,54 +363,11 @@ class Commands extends WP_CLI_Command {
         $has_errors = false;
 
         foreach ( $blocks as $block_path ) {
-            $name = basename( $block_path );
-            $json_file = $block_path . '/block.json';
+            $row = self::validateBlockAt( $block_path, $validator );
 
-            if ( ! file_exists( $json_file ) ) {
-                $results[] = [
-                    'block'  => $name,
-                    'status' => 'error',
-                    'message' => 'Missing block.json',
-                ];
-                $has_errors = true;
-                continue;
-            }
+            $results[] = $row;
 
-            $schema = json_decode( file_get_contents( $json_file ), true );
-
-            if ( json_last_error() !== JSON_ERROR_NONE ) {
-                $results[] = [
-                    'block'  => $name,
-                    'status' => 'error',
-                    'message' => 'Invalid JSON: ' . json_last_error_msg(),
-                ];
-                $has_errors = true;
-                continue;
-            }
-
-            $validation = $validator->validate( $schema );
-
-            if ( $validation->isValid() ) {
-                $warnings = $validation->getWarnings();
-                if ( ! empty( $warnings ) ) {
-                    $results[] = [
-                        'block'  => $name,
-                        'status' => 'warning',
-                        'message' => implode( '; ', $warnings ),
-                    ];
-                } else {
-                    $results[] = [
-                        'block'  => $name,
-                        'status' => 'valid',
-                        'message' => 'OK',
-                    ];
-                }
-            } else {
-                $results[] = [
-                    'block'  => $name,
-                    'status' => 'error',
-                    'message' => implode( '; ', $validation->getErrors() ),
-                ];
+            if ( 'error' === $row['status'] ) {
                 $has_errors = true;
             }
         }
