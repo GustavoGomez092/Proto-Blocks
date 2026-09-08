@@ -266,7 +266,7 @@ class Commands extends WP_CLI_Command {
         }
 
         $validator = new SchemaValidator();
-        $blocks    = $discovery->discoverBlocks();
+        $blocks    = $discovery->discover();
 
         // Filter to specific block if provided
         if ( ! empty( $args[0] ) ) {
@@ -440,7 +440,7 @@ class Commands extends WP_CLI_Command {
             return;
         }
 
-        $blocks = $discovery->discoverBlocks();
+        $blocks = $discovery->discover();
         $source_path = null;
 
         foreach ( $blocks as $block_path ) {
