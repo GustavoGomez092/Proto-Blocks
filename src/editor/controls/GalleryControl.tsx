@@ -42,6 +42,7 @@ import {
     indexOfId,
     removeAt,
     reorder,
+    shouldAddToGallery,
     toGalleryItems,
     toStoredItems,
 } from './gallery-items';
@@ -181,7 +182,10 @@ export function GalleryControl({
                 <MediaUpload
                     gallery
                     multiple
-                    addToGallery
+                    /* Only once something is chosen: on an empty gallery this
+                       prop pins core's frame to its add-to-an-existing-gallery
+                       state, which hands back the whole media library. */
+                    addToGallery={shouldAddToGallery(items)}
                     allowedTypes={['image']}
                     /* The modal opens on the current selection, so it is an
                        editor rather than a fresh picker -- reopening it does

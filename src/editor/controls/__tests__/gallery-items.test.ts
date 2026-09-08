@@ -8,6 +8,7 @@ import {
     indexOfId,
     removeAt,
     reorder,
+    shouldAddToGallery,
     toGalleryItems,
     toStoredItems,
 } from '../gallery-items';
@@ -158,5 +159,25 @@ describe('indexOfId', () => {
 
     it('reports -1 for an id that is not present', () => {
         expect(indexOfId([item(4)], 9)).toBe(-1);
+    });
+});
+
+
+describe('shouldAddToGallery', () => {
+    /**
+     * Core reads this prop as: `addToGallery ? 'gallery-library' : (value.length
+     * ? 'gallery-edit' : 'gallery')`. Passing it unconditionally pinned the frame
+     * to 'gallery-library' -- the add-to-an-existing-gallery browser -- even with
+     * nothing chosen, and confirming from there swept the whole media library
+     * into the attribute. Off when empty lets core pick 'gallery', the fresh
+     * picker, which is what an empty gallery wants.
+     */
+    it('is off for an empty gallery, so core opens the fresh picker', () => {
+        expect(shouldAddToGallery([])).toBe(false);
+    });
+
+    it('is on once something is chosen, so reopening adds to the selection', () => {
+        expect(shouldAddToGallery([item(1)])).toBe(true);
+        expect(shouldAddToGallery([item(1), item(2)])).toBe(true);
     });
 });

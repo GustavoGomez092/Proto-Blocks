@@ -144,3 +144,24 @@ export function reorder(items: GalleryItem[], from: number, to: number): Gallery
 export function indexOfId(items: GalleryItem[], id: number): number {
     return items.findIndex((item) => item.id === id);
 }
+
+/**
+ * Whether the media frame should open in "add to this gallery" mode.
+ *
+ * Core turns this prop straight into the frame's opening state:
+ *
+ *     addToGallery ? 'gallery-library'
+ *                  : (value.length ? 'gallery-edit' : 'gallery')
+ *
+ * so passing it unconditionally pinned an EMPTY gallery to 'gallery-library'
+ * -- the browser for adding to a gallery that already exists. With nothing
+ * selected to constrain it, confirming from that state handed back the entire
+ * media library: three ticked images came back as a hundred and eighty-two.
+ *
+ * Off while empty lets core choose 'gallery', the fresh picker. Once there is
+ * something to add to, 'gallery-library' is the state we actually want, so
+ * this is on from the first image onward.
+ */
+export function shouldAddToGallery(items: GalleryItem[]): boolean {
+    return items.length > 0;
+}
