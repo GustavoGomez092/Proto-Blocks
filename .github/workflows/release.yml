@@ -122,4 +122,5 @@ jobs:
             "$ZIP" \
             --repo "$GITHUB_REPOSITORY" \
             --title "v${NEW}" \
+            --latest \
             --generate-notes

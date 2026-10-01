@@ -80,6 +80,10 @@ jobs:
           EOF
           )
 
+          # --latest=false: this rolling build must never be the release GitHub
+          # marks "Latest" (/releases/latest). Otherwise, since it is created
+          # after the versioned release, it wins by creation date and serves a
+          # zip built from the pre-bump commit. release.yml marks vX.Y.Z latest.
           # Idempotent: delete the previous rolling release + its tag if either exists
           gh release delete latest \
             --yes \
@@ -91,5 +95,6 @@ jobs:
             "$ZIP" \
             --repo "$GITHUB_REPOSITORY" \
             --title "Latest build (main)" \
+            --latest=false \
             --notes "$NOTES" \
             --target "$GITHUB_SHA"
