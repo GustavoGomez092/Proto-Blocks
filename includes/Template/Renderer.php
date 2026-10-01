@@ -400,7 +400,7 @@ class Renderer
             $type = $element->getAttribute('proto-type') ?: $element->getAttribute('zen-type') ?: 'text';
 
             // Special handling for innerblocks
-            if ($type === 'innerblocks' && !empty($attributes['innerBlocksContent'])) {
+            if (in_array($type, ['inner-blocks', 'innerblocks'], true) && !empty($attributes['innerBlocksContent'])) {
                 $this->fieldRegistry->updateElement($type, $element, $attributes['innerBlocksContent']);
             } elseif (isset($attributes[$name])) {
                 $this->fieldRegistry->updateElement($type, $element, $attributes[$name]);

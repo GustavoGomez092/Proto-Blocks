@@ -157,10 +157,13 @@ final class Plugin
             'attribute_schema' => ['type' => 'array', 'default' => []],
         ]);
 
-        $registry->register('innerblocks', [
-            'php_class' => \ProtoBlocks\Fields\Types\InnerBlocksField::class,
-            'attribute_schema' => ['type' => 'string', 'default' => ''],
-        ]);
+        // 'inner-blocks' is canonical (matches the editor); 'innerblocks' is a legacy alias.
+        foreach (['inner-blocks', 'innerblocks'] as $innerBlocksType) {
+            $registry->register($innerBlocksType, [
+                'php_class' => \ProtoBlocks\Fields\Types\InnerBlocksField::class,
+                'attribute_schema' => ['type' => 'string', 'default' => ''],
+            ]);
+        }
     }
 
     /**

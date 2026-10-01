@@ -31,7 +31,7 @@ class InnerBlocksField extends AbstractField
         return [
             'type' => 'string',
             'default' => $default ?? '',
-            '__protoType' => 'innerblocks',
+            '__protoType' => 'inner-blocks',
             '__protoAllowedBlocks' => $config['allowedBlocks'] ?? [],
             '__protoTemplate' => $config['template'] ?? [],
             '__protoTemplateLock' => $config['templateLock'] ?? false,

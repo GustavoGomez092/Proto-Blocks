@@ -556,10 +556,11 @@ directly in the template.
 ### Inner Blocks Field
 
 Lets a block host nested WordPress blocks. The field type **must be
-`"inner-blocks"` with a hyphen** — Proto-Blocks does not recognise
-`"innerblocks"` (no hyphen) and will silently skip the slot, so the
-editor renders the block as a leaf with no `+` appender and no
-drop target. Only **one** inner-blocks field per block is supported.
+`"inner-blocks"` with a hyphen**. The legacy spelling `"innerblocks"`
+is still accepted by the PHP side (and `validate` warns, suggesting
+`"inner-blocks"`), but the editor only recognises the hyphenated form —
+with `"innerblocks"` the block renders as a leaf with no `+` appender
+and no drop target. Only **one** inner-blocks field per block is supported.
 
 ```json
 {

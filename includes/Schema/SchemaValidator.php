@@ -23,7 +23,15 @@ class SchemaValidator
         'link',
         'wysiwyg',
         'repeater',
-        'innerblocks',
+        'inner-blocks',
+        'innerblocks', // Legacy alias of 'inner-blocks' (warns, see validateField)
+    ];
+
+    /**
+     * Legacy field type spellings mapped to their canonical type
+     */
+    private const LEGACY_FIELD_TYPES = [
+        'innerblocks' => 'inner-blocks',
     ];
 
     /**
@@ -151,6 +159,15 @@ class SchemaValidator
                 'Field "%s" uses unknown type "%s". Make sure it\'s registered.',
                 $name,
                 $type
+            );
+        }
+
+        if (is_string($type) && isset(self::LEGACY_FIELD_TYPES[$type])) {
+            $this->warnings[] = sprintf(
+                'Field "%s" uses legacy type "%s"; use "%s" instead.',
+                $name,
+                $type,
+                self::LEGACY_FIELD_TYPES[$type]
             );
         }
 
