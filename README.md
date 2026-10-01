@@ -1166,6 +1166,11 @@ wp proto-blocks cache stats
 
 # Export a block
 wp proto-blocks export card --output=/path/to/export
+
+# Tailwind CSS: enable, compile, and inspect (status supports --format=json|yaml|table)
+wp proto-blocks tailwind enable
+wp proto-blocks tailwind compile
+wp proto-blocks tailwind status --format=json
 ```
 
 ## Setup Wizard
