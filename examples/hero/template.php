@@ -5,12 +5,9 @@
  * A full-width hero section with background image, customizable colors, and nested content.
  *
  * @var array    $attributes Block attributes.
- * @var string   $content    Inner blocks content.
+ * @var string   $innerBlocksContent Nested blocks HTML (inner-blocks field).
  * @var WP_Block $block      Block instance.
  */
-
-// Ensure $content is defined (may not be set in preview mode)
-$content = $content ?? '';
 
 $title              = $attributes['title'] ?? '';
 $subtitle           = $attributes['subtitle'] ?? '';
@@ -69,7 +66,7 @@ $wrapper_attributes = get_block_wrapper_attributes( [
         <?php endif; ?>
 
         <div class="proto-hero__inner-blocks" data-proto-inner-blocks>
-            <?php echo $content; ?>
+            <?php echo $innerBlocksContent ?? ''; ?>
         </div>
     </div>
 </section>

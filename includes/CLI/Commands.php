@@ -550,7 +550,7 @@ class Commands extends WP_CLI_Command {
         $output .= " * Block: {$title}\n";
         $output .= " *\n";
         $output .= " * @var array    \$attributes Block attributes.\n";
-        $output .= " * @var string   \$content    Inner blocks content.\n";
+        $output .= " * @var string   \$innerBlocksContent Nested blocks HTML (inner-blocks field only).\n";
         $output .= " * @var WP_Block \$block      Block instance.\n";
         $output .= " */\n\n";
 
