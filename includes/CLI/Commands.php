@@ -438,6 +438,91 @@ class Commands extends WP_CLI_Command {
     }
 
     /**
+     * Manage Tailwind CSS compilation.
+     *
+     * ## OPTIONS
+     *
+     * <action>
+     * : What to do.
+     * ---
+     * options:
+     *   - compile
+     *   - status
+     *   - enable
+     * ---
+     *
+     * [--format=<format>]
+     * : Output format for `status`.
+     * ---
+     * default: table
+     * options:
+     *   - table
+     *   - json
+     *   - yaml
+     * ---
+     *
+     * ## EXAMPLES
+     *
+     *     wp proto-blocks tailwind status
+     *     wp proto-blocks tailwind status --format=json
+     *     wp proto-blocks tailwind enable
+     *     wp proto-blocks tailwind compile
+     *
+     * @param array $args       Positional arguments.
+     * @param array $assoc_args Associative arguments.
+     */
+    public function tailwind( array $args, array $assoc_args ): void {
+        $action  = $args[0] ?? '';
+        $manager = Plugin::getInstance()->getTailwindManager();
+
+        if ( ! $manager ) {
+            WP_CLI::error( 'Tailwind manager is not available.' );
+            return;
+        }
+
+        switch ( $action ) {
+            case 'compile':
+                $result = $manager->compile();
+                if ( ! empty( $result['success'] ) ) {
+                    WP_CLI::success( $result['message'] ?? 'Tailwind CSS compiled.' );
+                } else {
+                    WP_CLI::error( $result['message'] ?? 'Tailwind compilation failed.' );
+                }
+                break;
+
+            case 'status':
+                $settings = $manager->getSettings();
+                $last     = $settings['last_compiled'] ?? null;
+                $item     = [
+                    'enabled'       => ! empty( $settings['enabled'] ),
+                    'mode'          => $settings['mode'] ?? 'cached',
+                    'engine'        => $settings['engine'] ?? 'auto',
+                    'last_compiled' => $last ? gmdate( 'c', (int) $last ) : null,
+                ];
+                $format = $assoc_args['format'] ?? 'table';
+
+                if ( 'json' === $format ) {
+                    WP_CLI::line( wp_json_encode( $item ) );
+                } elseif ( 'yaml' === $format ) {
+                    WP_CLI\Utils\format_items( 'yaml', [ $item ], array_keys( $item ) );
+                } else {
+                    $item['enabled']       = $item['enabled'] ? 'yes' : 'no';
+                    $item['last_compiled'] = $item['last_compiled'] ?? 'never';
+                    WP_CLI\Utils\format_items( 'table', [ $item ], array_keys( $item ) );
+                }
+                break;
+
+            case 'enable':
+                $manager->updateSettings( [ 'enabled' => true ] );
+                WP_CLI::success( 'Tailwind CSS enabled. Run `wp proto-blocks tailwind compile` to build the stylesheet.' );
+                break;
+
+            default:
+                WP_CLI::error( "Unknown tailwind action: {$action}. Use compile, status, or enable." );
+        }
+    }
+
+    /**
      * Export a block to a standalone directory.
      *
      * ## OPTIONS
@@ -550,7 +635,7 @@ class Commands extends WP_CLI_Command {
         $output .= " * Block: {$title}\n";
         $output .= " *\n";
         $output .= " * @var array    \$attributes Block attributes.\n";
-        $output .= " * @var string   \$content    Inner blocks content.\n";
+        $output .= " * @var string   \$innerBlocksContent Nested blocks HTML (inner-blocks field only).\n";
         $output .= " * @var WP_Block \$block      Block instance.\n";
         $output .= " */\n\n";
 

@@ -30,7 +30,7 @@
                 "format": "standard"
             },
             "innerContent": {
-                "type": "innerblocks",
+                "type": "inner-blocks",
                 "allowedBlocks": ["core/button", "core/buttons", "core/paragraph", "core/heading", "core/list", "core/image"],
                 "template": [
                     ["core/buttons", {}, [
