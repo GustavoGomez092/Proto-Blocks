@@ -96,18 +96,48 @@ class BinaryManager
         $output = [];
         $exitCode = 0;
 
-        exec(escapeshellarg($binaryPath) . ' --version 2>&1', $output, $exitCode);
+        // Tailwind v4's CLI has no `--version` flag. Passing one makes it fall
+        // through to a full build, scanning every file under the current working
+        // directory for class names. When PHP's cwd is a site root or home
+        // directory, that walk can pull tens of gigabytes into memory and wedge
+        // the machine. `--help` prints the version on its first line
+        // ("~ tailwindcss v4.3.3") and exits immediately.
+        //
+        // Running from an empty scratch directory is belt-and-braces: if a future
+        // CLI ever scans again, it finds nothing instead of walking the disk.
+        $scratch = $this->getVersionScratchDir();
 
-        if ($exitCode === 0 && !empty($output[0])) {
-            // Output is typically "tailwindcss v4.x.x"
-            $version = trim($output[0]);
-            if (preg_match('/v?(\d+\.\d+\.\d+)/', $version, $matches)) {
+        exec(
+            'cd ' . escapeshellarg($scratch) . ' && '
+            . escapeshellarg($binaryPath) . ' --help 2>&1',
+            $output,
+            $exitCode
+        );
+
+        foreach ($output as $line) {
+            if (preg_match('/v?(\d+\.\d+\.\d+)/', $line, $matches)) {
                 return $matches[1];
             }
-            return $version;
         }
 
         return null;
+    }
+
+    /**
+     * An empty directory to run the version check from.
+     *
+     * Tailwind's CLI scans its working directory, so pointing it at an empty
+     * scratch dir keeps a stray scan from walking the whole filesystem.
+     */
+    private function getVersionScratchDir(): string
+    {
+        $dir = $this->binDir . '.version-check';
+
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+
+        return is_dir($dir) ? $dir : sys_get_temp_dir();
     }
 
     /**

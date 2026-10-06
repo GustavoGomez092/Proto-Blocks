@@ -19,13 +19,23 @@ final class BinaryManagerTest extends TestCase
 
     protected function tearDown(): void
     {
-        $bin = $this->binDir . 'tailwindcss';
-        if (file_exists($bin)) {
-            @unlink($bin);
+        $this->removeTree($this->binDir);
+    }
+
+    private function removeTree(string $dir): void
+    {
+        $dir = rtrim($dir, DIRECTORY_SEPARATOR);
+
+        if (!is_dir($dir)) {
+            return;
         }
-        if (is_dir($this->binDir)) {
-            @rmdir($this->binDir);
+
+        foreach (array_diff(scandir($dir) ?: [], ['.', '..']) as $entry) {
+            $path = $dir . DIRECTORY_SEPARATOR . $entry;
+            is_dir($path) ? $this->removeTree($path) : @unlink($path);
         }
+
+        @rmdir($dir);
     }
 
     private function writeBinary(string $contents): void
@@ -83,5 +93,56 @@ final class BinaryManagerTest extends TestCase
 
         $bm = new BinaryManager($this->binDir);
         $this->assertTrue($bm->isShellAvailable());
+    }
+
+    public function test_version_check_does_not_pass_the_unsupported_version_flag(): void
+    {
+        // Tailwind v4 has no `--version` flag. Passing it makes the real CLI fall
+        // through to a full build that scans the working directory for class
+        // names — which is how a "version check" once pulled tens of gigabytes
+        // into memory and wedged a machine. This stub refuses every flag except
+        // --help, so the old `--version` implementation reads no version at all.
+        $this->writeBinary(
+            "#!/bin/sh\n"
+            . "case \"$1\" in\n"
+            . "  --help) echo \"~ tailwindcss v4.3.3\"; exit 0 ;;\n"
+            . "  *) echo \"error: unexpected flag $1\" >&2; exit 1 ;;\n"
+            . "esac\n"
+        );
+
+        $bm = new BinaryManager($this->binDir);
+
+        $this->assertSame('4.3.3', $bm->getVersion());
+    }
+
+    public function test_version_check_runs_from_an_empty_scratch_directory(): void
+    {
+        // The CLI must never run in the caller's working directory: Tailwind
+        // scans wherever it is invoked, so a check from a site root or a home
+        // directory walks the entire disk. Record the cwd the binary sees.
+        $marker = $this->binDir . 'cwd.txt';
+
+        $this->writeBinary(
+            "#!/bin/sh\n"
+            . "pwd > " . escapeshellarg($marker) . "\n"
+            . "echo \"~ tailwindcss v4.3.3\"\n"
+        );
+
+        $bm = new BinaryManager($this->binDir);
+        $this->assertSame('4.3.3', $bm->getVersion());
+
+        $seenCwd = trim((string) file_get_contents($marker));
+
+        $this->assertNotSame(
+            realpath(getcwd() ?: '.'),
+            realpath($seenCwd),
+            'the version check must not run in the calling working directory'
+        );
+
+        $this->assertSame(
+            [],
+            array_values(array_diff(scandir($seenCwd) ?: [], ['.', '..'])),
+            'the scratch directory must be empty so a stray scan finds nothing'
+        );
     }
 }
