@@ -669,6 +669,8 @@ authors from breaking it. Reach for `inner-blocks` when the slot's
 - `color-palette` - Color palette selection
 - `image` - Image selection from media library
 - `gallery` - Ordered list of images from the media library (stores `[{ id, url, alt }]` — see [The gallery Control](docs/gallery-control.md))
+- `file` - Any attachment, not only an image or a video (stores `{ id, url, filename, mime }` — see [The file Control](docs/file-control.md))
+- `repeater` - A repeatable group of controls in the sidebar, for repeated *configuration* rather than repeated content (stores an array of flat objects — see [The repeater Control](docs/repeater-control.md))
 - `video` - Video selection from media library (stores `{ id, url, mime }`; optional `allowedTypes`, defaults to `["video"]`)
 - `radio` - Radio button group
 
