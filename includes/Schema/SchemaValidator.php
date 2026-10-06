@@ -52,6 +52,32 @@ class SchemaValidator
         'image',
         'video',
         'gallery',
+        'file',
+        'repeater',
+    ];
+
+    /**
+     * Control types a repeater row may contain.
+     *
+     * A repeater cannot nest: a second level of rows inside a sidebar panel is
+     * unreadable, and every case met so far is one level deep. Keeping it flat
+     * also keeps the stored value a plain list of flat objects.
+     */
+    private const VALID_REPEATER_FIELD_TYPES = [
+        'text',
+        'textarea',
+        'select',
+        'multiselect',
+        'toggle',
+        'checkbox',
+        'range',
+        'number',
+        'color',
+        'color-palette',
+        'radio',
+        'image',
+        'video',
+        'file',
     ];
 
     /**
@@ -226,9 +252,78 @@ class SchemaValidator
             }
         }
 
+        // A repeater's rows are built from its own fields
+        if ($type === 'repeater') {
+            $this->validateRepeaterControl($name, $control);
+        }
+
         // Validate conditions
         if (isset($control['conditions'])) {
             $this->validateConditions($name, $control['conditions']);
+        }
+    }
+
+    /**
+     * Validate a repeater control's row definition.
+     *
+     * @param array<string, mixed> $control
+     */
+    private function validateRepeaterControl(string $name, array $control): void
+    {
+        $fields = $control['fields'] ?? null;
+
+        if (!is_array($fields) || $fields === []) {
+            $this->errors[] = sprintf(
+                'Repeater control "%s" must define fields for one row',
+                $name
+            );
+
+            return;
+        }
+
+        foreach ($fields as $key => $field) {
+            if (!is_array($field)) {
+                $this->errors[] = sprintf(
+                    'Repeater control "%s" field "%s" must be an object',
+                    $name,
+                    (string) $key
+                );
+
+                continue;
+            }
+
+            $fieldType = $field['type'] ?? 'text';
+
+            if (!in_array($fieldType, self::VALID_REPEATER_FIELD_TYPES, true)) {
+                $this->errors[] = sprintf(
+                    'Repeater control "%s" field "%s" uses type "%s", which a repeater row cannot hold',
+                    $name,
+                    (string) $key,
+                    (string) $fieldType
+                );
+            }
+
+            if (
+                in_array($fieldType, ['select', 'multiselect'], true)
+                && empty($field['options'])
+                && empty($field['optionsSource'])
+            ) {
+                $this->errors[] = sprintf(
+                    'Repeater control "%s" field "%s" of type "%s" must have options or an optionsSource defined',
+                    $name,
+                    (string) $key,
+                    (string) $fieldType
+                );
+            }
+        }
+
+        // The row's title in the sidebar comes from one of its own fields.
+        if (isset($control['itemLabel']) && !isset($fields[$control['itemLabel']])) {
+            $this->warnings[] = sprintf(
+                'Repeater control "%s" names "%s" as its itemLabel, which is not one of its fields',
+                $name,
+                (string) $control['itemLabel']
+            );
         }
     }
 

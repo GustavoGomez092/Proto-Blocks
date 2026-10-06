@@ -600,3 +600,108 @@
 .proto-blocks-gallery__remove:focus-visible {
 	background: #b32d2e;
 }
+
+/* -------------------------------------------------------------------------
+ * Repeater control
+ *
+ * A repeatable group of controls in the sidebar. Rows collapse to a title so a
+ * long list stays scannable, and only the open row shows its controls: a
+ * sidebar is narrow, and several rows of expanded controls is unreadable.
+ * ---------------------------------------------------------------------- */
+.proto-blocks-repeater__empty {
+    margin: 0 0 8px;
+    color: #757575;
+    font-style: italic;
+}
+
+.proto-blocks-repeater__row {
+    margin-bottom: 6px;
+    border: 1px solid #e0e0e0;
+    border-radius: 2px;
+    background: #fff;
+}
+
+.proto-blocks-repeater__row.is-open {
+    border-color: #c3c4c7;
+}
+
+.proto-blocks-repeater__header {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 2px 2px 0;
+}
+
+.proto-blocks-repeater__toggle {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    padding: 6px 4px;
+    border: 0;
+    background: none;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+}
+
+/* A long row title truncates rather than wrapping the header onto two lines. */
+.proto-blocks-repeater__toggle span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.proto-blocks-repeater__actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
+.proto-blocks-repeater__body {
+    padding: 4px 12px 12px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.proto-blocks-repeater__field + .proto-blocks-repeater__field {
+    margin-top: 12px;
+}
+
+.proto-blocks-repeater__add {
+    margin-top: 4px;
+    width: 100%;
+    justify-content: center;
+}
+
+/* -------------------------------------------------------------------------
+ * File control
+ * ---------------------------------------------------------------------- */
+.proto-blocks-file-control {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.proto-blocks-file-control__current {
+    flex: 1 0 100%;
+    margin: 0 0 4px;
+    min-width: 0;
+}
+
+.proto-blocks-file-control__name {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.proto-blocks-file-control__mime {
+    display: block;
+    color: #757575;
+    font-size: 11px;
+}

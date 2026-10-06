@@ -23,6 +23,8 @@ import { __ } from '@wordpress/i18n';
 import { DynamicSelectControl } from './DynamicSelectControl';
 import { MultiSelectControl } from './MultiSelectControl';
 import { GalleryControl } from './GalleryControl';
+import { FileControl, FileValue } from './FileControl';
+import { RepeaterControl, RepeaterRow } from './RepeaterControl';
 
 interface MediaItem {
     id: number;
@@ -195,6 +197,49 @@ export function renderControl(
                     label={config.label}
                     value={value}
                     onChange={onChange}
+                />
+            );
+
+        case 'file':
+            return (
+                <FileControl
+                    label={config.label}
+                    help={config.help}
+                    allowedTypes={config.allowedTypes}
+                    value={value as FileValue}
+                    onChange={onChange}
+                />
+            );
+
+        case 'repeater':
+            return (
+                <RepeaterControl
+                    label={config.label}
+                    help={config.help}
+                    fields={config.fields || {}}
+                    itemLabel={config.itemLabel}
+                    min={config.min}
+                    max={config.max}
+                    value={value as RepeaterRow[]}
+                    onChange={onChange}
+                    /*
+                     * A row's controls go through this same switch, by handing
+                     * it a one-key attribute bag. That keeps every control type
+                     * available inside a row without this file knowing anything
+                     * about rows, and without the repeater importing the switch
+                     * it is rendered from.
+                     */
+                    renderField={(fieldName, fieldConfig, fieldValue, fieldOnChange) =>
+                        renderControl(
+                            fieldName,
+                            fieldConfig,
+                            { [fieldName]: fieldValue } as BlockAttributes,
+                            (attrs) =>
+                                fieldOnChange(
+                                    (attrs as Record<string, unknown>)[fieldName]
+                                )
+                        )
+                    }
                 />
             );
 

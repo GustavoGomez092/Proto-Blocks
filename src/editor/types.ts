@@ -29,6 +29,13 @@ export interface ControlConfig {
         enabled?: Record<string, unknown>;
     };
     affects?: string[];
+    help?: string;
+    /** `file`: media library types to offer, e.g. [ 'text/csv' ]. */
+    allowedTypes?: string[];
+    /** `repeater`: the controls one row is built from. */
+    fields?: Record<string, ControlConfig>;
+    /** `repeater`: which field titles a row in the list. */
+    itemLabel?: string;
 }
 
 // Block supports configuration

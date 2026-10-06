@@ -246,6 +246,25 @@ final class Plugin
             'data_type' => 'array',
             'default' => [],
         ]);
+
+        // Any attachment, not only an image: { id, url, filename, mime }.
+        // `image` and `video` filter the media library to their own kind, which
+        // leaves no way to pick a CSV, a PDF or a font from a control.
+        $registry->register('file', [
+            'data_type' => 'object',
+            'default' => [],
+        ]);
+
+        // A repeatable group of controls, held in the sidebar: an ordered list
+        // of objects, one per row, each keyed by the names in the control's own
+        // `fields`. The `repeater` FIELD puts its editing UI in the canvas,
+        // which is right when the repeated thing is content the visitor sees
+        // and wrong when it is configuration — a list of tabs, a set of
+        // breakpoints, a table pasted as CSV.
+        $registry->register('repeater', [
+            'data_type' => 'array',
+            'default' => [],
+        ]);
     }
 
     /**

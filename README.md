@@ -15,6 +15,8 @@ A next-generation WordPress plugin that enables developers to create Gutenberg b
 - **Template Caching**: Compiled templates are cached for optimal performance
 - **Extensible Field Types**: Plugin architecture for custom field types
 - **Enhanced Repeater**: Drag-drop reordering, collapse/expand, duplicate, min/max limits, item-level link editing, and a flow-aware "add between" button that's never clipped by item styling
+- **Sidebar Repeater**: The same repetition as a *control*, for repeated configuration rather than repeated content — a set of tabs, a list of breakpoints, a table pasted as CSV. Keeps editing furniture out of the block's own markup, and gives a value the template parses rather than prints somewhere to be edited. See `docs/repeater-control.md`
+- **File Control**: Pick any attachment, not only an image or a video — a CSV, a PDF, a font, a caption track. Stores `{ id, url, filename, mime }` so a template can read it from disk by id rather than fetching a URL. See `docs/file-control.md`
 - **Interactivity API Support**: Full support for WordPress Interactivity API directives
 - **WP-CLI Commands**: Scaffold, validate, and manage blocks from the command line
 - **TypeScript Editor**: Type-safe editor components for better developer experience
@@ -669,6 +671,8 @@ authors from breaking it. Reach for `inner-blocks` when the slot's
 - `color-palette` - Color palette selection
 - `image` - Image selection from media library
 - `gallery` - Ordered list of images from the media library (stores `[{ id, url, alt }]` — see [The gallery Control](docs/gallery-control.md))
+- `file` - Any attachment, not only an image or a video (stores `{ id, url, filename, mime }` — see [The file Control](docs/file-control.md))
+- `repeater` - A repeatable group of controls in the sidebar, for repeated *configuration* rather than repeated content (stores an array of flat objects — see [The repeater Control](docs/repeater-control.md))
 - `video` - Video selection from media library (stores `{ id, url, mime }`; optional `allowedTypes`, defaults to `["video"]`)
 - `radio` - Radio button group
 
