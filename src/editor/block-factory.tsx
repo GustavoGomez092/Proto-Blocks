@@ -6,18 +6,96 @@ import React from 'react';
 import { useState, useEffect, useMemo, useCallback } from '@wordpress/element';
 import { useBlockProps, InspectorControls } from '@wordpress/block-editor';
 import { PanelBody, Spinner } from '@wordpress/components';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import type { BlockEditProps as WPBlockEditProps } from '@wordpress/blocks';
 import { BlockData, BlockAttributes, BlockEditProps } from './types';
 import { processHtmlToReact } from './utils/html-to-react';
 import { renderControl } from './controls/render';
 import { useDebouncedCallback } from './utils/debounce';
+import { RepeaterItemProvider, useRepeaterItem } from './repeater-item-context';
 
 // Get data from PHP
 const protoBlocksData = window.protoBlocksData;
 const ajaxUrl = protoBlocksData?.ajaxUrl || '/wp-admin/admin-ajax.php';
 const previewNonce = protoBlocksData?.previewNonce || '';
 const debug = protoBlocksData?.debug || false;
+
+/**
+ * The settings of whichever repeater row is focused on the canvas.
+ *
+ * Rendered above the block's own settings and only while a row is focused, so a
+ * block with no repeater, or one whose repeater declares no itemControls, sees
+ * the sidebar it has always seen.
+ *
+ * The row's values live in the same attribute the canvas edits -- the repeater's
+ * array -- so typing here and typing on the canvas write to one place and cannot
+ * disagree.
+ */
+function RepeaterItemPanel({
+    block,
+    attributes,
+    setAttributes,
+}: {
+    block: BlockData;
+    attributes: BlockAttributes;
+    setAttributes: (attrs: Partial<BlockAttributes>) => void;
+}): JSX.Element | null {
+    const { active } = useRepeaterItem();
+
+    if (!active) {
+        return null;
+    }
+
+    const fieldConfig = block.fields?.[active.field] as
+        | { itemControls?: Record<string, unknown> }
+        | undefined;
+    const itemControls = fieldConfig?.itemControls;
+
+    if (!itemControls || Object.keys(itemControls).length === 0) {
+        return null;
+    }
+
+    const rows = Array.isArray(attributes[active.field])
+        ? ([...(attributes[active.field] as Record<string, unknown>[])])
+        : [];
+    const row = rows[active.index];
+
+    if (!row) {
+        return null;
+    }
+
+    /* Titled with the row itself, because a panel whose contents change as focus
+       moves has to say which thing it is describing. */
+    const title = active.label
+        ? active.label
+        : sprintf(
+              /* translators: %d is the row's position in the list. */
+              __('Item %d', 'proto-blocks'),
+              active.index + 1
+          );
+
+    return (
+        <PanelBody title={title} initialOpen>
+            {Object.entries(itemControls).map(([name, config]) => (
+                <div key={name} className="proto-blocks-control">
+                    {renderControl(
+                        name,
+                        config as Parameters<typeof renderControl>[1],
+                        { [name]: row[name] } as BlockAttributes,
+                        (attrs) => {
+                            const next = rows.slice();
+                            next[active.index] = {
+                                ...row,
+                                [name]: (attrs as Record<string, unknown>)[name],
+                            };
+                            setAttributes({ [active.field]: next } as Partial<BlockAttributes>);
+                        }
+                    )}
+                </div>
+            ))}
+        </PanelBody>
+    );
+}
 
 /**
  * Create an edit component for a block
@@ -167,9 +245,11 @@ export function createEditComponent(block: BlockData) {
         }, [previewHtml, attributes, handleAttributeChange, isSelected]);
 
         return (
-            <>
+            <RepeaterItemProvider>
                 {/* Inspector Controls */}
                 <InspectorControls>
+                    <RepeaterItemPanel block={block} attributes={attributes} setAttributes={setAttributes} />
+
                     {Object.keys(controls).length > 0 && (
                         <PanelBody title={__('Block Settings', 'proto-blocks')}>
                             {Object.entries(controls).map(([name, config]) => {
@@ -212,7 +292,7 @@ export function createEditComponent(block: BlockData) {
                         content
                     )}
                 </div>
-            </>
+            </RepeaterItemProvider>
         );
     };
 }
