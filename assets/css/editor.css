@@ -705,3 +705,10 @@
     color: #757575;
     font-size: 11px;
 }
+
+/* The back link out of a repeater row's panel: a step up and out, so it reads as
+   navigation rather than as one of the row's own controls. */
+.proto-blocks-item-panel__back {
+	margin-bottom: 12px;
+	padding-left: 0;
+}

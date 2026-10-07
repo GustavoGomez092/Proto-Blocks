@@ -42,6 +42,17 @@ block's sidebar**, titled with that row — its `itemLabel` field, or "Item 3" w
 that is empty. The block's own settings stay below it, so nothing is hidden by
 focusing a row.
 
+### Getting back out
+
+Two ways, because focusing a row is easy to do by accident:
+
+- **"Back to block settings"** at the top of the panel closes it.
+- **Clicking the block but not a row** — its padding, its heading, the space
+  around the list — closes it too. Clicking the repeater without hitting one of
+  its rows means the author is addressing the block, not a row.
+
+Clicking a *different* row swaps the panel to that row rather than closing it.
+
 The panel writes into the same repeater attribute the canvas edits, so the two
 halves cannot drift apart. The template reads a row exactly as it always did:
 

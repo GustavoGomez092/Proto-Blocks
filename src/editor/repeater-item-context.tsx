@@ -16,6 +16,30 @@
 import React from 'react';
 import { createContext, useContext, useState, useMemo, useCallback } from '@wordpress/element';
 
+/**
+ * What a repeater row looks like in the DOM.
+ *
+ * The server renders `data-proto-repeater-item`, but the editor replaces each row
+ * with its sortable wrapper, so only the class is present on the canvas. Matching
+ * both means the same selector works against rendered HTML and the live editor.
+ */
+export const REPEATER_ITEM_SELECTOR =
+    '[data-proto-repeater-item], .proto-blocks-repeater__sortable-item';
+
+/**
+ * Is this event target inside a repeater row?
+ *
+ * Used to tell "the author clicked a row" from "the author clicked the block
+ * around the rows". `closest` is missing on a text node or an SVG target in some
+ * browsers, so a target that cannot answer counts as not a row: the sidebar
+ * falling back to the block's settings is the safe direction.
+ */
+export function isInsideRepeaterItem(target: EventTarget | null): boolean {
+    const el = target as (Element & { closest?: Element['closest'] }) | null;
+
+    return typeof el?.closest === 'function' ? el.closest(REPEATER_ITEM_SELECTOR) !== null : false;
+}
+
 export interface ActiveRepeaterItem {
     /** The repeater field's name, e.g. "reps". */
     field: string;
