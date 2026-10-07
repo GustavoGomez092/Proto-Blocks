@@ -204,6 +204,47 @@ class SchemaValidator
             }
         }
 
+        /*
+         * A repeater's itemControls are the sidebar half of a row: controls shown
+         * for whichever row the author has focused, for the values a template
+         * consumes rather than prints and which therefore have no element on the
+         * canvas to carry data-proto-field. They are validated as controls, not as
+         * fields, because that is what they are.
+         */
+        if ($type === 'repeater' && isset($field['itemControls'])) {
+            if (!is_array($field['itemControls'])) {
+                $this->errors[] = sprintf(
+                    'Field "%s" has itemControls that is not an object',
+                    $name
+                );
+            } else {
+                foreach ($field['itemControls'] as $controlName => $control) {
+                    if (!is_array($control)) {
+                        $this->errors[] = sprintf(
+                            'Field "%s" itemControl "%s" must be an object',
+                            $name,
+                            (string) $controlName
+                        );
+
+                        continue;
+                    }
+
+                    $this->validateControl("{$name}.{$controlName}", $control);
+
+                    /* A repeater inside a row's controls would nest a list in a
+                       list, which the sidebar cannot lay out and the stored value
+                       cannot stay flat through. */
+                    if (($control['type'] ?? 'text') === 'repeater') {
+                        $this->errors[] = sprintf(
+                            'Field "%s" itemControl "%s" is a repeater; rows cannot nest',
+                            $name,
+                            (string) $controlName
+                        );
+                    }
+                }
+            }
+        }
+
         // Validate field name format
         if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $name)) {
             $this->warnings[] = sprintf(

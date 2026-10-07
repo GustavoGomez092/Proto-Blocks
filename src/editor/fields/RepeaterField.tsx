@@ -17,6 +17,7 @@
  */
 
 import React from 'react';
+import { useRepeaterItem } from '../repeater-item-context';
 import {
     createElement,
     useState,
@@ -31,7 +32,7 @@ import {
     TextControl,
     ToggleControl,
 } from '@wordpress/components';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import {
     dragHandle,
     copy,
@@ -195,6 +196,8 @@ interface RepeaterConfig extends FieldConfig {
     max?: number;
     itemLabel?: string;
     fields?: Record<string, FieldConfig>;
+    /** Per-row controls shown in the sidebar while that row is focused. */
+    itemControls?: Record<string, unknown>;
 }
 
 interface SortableItemProps {
@@ -202,6 +205,8 @@ interface SortableItemProps {
     itemElement: Element;
     item: RepeaterItem;
     fields: Record<string, FieldConfig>;
+    /** Reports this row to the sidebar when it takes focus. */
+    onActivate?: () => void;
     canRemove: boolean;
     canAdd: boolean;
     // All callbacks are id-based and stable. The item component
@@ -479,6 +484,7 @@ function SortableRepeaterItem({
     onFieldChange,
     isSelected,
     linkFieldName,
+    onActivate,
 }: SortableItemProps): JSX.Element | null {
     const {
         attributes: dndAttributes,
@@ -672,8 +678,15 @@ function SortableRepeaterItem({
             // portaled out of the item, so neither can use CSS :hover.
             onMouseEnter: showAdd,
             onMouseLeave: hideAdd,
-            onFocusCapture: showAdd,
+            onFocusCapture: (event: React.FocusEvent) => {
+                showAdd();
+                onActivate?.();
+            },
             onBlurCapture: hideAdd,
+            /* Pointer as well as focus: clicking an image or a toolbar button
+               inside a row may never move focus into it, and the author still
+               means "this row". */
+            onPointerDownCapture: () => onActivate?.(),
         },
         ...originalChildren,
     );
@@ -700,6 +713,29 @@ export function RepeaterField({
     element,
 }: RepeaterFieldProps): JSX.Element {
     const repeaterConfig = config as RepeaterConfig;
+    const { setActive } = useRepeaterItem();
+
+    /* Only report a row when the repeater has something to show for it. Without
+       itemControls the sidebar would open an empty panel, so the handler is left
+       off entirely and the block behaves as it did before this existed. */
+    const hasItemControls = Object.keys(repeaterConfig.itemControls || {}).length > 0;
+
+    /* The same rule the sidebar repeater control uses: the named field, else the
+       first one, else the row's position. */
+    const itemTitle = useCallback(
+        (item: RepeaterItem, index: number): string => {
+            const fieldNames = Object.keys(repeaterConfig.fields || {});
+            const titleField =
+                repeaterConfig.itemLabel && fieldNames.includes(repeaterConfig.itemLabel)
+                    ? repeaterConfig.itemLabel
+                    : fieldNames[0];
+            const raw = titleField ? item[titleField] : '';
+            const text = typeof raw === 'string' ? raw.trim() : '';
+
+            return text !== '' ? text : sprintf(__('Item %d', 'proto-blocks'), index + 1);
+        },
+        [repeaterConfig.fields, repeaterConfig.itemLabel]
+    );
     const items = Array.isArray(value) ? value : [];
     const [showInitialAdd, setShowInitialAdd] = useState(false);
     const initialAddRef = useRef<HTMLButtonElement>(null);
@@ -928,6 +964,16 @@ export function RepeaterField({
                                     onFieldChange={handleFieldChange}
                                     isSelected={isSelected}
                                     linkFieldName={linkFieldName}
+                                    onActivate={
+                                        hasItemControls
+                                            ? () =>
+                                                  setActive({
+                                                      field: name,
+                                                      index,
+                                                      label: itemTitle(item, index),
+                                                  })
+                                            : undefined
+                                    }
                                 />
                             );
                         })

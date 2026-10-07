@@ -92,8 +92,23 @@ Rows collapse to their title and only the open one shows its controls — a
 sidebar is narrow, and several expanded rows at once cannot be read. Each row
 carries move-up, move-down and remove; "Add item" sits beneath the list.
 
+## Three repeaters, and which is which
+
+Proto-Blocks repeats in three places, and they are not interchangeable:
+
+| | Where it is edited | What it is for |
+|---|---|---|
+| repeater **field** (`fields`) | the canvas | repeated **content** — the row's own markup |
+| repeater field's **itemControls** | the sidebar, per row | values a row *consumes* rather than prints |
+| repeater **control** (`controls`) | the sidebar | repeated **configuration** that never appears as content |
+
+A list of milestones is a field. The phone number each milestone carries into a
+dialog is an itemControl. A set of tabs whose CSV the template parses is a
+control. See `repeater-item-controls.md` for the middle one.
+
 ## See also
 
+- `repeater-item-controls.md` — per-row controls in the sidebar for a repeater field
 - `file-control.md` — for choosing any attachment, not only an image
 - `references/composition.md` in the skill — choosing between a field and a
   control in the first place

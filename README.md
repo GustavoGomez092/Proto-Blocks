@@ -15,6 +15,7 @@ A next-generation WordPress plugin that enables developers to create Gutenberg b
 - **Template Caching**: Compiled templates are cached for optimal performance
 - **Extensible Field Types**: Plugin architecture for custom field types
 - **Enhanced Repeater**: Drag-drop reordering, collapse/expand, duplicate, min/max limits, item-level link editing, and a flow-aware "add between" button that's never clipped by item styling
+- **Repeater Item Controls**: A row's second half. `fields` are edited on the canvas, where the author sees what they change; `itemControls` are edited in the sidebar, for the values a template *consumes* rather than prints — a number read into a data attribute, a colour passed to a style — which have no element to bind and so nowhere to be typed at all. Focus a row and its panel appears above the block's own settings. See `docs/repeater-item-controls.md`
 - **Sidebar Repeater**: The same repetition as a *control*, for repeated configuration rather than repeated content — a set of tabs, a list of breakpoints, a table pasted as CSV. Keeps editing furniture out of the block's own markup, and gives a value the template parses rather than prints somewhere to be edited. See `docs/repeater-control.md`
 - **File Control**: Pick any attachment, not only an image or a video — a CSV, a PDF, a font, a caption track. Stores `{ id, url, filename, mime }` so a template can read it from disk by id rather than fetching a URL. See `docs/file-control.md`
 - **Interactivity API Support**: Full support for WordPress Interactivity API directives
@@ -431,6 +432,7 @@ Add a `preview.png` (400px wide recommended) to show in the block inserter inste
 | Block not appearing | Check `block.json` syntax with JSON validator |
 | Fields not editable | Ensure `data-proto-field="fieldName"` matches field key |
 | Repeater not working | Use both `data-proto-repeater` and `data-proto-repeater-item` |
+| A repeater sub-field has nowhere to be typed | It is consumed, not printed, so nothing binds it. Move it from `fields` to `itemControls` and it is edited in the sidebar — see [Repeater item controls](docs/repeater-item-controls.md) |
 | Styles not loading | Check file is named `style.css` in block folder |
 | Tailwind not working | Enable Tailwind in Proto-Blocks > Tailwind Settings |
 | Preview shows error | Check PHP syntax, enable `WP_DEBUG` |
@@ -550,10 +552,44 @@ directly in the template.
         "fields": {
             "title": { "type": "text" },
             "content": { "type": "wysiwyg" }
+        },
+        "itemControls": {
+            "tone": {
+                "type": "select",
+                "label": "Tone",
+                "options": [
+                    { "key": "light", "label": "Light" },
+                    { "key": "dark", "label": "Dark" }
+                ]
+            }
         }
     }
 }
 ```
+
+| Key | Meaning |
+|---|---|
+| `fields` | **Required.** Edited on the canvas. Each needs an element carrying its `data-proto-field` to be editable at all. |
+| `itemControls` | Optional. Edited in the sidebar, for values the template consumes rather than prints. Validated as controls; a repeater inside one is rejected. |
+| `itemLabel` | Which field titles the row — in the item list, and in the sidebar panel. |
+| `min` / `max` | Rows below `min` cannot be removed; adding stops at `max`. |
+
+**`fields` or `itemControls`?** If removing the value changes nothing visible in
+the row's markup, it belongs in `itemControls`. A phone number rendered on the
+card is a field; the same number read into a `data-` attribute for a dialog is an
+item control, because there is no element to bind it to.
+
+Both halves write into the same repeater attribute, so the template reads a row
+exactly as before:
+
+```php
+foreach ($attributes['items'] as $item) {
+    $title = $item['title'] ?? '';   // fields
+    $tone  = $item['tone'] ?? '';    // itemControls
+}
+```
+
+Full detail: [Repeater item controls](docs/repeater-item-controls.md).
 
 ### Inner Blocks Field
 
@@ -811,6 +847,21 @@ Use `data-proto-repeater` for repeater containers:
     <?php endforeach; ?>
 </ul>
 ```
+
+**Values with no markup.** Everything above is for what the row *prints*. A value
+the template consumes instead — read into a `data-` attribute, parsed, passed to
+a style — has no element to carry `data-proto-field`, so binding is impossible
+and there is nowhere to type it. Declare those as `itemControls` rather than
+`fields` and they are edited in the sidebar when the row is focused:
+
+```php
+<li data-proto-repeater-item
+    data-phone="<?php echo esc_attr($item['phone'] ?? ''); ?>">   <!-- itemControls -->
+    <span data-proto-field="title"><?php echo esc_html($item['title'] ?? ''); ?></span>
+</li>
+```
+
+See [Repeater item controls](docs/repeater-item-controls.md).
 
 #### Repeater editor UX: links & the add button
 
