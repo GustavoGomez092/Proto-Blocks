@@ -17,7 +17,7 @@
  */
 
 import React from 'react';
-import { useRepeaterItem } from '../repeater-item-context';
+import { REPEATER_ITEM_SELECTOR, useRepeaterItem } from '../repeater-item-context';
 import {
     createElement,
     useState,
@@ -74,7 +74,7 @@ import { processElementNode } from '../utils/html-to-react';
  */
 function computeFlowPlacement(el: HTMLElement | null): 'right' | 'bottom' {
     if (!el) return 'bottom';
-    const sel = '[data-proto-repeater-item], .proto-blocks-repeater__sortable-item';
+    const sel = REPEATER_ITEM_SELECTOR;
     const sibling = (node: Element, dir: 'next' | 'previous'): Element | null => {
         let n: Element | null =
             dir === 'next' ? node.nextElementSibling : node.previousElementSibling;

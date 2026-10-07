@@ -3,22 +3,96 @@
  */
 
 import React from 'react';
-import { useState, useEffect, useMemo, useCallback } from '@wordpress/element';
+import { useState, useEffect, useMemo, useCallback, useRef } from '@wordpress/element';
 import { useBlockProps, InspectorControls } from '@wordpress/block-editor';
-import { PanelBody, Spinner } from '@wordpress/components';
+import { Button, PanelBody, Spinner } from '@wordpress/components';
+import { chevronLeft } from '@wordpress/icons';
 import { __, sprintf } from '@wordpress/i18n';
 import type { BlockEditProps as WPBlockEditProps } from '@wordpress/blocks';
 import { BlockData, BlockAttributes, BlockEditProps } from './types';
 import { processHtmlToReact } from './utils/html-to-react';
 import { renderControl } from './controls/render';
 import { useDebouncedCallback } from './utils/debounce';
-import { RepeaterItemProvider, useRepeaterItem } from './repeater-item-context';
+import {
+    isInsideRepeaterItem,
+    RepeaterItemProvider,
+    useRepeaterItem,
+} from './repeater-item-context';
 
 // Get data from PHP
 const protoBlocksData = window.protoBlocksData;
 const ajaxUrl = protoBlocksData?.ajaxUrl || '/wp-admin/admin-ajax.php';
 const previewNonce = protoBlocksData?.previewNonce || '';
 const debug = protoBlocksData?.debug || false;
+
+/**
+ * The block's own wrapper, inside the provider so it can clear the active row.
+ *
+ * Clicking the block but not a row means the author is addressing the block, so
+ * the sidebar goes back to the block's settings. Capture runs outer-first, so a
+ * click that IS on a row clears here and is re-set a moment later by the row's
+ * own handler -- the net effect is the row that was clicked.
+ */
+function BlockCanvas({
+    blockProps,
+    children,
+}: {
+    blockProps: Record<string, unknown>;
+    children: React.ReactNode;
+}): JSX.Element {
+    const { setActive } = useRepeaterItem();
+    const ref = useRef<HTMLDivElement | null>(null);
+
+    /* useBlockProps supplies its own ref, which the editor needs for selection and
+       typing. Keep it: take it out of the spread and hand the node to both. */
+    const { ref: blockRef, ...rest } = blockProps as Record<string, unknown> & {
+        ref?: React.Ref<HTMLDivElement>;
+    };
+
+    const setRefs = useCallback(
+        (node: HTMLDivElement | null) => {
+            ref.current = node;
+
+            if (typeof blockRef === 'function') {
+                blockRef(node);
+            } else if (blockRef && typeof blockRef === 'object') {
+                (blockRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+            }
+        },
+        [blockRef]
+    );
+
+    /* A native capture listener rather than React's onPointerDownCapture: the
+       editor's own block handlers sit between the React root and this element and
+       stop the synthetic event, so the React version never runs. Listening on the
+       element itself puts us inside anything that intercepts above it. */
+    useEffect(() => {
+        const el = ref.current;
+
+        if (!el) {
+            return undefined;
+        }
+
+        const onPointerDown = (event: Event) => {
+            /* A click on the block but not on a row means the author is addressing
+               the block, so the sidebar goes back to its settings. A click that IS
+               on a row is left alone: the row reports itself. */
+            if (!isInsideRepeaterItem(event.target)) {
+                setActive(null);
+            }
+        };
+
+        el.addEventListener('pointerdown', onPointerDown, true);
+
+        return () => el.removeEventListener('pointerdown', onPointerDown, true);
+    }, [setActive]);
+
+    return (
+        <div {...rest} ref={setRefs}>
+            {children}
+        </div>
+    );
+}
 
 /**
  * The settings of whichever repeater row is focused on the canvas.
@@ -40,7 +114,7 @@ function RepeaterItemPanel({
     attributes: BlockAttributes;
     setAttributes: (attrs: Partial<BlockAttributes>) => void;
 }): JSX.Element | null {
-    const { active } = useRepeaterItem();
+    const { active, setActive } = useRepeaterItem();
 
     if (!active) {
         return null;
@@ -75,7 +149,18 @@ function RepeaterItemPanel({
           );
 
     return (
-        <PanelBody title={title} initialOpen>
+        <PanelBody title={title} initialOpen className="proto-blocks-item-panel">
+            {/* The way back. Focusing a row is easy to do by accident and the block's
+                own settings are the more common destination, so leaving must not
+                depend on finding somewhere neutral to click. */}
+            <Button
+                className="proto-blocks-item-panel__back"
+                icon={chevronLeft}
+                variant="tertiary"
+                onClick={() => setActive(null)}
+            >
+                {__('Back to block settings', 'proto-blocks')}
+            </Button>
             {Object.entries(itemControls).map(([name, config]) => (
                 <div key={name} className="proto-blocks-control">
                     {renderControl(
@@ -101,6 +186,8 @@ function RepeaterItemPanel({
  * Create an edit component for a block
  */
 export function createEditComponent(block: BlockData) {
+    /* The provider sits above this component, so the part that needs to clear the
+       active row is split out to sit inside it. */
     return function EditComponent(props: WPBlockEditProps<BlockAttributes>) {
         const { attributes, setAttributes, isSelected } = props;
         const controls = block.controls || {};
@@ -278,7 +365,7 @@ export function createEditComponent(block: BlockData) {
                 </InspectorControls>
 
                 {/* Block Content */}
-                <div {...blockProps}>
+                <BlockCanvas blockProps={blockProps}>
                     {isLoading ? (
                         <div className="proto-blocks-loading">
                             <Spinner />
@@ -291,7 +378,7 @@ export function createEditComponent(block: BlockData) {
                     ) : (
                         content
                     )}
-                </div>
+                </BlockCanvas>
             </RepeaterItemProvider>
         );
     };
