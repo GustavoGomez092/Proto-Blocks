@@ -74,9 +74,28 @@
     }
   }
 
+  // Intro overlay (a theme's once-per-session preloader, such as proto-blocks-theme's `.proto-intro`): while it is
+  // up, nothing is revealed and no watchdog runs, so motion that waits for the overlay is not snapped to its end
+  // underneath it. The theme dispatches `proto:intro-complete` on document when it hands control back (its own
+  // safety net fires it too); a 10 s backstop here covers an overlay that never does.
+  var INTRO_BACKSTOP = 10000;
+  function introActive() {
+    var html = document.documentElement;
+    if (html.classList.contains('proto-intro-skip')) return false;
+    var overlay = document.querySelector('.proto-intro');
+    return !!(overlay && !overlay.classList.contains('is-hidden') && html.classList.contains('proto-intro-active'));
+  }
+  function bootAfterIntro() {
+    if (!introActive()) { boot(); return; }
+    var booted = false;
+    function go() { if (booted) return; booted = true; boot(); }
+    document.addEventListener('proto:intro-complete', go, { once: true });
+    window.setTimeout(go, INTRO_BACKSTOP);
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
+    document.addEventListener('DOMContentLoaded', bootAfterIntro);
   } else {
-    boot();
+    bootAfterIntro();
   }
 })();
