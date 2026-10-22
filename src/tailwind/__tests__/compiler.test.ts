@@ -1,3 +1,9 @@
+/**
+ * @jest-environment node
+ *
+ * The compiler talks to WebAssembly and fetch, not the DOM; jsdom lacks the
+ * TextDecoder that lightningcss-wasm needs when ../engine is auto-mocked.
+ */
 import { runBrowserCompile } from '../compiler';
 import { compileTailwind } from '../engine';
 
