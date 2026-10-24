@@ -128,10 +128,11 @@
             } )
         );
 
-        // Extra settle frame -- gives GSAP/scroll-trigger animations
-        // that auto-fire on load a chance to land at their final state
-        // before we screenshot.
-        await new Promise( ( resolve ) => setTimeout( resolve, 350 ) );
+        // Settle: load-time animation (reveals, counters, a hero zoom) must
+        // land at its final frame before the screenshot. Length comes from
+        // the `proto_blocks_capture_settle_ms` filter (default 1000).
+        const settle = Number( config.settleMs );
+        await new Promise( ( resolve ) => setTimeout( resolve, isNaN( settle ) ? 1000 : settle ) );
     }
 
     async function captureOne( row ) {

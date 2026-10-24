@@ -89,6 +89,109 @@ class PreviewCapture
     }
 
     /**
+     * The attributes a capture renders with. Schema defaults alone give an
+     * empty thumbnail for most real blocks (no heading, no image: the author
+     * fills those in), so the capture prefers content that exists:
+     *
+     *   1. `example.attributes` from block.json, when the author wrote one.
+     *   2. The block's first instance on the site: the most recently modified
+     *      published post of any type, then the theme's template and part
+     *      files (header/footer blocks live there).
+     *   3. Schema defaults.
+     *
+     * Instance and example values are merged over the defaults, so a control
+     * the instance never set still renders as the schema says.
+     *
+     * @param array{path:string,schema:array,attributes:array} $block
+     */
+    private function captureAttributes(string $blockName, array $block): array
+    {
+        $defaults = [];
+        foreach (($block['attributes'] ?? []) as $attrName => $config) {
+            if (is_array($config) && array_key_exists('default', $config)) {
+                $defaults[$attrName] = $config['default'];
+            }
+        }
+
+        $example = $block['schema']['example']['attributes'] ?? null;
+        if (is_array($example) && $example !== []) {
+            return array_merge($defaults, $example);
+        }
+
+        $instance = $this->findInstanceAttributes($blockName);
+        if ($instance !== null) {
+            return array_merge($defaults, $instance);
+        }
+
+        return $defaults;
+    }
+
+    /**
+     * Attributes of the block's first instance in published content or in
+     * the theme's template/part files; null when the block is used nowhere.
+     */
+    private function findInstanceAttributes(string $blockName): ?array
+    {
+        global $wpdb;
+
+        $like = '%' . $wpdb->esc_like('<!-- wp:' . $blockName) . '%';
+        $rows = $wpdb->get_col($wpdb->prepare(
+            "SELECT post_content FROM {$wpdb->posts}
+             WHERE post_status = 'publish'
+               AND post_type NOT IN ('revision', 'attachment', 'wp_navigation')
+               AND post_content LIKE %s
+             ORDER BY post_modified DESC
+             LIMIT 20",
+            $like
+        ));
+
+        foreach ((array) $rows as $content) {
+            $attrs = self::firstBlockAttributes(parse_blocks((string) $content), $blockName);
+            if ($attrs !== null) {
+                return $attrs;
+            }
+        }
+
+        $dirs = array_unique([get_stylesheet_directory(), get_template_directory()]);
+        foreach ($dirs as $dir) {
+            foreach (array_merge(glob($dir . '/parts/*.html') ?: [], glob($dir . '/templates/*.html') ?: []) as $file) {
+                $markup = file_get_contents($file);
+                if ($markup === false || strpos($markup, '<!-- wp:' . $blockName) === false) {
+                    continue;
+                }
+                $attrs = self::firstBlockAttributes(parse_blocks($markup), $blockName);
+                if ($attrs !== null) {
+                    return $attrs;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Depth-first search of parsed blocks for the first `$blockName`; its
+     * attributes, or null.
+     *
+     * @param array<int, array{blockName?:?string,attrs?:array,innerBlocks?:array}> $blocks
+     */
+    public static function firstBlockAttributes(array $blocks, string $blockName): ?array
+    {
+        foreach ($blocks as $b) {
+            if (($b['blockName'] ?? null) === $blockName) {
+                return is_array($b['attrs'] ?? null) ? $b['attrs'] : [];
+            }
+            if (!empty($b['innerBlocks']) && is_array($b['innerBlocks'])) {
+                $found = self::firstBlockAttributes($b['innerBlocks'], $blockName);
+                if ($found !== null) {
+                    return $found;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * Render the capture-UI admin page (table of blocks + buttons).
      */
     private function renderAdminUi(): void
@@ -202,15 +305,7 @@ class PreviewCapture
         $schema       = $block['schema'];
         $templatePath = $schema['protoBlocks']['templatePath'] ?? ($block['path'] . '/' . basename($block['path']) . '.php');
 
-        // Use schema-declared default attributes so the block renders
-        // its placeholder/example content (the same content authors
-        // see before they fill anything in).
-        $attributes = [];
-        foreach (($block['attributes'] ?? []) as $attrName => $config) {
-            if (array_key_exists('default', $config)) {
-                $attributes[$attrName] = $config['default'];
-            }
-        }
+        $attributes = $this->captureAttributes($blockName, $block);
 
         $engine = Plugin::getInstance()->getEngine();
         $html   = '<div class="proto-blocks-scope">'
@@ -427,6 +522,14 @@ wp_print_footer_scripts();
             'restUrl' => esc_url_raw(rest_url('proto-blocks/v1/preview-capture')),
             'nonce'   => wp_create_nonce('wp_rest'),
             'width'   => 1280,
+            /**
+             * Milliseconds the capture waits after fonts and images have settled
+             * before it rasterises, so load-time animation (reveals, counters,
+             * a hero zoom) lands at its final frame.
+             *
+             * @param int $ms Default 1000.
+             */
+            'settleMs' => max(0, (int) apply_filters('proto_blocks_capture_settle_ms', 1000)),
         ]);
 
         wp_enqueue_style(
