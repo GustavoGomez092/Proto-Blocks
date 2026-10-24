@@ -115,16 +115,28 @@ class PreviewCapture
 
         $example = $block['schema']['example']['attributes'] ?? null;
         if (is_array($example) && $example !== []) {
+            $this->captureSource = 'example';
             return array_merge($defaults, $example);
         }
 
-        $instance = $this->findInstanceAttributes($blockName);
+        // The registry is keyed by the short slug; content holds the full block
+        // name from block.json (`<!-- wp:proto-blocks/hero -->`).
+        $fullName = (string) ($block['schema']['name'] ?? '');
+        if ($fullName === '') {
+            $fullName = str_contains($blockName, '/') ? $blockName : 'proto-blocks/' . $blockName;
+        }
+        $instance = $this->findInstanceAttributes($fullName);
         if ($instance !== null) {
+            $this->captureSource = 'instance';
             return array_merge($defaults, $instance);
         }
 
+        $this->captureSource = 'defaults';
         return $defaults;
     }
+
+    /** Where the last capture's attributes came from: example, instance or defaults (shown in the render document). */
+    private string $captureSource = 'defaults';
 
     /**
      * Attributes of the block's first instance in published content or in
@@ -323,6 +335,7 @@ class PreviewCapture
 <meta charset="<?php bloginfo('charset'); ?>">
 <meta name="viewport" content="width=1280, initial-scale=1">
 <title><?php echo esc_html($schema['title'] ?? $blockName); ?> — Preview</title>
+<meta name="proto-blocks-capture-source" content="<?php echo esc_attr($this->captureSource); ?>">
 <?php
 // Force the WP enqueue system to think it's on a content page so the
 // theme's enqueue_block_assets hook (which fires for both front end
