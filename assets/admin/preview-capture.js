@@ -147,6 +147,11 @@
         setRowStatus( row, 'Rendering…', 'pending' );
         setGlobalStatus( 'Capturing ' + blockName + '…' );
 
+        // Start every block from a short frame. The height set for the previous
+        // block would otherwise be this document's viewport, and a theme's
+        // `body { min-height: 100vh }` would stretch the body to it, leaving a
+        // band of empty page under the block in the capture.
+        iframe.style.height = '10px';
         iframe.src = renderUrl;
         await waitForLoad( iframe );
         await waitForReady( iframe );

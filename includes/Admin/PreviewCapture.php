@@ -347,7 +347,10 @@ wp_print_head_scripts();
 ?>
 <style>
   html, body { margin: 0; padding: 0; background: #ffffff; }
-  body { width: 1280px; min-height: 1px; }
+  /* The capture measures the body to size the shot: a theme's
+     `min-height: 100vh` on html/body would pad it to the frame height. */
+  html, body { min-height: 0 !important; height: auto !important; }
+  body { width: 1280px; }
   /* Hide anything that might have slipped through (theme banners,
      intro overlays, sticky nav, admin bar). Capture surface only. */
   .oit-intro,
