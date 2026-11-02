@@ -5,14 +5,18 @@
  * Display statistics and numbers with labels in a grid layout.
  *
  * @var array    $attributes Block attributes.
- * @var string   $content    Inner blocks content.
  * @var WP_Block $block      Block instance.
  */
 
+defined( 'ABSPATH' ) || exit;
+
 $stats         = $attributes['stats'] ?? [];
-$columns       = $attributes['columns'] ?? 4;
+// Numeric controls: cast and clamp to the control's range before they reach style="".
+$columns       = max( 1, min( 6, (int) ( $attributes['columns'] ?? 4 ) ) );
+$number_size   = max( 24, min( 96, (int) ( $attributes['numberSize'] ?? 48 ) ) );
+// Select values are not validated against `options` on the server: allowlist before use in a class.
 $style         = $attributes['style'] ?? 'default';
-$number_size   = $attributes['numberSize'] ?? 48;
+$style         = in_array( $style, [ 'default', 'boxed', 'bordered', 'minimal' ], true ) ? $style : 'default';
 $show_dividers = $attributes['showDividers'] ?? false;
 
 // Check if we're in editor preview mode
@@ -22,8 +26,8 @@ $is_preview = ! isset( $block ) || $block === null;
 $classes = [
     'wp-block-proto-blocks-stats',
     'proto-stats',
-    'proto-stats--style-' . esc_attr( $style ),
-    'proto-stats--cols-' . esc_attr( $columns ),
+    'proto-stats--style-' . sanitize_html_class( $style ),
+    'proto-stats--cols-' . $columns,
 ];
 
 if ( $show_dividers ) {
@@ -32,7 +36,7 @@ if ( $show_dividers ) {
 
 $wrapper_attributes = get_block_wrapper_attributes( [
     'class' => implode( ' ', $classes ),
-    'style' => '--proto-stats-number-size: ' . esc_attr( $number_size ) . 'px; --proto-stats-columns: ' . esc_attr( $columns ) . ';',
+    'style' => '--proto-stats-number-size: ' . $number_size . 'px; --proto-stats-columns: ' . $columns . ';',
 ] );
 
 // Default stats for preview

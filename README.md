@@ -234,12 +234,14 @@ The template renders your block's HTML. It receives three variables:
  * Block Template: My Card
  *
  * @var array    $attributes Block attributes (field and control values)
- * @var string   $content    Inner blocks content (if using inner blocks)
+ * @var string   $innerBlocksContent Nested blocks HTML, already rendered by core (inner-blocks field only)
  * @var WP_Block $block      Block instance (null in editor preview)
  */
 
 // Always provide default values with null coalescing
 $layout = $attributes['layout'] ?? 'vertical';
+// Select values are not validated against `options` on the server: allowlist before use.
+$layout = in_array($layout, ['vertical', 'horizontal', 'overlay'], true) ? $layout : 'vertical';
 $show_link = $attributes['showLink'] ?? true;
 $title = $attributes['title'] ?? '';
 $content = $attributes['content'] ?? '';
@@ -253,7 +255,7 @@ $is_preview = !isset($block) || $block === null;
 $classes = [
     'wp-block-proto-blocks-my-card',
     'my-card',
-    'my-card--' . esc_attr($layout),
+    'my-card--' . sanitize_html_class($layout),
 ];
 
 // Use WordPress function for wrapper attributes
@@ -288,8 +290,7 @@ $wrapper_attributes = get_block_wrapper_attributes([
             <a
                 href="<?php echo esc_url($link['url'] ?? '#'); ?>"
                 class="my-card__link"
-                data-proto-field="link"
-                <?php echo !empty($link['target']) ? 'target="' . esc_attr($link['target']) . '"' : ''; ?>
+                data-proto-field="link"<?php echo proto_blocks_link_attrs($link); // target="_blank" always gets rel="noopener" ?>
             >
                 <?php echo esc_html($link['text'] ?? 'Learn More'); ?>
             </a>
@@ -304,7 +305,7 @@ $wrapper_attributes = get_block_wrapper_attributes([
 
 > **✅ Do:** Always provide default values using null coalescing (`??`).
 
-> **✅ Do:** Always escape output (`esc_html()`, `esc_attr()`, `esc_url()`, `wp_kses_post()`).
+> **✅ Do:** Always escape output for its context — `esc_html()` for text, `esc_attr()` for attributes, `esc_url()` for `href`/`src`, `wp_kses_post()` for rich text, and `sanitize_hex_color()` / `proto_blocks_css_url()` for anything that lands in `style=""`. Everything in `$attributes` is untrusted; see [Escaping in templates](#escaping-in-templates).
 
 > **✅ Do:** Use `get_block_wrapper_attributes()` for the root element.
 
@@ -337,6 +338,45 @@ if (empty($items)) {
 }
 ?>
 ```
+
+#### Escaping in templates
+
+Block attributes are contributor-controlled JSON. WordPress validates them
+against the JSON schema types in `block.json` (a `number` must be numeric, an
+`array` must be a list) but **never runs them through kses**, and Proto-Blocks
+does not escape or sanitise them for you either: field sanitisers only run in
+the editor, and `select`/`radio`/`color` controls are not checked against
+their `options` on the server. Whatever your `template.php` echoes is the
+final front-end HTML, so **every echo of an attribute must be escaped for the
+context it lands in**:
+
+| Output context | Use |
+|---|---|
+| Text node (`<h2>…</h2>`) | `esc_html( $value )` |
+| HTML attribute (`alt=""`, `data-*=""`) | `esc_attr( $value )` |
+| `href` / `src` | `esc_url( $value )` |
+| Class name from a `select`/`radio` | allowlist with `in_array( $value, [...], true )`, then `sanitize_html_class( $value )` |
+| Colour inside `style=""` | `sanitize_hex_color( $value ) ?: '#000'` or `proto_blocks_sanitize_color( $value, '#000' )` — never `esc_attr()` |
+| Number inside `style=""` | `(int)` / `(float)` cast, clamped to the control's range |
+| CSS `url(...)` inside `style=""` | `proto_blocks_css_url( $value )` (resolve from the attachment id with `wp_get_attachment_image_url()` when you have one) — never `esc_url()` on its own |
+| JSON in an attribute (`data-wp-context`) | `esc_attr( wp_json_encode( $data ) )` in a double-quoted attribute |
+| Value inside an inline `<script>` | `wp_json_encode( $value, JSON_HEX_TAG \| JSON_HEX_AMP \| JSON_HEX_APOS \| JSON_HEX_QUOT )` |
+| WYSIWYG / rich text | `wp_kses_post( $value )` |
+| `target="_blank"` on a link field | `proto_blocks_link_attrs( $link )` (adds `rel="noopener"`) |
+| Nested blocks | `echo $innerBlocksContent ?? ''` **raw** — it is core's already-rendered HTML; `wp_kses_post()` would strip core block markup |
+
+`esc_attr()` and `esc_url()` only encode `< > & " '`; inside `style=""` they
+leave `;`, `(`, `)` and `:` intact, so a stored "colour" of
+`red;position:fixed;inset:0` or an image URL of `a.png);background:url(...)`
+becomes a full-viewport overlay. Validate values that reach CSS; do not just
+escape them.
+
+**Why nothing escapes for you:** the renderer only injects values into the DOM
+for the legacy `proto-edit` / `zen-edit` / `proto-repeater` bindings
+(`Renderer::updateFields()` matches those attributes and nothing else). With
+the current `data-proto-field` / `data-proto-repeater` / `data-proto-inner-blocks`
+syntax the PHP echo in your template is the **only** output path, on the front
+end and in the editor preview alike.
 
 ### 4. Add Styles (style.css) - Optional
 
@@ -480,8 +520,9 @@ colour tool lives under the **⌄** (More) button in the block toolbar, as
 > **Colouring text writes a `<mark>` tag**, and browsers give `<mark>` a yellow
 > background by default. Core suppresses that with an inline
 > `background-color: rgba(0,0,0,0)`, but `wp_kses_post()` — which templates
-> should run text fields through — strips `background-color` from inline
-> styles, so the yellow comes back on the front end. A theme rule fixes it once:
+> should run text fields through (for text content only — a text field printed
+> into an attribute still needs `esc_attr()`) — strips `background-color` from
+> inline styles, so the yellow comes back on the front end. A theme rule fixes it once:
 >
 > ```css
 > mark.has-inline-color { background-color: transparent; }
@@ -856,10 +897,16 @@ and there is nowhere to type it. Declare those as `itemControls` rather than
 
 ```php
 <li data-proto-repeater-item
-    data-phone="<?php echo esc_attr($item['phone'] ?? ''); ?>">   <!-- itemControls -->
+    data-phone="<?php echo esc_attr($item['phone'] ?? ''); ?>"   <!-- itemControls: attribute -->
+    style="--card-color: <?php echo esc_attr(sanitize_hex_color($item['color'] ?? '') ?: '#000'); ?>">   <!-- itemControls: colour -->
     <span data-proto-field="title"><?php echo esc_html($item['title'] ?? ''); ?></span>
 </li>
 ```
+
+Colours and anything else that lands in `style` must be **validated**
+(`sanitize_hex_color()`, numeric casts, `safecss_filter_attr()`), not merely
+escaped: `esc_attr()` leaves `;` and `(` alone, so an escaped-but-unvalidated
+colour can append arbitrary declarations.
 
 See [Repeater item controls](docs/repeater-item-controls.md).
 
@@ -890,8 +937,7 @@ how you edit it depends on the markup:
      the link, so the URL is editable from the item's toolbar. -->
 <a data-proto-repeater-item
    class="card"
-   href="<?php echo esc_url($item['cardLink']['url'] ?? '#'); ?>"
-   <?php echo !empty($item['cardLink']['target']) ? 'target="' . esc_attr($item['cardLink']['target']) . '"' : ''; ?>>
+   href="<?php echo esc_url($item['cardLink']['url'] ?? '#'); ?>"<?php echo proto_blocks_link_attrs((array) ($item['cardLink'] ?? [])); ?>>
     <span data-proto-field="title"><?php echo esc_html($item['title'] ?? ''); ?></span>
 </a>
 ```
@@ -926,6 +972,12 @@ Always null-coalesce: an unsaved or empty instance leaves
     <?php echo $innerBlocksContent ?? ''; ?>
 </div>
 ```
+
+This is the one value you echo **raw**: it is WordPress's already-rendered
+inner-block HTML, and the engine overwrites `$attributes['innerBlocksContent']`
+unconditionally on every render, so an attribute of the same name saved in
+post content can never reach the template. Do not wrap it in `wp_kses_post()`
+— that would strip core blocks' markup.
 
 The matching field in `block.json` must use `"type": "inner-blocks"`
 (with the hyphen). See [Inner Blocks Field](#inner-blocks-field) for
@@ -1051,7 +1103,7 @@ $context = [
 ?>
 <div
     data-wp-interactive="my-namespace/accordion"
-    data-wp-context='<?php echo wp_json_encode($context); ?>'
+    data-wp-context="<?php echo esc_attr(wp_json_encode($context)); ?>"
 >
     <button data-wp-on--click="actions.toggle">
         Toggle
@@ -1061,6 +1113,13 @@ $context = [
     </div>
 </div>
 ```
+
+Always build the context as a PHP array and print it with
+`esc_attr( wp_json_encode( ... ) )` inside a **double-quoted** attribute (or
+`wp_interactivity_data_wp_context( $context )` on WP 6.5+). Never hand-write
+the JSON or print it unescaped: context values usually come from attributes,
+and a single-quoted attribute with raw `wp_json_encode()` output lets a value
+containing `'` close the attribute and inject new ones.
 
 **view.js:**
 ```javascript
@@ -1960,6 +2019,9 @@ template as `$innerBlocksContent`. The plain `$content` variable is
     <?php echo $innerBlocksContent ?? ''; ?>
 </div>
 ```
+
+Echo it raw: it is core's already-rendered (and escaped) block HTML, and the
+engine always overwrites it, so nothing from post content can reach it.
 
 The null-coalescing fallback also suppresses
 `Undefined variable $innerBlocksContent` warnings for freshly

@@ -6,9 +6,10 @@
  * Styled entirely with Tailwind CSS.
  *
  * @var array    $attributes Block attributes.
- * @var string   $content    Inner blocks content.
  * @var WP_Block $block      Block instance.
  */
+
+defined( 'ABSPATH' ) || exit;
 
 // Controls
 $show_logo = $attributes['showLogo'] ?? true;
@@ -118,8 +119,7 @@ $wrapper_attributes = get_block_wrapper_attributes([
         &copy;
         <a href="<?php echo esc_url($copyright_link['url'] ?? '#'); ?>"
            class="text-primary-600 hover:text-primary-700 transition-colors"
-           data-proto-field="copyrightLink"
-           <?php echo !empty($copyright_link['target']) ? 'target="' . esc_attr($copyright_link['target']) . '"' : ''; ?>>
+           data-proto-field="copyrightLink"<?php echo proto_blocks_link_attrs($copyright_link); // target="_blank" always gets rel="noopener" ?>>
             <?php echo esc_html($copyright_link['text'] ?? 'Your Company'); ?>
         </a>.
         All Rights Reserved.

@@ -5,8 +5,7 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: release-main
@@ -15,21 +14,23 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # push bump commit/tag, create + upload the release
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0 # need full history + tags to diff commits since last release
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci || npm install --no-audit --no-fund
+        run: npm ci
 
       - name: Test version logic
         run: npm run test:scripts
@@ -118,9 +119,27 @@ jobs:
           set -euo pipefail
           ZIP="dist/proto-blocks-${NEW}.zip"
           test -f "$ZIP" || { echo "::error::$ZIP missing"; exit 1; }
+
+          # Integrity: publish the zip's sha256 as a sidecar asset AND as a
+          # `sha256: <hex>` line in the release body. GitHubUpdater verifies
+          # the download against it before WordPress unpacks the package, so
+          # a replaced asset on an existing release no longer installs.
+          SHA=$(sha256sum "$ZIP" | cut -d' ' -f1)
+          ( cd dist && sha256sum "proto-blocks-${NEW}.zip" > "proto-blocks-${NEW}.zip.sha256" )
+          echo "sha256: ${SHA}"
+
+          # Same auto-generated notes as --generate-notes, with the checksum
+          # appended (the API prepends --notes to generated notes; we want
+          # the hash as the last line).
+          NOTES_FILE="${RUNNER_TEMP}/release-notes.md"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            -f tag_name="v${NEW}" --jq .body > "$NOTES_FILE"
+          printf '\n\n---\nsha256: %s\n' "$SHA" >> "$NOTES_FILE"
+
           gh release create "v${NEW}" \
             "$ZIP" \
+            "${ZIP}.sha256" \
             --repo "$GITHUB_REPOSITORY" \
             --title "v${NEW}" \
             --latest \
-            --generate-notes
+            --notes-file "$NOTES_FILE"

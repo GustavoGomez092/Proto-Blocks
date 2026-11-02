@@ -43,8 +43,10 @@ slow sidebar.
         // From the attachment id, so WordPress emits srcset. Falling back to
         // the stored url covers an attachment deleted since it was chosen.
         if (! empty($image['id'])) {
+            // wp_get_attachment_image() escapes every attribute itself;
+            // esc_attr() here would double-encode (& becomes &amp;amp;).
             echo wp_get_attachment_image((int) $image['id'], 'large', false, [
-                'alt' => esc_attr($image['alt'] ?? ''),
+                'alt' => $image['alt'] ?? '',
             ]);
         } elseif (! empty($image['url'])) {
             ?>

@@ -6,9 +6,10 @@
  * Demonstrates how to build Proto Blocks using Tailwind.
  *
  * @var array    $attributes Block attributes.
- * @var string   $content    Inner blocks content.
  * @var WP_Block $block      Block instance.
  */
+
+defined( 'ABSPATH' ) || exit;
 
 $layout         = $attributes['layout'] ?? 'vertical';
 $image_position = $attributes['imagePosition'] ?? 'top';
@@ -17,6 +18,10 @@ $image          = $attributes['image'] ?? [];
 $title          = $attributes['title'] ?? '';
 $card_content   = $attributes['content'] ?? '';
 $link           = $attributes['link'] ?? [];
+
+// Select values are not validated against `options` on the server: allowlist before use.
+$layout         = in_array( $layout, [ 'vertical', 'horizontal', 'overlay' ], true ) ? $layout : 'vertical';
+$image_position = in_array( $image_position, [ 'top', 'bottom', 'left', 'right' ], true ) ? $image_position : 'top';
 
 // Check if we're in editor preview mode (no block instance = preview)
 $is_preview = ! isset( $block ) || $block === null;
@@ -128,8 +133,7 @@ if ( 'overlay' === $layout ) {
 			class="proto-card__link inline-flex items-center gap-2 mt-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white no-underline rounded font-medium transition-colors duration-200"
 			href="<?php echo esc_url( $link['url'] ?? '#' ); ?>"
 			data-proto-field="link"
-			<?php echo ! empty( $link['target'] ) ? 'target="' . esc_attr( $link['target'] ) . '"' : ''; ?>
-			<?php echo ! empty( $link['rel'] ) ? 'rel="' . esc_attr( $link['rel'] ) . '"' : ''; ?>
+			<?php echo proto_blocks_link_attrs( $link ); // target="_blank" always gets rel="noopener" ?>
 		><?php echo esc_html( $link['text'] ?? __( 'Learn More', 'proto-blocks' ) ); ?></a>
 		<?php endif; ?>
 	</div>

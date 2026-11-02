@@ -17,6 +17,7 @@ use ProtoBlocks\Template\Engine;
 use ProtoBlocks\Template\Cache;
 use ProtoBlocks\Blocks\Registrar;
 use ProtoBlocks\Controls\OptionsProviders;
+use ProtoBlocks\Security\AttributeSanitizer;
 
 /**
  * REST API endpoints for Proto-Blocks
@@ -89,6 +90,10 @@ class RestAPI
                 'attributes' => [
                     'required' => true,
                     'type' => 'object',
+                    // A JSON object: an associative array, or [] for "{}".
+                    // array_is_list() is PHP 8.1+; the plugin header allows 8.0.
+                    'validate_callback' => static fn($value): bool => is_array($value)
+                        && ($value === [] || array_keys($value) !== range(0, count($value) - 1)),
                 ],
             ],
         ]);
@@ -181,6 +186,13 @@ class RestAPI
             );
         }
 
+        // Same sanitiser as the admin-ajax preview twin (kses on every string,
+        // plus the type-keyed pass for users without unfiltered_html).
+        $attributes = AjaxHandler::sanitizePreviewAttributes(
+            is_array($attributes) ? $attributes : [],
+            is_array($block['schema'] ?? null) ? $block['schema'] : []
+        );
+
         try {
             $html = $this->engine->renderPreview($templatePath, $attributes, $block['schema']);
 
@@ -190,7 +202,7 @@ class RestAPI
         } catch (\Throwable $e) {
             return new WP_Error(
                 'proto_blocks_preview_error',
-                $e->getMessage(),
+                self::errorMessage($e, __('Failed to generate preview.', 'proto-blocks')),
                 ['status' => 500]
             );
         }
@@ -216,8 +228,7 @@ class RestAPI
 
         return new WP_REST_Response([
             'name' => $name,
-            'path' => $block['path'],
-            'schema' => $block['schema'],
+            'schema' => \ProtoBlocks\Admin\Assets::publicSchema($block['schema']),
             'attributes' => $block['attributes'],
         ], 200);
     }
@@ -257,7 +268,7 @@ class RestAPI
         } catch (\Throwable $e) {
             return new WP_Error(
                 'proto_blocks_options_error',
-                $e->getMessage(),
+                self::errorMessage($e, __('Failed to load options.', 'proto-blocks')),
                 ['status' => 500]
             );
         }
@@ -298,6 +309,22 @@ class RestAPI
                 $count
             ),
         ], 200);
+    }
+
+    /**
+     * Message for an error response: the raw exception text (absolute template
+     * paths, PHP type errors) only when PROTO_BLOCKS_DEBUG is on; otherwise a
+     * generic message, with the detail sent to the error log.
+     */
+    private static function errorMessage(\Throwable $e, string $generic): string
+    {
+        if (defined('PROTO_BLOCKS_DEBUG') && PROTO_BLOCKS_DEBUG) {
+            return $e->getMessage();
+        }
+
+        error_log('Proto-Blocks REST error: ' . $e->getMessage());
+
+        return $generic;
     }
 
     /**

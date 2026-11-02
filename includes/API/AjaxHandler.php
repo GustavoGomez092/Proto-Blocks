@@ -12,6 +12,7 @@ namespace ProtoBlocks\API;
 use ProtoBlocks\Template\Engine;
 use ProtoBlocks\Blocks\Discovery;
 use ProtoBlocks\Core\Plugin;
+use ProtoBlocks\Security\AttributeSanitizer;
 
 /**
  * Handles AJAX requests for Proto-Blocks
@@ -65,10 +66,7 @@ class AjaxHandler
             return;
         }
 
-        // Sanitize attributes
-        if (is_array($attributes)) {
-            $attributes = $this->sanitizeAttributes($attributes);
-        } else {
+        if (!is_array($attributes)) {
             $attributes = [];
         }
 
@@ -108,6 +106,10 @@ class AjaxHandler
             $metadata = json_decode($content ?: '{}', true) ?: [];
         }
 
+        // Sanitize attributes (shared with the REST /preview route so both
+        // paths are identical).
+        $attributes = self::sanitizePreviewAttributes($attributes, $metadata);
+
         try {
             $html = $this->engine->renderPreview($templatePath, $attributes, $metadata);
             wp_send_json_success(['html' => $html]);
@@ -121,11 +123,35 @@ class AjaxHandler
     }
 
     /**
+     * Sanitize attributes posted to a preview endpoint.
+     *
+     * Shared by the admin-ajax preview and the REST /preview route so the two
+     * twins apply exactly the same rules: every string is run through
+     * wp_kses_post() regardless of capability (the editor path never needs
+     * raw markup), and users who lack `unfiltered_html` additionally get the
+     * type-keyed AttributeSanitizer pass that save and render apply.
+     *
+     * @param array $attributes Decoded attributes from the request.
+     * @param array $metadata   The block's schema (block.json), used for its protoBlocks config.
+     */
+    public static function sanitizePreviewAttributes(array $attributes, array $metadata = []): array
+    {
+        $attributes = self::ksesAttributes($attributes);
+
+        if (AttributeSanitizer::shouldSanitizeForUser((int) get_current_user_id())) {
+            $protoConfig = $metadata['protoBlocks'] ?? [];
+            $attributes  = AttributeSanitizer::sanitize($attributes, is_array($protoConfig) ? $protoConfig : []);
+        }
+
+        return $attributes;
+    }
+
+    /**
      * Recursively sanitize attributes
      * Note: We preserve the original key names (including camelCase) because
      * WordPress block attributes commonly use camelCase naming convention
      */
-    private function sanitizeAttributes(array $attributes): array
+    private static function ksesAttributes(array $attributes): array
     {
         $sanitized = [];
 
@@ -140,7 +166,7 @@ class AjaxHandler
             }
 
             if (is_array($value)) {
-                $sanitized[$sanitizedKey] = $this->sanitizeAttributes($value);
+                $sanitized[$sanitizedKey] = self::ksesAttributes($value);
             } elseif (is_string($value)) {
                 // Allow HTML for content fields
                 $sanitized[$sanitizedKey] = wp_kses_post($value);

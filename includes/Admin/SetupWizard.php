@@ -77,6 +77,21 @@ class SetupWizard
     }
 
     /**
+     * Component styles the wizard knows how to install.
+     */
+    public const COMPONENT_STYLES = ['vanilla', 'tailwind'];
+
+    /**
+     * Map a submitted/stored component style onto the known enum.
+     * Unknown or empty values fall back to 'vanilla' -- never to "all".
+     */
+    public static function normalizeComponentStyle(string $style): string
+    {
+        $style = strtolower(trim($style));
+        return in_array($style, self::COMPONENT_STYLES, true) ? $style : 'vanilla';
+    }
+
+    /**
      * Check if wizard should be shown
      */
     private function shouldShowWizard(): bool
@@ -158,8 +173,16 @@ class SetupWizard
             return;
         }
 
-        // Verify nonce
-        if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'proto_blocks_wizard')) {
+        // Authorization first: this runs on admin_init, before WordPress
+        // enforces the menu page capability, so the nonce alone must never
+        // be what stands between a low-privilege user and a file write.
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+
+        // Verify nonce (CSRF)
+        $nonce = isset($_POST['_wpnonce']) ? sanitize_text_field(wp_unslash($_POST['_wpnonce'])) : '';
+        if ($nonce === '' || !wp_verify_nonce($nonce, 'proto_blocks_wizard')) {
             return;
         }
 
@@ -168,7 +191,9 @@ class SetupWizard
 
         switch ($action) {
             case 'save_style':
-                $style = isset($_POST['component_style']) ? sanitize_text_field($_POST['component_style']) : 'vanilla';
+                $style = self::normalizeComponentStyle(
+                    isset($_POST['component_style']) ? sanitize_key(wp_unslash($_POST['component_style'])) : ''
+                );
                 update_option(self::OPTION_STYLE, $style);
 
                 // Save category name
@@ -184,17 +209,26 @@ class SetupWizard
                 exit;
 
             case 'install_demos':
-                $style = get_option(self::OPTION_STYLE, 'vanilla');
+                // The stored option is re-validated so a stale/unknown value can
+                // never widen the install to "all" demo blocks.
+                $style = self::normalizeComponentStyle((string) get_option(self::OPTION_STYLE, 'vanilla'));
                 $adminPage = Plugin::getInstance()->getAdminPage();
 
-                // Use reflection to call the private method
-                $reflection = new \ReflectionClass($adminPage);
-                $method = $reflection->getMethod('installDemoBlocks');
-                $method->setAccessible(true);
-                $result = $method->invoke($adminPage, $style);
+                // Refuse to write code into the theme when the site forbids it.
+                if (!AdminPage::fileModsAllowed()) {
+                    wp_safe_redirect(admin_url('admin.php?page=' . self::SLUG . '&step=4&installed=0&error=file_mods'));
+                    exit;
+                }
 
-                $installed = is_wp_error($result) ? 0 : $result;
-                wp_safe_redirect(admin_url('admin.php?page=' . self::SLUG . '&step=4&installed=' . $installed));
+                $result = $adminPage->installDemoBlocks($style);
+
+                $installed = is_wp_error($result) ? 0 : (int) $result;
+                $skipped   = count($adminPage->getSkippedDemoBlocks());
+                $query     = '&step=4&installed=' . $installed . ($skipped > 0 ? '&skipped=' . $skipped : '');
+                if (is_wp_error($result)) {
+                    $query .= '&error=' . rawurlencode(sanitize_key((string) $result->get_error_code()));
+                }
+                wp_safe_redirect(admin_url('admin.php?page=' . self::SLUG . $query));
                 exit;
 
             case 'skip_demos':
@@ -470,7 +504,7 @@ class SetupWizard
      */
     private function renderStep3Import(): void
     {
-        $style = get_option(self::OPTION_STYLE, 'vanilla');
+        $style = self::normalizeComponentStyle((string) get_option(self::OPTION_STYLE, 'vanilla'));
         $adminPage = Plugin::getInstance()->getAdminPage();
         $demoBlocks = $adminPage->getDemoBlockNamesByType($style);
         $styleLabel = $style === 'tailwind' ? __('Tailwind CSS', 'proto-blocks') : __('Vanilla CSS', 'proto-blocks');
@@ -536,7 +570,7 @@ class SetupWizard
 
                     <!-- Install Button -->
                     <?php if (!empty($demoBlocks)): ?>
-                        <form method="post" class="pb-inline">
+                        <form method="post" class="pb-inline" onsubmit="return confirm('<?php echo esc_js(__('Install the example blocks into your theme? Existing unmodified demo copies will be replaced; custom blocks are left untouched.', 'proto-blocks')); ?>');">
                             <?php wp_nonce_field('proto_blocks_wizard'); ?>
                             <input type="hidden" name="proto_blocks_wizard_action" value="install_demos">
                             <button type="submit" class="pb-inline-flex pb-items-center pb-gap-2 pb-bg-primary hover:pb-bg-primary-hover pb-text-white pb-px-6 pb-py-3 pb-rounded-lg pb-shadow-md pb-font-semibold pb-transition-colors">
@@ -565,13 +599,37 @@ class SetupWizard
      */
     private function renderStep4Finish(): void
     {
-        $style = get_option(self::OPTION_STYLE, 'vanilla');
+        $style = self::normalizeComponentStyle((string) get_option(self::OPTION_STYLE, 'vanilla'));
         $styleLabel = $style === 'tailwind' ? __('Tailwind CSS', 'proto-blocks') : __('Vanilla CSS', 'proto-blocks');
         $installed = isset($_GET['installed']) ? absint($_GET['installed']) : 0;
+        $skipped = isset($_GET['skipped']) ? absint($_GET['skipped']) : 0;
+        $error = isset($_GET['error']) ? sanitize_key(wp_unslash($_GET['error'])) : '';
         $tailwindEnabled = TailwindManager::getInstance()->isEnabled();
         $categoryName = get_option(AdminPage::OPTION_CATEGORY_NAME, '');
         ?>
         <div class="pb-text-center">
+            <?php if ($error !== ''): ?>
+                <div class="pb-bg-red-50 pb-border-l-4 pb-border-red-400 pb-p-4 pb-mb-6 pb-text-sm pb-text-red-800 pb-text-left pb-max-w-md pb-mx-auto">
+                    <?php if ($error === 'file_mods_disallowed' || $error === 'file_mods'): ?>
+                        <?php esc_html_e('Example blocks were not installed: file modifications are disabled on this site (DISALLOW_FILE_MODS). Copy the blocks from the plugin examples folder into your theme manually.', 'proto-blocks'); ?>
+                    <?php else: ?>
+                        <?php esc_html_e('Example blocks could not be installed. Check that the theme directory is writable, then try again from the Proto Blocks dashboard.', 'proto-blocks'); ?>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+            <?php if ($skipped > 0): ?>
+                <div class="pb-bg-amber-50 pb-border-l-4 pb-border-amber-400 pb-p-4 pb-mb-6 pb-text-sm pb-text-amber-800 pb-text-left pb-max-w-md pb-mx-auto">
+                    <?php printf(
+                        esc_html(_n(
+                            '%d block was left untouched because a directory with the same name already exists in your theme and is not an unmodified demo copy.',
+                            '%d blocks were left untouched because directories with the same names already exist in your theme and are not unmodified demo copies.',
+                            $skipped,
+                            'proto-blocks'
+                        )),
+                        (int) $skipped
+                    ); ?>
+                </div>
+            <?php endif; ?>
             <!-- Success Icon -->
             <div class="pb-mb-6">
                 <div class="pb-inline-flex pb-items-center pb-justify-center pb-w-20 pb-h-20 pb-bg-green-100 pb-rounded-full">

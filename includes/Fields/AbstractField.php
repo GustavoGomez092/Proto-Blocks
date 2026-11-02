@@ -70,18 +70,52 @@ abstract class AbstractField implements FieldInterface
     }
 
     /**
-     * Helper: Set HTML content on an element
+     * Helper: Sanitise a markup string before it is parsed into the output DOM.
+     *
+     * Field values arrive straight from the block's attribute JSON, which a
+     * contributor controls byte for byte (the block serializer writes "<" as
+     * "<", so wp_filter_post_kses never sees a tag inside the block
+     * comment, and a REST client can write the JSON directly). Nothing on the
+     * save path invokes FieldInterface::sanitize(), so the render path cannot
+     * assume the value was filtered earlier. Every field that inserts markup
+     * must therefore filter it itself, and this is the shared default filter.
+     *
+     * Subclasses that need a narrower profile (LinkField) apply their own
+     * allowlist first; wp_kses_post is a superset, so running it afterwards
+     * is a no-op on their output.
      */
-    protected static function setHtmlContent(DOMElement $element, string $html): void
+    protected static function sanitizeHtmlForOutput(string $html): string
+    {
+        return wp_kses_post($html);
+    }
+
+    /**
+     * Helper: Set HTML content on an element
+     *
+     * @param DOMElement $element Element whose children are replaced.
+     * @param string     $html    Value to insert. Plain text (no "<") becomes a
+     *                            text node; anything else is parsed as markup.
+     * @param bool       $trusted Pass true ONLY for markup that WordPress has
+     *                            already rendered (e.g. the inner-blocks
+     *                            content handed to render_callback). Default
+     *                            false runs sanitizeHtmlForOutput() first, so
+     *                            a caller that forgets to filter a raw
+     *                            attribute still cannot insert live elements.
+     */
+    protected static function setHtmlContent(DOMElement $element, string $html, bool $trusted = false): void
     {
         static::clearElement($element);
 
-        if (empty($html)) {
+        if ($html === '') {
             return;
         }
 
         // Check if content contains HTML
         if (str_contains($html, '<')) {
+            if (!$trusted) {
+                $html = static::sanitizeHtmlForOutput($html);
+            }
+
             try {
                 $tempDoc = new DOMDocument('1.0', 'UTF-8');
                 libxml_use_internal_errors(true);
@@ -104,7 +138,9 @@ abstract class AbstractField implements FieldInterface
                 $element->appendChild($textNode);
             }
         } else {
-            // Plain text
+            // Plain text: a text node is inert by construction (libxml escapes
+            // "&" on serialisation), so no filter is applied and "&" survives
+            // as a single "&amp;" rather than being double-encoded.
             $textNode = $element->ownerDocument->createTextNode($html);
             $element->appendChild($textNode);
         }

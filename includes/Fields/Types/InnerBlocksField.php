@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace ProtoBlocks\Fields\Types;
 
 use DOMElement;
-use DOMDocument;
 use ProtoBlocks\Fields\AbstractField;
 
 /**
@@ -40,33 +39,30 @@ class InnerBlocksField extends AbstractField
 
     /**
      * Update element with InnerBlocks content
+     *
+     * Two very different strings reach this method under the same type:
+     *
+     *  - the inner-block HTML WordPress rendered for render_callback (trusted:
+     *    core already ran every nested block's save/render path), and
+     *  - the block's own string attribute named after the field, which the
+     *    Renderer falls back to when the block has no children. That is raw
+     *    attribute JSON a contributor controls byte for byte.
+     *
+     * The field cannot tell them apart by content, so it filters with
+     * wp_kses_post unless the caller vouches for the markup by passing
+     * `['trustedInnerContent' => true]` in $config. Secure by default: a caller
+     * that passes nothing gets the filtered path.
      */
     public static function updateElement(DOMElement $element, mixed $value, array $config = []): void
     {
-        if (!is_string($value) || empty($value)) {
+        if (!is_string($value) || $value === '') {
             // Keep default content if no inner blocks
             return;
         }
 
-        // Clear existing content
-        static::clearElement($element);
-
-        // Parse and import the inner blocks HTML
-        $tempDoc = new DOMDocument('1.0', 'UTF-8');
-        libxml_use_internal_errors(true);
-        $tempDoc->loadHTML(
-            '<?xml encoding="UTF-8"?><div>' . $value . '</div>',
-            LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
-        );
-        libxml_clear_errors();
-
-        $contentNode = $tempDoc->getElementsByTagName('div')->item(0);
-        if ($contentNode && $contentNode->hasChildNodes()) {
-            foreach ($contentNode->childNodes as $child) {
-                $importedNode = $element->ownerDocument->importNode($child, true);
-                $element->appendChild($importedNode);
-            }
-        }
+        // The helper filters with wp_kses_post on the markup path unless the
+        // caller vouches for the content (see sanitize() for the contract).
+        static::setHtmlContent($element, $value, !empty($config['trustedInnerContent']));
     }
 
     /**
@@ -79,6 +75,9 @@ class InnerBlocksField extends AbstractField
 
     /**
      * Sanitize InnerBlocks content
+     *
+     * The declared attribute is a plain string that WordPress's schema check
+     * accepts verbatim, so it has NOT been sanitised by anything upstream.
      */
     public static function sanitize(mixed $value, array $config = []): mixed
     {
@@ -86,9 +85,7 @@ class InnerBlocksField extends AbstractField
             return '';
         }
 
-        // InnerBlocks content is already sanitized by WordPress
-        // We just need to ensure it's a string
-        return $value;
+        return wp_kses_post($value);
     }
 
     /**

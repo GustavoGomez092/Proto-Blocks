@@ -156,8 +156,12 @@ class Registrar
      */
     private function registerAssets(string $name, string $path, array $protoConfig, array $schema = []): void
     {
-        // Determine base URL
+        // Determine base URL; a block outside any web-reachable root has no
+        // enqueueable assets, so skip registration rather than emit a path.
         $baseUrl = $this->getAssetUrl($path);
+        if ($baseUrl === '') {
+            return;
+        }
 
         // Register block-specific CSS (try style.css first, then {name}.css)
         $cssFile = $this->getBlockStyleFile($path, $name);
@@ -287,6 +291,9 @@ class Registrar
         }
 
         $baseUrl = $this->getAssetUrl($path);
+        if ($baseUrl === '') {
+            return;
+        }
         $moduleHandle = 'proto-blocks-' . $name . '-view';
 
         // Register the script module with @wordpress/interactivity dependency
@@ -352,8 +359,8 @@ class Registrar
             return plugins_url($relativePath);
         }
 
-        // Fallback
-        return $path;
+        // No web-reachable mapping: never leak a filesystem path into a URL.
+        return '';
     }
 
     /**
@@ -418,7 +425,8 @@ class Registrar
             // Get preview image URL if exists
             $previewImageUrl = null;
             if (!empty($protoConfig['previewImage'])) {
-                $previewImageUrl = $this->getAssetUrl(dirname($protoConfig['previewImage'])) . '/' . basename($protoConfig['previewImage']);
+                $previewBase = $this->getAssetUrl(dirname($protoConfig['previewImage']));
+                $previewImageUrl = $previewBase !== '' ? $previewBase . '/' . basename($protoConfig['previewImage']) : null;
             }
 
             $data[] = [
@@ -433,7 +441,8 @@ class Registrar
                 'fields' => $parsedData['fields'] ?? [],
                 'controls' => $protoConfig['controls'] ?? [],
                 'previewImage' => $previewImageUrl,
-                'metadata' => $schema,
+                // Strip server-only keys (absolute template/block paths).
+                'metadata' => \ProtoBlocks\Admin\Assets::publicSchema($schema),
             ];
         }
 

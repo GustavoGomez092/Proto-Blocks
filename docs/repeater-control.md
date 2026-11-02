@@ -65,8 +65,14 @@ $tabs = $attributes['tabs'] ?? [];
 foreach ($tabs as $tab) {
     $label = (string) ($tab['label'] ?? '');
     $csv   = (string) ($tab['csv'] ?? '');
+    ?>
+    <span><?php echo esc_html($label); ?></span>
+    <?php
 }
 ```
+
+Escape at the point of output (`esc_html()` for text, `esc_attr()` for
+attributes); the cast is for type safety only and does not sanitise anything.
 
 Rows are plain arrays, so ordering, `array_filter` and `array_chunk` all work as
 they would on any list. There is no item id: the order *is* the identity.

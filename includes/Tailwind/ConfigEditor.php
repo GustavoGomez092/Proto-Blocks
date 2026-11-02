@@ -116,11 +116,16 @@ class ConfigEditor
         $themePath      = $this->getThemeCssPath();
         $preflightLayer = $this->getPreflightLayer();
 
+        // Only the file name goes into the generated CSS: input.css is written
+        // to disk under uploads during a CLI compile, so an absolute server path
+        // here would be a path disclosure.
+        $themeName = basename($themePath);
+
         if ($themeCss === '') {
-            $themeBlock = "/* No Tailwind theme file found at: {$themePath}\n" .
+            $themeBlock = "/* No Tailwind theme file found ({$themeName} in the active theme).\n" .
                           "   Create one with `@theme { --color-…: …; }` to expose brand tokens. */";
         } else {
-            $themeBlock = "/* Theme tokens loaded from: {$themePath} */\n{$themeCss}";
+            $themeBlock = "/* Theme tokens loaded from: {$themeName} */\n{$themeCss}";
         }
 
         // Tailwind v4's `@import "tailwindcss"` shorthand pulls in theme + preflight

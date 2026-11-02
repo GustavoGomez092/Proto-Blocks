@@ -12,6 +12,7 @@
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: proto-blocks
  * Domain Path: /languages
+ * Update URI: https://github.com/GustavoGomez092/Proto-Blocks
  *
  * @package ProtoBlocks
  */
@@ -95,12 +96,6 @@ add_action('plugins_loaded', __NAMESPACE__ . '\\init');
 
 // Activation hook
 register_activation_hook(__FILE__, function (): void {
-    // Create cache directory
-    $cache_dir = WP_CONTENT_DIR . '/cache/proto-blocks';
-    if (!is_dir($cache_dir)) {
-        wp_mkdir_p($cache_dir);
-    }
-
     // Flush rewrite rules
     flush_rewrite_rules();
 

@@ -7,6 +7,7 @@
 import { createElement } from '@wordpress/element';
 import { Icon } from '@wordpress/components';
 import * as icons from '@wordpress/icons';
+import { sanitizeSvgString } from './sanitize-svg';
 
 type IconType = string | { src: string } | JSX.Element;
 
@@ -248,10 +249,12 @@ export function getBlockIcon(icon?: string): IconType {
         return icons[icon as keyof typeof icons] as IconType;
     }
 
-    // SVG string
+    // SVG string. block.json is theme-authored, so trusted, but the markup
+    // still goes through the SVG sanitiser (no script/foreignObject/on*/
+    // javascript: hrefs) before it is injected.
     if (icon.startsWith('<svg')) {
         return createElement('span', {
-            dangerouslySetInnerHTML: { __html: icon },
+            dangerouslySetInnerHTML: { __html: sanitizeSvgString(icon) },
         });
     }
 

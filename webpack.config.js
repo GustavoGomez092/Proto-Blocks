@@ -2,11 +2,46 @@ const defaultConfig = require('@wordpress/scripts/config/webpack.config');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const path = require('path');
 
+/**
+ * A CSS-only entry still makes webpack emit an (empty) `<name>.js` and the
+ * matching `<name>.asset.php`. Nothing enqueues them, so drop them from the
+ * compilation after every other plugin has had its turn.
+ */
+class DropEmptyScriptsPlugin {
+    constructor(names) {
+        this.names = names;
+    }
+
+    apply(compiler) {
+        const { Compilation } = compiler.webpack;
+        compiler.hooks.thisCompilation.tap('DropEmptyScriptsPlugin', (compilation) => {
+            compilation.hooks.processAssets.tap(
+                {
+                    name: 'DropEmptyScriptsPlugin',
+                    stage: Compilation.PROCESS_ASSETS_STAGE_REPORT,
+                },
+                () => {
+                    for (const name of this.names) {
+                        for (const asset of [`${name}.js`, `${name}.asset.php`]) {
+                            if (compilation.getAsset(asset)) {
+                                compilation.deleteAsset(asset);
+                            }
+                        }
+                    }
+                }
+            );
+        });
+    }
+}
+
 module.exports = {
     ...defaultConfig,
     entry: {
         editor: path.resolve(__dirname, 'src/editor/index.tsx'),
-        admin: path.resolve(__dirname, 'src/admin/index.ts'),
+        // The Proto-Blocks admin screens are PHP-rendered; the former React
+        // admin app never had a mount node and was removed. This entry only
+        // builds the stylesheet those screens enqueue (assets/css/admin.css).
+        admin: path.resolve(__dirname, 'src/admin/admin.css'),
         'tailwind-compiler': path.resolve(__dirname, 'src/tailwind/compiler.ts'),
     },
     output: {
@@ -85,11 +120,16 @@ module.exports = {
         ],
     },
     plugins: [
+        // RtlCssPlugin is dropped too: it wrote `<name>-rtl.css` next to the
+        // scripts in assets/js, and nothing registered an RTL stylesheet.
         ...defaultConfig.plugins.filter(
-            (plugin) => plugin.constructor.name !== 'MiniCssExtractPlugin'
+            (plugin) =>
+                plugin.constructor.name !== 'MiniCssExtractPlugin' &&
+                plugin.constructor.name !== 'RtlCssPlugin'
         ),
         new MiniCssExtractPlugin({
             filename: '../css/[name].css',
         }),
+        new DropEmptyScriptsPlugin(['admin']),
     ],
 };

@@ -199,6 +199,12 @@ class AdminSettings
                                         <?php elseif ($status['cli_functional']): ?>
                                             <span class="material-icons-outlined pb-text-green-600 pb-text-lg">check_circle</span>
                                             <span class="pb-text-sm"><?php printf(\esc_html__('Server CLI v%s', 'proto-blocks'), \esc_html($status['cli_version'])); ?></span>
+                                        <?php elseif ($status['cli_installed'] && ($status['cli_trust_state'] ?? '') === BinaryManager::TRUST_MISMATCH): ?>
+                                            <span class="material-icons-outlined pb-text-red-600 pb-text-lg">gpp_bad</span>
+                                            <span class="pb-text-sm pb-text-red-600"><?php \esc_html_e('Binary failed integrity check (checksum mismatch) — not run. Re-download.', 'proto-blocks'); ?></span>
+                                        <?php elseif ($status['cli_installed'] && ($status['cli_trust_state'] ?? '') === BinaryManager::TRUST_UNVERIFIED): ?>
+                                            <span class="material-icons-outlined pb-text-orange-500 pb-text-lg">gpp_maybe</span>
+                                            <span class="pb-text-sm pb-text-orange-600"><?php \esc_html_e('Binary has no recorded checksum — re-download to verify it', 'proto-blocks'); ?></span>
                                         <?php elseif ($status['cli_installed']): ?>
                                             <span class="material-icons-outlined pb-text-orange-500 pb-text-lg">warning</span>
                                             <span class="pb-text-sm pb-text-orange-600"><?php \esc_html_e('Installed but not runnable — re-download', 'proto-blocks'); ?></span>
@@ -687,14 +693,22 @@ class AdminSettings
         $css = isset($_POST['css']) ? \wp_unslash((string) $_POST['css']) : '';
         $hash = isset($_POST['hash']) ? \sanitize_text_field((string) $_POST['hash']) : '';
 
-        $compiler = new \ProtoBlocks\Tailwind\BrowserCompiler(
+        // Size cap + content checks: this file is served to every visitor and
+        // injected into the editor, so refuse anything that is not plain CSS.
+        $rejection = BrowserCompiler::validate($css);
+        if ($rejection !== null) {
+            \wp_send_json_error(['message' => $rejection]);
+            return;
+        }
+
+        $compiler = new BrowserCompiler(
             $this->manager->getScoper(),
             $this->manager->getCache()
         );
 
         if (!$compiler->store($css)) {
             \wp_send_json_error([
-                'message' => \__('No CSS was produced by the browser compiler.', 'proto-blocks'),
+                'message' => $compiler->getLastError() ?? \__('No CSS was produced by the browser compiler.', 'proto-blocks'),
             ]);
             return; // wp_send_json_error exits, but be explicit (and testable).
         }
@@ -727,10 +741,19 @@ class AdminSettings
     {
         $this->verifyNonce();
 
+        // Respect the host-level filesystem lock the same way core does for
+        // plugin/theme installs and the file editor.
+        if (defined('DISALLOW_FILE_MODS') && \DISALLOW_FILE_MODS) {
+            \wp_send_json_error([
+                'message' => \__('File modifications are disabled on this site (DISALLOW_FILE_MODS). Add tailwind-theme.css to your theme repository instead.', 'proto-blocks'),
+            ]);
+            return;
+        }
+
         $configEditor = $this->manager->getConfigEditor();
         $path         = $configEditor->getThemeCssPath();
 
-        if (file_exists($path)) {
+        if (file_exists($path) || is_link($path)) {
             \wp_send_json_error([
                 'message' => sprintf(
                     /* translators: %s: filesystem path */
@@ -738,6 +761,7 @@ class AdminSettings
                     $path
                 ),
             ]);
+            return;
         }
 
         $dir = dirname($path);
@@ -749,12 +773,12 @@ class AdminSettings
                     $dir
                 ),
             ]);
+            return;
         }
 
         $contents = $this->getStarterThemeCss();
 
-        $bytes = file_put_contents($path, $contents);
-        if ($bytes === false) {
+        if (!Cache::atomicWrite($path, $contents)) {
             \wp_send_json_error([
                 'message' => sprintf(
                     /* translators: %s: filesystem path */
@@ -762,6 +786,7 @@ class AdminSettings
                     $path
                 ),
             ]);
+            return;
         }
 
         \wp_send_json_success([

@@ -37,8 +37,20 @@ final class Manager
         'content_hash' => null,
         'theme_config' => '',
         'cli_version' => null,
+        'cli_sha256' => null, // SHA-256 recorded when the CLI binary was downloaded; re-checked before every exec
         'disable_global_styles' => false, // Disable WordPress global styles
     ];
+
+    /**
+     * Transient set after a failed on-reload compile so a broken setup does
+     * not re-run the binary (and a full block scan) on every admin request.
+     */
+    public const RELOAD_BACKOFF_TRANSIENT = 'proto_blocks_tw_compile_backoff';
+
+    /**
+     * Default back-off window in seconds.
+     */
+    public const RELOAD_BACKOFF_SECONDS = 60;
 
     /**
      * Services
@@ -350,11 +362,20 @@ final class Manager
      */
     public function maybeCompileOnReload(): void
     {
-        if (!$this->isEnabled()) {
+        // Cheap option reads only until the caller is known to be an admin:
+        // this hook runs on `init` for EVERY request, and getStatus() /
+        // needsRecompilation() exec the binary and read every block template.
+        if (!$this->isEnabled() || !$this->isOnReloadMode()) {
             return;
         }
 
-        if (!$this->isOnReloadMode()) {
+        if (!self::isAdminPageView()) {
+            return;
+        }
+
+        // Back off after a failure so a broken binary / unwritable cache does
+        // not re-run exec() (and, when opted in, an npx run) on every request.
+        if (\get_transient(self::RELOAD_BACKOFF_TRANSIENT)) {
             return;
         }
 
@@ -367,15 +388,54 @@ final class Manager
             return;
         }
 
-        // Only for admins
-        if (!\current_user_can('manage_options')) {
+        // Check if recompilation is needed
+        if (!$this->needsRecompilation()) {
             return;
         }
 
-        // Check if recompilation is needed
-        if ($this->needsRecompilation()) {
-            $this->compile();
+        $result = $this->compile();
+        if (empty($result['success'])) {
+            $seconds = self::RELOAD_BACKOFF_SECONDS;
+            if (function_exists('apply_filters')) {
+                /**
+                 * Filter how long (seconds) on-reload compilation pauses after a failure.
+                 *
+                 * @param int $seconds Default 60.
+                 */
+                $seconds = (int) \apply_filters('proto_blocks_tailwind_reload_backoff', $seconds);
+            }
+            \set_transient(self::RELOAD_BACKOFF_TRANSIENT, time(), max(1, $seconds));
         }
+    }
+
+    /**
+     * Whether the current request is a page view by a site administrator.
+     *
+     * On-reload mode exists so an admin sees fresh CSS when they load a page
+     * (admin screen or front end). Anonymous and low-privilege users, and the
+     * background contexts (admin-ajax/heartbeat, REST, cron, WP-CLI) that an
+     * admin session also fires, must never trigger a compile.
+     */
+    private static function isAdminPageView(): bool
+    {
+        if (!\is_user_logged_in() || !\current_user_can('manage_options')) {
+            return false;
+        }
+
+        if (defined('WP_CLI') && \WP_CLI) {
+            return false;
+        }
+        if (defined('REST_REQUEST') && \REST_REQUEST) {
+            return false;
+        }
+        if (function_exists('wp_doing_ajax') && \wp_doing_ajax()) {
+            return false;
+        }
+        if (function_exists('wp_doing_cron') && \wp_doing_cron()) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -400,7 +460,10 @@ final class Manager
         // Resolve the binary state live on every call (the settings page calls
         // getStatus() on each load), reading the version once.
         $cliInstalled = $binaryManager->isInstalled();
-        $cliVersion = $cliInstalled ? $binaryManager->getVersion() : null;
+        $cliTrustState = $cliInstalled ? $binaryManager->getTrustState() : BinaryManager::TRUST_MISSING;
+        $cliTrusted = $cliTrustState === BinaryManager::TRUST_TRUSTED;
+        // getVersion() execs the binary, so only a hash-verified file is probed.
+        $cliVersion = $cliTrusted ? $binaryManager->getVersion() : null;
         $shellAvailable = $binaryManager->isShellAvailable();
 
         // Which compile engine to use. Resolution order (highest wins):
@@ -433,7 +496,9 @@ final class Manager
             'engine' => $engine,
             'engine_setting' => $engineSetting,
             'cli_installed' => $cliInstalled,
-            'cli_functional' => $cliInstalled && $cliVersion !== null,
+            'cli_trusted' => $cliTrusted,
+            'cli_trust_state' => $cliTrustState,
+            'cli_functional' => $cliInstalled && $cliTrusted && $cliVersion !== null,
             'cli_version' => $cliVersion,
             'cache_exists' => $cache->exists(),
             'cache_size' => $cache->getSize(),

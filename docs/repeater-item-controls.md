@@ -60,8 +60,19 @@ halves cannot drift apart. The template reads a row exactly as it always did:
 foreach ($attributes['reps'] as $rep) {
     $phone = (string) ($rep['phone'] ?? '');   // itemControls
     $name  = (string) ($rep['name'] ?? '');    // fields
+    ?>
+    <li data-phone="<?php echo esc_attr($phone); ?>"
+        style="--rep-color: <?php echo esc_attr(sanitize_hex_color($rep['color'] ?? '') ?: '#000'); ?>">
+        <?php echo esc_html($name); ?>
+    </li>
+    <?php
 }
 ```
+
+Escape at the point of output; the cast is for type safety only. Colours and
+anything else that lands in `style` must be validated (`sanitize_hex_color()`,
+numeric casts, `safecss_filter_attr()`), not merely escaped — `esc_attr()`
+leaves `;` and `(` intact.
 
 There is no second attribute, no separate array, and nothing extra to migrate.
 

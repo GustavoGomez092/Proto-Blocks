@@ -37,6 +37,17 @@ class RepeaterField extends AbstractField
     }
 
     /**
+     * Items rendered per repeater when the field config sets no `max`.
+     *
+     * Each item clones the whole item template into the output DOM, and the
+     * value is raw attribute JSON, so without a ceiling a contributor can
+     * save `[{},{},{},...]` by the million and turn every render of the post
+     * (front end, REST preview, admin list) into a multi-second, multi-hundred
+     * megabyte job. Filterable via `proto_blocks_repeater_max_items`.
+     */
+    public const DEFAULT_MAX_ITEMS = 500;
+
+    /**
      * Update element with repeater items
      */
     public static function updateElement(DOMElement $element, mixed $value, array $config = []): void
@@ -54,8 +65,16 @@ class RepeaterField extends AbstractField
         // Clear all existing children
         static::clearElement($element);
 
-        // Clone and populate for each item
+        $maxItems = static::resolveMaxItems($element, $config);
+        $rendered = 0;
+
+        // Clone and populate for each item, up to the cap. Items beyond it are
+        // dropped silently: the block still renders, just truncated.
         foreach ($value as $item) {
+            if ($rendered >= $maxItems) {
+                break;
+            }
+
             if (!is_array($item)) {
                 continue;
             }
@@ -63,7 +82,31 @@ class RepeaterField extends AbstractField
             $clone = $template->cloneNode(true);
             static::processRepeaterItem($clone, $item, $config);
             $element->appendChild($clone);
+            $rendered++;
         }
+    }
+
+    /**
+     * Resolve the maximum number of items this repeater will render.
+     *
+     * The field config's `max` wins when it is a positive integer (it is the
+     * developer's own block.json). Otherwise DEFAULT_MAX_ITEMS applies, passed
+     * through the `proto_blocks_repeater_max_items` filter so a site can raise
+     * or lower it per field:
+     *
+     *     add_filter('proto_blocks_repeater_max_items', fn ($max, $field, $config) => 2000, 10, 3);
+     */
+    protected static function resolveMaxItems(DOMElement $element, array $config): int
+    {
+        $fieldName = $element->getAttribute('proto-repeater') ?: $element->getAttribute('zen-repeater');
+
+        if (isset($config['max']) && is_numeric($config['max']) && (int) $config['max'] > 0) {
+            return (int) $config['max'];
+        }
+
+        $max = apply_filters('proto_blocks_repeater_max_items', self::DEFAULT_MAX_ITEMS, $fieldName, $config);
+
+        return is_numeric($max) ? max(0, (int) $max) : self::DEFAULT_MAX_ITEMS;
     }
 
     /**

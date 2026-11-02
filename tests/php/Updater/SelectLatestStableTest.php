@@ -4,11 +4,21 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Tests\Updater;
 
+require_once __DIR__ . '/stubs.php';
+
 use PHPUnit\Framework\TestCase;
 use ProtoBlocks\Updater\GitHubUpdater;
 
 final class SelectLatestStableTest extends TestCase
 {
+    private const DL = 'https://github.com/GustavoGomez092/Proto-Blocks/releases/download/';
+
+    /** Trusted download URL for an asset of a given tag. */
+    private function url(string $tag, string $name): string
+    {
+        return self::DL . $tag . '/' . $name;
+    }
+
     /** Build a minimal release array, overridable per field. */
     private function rel(string $tag, array $extra = []): array
     {
@@ -17,12 +27,12 @@ final class SelectLatestStableTest extends TestCase
             'tag_name'     => $tag,
             'draft'        => false,
             'prerelease'   => false,
-            'html_url'     => 'https://github.com/x/y/releases/tag/' . $tag,
+            'html_url'     => 'https://github.com/GustavoGomez092/Proto-Blocks/releases/tag/' . $tag,
             'body'         => 'notes',
             'published_at' => '2026-01-01T00:00:00Z',
             'assets'       => [[
                 'name'                 => 'proto-blocks-' . $ver . '.zip',
-                'browser_download_url' => 'https://github.com/x/y/releases/download/' . $tag . '/proto-blocks-' . $ver . '.zip',
+                'browser_download_url' => $this->url($tag, 'proto-blocks-' . $ver . '.zip'),
             ]],
         ], $extra);
     }
@@ -40,7 +50,7 @@ final class SelectLatestStableTest extends TestCase
         $releases = [
             $this->rel('latest', ['assets' => [[
                 'name'                 => 'proto-blocks-9.9.9.zip',
-                'browser_download_url' => 'https://github.com/x/y/releases/download/latest/proto-blocks-9.9.9.zip',
+                'browser_download_url' => $this->url('latest', 'proto-blocks-9.9.9.zip'),
             ]]]),
             $this->rel('v2.4.0'),
         ];
@@ -57,31 +67,87 @@ final class SelectLatestStableTest extends TestCase
         $this->assertSame('2.4.0', GitHubUpdater::select_latest_stable($releases)['version']);
     }
 
-    public function test_prefers_named_asset_then_any_zip(): void
+    public function test_requires_exactly_named_asset_no_any_zip_fallback(): void
     {
         $named = $this->rel('v2.4.0', ['assets' => [
-            ['name' => 'something-else.zip', 'browser_download_url' => 'https://github.com/x/y/a.zip'],
-            ['name' => 'proto-blocks-2.4.0.zip', 'browser_download_url' => 'https://github.com/x/y/p.zip'],
+            ['name' => 'something-else.zip', 'browser_download_url' => $this->url('v2.4.0', 'something-else.zip')],
+            ['name' => 'proto-blocks-2.4.0.zip', 'browser_download_url' => $this->url('v2.4.0', 'proto-blocks-2.4.0.zip')],
         ]]);
-        $this->assertSame('https://github.com/x/y/p.zip', GitHubUpdater::select_latest_stable([$named])['package']);
+        $this->assertSame(
+            $this->url('v2.4.0', 'proto-blocks-2.4.0.zip'),
+            GitHubUpdater::select_latest_stable([$named])['package']
+        );
 
-        $fallback = $this->rel('v2.4.0', ['assets' => [
-            ['name' => 'whatever.zip', 'browser_download_url' => 'https://github.com/x/y/w.zip'],
+        // A release whose only zip is not proto-blocks-<ver>.zip is not installable.
+        $other = $this->rel('v2.4.0', ['assets' => [
+            ['name' => 'whatever.zip', 'browser_download_url' => $this->url('v2.4.0', 'whatever.zip')],
         ]]);
-        $this->assertSame('https://github.com/x/y/w.zip', GitHubUpdater::select_latest_stable([$fallback])['package']);
+        $this->assertNull(GitHubUpdater::select_latest_stable([$other]));
+
+        // Neither is a zip for a different version attached to this tag.
+        $wrong_ver = $this->rel('v2.4.0', ['assets' => [
+            ['name' => 'proto-blocks-2.3.9.zip', 'browser_download_url' => $this->url('v2.4.0', 'proto-blocks-2.3.9.zip')],
+        ]]);
+        $this->assertNull(GitHubUpdater::select_latest_stable([$wrong_ver]));
+    }
+
+    public function test_accepts_v_prefixed_asset_name(): void
+    {
+        $rel = $this->rel('v2.4.0', ['assets' => [
+            ['name' => 'proto-blocks-v2.4.0.zip', 'browser_download_url' => $this->url('v2.4.0', 'proto-blocks-v2.4.0.zip')],
+        ]]);
+        $this->assertSame(
+            $this->url('v2.4.0', 'proto-blocks-v2.4.0.zip'),
+            GitHubUpdater::select_latest_stable([$rel])['package']
+        );
+    }
+
+    public function test_untrusted_asset_url_is_never_cached(): void
+    {
+        foreach ([
+            'https://github.com/attacker/evil/releases/download/v2.4.0/proto-blocks-2.4.0.zip',
+            'http://github.com/GustavoGomez092/Proto-Blocks/releases/download/v2.4.0/proto-blocks-2.4.0.zip',
+            'https://objects.githubusercontent.com/x/proto-blocks-2.4.0.zip',
+        ] as $bad) {
+            $rel = $this->rel('v2.4.0', ['assets' => [
+                ['name' => 'proto-blocks-2.4.0.zip', 'browser_download_url' => $bad],
+            ]]);
+            $this->assertNull(GitHubUpdater::select_latest_stable([$rel]), $bad);
+        }
     }
 
     public function test_release_without_zip_asset_is_skipped(): void
     {
         $rel = $this->rel('v2.4.0', ['assets' => [
-            ['name' => 'notes.txt', 'browser_download_url' => 'https://github.com/x/y/notes.txt'],
+            ['name' => 'notes.txt', 'browser_download_url' => $this->url('v2.4.0', 'notes.txt')],
         ]]);
         $this->assertNull(GitHubUpdater::select_latest_stable([$rel]));
+    }
+
+    public function test_checksum_from_body_and_sidecar_asset_are_captured(): void
+    {
+        $hex = str_repeat('ab', 32);
+        $rel = $this->rel('v2.4.0', [
+            'body'   => "## Changes\n- stuff\n\n---\nsha256: {$hex}\n",
+            'assets' => [
+                ['name' => 'proto-blocks-2.4.0.zip', 'browser_download_url' => $this->url('v2.4.0', 'proto-blocks-2.4.0.zip')],
+                ['name' => 'proto-blocks-2.4.0.zip.sha256', 'browser_download_url' => $this->url('v2.4.0', 'proto-blocks-2.4.0.zip.sha256')],
+            ],
+        ]);
+        $r = GitHubUpdater::select_latest_stable([$rel]);
+        $this->assertSame($hex, $r['sha256']);
+        $this->assertSame($this->url('v2.4.0', 'proto-blocks-2.4.0.zip.sha256'), $r['sha256_url']);
+
+        // Older release: no checksum anywhere -> empty strings, still selectable.
+        $old = GitHubUpdater::select_latest_stable([$this->rel('v2.3.0')]);
+        $this->assertSame('', $old['sha256']);
+        $this->assertSame('', $old['sha256_url']);
     }
 
     public function test_empty_or_malformed_returns_null(): void
     {
         $this->assertNull(GitHubUpdater::select_latest_stable([]));
         $this->assertNull(GitHubUpdater::select_latest_stable(['garbage', 42, null]));
+        $this->assertNull(GitHubUpdater::select_latest_stable([$this->rel('v2.4.0', ['assets' => 'nope'])]));
     }
 }

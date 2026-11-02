@@ -5,9 +5,9 @@
  */
 
 import { createElement, Fragment, ReactNode } from '@wordpress/element';
-import { RichText } from '@wordpress/block-editor';
 import { FieldConfig, BlockAttributes } from '../types';
 import { renderField } from '../fields/render';
+import { sanitizeSvgElement } from './sanitize-svg';
 
 interface ProcessOptions {
     attributes: BlockAttributes;
@@ -105,15 +105,10 @@ function processElement(
     const tagName = element.tagName.toLowerCase();
     const { attributes, setAttributes, fields, isSelected } = options;
 
-    // Handle SVG elements - render using dangerouslySetInnerHTML to preserve SVG structure
+    // SVG: never inject the preview's markup raw. Sanitise the subtree and
+    // rebuild it as React elements like everything else.
     if (tagName === 'svg') {
-        const props = convertAttributes(element, key);
-        // Get the outer HTML and use it with dangerouslySetInnerHTML
-        const svgHtml = element.innerHTML;
-        return createElement('svg', {
-            ...props,
-            dangerouslySetInnerHTML: { __html: svgHtml },
-        });
+        return processSvgElement(element, key);
     }
 
     // Get proto-blocks specific attributes
@@ -222,6 +217,90 @@ function processElement(
     }
 
     return createElement(tagName, props, ...children);
+}
+
+/**
+ * Build an SVG subtree as React elements.
+ *
+ * `sanitizeSvgElement` strips `<script>`, `<foreignObject>`, `on*`
+ * handlers and non-http(s)/fragment hrefs in place first. `localName` is
+ * used for tag names because SVG tags are case-sensitive
+ * (`linearGradient`, `clipPath`) and the HTML parser preserves that case.
+ */
+function processSvgElement(element: Element, key?: number): ReactNode {
+    sanitizeSvgElement(element);
+    return buildSvgNode(element, key);
+}
+
+function buildSvgNode(node: Node, key?: number): ReactNode {
+    if (node.nodeType === Node.TEXT_NODE) {
+        return node.textContent;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+        return null;
+    }
+    const element = node as Element;
+    const props = convertSvgAttributes(element, key);
+    const children = Array.from(element.childNodes)
+        .map((child, index) => buildSvgNode(child, index))
+        .filter((child) => child !== null && child !== '');
+    return createElement(element.localName, props, ...children);
+}
+
+/** Namespaced / reserved attribute names React spells differently. */
+const SVG_ATTRIBUTE_MAP: Record<string, string> = {
+    class: 'className',
+    for: 'htmlFor',
+    tabindex: 'tabIndex',
+    'xlink:href': 'xlinkHref',
+    'xlink:title': 'xlinkTitle',
+    'xlink:role': 'xlinkRole',
+    'xlink:show': 'xlinkShow',
+    'xlink:actuate': 'xlinkActuate',
+    'xlink:arcrole': 'xlinkArcrole',
+    'xlink:type': 'xlinkType',
+    'xml:lang': 'xmlLang',
+    'xml:space': 'xmlSpace',
+    'xml:base': 'xmlBase',
+    'xmlns:xlink': 'xmlnsXlink',
+};
+
+function convertSvgAttributes(
+    element: Element,
+    key?: number
+): Record<string, unknown> {
+    const props: Record<string, unknown> = {};
+    if (key !== undefined) {
+        props.key = key;
+    }
+
+    Array.from(element.attributes).forEach((attr) => {
+        const name = attr.name;
+        const value = attr.value;
+
+        // Already removed by the sanitiser; belt and braces.
+        if (/^on/i.test(name) || name.startsWith('data-proto-')) {
+            return;
+        }
+        if (name === 'style') {
+            props.style = parseInlineStyles(value);
+        } else if (SVG_ATTRIBUTE_MAP[name]) {
+            props[SVG_ATTRIBUTE_MAP[name]] = value;
+        } else if (name.startsWith('data-') || name.startsWith('aria-')) {
+            props[name] = value;
+        } else if (name.includes(':')) {
+            // Editor metadata (inkscape:, sodipodi: ...) React cannot render.
+            return;
+        } else if (name.includes('-')) {
+            // stroke-width -> strokeWidth; React maps it back on render.
+            props[name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = value;
+        } else {
+            // viewBox, preserveAspectRatio, d, fill ... keep as-is.
+            props[name] = value;
+        }
+    });
+
+    return props;
 }
 
 /**

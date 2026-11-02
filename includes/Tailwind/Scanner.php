@@ -185,7 +185,8 @@ class Scanner
 </html>
 HTML;
 
-        return file_put_contents($outputPath, $html) !== false;
+        // Temp file + rename, never through a symlink (see Cache::atomicWrite).
+        return Cache::atomicWrite($outputPath, $html);
     }
 
     /**

@@ -15,6 +15,18 @@ namespace ProtoBlocks\Tailwind;
 class Compiler
 {
     /**
+     * Exact @tailwindcss/cli version used by the (opt-in) npx fallback.
+     * Never a dist-tag: `next`/`latest` are mutable and would run whatever
+     * the registry serves at that moment.
+     */
+    public const NPX_CLI_VERSION = '4.1.11';
+
+    /**
+     * Default wall-clock limit for a compile (seconds).
+     */
+    public const DEFAULT_TIMEOUT = 120;
+
+    /**
      * Services
      */
     private BinaryManager $binaryManager;
@@ -59,14 +71,38 @@ class Compiler
             }
         }
 
-        // Ensure cache directory exists
-        if (!$this->cache->ensureDirectory()) {
+        // Never run a binary that does not match the hash recorded at download.
+        if (!$this->binaryManager->isTrusted()) {
+            return [
+                'success' => false,
+                'message' => self::untrustedBinaryMessage($this->binaryManager->getTrustState()),
+            ];
+        }
+
+        // Ensure output + work directories exist (and are guarded)
+        if (!$this->cache->ensureDirectory() || !$this->cache->ensureWorkDirectory()) {
             return [
                 'success' => false,
                 'message' => \__('Could not create cache directory.', 'proto-blocks'),
             ];
         }
 
+        try {
+            return $this->runPipeline();
+        } finally {
+            // The content file is the verbatim PHP source of every block
+            // template; it must not outlive the compile, whatever happened.
+            $this->cache->removeCompileInputs();
+        }
+    }
+
+    /**
+     * The compile steps proper; compile() wraps this in the cleanup.
+     *
+     * @return array{success: bool, message: string, output?: string, css_size?: int}
+     */
+    private function runPipeline(): array
+    {
         // Step 1: Generate content file from scanner
         $contentPath = $this->cache->getContentPath();
         if (!$this->scanner->writeContentFile($contentPath)) {
@@ -102,7 +138,17 @@ class Compiler
             ];
         }
 
-        $scopedCss = $this->scoper->scopeCompiledCss($css);
+        try {
+            $scopedCss = $this->scoper->scopeCompiledCss($css);
+        } catch (\RuntimeException $e) {
+            // Do not leave the unscoped CLI output in place as the live stylesheet.
+            @unlink($outputPath);
+            return [
+                'success' => false,
+                'message' => \__('Could not scope compiled CSS: ', 'proto-blocks') . $e->getMessage(),
+            ];
+        }
+
         if (!$this->cache->saveContent($scopedCss)) {
             return [
                 'success' => false,
@@ -131,29 +177,30 @@ class Compiler
     {
         $binaryPath = $this->binaryManager->getBinaryPath();
         $outputPath = $this->cache->getCssPath();
-        $cwd = $this->cache->getCacheDir();
+        $cwd = $this->cache->getWorkDir();
 
         // Build command
         $cmd = sprintf(
-            '%s --input %s --output %s --cwd %s --minify 2>&1',
+            '%s --input %s --output %s --cwd %s --minify',
             escapeshellarg($binaryPath),
             escapeshellarg($inputPath),
             escapeshellarg($outputPath),
             escapeshellarg($cwd)
         );
 
-        // Execute
-        $output = [];
-        $exitCode = 0;
-        exec($cmd, $output, $exitCode);
-
-        $outputStr = implode("\n", $output);
+        $run = ProcessRunner::run($cmd, self::getTimeout(), $cwd);
+        $exitCode = $run['exit'];
+        $outputStr = $run['output'];
 
         if ($exitCode !== 0) {
-            // Try fallback to npx if available
-            $fallbackResult = $this->tryNpxFallback($inputPath);
-            if ($fallbackResult !== null) {
-                return $fallbackResult;
+            // Only fall back to npx when the binary itself cannot run (wrong
+            // arch, missing, not executable) — never on a Tailwind/CSS error,
+            // which npx would just reproduce after a network install.
+            if (self::shouldTryNpxFallback($exitCode, $outputStr)) {
+                $fallbackResult = $this->tryNpxFallback($inputPath);
+                if ($fallbackResult !== null) {
+                    return $fallbackResult;
+                }
             }
 
             return [
@@ -175,13 +222,64 @@ class Compiler
     }
 
     /**
-     * Try compilation using npx as fallback
+     * Whether the npx fallback is enabled (opt-in via wp-config constant).
+     */
+    public static function isNpxFallbackAllowed(): bool
+    {
+        return defined('PROTO_BLOCKS_TAILWIND_ALLOW_NPX') && (bool) \PROTO_BLOCKS_TAILWIND_ALLOW_NPX;
+    }
+
+    /**
+     * Whether a failed binary run looks like "the binary cannot execute" rather
+     * than "Tailwind reported an error". Pure, for unit tests.
+     */
+    public static function shouldTryNpxFallback(int $exitCode, string $output): bool
+    {
+        return self::isNpxFallbackAllowed() && self::looksLikeUnrunnableBinary($exitCode, $output);
+    }
+
+    /**
+     * Classify a failed run: binary cannot execute (true) vs Tailwind error (false).
+     */
+    public static function looksLikeUnrunnableBinary(int $exitCode, string $output): bool
+    {
+        // 126 = found but not executable, 127 = not found (POSIX shell).
+        if ($exitCode === 126 || $exitCode === 127) {
+            return true;
+        }
+
+        return (bool) preg_match(
+            '/exec format error|cannot execute binary|bad cpu type|no such file or directory|permission denied|could not start process/i',
+            $output
+        );
+    }
+
+    /**
+     * Compile wall-clock limit in seconds.
+     */
+    public static function getTimeout(): int
+    {
+        $timeout = self::DEFAULT_TIMEOUT;
+        if (function_exists('apply_filters')) {
+            /**
+             * Filter the maximum number of seconds a Tailwind compile may run.
+             *
+             * @param int $timeout Default 120.
+             */
+            $timeout = (int) \apply_filters('proto_blocks_tailwind_exec_timeout', $timeout);
+        }
+
+        return max(1, $timeout);
+    }
+
+    /**
+     * Try compilation using npx as fallback (opt-in, pinned, no auto-install).
      *
      * @return array{success: bool, message: string, output?: string}|null
      */
     private function tryNpxFallback(string $inputPath): ?array
     {
-        if (!$this->binaryManager->isNpxAvailable()) {
+        if (!self::isNpxFallbackAllowed()) {
             return null;
         }
 
@@ -191,22 +289,22 @@ class Compiler
         }
 
         $outputPath = $this->cache->getCssPath();
-        $cwd = $this->cache->getCacheDir();
+        $cwd = $this->cache->getWorkDir();
 
-        // Build npx command (using @tailwindcss/cli for v4)
+        // --no-install: only run a package that is already present on the host;
+        // never pull @tailwindcss/cli from the registry at request time.
         $cmd = sprintf(
-            '%s @tailwindcss/cli@next --input %s --output %s --cwd %s --minify 2>&1',
+            '%s --no-install %s --input %s --output %s --cwd %s --minify',
             escapeshellarg($npxPath),
+            escapeshellarg('@tailwindcss/cli@' . self::NPX_CLI_VERSION),
             escapeshellarg($inputPath),
             escapeshellarg($outputPath),
             escapeshellarg($cwd)
         );
 
-        $output = [];
-        $exitCode = 0;
-        exec($cmd, $output, $exitCode);
-
-        $outputStr = implode("\n", $output);
+        $run = ProcessRunner::run($cmd, self::getTimeout(), $cwd);
+        $exitCode = $run['exit'];
+        $outputStr = $run['output'];
 
         if ($exitCode !== 0) {
             return [
@@ -228,6 +326,23 @@ class Compiler
     }
 
     /**
+     * Human-readable reason a binary was refused.
+     */
+    public static function untrustedBinaryMessage(string $trustState): string
+    {
+        switch ($trustState) {
+            case BinaryManager::TRUST_MISMATCH:
+                return \__('The Tailwind CLI binary on disk does not match the checksum recorded when it was downloaded, so it was not run. Re-download it from the Tailwind settings.', 'proto-blocks');
+            case BinaryManager::TRUST_UNVERIFIED:
+                return \__('The Tailwind CLI binary has no recorded checksum (it predates integrity checks), so it was not run. Re-download it from the Tailwind settings.', 'proto-blocks');
+            case BinaryManager::TRUST_MISSING:
+                return \__('The Tailwind CLI binary is missing.', 'proto-blocks');
+            default:
+                return \__('The Tailwind CLI binary could not be verified.', 'proto-blocks');
+        }
+    }
+
+    /**
      * Check if compilation is possible
      *
      * @return array{possible: bool, reason?: string}
@@ -243,10 +358,19 @@ class Compiler
         }
 
         // Check if binary is installed or can be installed
-        if (!$this->binaryManager->isInstalled() && !$this->binaryManager->isNpxAvailable()) {
+        if (!$this->binaryManager->isInstalled()
+            && !(self::isNpxFallbackAllowed() && $this->binaryManager->isNpxAvailable())
+        ) {
             return [
                 'possible' => false,
-                'reason' => \__('Neither Tailwind CLI binary nor npx is available.', 'proto-blocks'),
+                'reason' => \__('Tailwind CLI binary is not available.', 'proto-blocks'),
+            ];
+        }
+
+        if ($this->binaryManager->isInstalled() && !$this->binaryManager->isTrusted()) {
+            return [
+                'possible' => false,
+                'reason' => self::untrustedBinaryMessage($this->binaryManager->getTrustState()),
             ];
         }
 
@@ -273,8 +397,9 @@ class Compiler
         return [
             'can_compile' => $this->canCompile(),
             'binary_installed' => $this->binaryManager->isInstalled(),
+            'binary_trusted' => $this->binaryManager->isTrusted(),
             'binary_version' => $this->binaryManager->getVersion(),
-            'npx_available' => $this->binaryManager->isNpxAvailable(),
+            'npx_available' => self::isNpxFallbackAllowed() && $this->binaryManager->isNpxAvailable(),
             'cache_writable' => $this->cache->isWritable(),
             'cache_exists' => $this->cache->exists(),
         ];

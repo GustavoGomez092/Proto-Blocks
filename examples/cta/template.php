@@ -5,19 +5,25 @@
  * A prominent call-to-action section with customizable styling.
  *
  * @var array    $attributes Block attributes.
- * @var string   $content    Inner blocks content.
  * @var WP_Block $block      Block instance.
  */
+
+defined( 'ABSPATH' ) || exit;
 
 $title            = $attributes['title'] ?? '';
 $description      = $attributes['description'] ?? '';
 $link             = $attributes['link'] ?? [];
-$background_color = $attributes['backgroundColor'] ?? '';
-$text_color       = $attributes['textColor'] ?? '';
+// Colour controls land inside style="": validate as hex, never merely escape (esc_attr leaves `;` and `(` intact).
+$background_color = proto_blocks_sanitize_color( $attributes['backgroundColor'] ?? '', '' );
+$text_color       = proto_blocks_sanitize_color( $attributes['textColor'] ?? '', '' );
 $button_style     = $attributes['buttonStyle'] ?? 'primary';
 $layout           = $attributes['layout'] ?? 'centered';
 $show_icon        = $attributes['showIcon'] ?? true;
 $full_width       = $attributes['fullWidth'] ?? false;
+
+// Select/radio values are not validated against `options` on the server: allowlist before use in a class.
+$layout       = in_array( $layout, [ 'centered', 'inline', 'stacked' ], true ) ? $layout : 'centered';
+$button_style = in_array( $button_style, [ 'primary', 'secondary', 'outline' ], true ) ? $button_style : 'primary';
 
 // Check if we're in editor preview mode
 $is_preview = ! isset( $block ) || $block === null;
@@ -26,8 +32,8 @@ $is_preview = ! isset( $block ) || $block === null;
 $classes = [
     'wp-block-proto-blocks-cta',
     'proto-cta',
-    'proto-cta--layout-' . esc_attr( $layout ),
-    'proto-cta--button-' . esc_attr( $button_style ),
+    'proto-cta--layout-' . sanitize_html_class( $layout ),
+    'proto-cta--button-' . sanitize_html_class( $button_style ),
 ];
 
 if ( $full_width ) {
@@ -37,10 +43,10 @@ if ( $full_width ) {
 // Build inline styles
 $styles = [];
 if ( ! empty( $background_color ) ) {
-    $styles[] = 'background-color: ' . esc_attr( $background_color );
+    $styles[] = 'background-color: ' . $background_color;
 }
 if ( ! empty( $text_color ) ) {
-    $styles[] = 'color: ' . esc_attr( $text_color );
+    $styles[] = 'color: ' . $text_color;
 }
 
 $wrapper_attributes = get_block_wrapper_attributes( [
@@ -76,8 +82,7 @@ $arrow_icon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width
             class="proto-cta__button"
             href="<?php echo esc_url( $link['url'] ?? '#' ); ?>"
             data-proto-field="link"
-            <?php echo ! empty( $link['target'] ) ? 'target="' . esc_attr( $link['target'] ) . '"' : ''; ?>
-            <?php echo ! empty( $link['rel'] ) ? 'rel="' . esc_attr( $link['rel'] ) . '"' : ''; ?>
+            <?php echo proto_blocks_link_attrs( $link ); // target="_blank" always gets rel="noopener" ?>
         >
             <span class="proto-cta__button-text"><?php
                 echo esc_html( $link['text'] ?? __( 'Get Started', 'proto-blocks' ) );

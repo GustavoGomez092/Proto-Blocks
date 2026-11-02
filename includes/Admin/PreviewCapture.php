@@ -147,19 +147,30 @@ class PreviewCapture
         global $wpdb;
 
         $like = '%' . $wpdb->esc_like('<!-- wp:' . $blockName) . '%';
-        $rows = $wpdb->get_col($wpdb->prepare(
-            "SELECT post_content FROM {$wpdb->posts}
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT post_content, post_author FROM {$wpdb->posts}
              WHERE post_status = 'publish'
                AND post_type NOT IN ('revision', 'attachment', 'wp_navigation')
                AND post_content LIKE %s
              ORDER BY post_modified DESC
              LIMIT 20",
             $like
-        ));
+        ), ARRAY_A);
 
-        foreach ((array) $rows as $content) {
-            $attrs = self::firstBlockAttributes(parse_blocks((string) $content), $blockName);
+        foreach ((array) $rows as $row) {
+            $content = (string) ($row['post_content'] ?? '');
+            $attrs = self::firstBlockAttributes(parse_blocks($content), $blockName);
             if ($attrs !== null) {
+                // The render document echoes the template's output unescaped on
+                // the admin origin. Content saved by a user without
+                // `unfiltered_html` was already kses-filtered as post_content,
+                // but the JSON inside the block comment is not: re-apply the
+                // same policy to every string attribute before it reaches the
+                // template.
+                $author = (int) ($row['post_author'] ?? 0);
+                if ($author <= 0 || !user_can($author, 'unfiltered_html')) {
+                    $attrs = self::ksesAttributes($attrs);
+                }
                 return $attrs;
             }
         }
@@ -176,6 +187,60 @@ class PreviewCapture
                     return $attrs;
                 }
             }
+        }
+
+        return null;
+    }
+
+    /**
+     * Run wp_kses_post over every string in a (nested) attribute array.
+     *
+     * @param array<mixed> $attrs
+     * @return array<mixed>
+     */
+    public static function ksesAttributes(array $attrs): array
+    {
+        array_walk_recursive($attrs, static function (&$value): void {
+            if (is_string($value)) {
+                $value = wp_kses_post($value);
+            }
+        });
+        return $attrs;
+    }
+
+    /**
+     * Default cap on a captured image upload, in bytes (5 MB). Filterable via
+     * `proto_blocks_capture_max_bytes`.
+     */
+    public const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+    /**
+     * Image MIME types a capture may be stored as.
+     */
+    public const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg'];
+
+    /**
+     * Validate decoded capture bytes before they are written to disk.
+     *
+     * Returns null when the bytes are an acceptable image, otherwise an error
+     * code: `empty`, `too_large`, `not_image` (not a parseable raster image)
+     * or `bad_mime` (an image, but not PNG/JPEG).
+     */
+    public static function validateImageBytes(string $bytes, int $maxBytes = self::MAX_IMAGE_BYTES): ?string
+    {
+        if ($bytes === '') {
+            return 'empty';
+        }
+        if ($maxBytes > 0 && strlen($bytes) > $maxBytes) {
+            return 'too_large';
+        }
+
+        $info = @getimagesizefromstring($bytes);
+        if (!is_array($info) || empty($info['mime'])) {
+            return 'not_image';
+        }
+        if (!in_array($info['mime'], self::ALLOWED_IMAGE_MIMES, true)) {
+            return 'bad_mime';
         }
 
         return null;
@@ -289,10 +354,21 @@ class PreviewCapture
 
             <!-- Hidden iframe used as the capture surface. JS swaps its
                  src for each block, runs html2canvas-pro against the
-                 loaded document, then POSTs the resulting PNG back. -->
+                 loaded document, then POSTs the resulting PNG back.
+
+                 sandbox: `allow-same-origin` is required so this page can
+                 reach the frame's contentDocument for html2canvas, and
+                 `allow-scripts` is kept because block view scripts and the
+                 theme's front-end JS often drive layout (reveal animations,
+                 sliders, counters) that the snapshot must show in its final
+                 state. Everything else -- top-level navigation, form
+                 submission, popups, pointer lock, modals -- stays blocked,
+                 which costs the render nothing. -->
             <iframe class="proto-blocks-capture__frame"
                 title="Preview render"
-                aria-hidden="true"></iframe>
+                aria-hidden="true"
+                sandbox="allow-same-origin allow-scripts"
+                referrerpolicy="no-referrer"></iframe>
         </div>
         <?php
     }
@@ -329,6 +405,12 @@ class PreviewCapture
         // banner / admin bar. Only the asset stack runs.
         nocache_headers();
         header('Content-Type: text/html; charset=' . get_option('blog_charset'));
+        // The document is only ever meant to be framed by the capture page on
+        // this origin, and it must not leak the admin-ajax URL (with its
+        // nonce) to any asset host a template references.
+        header('X-Frame-Options: SAMEORIGIN');
+        header('Referrer-Policy: no-referrer');
+        header('X-Content-Type-Options: nosniff');
         ?><!DOCTYPE html>
 <html <?php language_attributes(); ?>>
 <head>
@@ -424,7 +506,10 @@ wp_print_footer_scripts();
         if (str_starts_with($path, $pluginsDir)) {
             return $pluginsUri . substr($path, strlen($pluginsDir));
         }
-        return $path;
+        // Not under a web-served directory we know: there is no URL for it.
+        // Never fall back to the filesystem path (it would be printed into
+        // the page and the REST response).
+        return '';
     }
 
     public function buildRenderUrl(string $blockName): string
@@ -454,30 +539,67 @@ wp_print_footer_scripts();
             return new \WP_Error('proto_blocks_capture_invalid', __('Missing block or image.', 'proto-blocks'), ['status' => 400]);
         }
 
+        if (!AdminPage::fileModsAllowed()) {
+            return new \WP_Error('proto_blocks_capture_file_mods', __('File modifications are disabled on this site (DISALLOW_FILE_MODS).', 'proto-blocks'), ['status' => 403]);
+        }
+
         $registrar  = Plugin::getInstance()->getRegistrar();
         $registered = $registrar->getRegisteredBlocks();
         if (!isset($registered[$blockName])) {
             return new \WP_Error('proto_blocks_capture_not_found', __('Block not registered.', 'proto-blocks'), ['status' => 404]);
         }
 
+        /**
+         * Largest capture upload accepted, in bytes.
+         *
+         * @param int $maxBytes Default 5 MB.
+         */
+        $maxBytes = max(0, (int) apply_filters('proto_blocks_capture_max_bytes', self::MAX_IMAGE_BYTES));
+
+        // Cheap pre-check on the encoded length before decoding (base64 is
+        // 4/3 the size of the payload) so an oversize body is rejected early.
+        if ($maxBytes > 0 && strlen($imageData) > (int) ceil($maxBytes * 4 / 3) + 64) {
+            return new \WP_Error('proto_blocks_capture_too_large', __('Image too large.', 'proto-blocks'), ['status' => 413]);
+        }
+
         // Strip "data:image/png;base64," prefix.
-        if (!preg_match('#^data:image/(png|jpe?g|webp);base64,(.+)$#i', $imageData, $matches)) {
+        if (!preg_match('#^data:image/(png|jpe?g);base64,([A-Za-z0-9+/=\s]+)$#i', $imageData, $matches)) {
             return new \WP_Error('proto_blocks_capture_bad_image', __('Unsupported image payload.', 'proto-blocks'), ['status' => 400]);
         }
-        $ext   = strtolower($matches[1]) === 'jpg' ? 'jpeg' : strtolower($matches[1]);
         $bytes = base64_decode($matches[2], true);
         if ($bytes === false) {
             return new \WP_Error('proto_blocks_capture_decode', __('Failed to decode image.', 'proto-blocks'), ['status' => 400]);
         }
 
+        // The declared MIME in the data URL is not trusted: the bytes
+        // themselves must parse as a PNG or JPEG.
+        $problem = self::validateImageBytes($bytes, $maxBytes);
+        if ($problem !== null) {
+            return match ($problem) {
+                'too_large' => new \WP_Error('proto_blocks_capture_too_large', __('Image too large.', 'proto-blocks'), ['status' => 413]),
+                default     => new \WP_Error('proto_blocks_capture_not_image', __('Payload is not a PNG or JPEG image.', 'proto-blocks'), ['status' => 400]),
+            };
+        }
+
         // Always write to preview.png (the inserter convention). If a
         // preview.jpg was sitting in the folder we leave it alone --
         // SchemaReader checks PNG first so the new file wins.
-        $targetPath = $registered[$blockName]['path'] . '/preview.png';
-        $written    = file_put_contents($targetPath, $bytes);
-        if ($written === false) {
+        $blockDir   = $registered[$blockName]['path'];
+        $targetPath = $blockDir . '/preview.png';
+        if (!is_dir($blockDir) || !is_writable($blockDir)) {
             return new \WP_Error('proto_blocks_capture_write', __('Could not write file. Check folder permissions.', 'proto-blocks'), ['status' => 500]);
         }
+
+        // Atomic replace: write to a temp file in the same directory, then
+        // rename over the target so a reader never sees a half-written PNG.
+        $tmpPath = $blockDir . '/.preview-' . wp_generate_password(12, false) . '.tmp';
+        $written = file_put_contents($tmpPath, $bytes, LOCK_EX);
+        if ($written === false || $written !== strlen($bytes) || !rename($tmpPath, $targetPath)) {
+            @unlink($tmpPath);
+            return new \WP_Error('proto_blocks_capture_write', __('Could not write file. Check folder permissions.', 'proto-blocks'), ['status' => 500]);
+        }
+        @chmod($targetPath, 0644);
+        clearstatcache(true, $targetPath);
 
         return rest_ensure_response([
             'success'    => true,
@@ -490,6 +612,11 @@ wp_print_footer_scripts();
 
     public function restPermission(): bool
     {
+        // Writing into the theme/plugin tree is a file modification: honour
+        // the site-wide policy before the capability.
+        if (!AdminPage::fileModsAllowed()) {
+            return false;
+        }
         return current_user_can(self::CAPABILITY);
     }
 

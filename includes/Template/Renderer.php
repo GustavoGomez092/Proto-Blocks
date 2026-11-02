@@ -272,6 +272,10 @@ class Renderer
             return;
         }
 
+        // The template's own root class/style are template-authored and are
+        // kept verbatim. Everything derived from block attributes below is
+        // contributor-controlled (block-comment JSON is never kses'd), so
+        // each piece is sanitised before it reaches the wrapper.
         $classes = explode(' ', $root->getAttribute('class') ?: '');
         $styles = [];
 
@@ -282,40 +286,63 @@ class Renderer
         }
 
         // Alignment
-        if (!empty($attributes['align'])) {
-            $classes[] = 'align' . $attributes['align'];
+        if (!empty($attributes['align']) && is_string($attributes['align'])) {
+            $classes[] = 'align' . self::sanitizeClassToken($attributes['align']);
         }
 
-        // Custom class
-        if (!empty($attributes['className'])) {
-            $classes = array_merge($classes, explode(' ', $attributes['className']));
+        // Custom class. Tokens are not forced through sanitize_html_class():
+        // Tailwind utilities (md:grid-cols-2, w-1/2, bg-[#fff]) are a
+        // supported use of className and would be destroyed. The DOM already
+        // escapes the attribute, so only characters that could never be part
+        // of a class name are stripped.
+        if (!empty($attributes['className']) && is_string($attributes['className'])) {
+            foreach (preg_split('/\s+/', $attributes['className']) ?: [] as $token) {
+                $token = preg_replace('/[<>"\'&\x00-\x1F\x7F]/', '', $token);
+                if ($token !== '' && $token !== null) {
+                    $classes[] = $token;
+                }
+            }
         }
 
-        // Anchor
-        if (!empty($attributes['anchor'])) {
-            $root->setAttribute('id', $attributes['anchor']);
+        // Anchor (HTML id)
+        if (!empty($attributes['anchor']) && is_string($attributes['anchor'])) {
+            $anchor = preg_replace('/[^A-Za-z0-9_:.\-]/', '', $attributes['anchor']);
+            if ($anchor !== '' && $anchor !== null) {
+                $root->setAttribute('id', $anchor);
+            }
         }
 
         // Background color
-        if (!empty($attributes['backgroundColor'])) {
-            $classes[] = 'has-' . $attributes['backgroundColor'] . '-background-color';
+        if (!empty($attributes['backgroundColor']) && is_string($attributes['backgroundColor'])) {
+            $classes[] = 'has-' . self::sanitizeClassToken($attributes['backgroundColor']) . '-background-color';
             $classes[] = 'has-background';
         }
 
         // Text color
-        if (!empty($attributes['textColor'])) {
-            $classes[] = 'has-' . $attributes['textColor'] . '-color';
+        if (!empty($attributes['textColor']) && is_string($attributes['textColor'])) {
+            $classes[] = 'has-' . self::sanitizeClassToken($attributes['textColor']) . '-color';
             $classes[] = 'has-text-color';
         }
 
         // Font size
-        if (!empty($attributes['fontSize'])) {
-            $classes[] = 'has-' . $attributes['fontSize'] . '-font-size';
+        if (!empty($attributes['fontSize']) && is_string($attributes['fontSize'])) {
+            $classes[] = 'has-' . self::sanitizeClassToken($attributes['fontSize']) . '-font-size';
         }
 
-        // Style attribute (colors, spacing, typography)
+        // Style attribute (colors, spacing, typography). Declarations built
+        // from the attribute are collected separately so they can be run
+        // through safecss_filter_attr() -- the same gate core's style engine
+        // applies -- without touching the template's own style attribute.
         if (!empty($attributes['style']) && is_array($attributes['style'])) {
-            $this->processStyleAttribute($attributes['style'], $classes, $styles);
+            $attributeStyles = [];
+            $this->processStyleAttribute($attributes['style'], $classes, $attributeStyles);
+            $filtered = self::filterCss(implode('; ', $attributeStyles));
+            if ($filtered !== '') {
+                // safecss_filter_attr() joins with a bare ';'. Restore the
+                // '; ' spacing the previous implementation emitted so rendered
+                // markup stays byte-identical on the happy path.
+                $styles[] = preg_replace('/;(?![^(]*\))(?=\S)/', '; ', rtrim($filtered, ';'));
+            }
         }
 
         // Add Tailwind scope class if enabled
@@ -336,6 +363,38 @@ class Renderer
     }
 
     /**
+     * A single class token derived from a block attribute (align, preset
+     * colour/font-size slugs): sanitize_html_class() when WordPress is
+     * loaded, otherwise its equivalent.
+     */
+    private static function sanitizeClassToken(string $token): string
+    {
+        if (function_exists('sanitize_html_class')) {
+            return (string) sanitize_html_class($token);
+        }
+
+        return (string) preg_replace('/[^A-Za-z0-9_-]/', '', $token);
+    }
+
+    /**
+     * Inline CSS declarations built from block attributes, through
+     * safecss_filter_attr() when WordPress is loaded. Without it (unit tests
+     * outside WP) declarations are passed through unchanged.
+     */
+    private static function filterCss(string $css): string
+    {
+        if ($css === '') {
+            return '';
+        }
+
+        if (function_exists('safecss_filter_attr')) {
+            return (string) safecss_filter_attr($css);
+        }
+
+        return $css;
+    }
+
+    /**
      * Process the style attribute
      */
     private function processStyleAttribute(array $style, array &$classes, array &$styles): void
@@ -344,8 +403,12 @@ class Renderer
         if (!empty($style['color'])) {
             if (!empty($style['color']['text'])) {
                 $color = $style['color']['text'];
+                if (!is_scalar($color)) {
+                    $color = '';
+                }
+                $color = (string) $color;
                 if (preg_match('/^var:preset\|color\|(.+)$/', $color, $matches)) {
-                    $classes[] = 'has-' . $matches[1] . '-color';
+                    $classes[] = 'has-' . self::sanitizeClassToken($matches[1]) . '-color';
                 } else {
                     $styles[] = 'color: ' . $color;
                 }
@@ -353,8 +416,12 @@ class Renderer
 
             if (!empty($style['color']['background'])) {
                 $bg = $style['color']['background'];
+                if (!is_scalar($bg)) {
+                    $bg = '';
+                }
+                $bg = (string) $bg;
                 if (preg_match('/^var:preset\|color\|(.+)$/', $bg, $matches)) {
-                    $classes[] = 'has-' . $matches[1] . '-background-color';
+                    $classes[] = 'has-' . self::sanitizeClassToken($matches[1]) . '-background-color';
                 } else {
                     $styles[] = 'background-color: ' . $bg;
                 }
@@ -365,15 +432,19 @@ class Renderer
         if (!empty($style['typography'])) {
             if (!empty($style['typography']['fontSize'])) {
                 $size = $style['typography']['fontSize'];
+                if (!is_scalar($size)) {
+                    $size = '';
+                }
+                $size = (string) $size;
                 if (preg_match('/^var:preset\|font-size\|(.+)$/', $size, $matches)) {
-                    $classes[] = 'has-' . $matches[1] . '-font-size';
+                    $classes[] = 'has-' . self::sanitizeClassToken($matches[1]) . '-font-size';
                 } else {
                     $styles[] = 'font-size: ' . $size;
                 }
             }
 
-            if (!empty($style['typography']['lineHeight'])) {
-                $styles[] = 'line-height: ' . $style['typography']['lineHeight'];
+            if (!empty($style['typography']['lineHeight']) && is_scalar($style['typography']['lineHeight'])) {
+                $styles[] = 'line-height: ' . (string) $style['typography']['lineHeight'];
             }
         }
 
@@ -399,16 +470,23 @@ class Renderer
                 foreach (['top', 'right', 'bottom', 'left'] as $side) {
                     if (isset($value[$side])) {
                         $val = $value[$side];
+                        if (!is_scalar($val)) {
+                            continue;
+                        }
+                        $val = (string) $val;
                         if (preg_match('/^var:preset\|spacing\|(.+)$/', $val, $matches)) {
-                            $styles[] = "{$property}-{$side}: var(--wp--preset--spacing--{$matches[1]})";
+                            $slug = self::sanitizeClassToken($matches[1]);
+                            $styles[] = "{$property}-{$side}: var(--wp--preset--spacing--{$slug})";
                         } else {
                             $styles[] = "{$property}-{$side}: {$val}";
                         }
                     }
                 }
-            } else {
+            } elseif (is_scalar($value)) {
+                $value = (string) $value;
                 if (preg_match('/^var:preset\|spacing\|(.+)$/', $value, $matches)) {
-                    $styles[] = "{$property}: var(--wp--preset--spacing--{$matches[1]})";
+                    $slug = self::sanitizeClassToken($matches[1]);
+                    $styles[] = "{$property}: var(--wp--preset--spacing--{$slug})";
                 } else {
                     $styles[] = "{$property}: {$value}";
                 }
@@ -432,8 +510,11 @@ class Renderer
 
             $name = $element->getAttribute('proto-repeater') ?: $element->getAttribute('zen-repeater');
             if (isset($attributes[$name])) {
-                $this->fieldRegistry->updateElement('repeater', $element, $attributes[$name], [
-                    'fields' => $protoConfig['fields'][$name]['fields'] ?? [],
+                // Pass the full field config so RepeaterField can honour
+                // block.json `max` when capping the number of rendered rows.
+                $fieldConfig = is_array($protoConfig['fields'][$name] ?? null) ? $protoConfig['fields'][$name] : [];
+                $this->fieldRegistry->updateElement('repeater', $element, $attributes[$name], $fieldConfig + [
+                    'fields' => $fieldConfig['fields'] ?? [],
                 ]);
             }
         }
@@ -454,8 +535,17 @@ class Renderer
             $type = $element->getAttribute('proto-type') ?: $element->getAttribute('zen-type') ?: 'text';
 
             // Special handling for innerblocks
-            if (in_array($type, ['inner-blocks', 'innerblocks'], true) && !empty($attributes['innerBlocksContent'])) {
-                $this->fieldRegistry->updateElement($type, $element, $attributes['innerBlocksContent']);
+            if (in_array($type, ['inner-blocks', 'innerblocks'], true)) {
+                // innerBlocksContent is core-rendered inner block HTML set by
+                // Engine::renderBlock, never a stored attribute, so it is
+                // trusted. The author-controlled attribute named after the
+                // field is deliberately NOT used as a fallback: it would be
+                // raw markup from the block comment JSON.
+                if (!empty($attributes['innerBlocksContent'])) {
+                    $this->fieldRegistry->updateElement($type, $element, $attributes['innerBlocksContent'], [
+                        'trustedInnerContent' => true,
+                    ]);
+                }
             } elseif (isset($attributes[$name])) {
                 $this->fieldRegistry->updateElement($type, $element, $attributes[$name]);
             }

@@ -6,9 +6,10 @@
  * Styled entirely with Tailwind CSS - no style.css needed.
  *
  * @var array    $attributes Block attributes.
- * @var string   $content    Inner blocks content.
  * @var WP_Block $block      Block instance.
  */
+
+defined( 'ABSPATH' ) || exit;
 
 $show_badge = $attributes['showBadge'] ?? true;
 $badge_text = $attributes['badgeText'] ?? 'Announcing our next round of funding.';
@@ -53,7 +54,7 @@ $wrapper_attributes = get_block_wrapper_attributes([
 					class="relative rounded-full px-3 py-1 text-sm leading-6 text-gray-400 ring-1 ring-white/10 hover:ring-white/20">
 					<span data-proto-field="badgeText"><?php echo esc_html($badge_text); ?></span>
 					<a href="<?php echo esc_url($badge_link['url'] ?? '#'); ?>"
-						class="font-semibold text-primary-400 ml-1 no-underline hover:underline" data-proto-field="badgeLink" <?php echo !empty($badge_link['target']) ? 'target="' . esc_attr($badge_link['target']) . '"' : ''; ?>>
+						class="font-semibold text-primary-400 ml-1 no-underline hover:underline" data-proto-field="badgeLink"<?php echo proto_blocks_link_attrs($badge_link); ?>>
 						<span aria-hidden="true" class="absolute inset-0"></span>
 						<?php echo esc_html($badge_link['text'] ?? 'Read more'); ?>
 						<span aria-hidden="true">&rarr;</span>
@@ -76,12 +77,12 @@ $wrapper_attributes = get_block_wrapper_attributes([
 			<div class="mt-10 flex items-center justify-center gap-x-6">
 				<a href="<?php echo esc_url($primary_button['url'] ?? '#'); ?>"
 					class="rounded-md bg-primary-500 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 transition-colors no-underline"
-					data-proto-field="primaryButton" <?php echo !empty($primary_button['target']) ? 'target="' . esc_attr($primary_button['target']) . '"' : ''; ?>><?php echo esc_html($primary_button['text'] ?? 'Get started'); ?></a>
+					data-proto-field="primaryButton"<?php echo proto_blocks_link_attrs($primary_button); ?>><?php echo esc_html($primary_button['text'] ?? 'Get started'); ?></a>
 
 				<?php if ($show_secondary_link): ?>
 					<a href="<?php echo esc_url($secondary_link['url'] ?? '#'); ?>"
 						class="text-sm font-semibold leading-6 text-white hover:text-gray-300 transition-colors no-underline"
-						data-proto-field="secondaryLink" <?php echo !empty($secondary_link['target']) ? 'target="' . esc_attr($secondary_link['target']) . '"' : ''; ?>>
+						data-proto-field="secondaryLink"<?php echo proto_blocks_link_attrs($secondary_link); ?>>
 						<?php echo esc_html($secondary_link['text'] ?? 'Learn more'); ?>
 						<span aria-hidden="true">→</span>
 					</a>

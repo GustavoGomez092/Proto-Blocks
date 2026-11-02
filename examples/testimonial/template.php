@@ -5,14 +5,17 @@
  * Display customer testimonials with quote, author info, and optional rating.
  *
  * @var array    $attributes Block attributes.
- * @var string   $content    Inner blocks content.
  * @var WP_Block $block      Block instance.
  */
+
+defined( 'ABSPATH' ) || exit;
 
 // Check if we're in editor preview mode
 $is_preview = ! isset( $block ) || $block === null;
 
 $style        = $attributes['style'] ?? 'default';
+// Select values are not validated against `options` on the server: allowlist before use in a class.
+$style        = in_array( $style, [ 'default', 'bordered', 'filled' ], true ) ? $style : 'default';
 $show_avatar  = $attributes['showAvatar'] ?? true;
 $show_rating  = $attributes['showRating'] ?? true;
 $rating       = (int) ( $attributes['rating'] ?? 5 );
@@ -25,7 +28,7 @@ $author_image = $attributes['authorImage'] ?? [];
 $classes = [
     'wp-block-proto-blocks-testimonial',
     'proto-testimonial',
-    'proto-testimonial--style-' . esc_attr( $style ),
+    'proto-testimonial--style-' . sanitize_html_class( $style ),
 ];
 
 $wrapper_attributes = get_block_wrapper_attributes( [

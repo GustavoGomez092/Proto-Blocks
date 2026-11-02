@@ -45,9 +45,22 @@ final class BinaryManagerTest extends TestCase
         chmod($path, 0755);
     }
 
+    /**
+     * A manager that trusts the binary currently on disk (its SHA-256 is
+     * injected the way download() records it). Integrity failures are covered
+     * separately in BinaryIntegrityTest.
+     */
+    private function trustedManager(): BinaryManager
+    {
+        $path = $this->binDir . 'tailwindcss';
+        $sha = is_file($path) ? (string) hash_file('sha256', $path) : null;
+
+        return new BinaryManager($this->binDir, $sha);
+    }
+
     public function test_missing_binary_is_neither_installed_nor_functional(): void
     {
-        $bm = new BinaryManager($this->binDir);
+        $bm = $this->trustedManager();
 
         $this->assertFalse($bm->isInstalled());
         $this->assertNull($bm->getVersion());
@@ -57,7 +70,7 @@ final class BinaryManagerTest extends TestCase
     public function test_runnable_binary_is_installed_and_functional(): void
     {
         $this->writeBinary("#!/bin/sh\necho \"tailwindcss v4.1.0\"\n");
-        $bm = new BinaryManager($this->binDir);
+        $bm = $this->trustedManager();
 
         $this->assertTrue($bm->isInstalled());
         $this->assertSame('4.1.0', $bm->getVersion());
@@ -69,7 +82,7 @@ final class BinaryManagerTest extends TestCase
         // Exists with the executable bit, but exits non-zero with no version
         // output — reproduces the "green check + v?" broken state.
         $this->writeBinary("#!/bin/sh\nexit 1\n");
-        $bm = new BinaryManager($this->binDir);
+        $bm = $this->trustedManager();
 
         $this->assertTrue($bm->isInstalled());   // file present + executable bit
         $this->assertNull($bm->getVersion());    // cannot read a version
@@ -91,7 +104,7 @@ final class BinaryManagerTest extends TestCase
             $this->markTestSkipped('exec() is disabled in this environment.');
         }
 
-        $bm = new BinaryManager($this->binDir);
+        $bm = $this->trustedManager();
         $this->assertTrue($bm->isShellAvailable());
     }
 
@@ -110,7 +123,7 @@ final class BinaryManagerTest extends TestCase
             . "esac\n"
         );
 
-        $bm = new BinaryManager($this->binDir);
+        $bm = $this->trustedManager();
 
         $this->assertSame('4.3.3', $bm->getVersion());
     }
@@ -128,7 +141,7 @@ final class BinaryManagerTest extends TestCase
             . "echo \"~ tailwindcss v4.3.3\"\n"
         );
 
-        $bm = new BinaryManager($this->binDir);
+        $bm = $this->trustedManager();
         $this->assertSame('4.3.3', $bm->getVersion());
 
         $seenCwd = trim((string) file_get_contents($marker));

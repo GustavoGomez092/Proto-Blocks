@@ -117,10 +117,14 @@ class Commands extends WP_CLI_Command {
      * @param array $assoc_args Associative arguments.
      */
     public function create( array $args, array $assoc_args ): void {
-        $name = sanitize_title( $args[0] );
+        $raw_name = (string) ( $args[0] ?? '' );
+        $name     = self::normalizeBlockName( $raw_name );
 
-        if ( empty( $name ) ) {
-            WP_CLI::error( 'Block name is required.' );
+        if ( null === $name ) {
+            WP_CLI::error(
+                "Invalid block name '" . self::safeArg( $raw_name ) . "'. "
+                . 'Use lowercase letters, digits and dashes, starting with a letter (e.g. "feature-card").'
+            );
             return;
         }
 
@@ -149,14 +153,11 @@ class Commands extends WP_CLI_Command {
         // Parse fields
         $fields = [];
         if ( ! empty( $assoc_args['fields'] ) ) {
-            $field_pairs = explode( ',', $assoc_args['fields'] );
-            foreach ( $field_pairs as $pair ) {
-                $parts = explode( ':', trim( $pair ) );
-                if ( count( $parts ) >= 2 ) {
-                    $field_name = sanitize_key( $parts[0] );
-                    $field_type = sanitize_key( $parts[1] );
-                    $fields[ $field_name ] = $this->getFieldConfig( $field_type, $field_name );
-                }
+            try {
+                $fields = self::parseFields( (string) $assoc_args['fields'] );
+            } catch ( \InvalidArgumentException $e ) {
+                WP_CLI::error( self::safeArg( $e->getMessage() ) );
+                return;
             }
         }
 
@@ -340,7 +341,7 @@ class Commands extends WP_CLI_Command {
 
         // Filter to specific block if provided
         if ( ! empty( $args[0] ) ) {
-            $target_name = $args[0];
+            $target_name = (string) $args[0];
             $blocks = array_filter(
                 $blocks,
                 function ( $path ) use ( $target_name ) {
@@ -349,7 +350,7 @@ class Commands extends WP_CLI_Command {
             );
 
             if ( empty( $blocks ) ) {
-                WP_CLI::error( "Block '{$target_name}' not found." );
+                WP_CLI::error( "Block '" . self::safeArg( $target_name ) . "' not found." );
                 return;
             }
         }
@@ -418,23 +419,24 @@ class Commands extends WP_CLI_Command {
      * @param array $assoc_args Associative arguments.
      */
     public function cache_stats( array $args, array $assoc_args ): void {
-        $cache_dir = WP_CONTENT_DIR . '/cache/proto-blocks';
+        $plugin = Plugin::getInstance();
+        $cache  = $plugin->getCache();
 
-        if ( ! is_dir( $cache_dir ) ) {
-            WP_CLI::log( 'Cache directory does not exist (no items cached yet).' );
+        if ( ! $cache ) {
+            WP_CLI::error( 'Cache system is not available.' );
             return;
         }
 
-        $files = glob( $cache_dir . '/*.php' );
-        $total_size = 0;
+        $stats = $cache->getStats();
 
-        foreach ( $files as $file ) {
-            $total_size += filesize( $file );
+        if ( 0 === (int) $stats['file_count'] ) {
+            WP_CLI::log( 'No templates cached yet.' );
         }
 
-        WP_CLI::log( sprintf( 'Cached templates: %d', count( $files ) ) );
-        WP_CLI::log( sprintf( 'Total cache size: %s', size_format( $total_size ) ) );
-        WP_CLI::log( sprintf( 'Cache directory: %s', $cache_dir ) );
+        WP_CLI::log( sprintf( 'Cached templates: %d', (int) $stats['file_count'] ) );
+        WP_CLI::log( sprintf( 'Total cache size: %s', size_format( (int) $stats['total_size'] ) ) );
+        WP_CLI::log( sprintf( 'Cache directory: %s', $stats['directory'] ) );
+        WP_CLI::log( sprintf( 'Cache enabled: %s', $stats['enabled'] ? 'yes' : 'no' ) );
     }
 
     /**
@@ -542,7 +544,7 @@ class Commands extends WP_CLI_Command {
      * @param array $assoc_args Associative arguments.
      */
     public function export( array $args, array $assoc_args ): void {
-        $name = $args[0];
+        $name = (string) ( $args[0] ?? '' );
 
         $plugin    = Plugin::getInstance();
         $discovery = $plugin->getDiscovery();
@@ -563,21 +565,136 @@ class Commands extends WP_CLI_Command {
         }
 
         if ( ! $source_path ) {
-            WP_CLI::error( "Block '{$name}' not found." );
+            WP_CLI::error( "Block '" . self::safeArg( $name ) . "' not found." );
             return;
         }
 
-        $output_dir = $assoc_args['output'] ?? getcwd() . '/' . $name;
+        $output_dir = (string) ( $assoc_args['output'] ?? getcwd() . '/' . $name );
 
         if ( is_dir( $output_dir ) ) {
-            WP_CLI::error( "Output directory already exists: {$output_dir}" );
+            WP_CLI::error( 'Output directory already exists: ' . self::safeArg( $output_dir ) );
             return;
         }
 
         // Copy directory recursively
         $this->copyDirectory( $source_path, $output_dir );
 
-        WP_CLI::success( "Block '{$name}' exported to: {$output_dir}" );
+        WP_CLI::success( "Block '{$name}' exported to: " . self::safeArg( $output_dir ) );
+    }
+
+    /**
+     * Local variable names the scaffolded template.php (and the engine that
+     * includes it) already own. A field with one of these names would be
+     * spliced into the template as `$name = $attributes['name'] ?? ...` and
+     * shadow the contract variable (or fatal, for `$this`).
+     *
+     * `content` is deliberately NOT reserved: the engine never defines a
+     * `$content` local (nested blocks arrive as `$innerBlocksContent`), and
+     * `content` is the default wysiwyg field name.
+     */
+    public const RESERVED_FIELD_NAMES = [
+        // Renderer::executeTemplate() scope.
+        'this',
+        'attributes',
+        'block',
+        'innerBlocksContent',
+        'templatePath',
+        'protoConfig',
+        'config',
+        'variables',
+        'template',
+        // Locals the scaffold itself declares.
+        'is_preview',
+        'wrapper_attributes',
+        'wrapper_styles',
+        'repeater_items',
+        'item',
+    ];
+
+    /**
+     * Strip control and escape characters from a value before echoing it in a
+     * terminal message, so an argument cannot carry ANSI sequences that rewrite
+     * the line or forge output in CI log viewers.
+     *
+     * @param string $value Untrusted argument.
+     * @return string Printable text.
+     */
+    public static function safeArg( string $value ): string {
+        return preg_replace( '/[\x00-\x1F\x7F]/', '', $value ) ?? '';
+    }
+
+    /**
+     * Normalise a block slug argument.
+     *
+     * sanitize_title() contains the value to a single path segment; the regex
+     * then enforces the block-name grammar WordPress accepts for the part after
+     * the namespace (`^[a-z][a-z0-9-]*$`), which sanitize_title alone does not
+     * (it keeps `_`, `%` and leading digits).
+     *
+     * @param string $raw Positional argument as typed.
+     * @return string|null Valid slug, or null when it cannot be used.
+     */
+    public static function normalizeBlockName( string $raw ): ?string {
+        $name = sanitize_title( trim( $raw ) );
+
+        if ( '' === $name || ! preg_match( '/^[a-z][a-z0-9-]*$/', $name ) ) {
+            return null;
+        }
+
+        return $name;
+    }
+
+    /**
+     * Validate a `--fields` entry name.
+     *
+     * The name is spliced into generated PHP as a variable identifier, an
+     * array key and a CSS class suffix, so it must be a plain identifier that
+     * starts with a lowercase letter, and must not collide with a variable the
+     * template contract already defines.
+     *
+     * @param string $field_name Field name as typed.
+     * @return string|null Error message, or null when the name is acceptable.
+     */
+    public static function validateFieldName( string $field_name ): ?string {
+        if ( ! preg_match( '/^[a-z][a-zA-Z0-9_]*$/', $field_name ) ) {
+            return "Invalid field name '{$field_name}': use letters, digits and underscores, starting with a lowercase letter.";
+        }
+
+        if ( in_array( $field_name, self::RESERVED_FIELD_NAMES, true ) ) {
+            return "Invalid field name '{$field_name}': it is reserved by the template contract.";
+        }
+
+        return null;
+    }
+
+    /**
+     * Parse a `--fields="name:type,name:type"` specification.
+     *
+     * @param string $spec Comma-separated name:type pairs.
+     * @return array<string, array> Field configurations keyed by name.
+     * @throws \InvalidArgumentException When a field name is invalid or reserved.
+     */
+    public static function parseFields( string $spec ): array {
+        $fields = [];
+
+        foreach ( explode( ',', $spec ) as $pair ) {
+            $parts = explode( ':', trim( $pair ) );
+            if ( count( $parts ) < 2 ) {
+                continue;
+            }
+
+            $field_name = trim( $parts[0] );
+            $field_type = sanitize_key( $parts[1] );
+
+            $error = self::validateFieldName( $field_name );
+            if ( null !== $error ) {
+                throw new \InvalidArgumentException( $error );
+            }
+
+            $fields[ $field_name ] = self::getFieldConfig( $field_type, $field_name );
+        }
+
+        return $fields;
     }
 
     /**
@@ -587,10 +704,15 @@ class Commands extends WP_CLI_Command {
      * @param string $field_name Field name.
      * @return array Field configuration.
      */
-    private function getFieldConfig( string $type, string $field_name ): array {
+    public static function getFieldConfig( string $type, string $field_name ): array {
         $config = [ 'type' => $type ];
 
         switch ( $type ) {
+            case 'color':
+            case 'color-palette':
+                $config['default'] = '#000000';
+                break;
+
             case 'text':
                 if ( in_array( $field_name, [ 'title', 'heading' ], true ) ) {
                     $config['tagName'] = 'h2';
@@ -626,7 +748,7 @@ class Commands extends WP_CLI_Command {
      * @param array  $fields Block fields.
      * @return string Template content.
      */
-    private function generateTemplate( string $name, array $fields ): string {
+    public function generateTemplate( string $name, array $fields ): string {
         $title      = ucwords( str_replace( '-', ' ', $name ) );
         $class_name = 'wp-block-proto-blocks-' . $name;
 
@@ -634,20 +756,47 @@ class Commands extends WP_CLI_Command {
         $output .= "/**\n";
         $output .= " * Block: {$title}\n";
         $output .= " *\n";
+        $output .= " * Every value in \$attributes is contributor-controlled JSON that WordPress\n";
+        $output .= " * only type-checks; nothing escapes it for you. Escape every echo for its\n";
+        $output .= " * context (esc_html / esc_attr / esc_url / wp_kses_post) and validate anything\n";
+        $output .= " * that lands inside style=\"\" (sanitize_hex_color, casts, allowlists).\n";
+        $output .= " *\n";
         $output .= " * @var array    \$attributes Block attributes.\n";
-        $output .= " * @var string   \$innerBlocksContent Nested blocks HTML (inner-blocks field only).\n";
+        $output .= " * @var string   \$innerBlocksContent Nested blocks HTML, already rendered by core (inner-blocks field only).\n";
         $output .= " * @var WP_Block \$block      Block instance.\n";
         $output .= " */\n\n";
+
+        $output .= "defined( 'ABSPATH' ) || exit;\n\n";
 
         // Add $is_preview detection for editor rendering
         $output .= "// Check if we're in editor preview mode (no block instance = preview)\n";
         $output .= "\$is_preview = ! isset( \$block ) || \$block === null;\n\n";
 
         // Extract field variables
+        $style_fields = [];
         foreach ( $fields as $field_name => $config ) {
             $type = $config['type'] ?? 'text';
-            if ( in_array( $type, [ 'image', 'link', 'repeater' ], true ) ) {
+
+            if ( 'inner-blocks' === $type ) {
+                // Provided by the engine as $innerBlocksContent; never a local of its own,
+                // so it can never shadow (or be shadowed by) a field named `content`.
+                continue;
+            }
+
+            if ( in_array( $type, [ 'image', 'link', 'repeater', 'gallery', 'file', 'multiselect' ], true ) ) {
                 $output .= "\${$field_name} = \$attributes['{$field_name}'] ?? [];\n";
+            } elseif ( in_array( $type, [ 'color', 'color-palette' ], true ) ) {
+                $default = (string) ( $config['default'] ?? '' );
+                if ( ! preg_match( '/^#(?:[0-9a-fA-F]{3}){1,2}$/', $default ) ) {
+                    $default = '#000000';
+                }
+                $output .= "// Colour: validated as a hex value, not merely escaped, because it lands inside style=\"\".\n";
+                $output .= "\${$field_name} = sanitize_hex_color( \$attributes['{$field_name}'] ?? '' ) ?: '{$default}';\n";
+                $style_fields[] = $field_name;
+            } elseif ( in_array( $type, [ 'number', 'range' ], true ) ) {
+                $output .= "\${$field_name} = (int) ( \$attributes['{$field_name}'] ?? 0 );\n";
+            } elseif ( in_array( $type, [ 'toggle', 'checkbox' ], true ) ) {
+                $output .= "\${$field_name} = ! empty( \$attributes['{$field_name}'] );\n";
             } else {
                 $output .= "\${$field_name} = \$attributes['{$field_name}'] ?? '';\n";
             }
@@ -656,9 +805,22 @@ class Commands extends WP_CLI_Command {
         $output .= "\n";
 
         // Use get_block_wrapper_attributes for proper block support
-        $output .= "\$wrapper_attributes = get_block_wrapper_attributes( [\n";
-        $output .= "    'class' => '{$class_name}',\n";
-        $output .= "] );\n";
+        if ( ! empty( $style_fields ) ) {
+            $output .= "// Colours are exposed as CSS custom properties; style.css reads them with var().\n";
+            $output .= "\$wrapper_styles = [];\n";
+            foreach ( $style_fields as $field_name ) {
+                $output .= "\$wrapper_styles[] = '--{$class_name}-{$field_name}: ' . \${$field_name};\n";
+            }
+            $output .= "\n";
+            $output .= "\$wrapper_attributes = get_block_wrapper_attributes( [\n";
+            $output .= "    'class' => '{$class_name}',\n";
+            $output .= "    'style' => implode( '; ', \$wrapper_styles ),\n";
+            $output .= "] );\n";
+        } else {
+            $output .= "\$wrapper_attributes = get_block_wrapper_attributes( [\n";
+            $output .= "    'class' => '{$class_name}',\n";
+            $output .= "] );\n";
+        }
         $output .= "?>\n\n";
 
         $output .= "<div <?php echo \$wrapper_attributes; ?>>\n";
@@ -706,8 +868,7 @@ class Commands extends WP_CLI_Command {
                     $output .= "        class=\"{$class_name}__{$field_name}\"\n";
                     $output .= "        href=\"<?php echo esc_url( \${$field_name}['url'] ?? '#' ); ?>\"\n";
                     $output .= "        data-proto-field=\"{$field_name}\"\n";
-                    $output .= "        <?php echo ! empty( \${$field_name}['target'] ) ? 'target=\"' . esc_attr( \${$field_name}['target'] ) . '\"' : ''; ?>\n";
-                    $output .= "        <?php echo ! empty( \${$field_name}['rel'] ) ? 'rel=\"' . esc_attr( \${$field_name}['rel'] ) . '\"' : ''; ?>\n";
+                    $output .= "        <?php echo proto_blocks_link_attrs( \${$field_name} ); // target=\"_blank\" always gets rel=\"noopener\" ?>\n";
                     $output .= "    ><?php echo esc_html( \${$field_name}['text'] ?? __( 'Link', 'proto-blocks' ) ); ?></a>\n";
                     $output .= "    <?php endif; ?>\n\n";
                     break;
@@ -737,7 +898,11 @@ class Commands extends WP_CLI_Command {
 
                 case 'inner-blocks':
                     $output .= "    <div class=\"{$class_name}__inner-blocks\" data-proto-inner-blocks>\n";
-                    $output .= "        <?php echo \$content; ?>\n";
+                    $output .= "        <?php\n";
+                    $output .= "        // \$innerBlocksContent is the nested-block HTML WordPress core has already\n";
+                    $output .= "        // rendered and escaped. Echo it raw: wp_kses_post() would strip core block markup.\n";
+                    $output .= "        echo \$innerBlocksContent ?? '';\n";
+                    $output .= "        ?>\n";
                     $output .= "    </div>\n\n";
                     break;
             }
@@ -811,7 +976,7 @@ class Commands extends WP_CLI_Command {
 
                 case 'link':
                     $output .= "            <?php if ( ! empty( \$item['{$field_name}']['url'] ) ) : ?>\n";
-                    $output .= "            <a class=\"{$class_name}__{$repeater_name}-{$field_name}\" href=\"<?php echo esc_url( \$item['{$field_name}']['url'] ); ?>\" data-proto-field=\"{$field_name}\"><?php echo esc_html( \$item['{$field_name}']['text'] ?? '' ); ?></a>\n";
+                    $output .= "            <a class=\"{$class_name}__{$repeater_name}-{$field_name}\" href=\"<?php echo esc_url( \$item['{$field_name}']['url'] ); ?>\" data-proto-field=\"{$field_name}\"<?php echo proto_blocks_link_attrs( (array) \$item['{$field_name}'] ); ?>><?php echo esc_html( \$item['{$field_name}']['text'] ?? '' ); ?></a>\n";
                     $output .= "            <?php endif; ?>\n";
                     break;
             }
@@ -893,6 +1058,13 @@ class Commands extends WP_CLI_Command {
                     $output .= "    /* Styles for inner blocks container */\n";
                     $output .= "}\n\n";
                     break;
+
+                case 'color':
+                case 'color-palette':
+                    $output .= ".{$class_name} {\n";
+                    $output .= "    /* {$field_name} is set on the wrapper as var(--{$class_name}-{$field_name}) */\n";
+                    $output .= "}\n\n";
+                    break;
             }
         }
 
@@ -942,7 +1114,7 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
         } elseif ( $args[0] === 'stats' ) {
             $commands->cache_stats( $args, $assoc_args );
         } else {
-            WP_CLI::error( "Unknown cache command: {$args[0]}" );
+            WP_CLI::error( 'Unknown cache command: ' . Commands::safeArg( (string) $args[0] ) );
         }
     } );
 }

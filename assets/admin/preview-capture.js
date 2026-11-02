@@ -224,11 +224,16 @@
         const payload = await response.json();
 
         // Refresh the row's thumbnail in place.
+        // `previewUrl` is '' when the block lives outside a web-served
+        // directory (nothing to show); keep the existing cell in that case.
         const cell = row.querySelector( '.proto-blocks-capture__thumb-cell' );
-        if ( cell && payload && payload.previewUrl ) {
-            cell.innerHTML =
-                '<img class="proto-blocks-capture__thumb" alt="" src="' +
-                payload.previewUrl + '?v=' + ( payload.mtime || Date.now() ) + '">';
+        const previewUrl = payload && typeof payload.previewUrl === 'string' ? payload.previewUrl : '';
+        if ( cell && previewUrl !== '' ) {
+            const img = document.createElement( 'img' );
+            img.className = 'proto-blocks-capture__thumb';
+            img.setAttribute( 'alt', '' );
+            img.setAttribute( 'src', previewUrl + '?v=' + ( Number( payload.mtime ) || Date.now() ) );
+            cell.replaceChildren( img );
         }
         row.dataset.hasPreview = '1';
         const badge = row.querySelector( '.proto-blocks-capture__badge' );

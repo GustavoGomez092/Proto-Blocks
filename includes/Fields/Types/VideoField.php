@@ -27,6 +27,13 @@ class VideoField extends AbstractField
     ];
 
     /**
+     * Shape of an acceptable `mime` value: `video/` + a registered-subtype
+     * character set (RFC 6838), no parameters. MIME types are case-insensitive;
+     * the attribute is written lower-cased.
+     */
+    private const MIME_PATTERN = '#^video/[A-Za-z0-9][A-Za-z0-9!\#$&^_.+-]{0,126}$#i';
+
+    /**
      * Get attribute schema
      */
     public static function getAttributeSchema(mixed $default = null, array $config = []): array
@@ -52,11 +59,22 @@ class VideoField extends AbstractField
         }
 
         $url = $value['url'] ?? '';
+        $url = is_scalar($url) ? (string) $url : '';
 
-        if (!empty($url)) {
+        if ($url !== '') {
             $element->setAttribute('src', esc_url($url));
-            if (!empty($value['mime']) && strtolower($element->nodeName) === 'source') {
-                $element->setAttribute('type', $value['mime']);
+
+            // `type` on <source> must be a video MIME type. The value is raw
+            // attribute JSON, so it is validated against a strict pattern
+            // (which is also a subset of attribute-safe characters) and
+            // dropped otherwise; nothing else is ever written to the attribute.
+            $mime = $value['mime'] ?? '';
+            if (
+                is_string($mime)
+                && strtolower($element->nodeName) === 'source'
+                && preg_match(self::MIME_PATTERN, $mime) === 1
+            ) {
+                $element->setAttribute('type', esc_attr(strtolower($mime)));
             }
         } else {
             // Remove the element if no video is set and there's no default.

@@ -361,20 +361,13 @@ JS;
             PROTO_BLOCKS_VERSION
         );
 
-        wp_enqueue_script(
-            'proto-blocks-admin',
-            PROTO_BLOCKS_URL . 'assets/js/admin.js',
-            ['jquery', 'wp-api-fetch'],
-            PROTO_BLOCKS_VERSION,
-            true
-        );
+        // NOTE: the React admin app (assets/js/admin.js, built from
+        // src/admin/) is intentionally not enqueued. No PHP renders its
+        // `#proto-blocks-admin-app` mount node, so it never ran, yet it
+        // printed a `wp_rest` nonce into every Proto-Blocks admin page.
+        // The admin UI is PHP-rendered.
 
         $this->enqueueTailwindCompiler();
-
-        wp_localize_script('proto-blocks-admin', 'protoBlocksAdmin', [
-            'apiNamespace' => 'proto-blocks/v1',
-            'nonce' => wp_create_nonce('wp_rest'),
-        ]);
     }
 
     /**
@@ -461,7 +454,8 @@ JS;
                 // Get preview image URL if exists
                 $previewImageUrl = null;
                 if (!empty($protoConfig['previewImage'])) {
-                    $previewImageUrl = $this->pathToUrl($protoConfig['previewImage']);
+                    $url = $this->pathToUrl($protoConfig['previewImage']);
+                    $previewImageUrl = $url !== '' ? $url : null;
                 }
 
                 $data[] = [
@@ -476,7 +470,7 @@ JS;
                     'controls' => $protoConfig['controls'] ?? [],
                     'attributes' => $this->generateAttributes($schema, $parsedData),
                     'previewImage' => $previewImageUrl,
-                    'metadata' => $schema,
+                    'metadata' => self::publicSchema($schema),
                 ];
             } catch (\Throwable $e) {
                 if (PROTO_BLOCKS_DEBUG) {
@@ -492,6 +486,27 @@ JS;
         }
 
         return $data;
+    }
+
+    /**
+     * Keys SchemaReader adds to `protoBlocks` that hold server filesystem
+     * paths. They are needed by PHP only and must not reach the browser.
+     */
+    public const SERVER_ONLY_SCHEMA_KEYS = ['templatePath', 'blockDir', 'previewImage'];
+
+    /**
+     * A copy of a block schema with server-only (absolute path) keys removed,
+     * safe to localize or return from REST. The editor reads none of them:
+     * the preview image is passed separately as a URL.
+     */
+    public static function publicSchema(array $schema): array
+    {
+        if (isset($schema['protoBlocks']) && is_array($schema['protoBlocks'])) {
+            foreach (self::SERVER_ONLY_SCHEMA_KEYS as $key) {
+                unset($schema['protoBlocks'][$key]);
+            }
+        }
+        return $schema;
     }
 
     /**
@@ -608,7 +623,8 @@ JS;
             return content_url($relativePath);
         }
 
-        // Fallback - return as-is (might not work)
-        return $path;
+        // Not under a web-served directory we know: there is no URL for it.
+        // Never return the filesystem path (it would be sent to the browser).
+        return '';
     }
 }

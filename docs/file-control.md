@@ -45,6 +45,13 @@ Use the **id**, not the URL:
 ```php
 $id = (int) ( $attributes['data']['id'] ?? 0 );
 
+// The id is whatever the author saved: any attachment on the site, of any type.
+// `allowedTypes` only filters the picker, so verify the mime type on the server
+// before reading and rendering the file.
+if ( 'attachment' !== get_post_type( $id ) || ! in_array( get_post_mime_type( $id ), [ 'text/csv', 'text/plain' ], true ) ) {
+    $id = 0;
+}
+
 if ( $id ) {
     $path = get_attached_file( $id );
     $body = $path && is_readable( $path ) ? file_get_contents( $path ) : '';

@@ -41,6 +41,9 @@ class Scoper
 
     /**
      * Scope compiled CSS by wrapping selectors with scope class
+     *
+     * @throws \RuntimeException When PCRE fails; callers must not persist
+     *                           anything in that case.
      */
     public function scopeCompiledCss(string $css): string
     {
@@ -59,7 +62,7 @@ class Scoper
     private function processCSS(string $css): string
     {
         // Remove existing comments to avoid issues
-        $css = preg_replace('/\/\*[\s\S]*?\*\//', '', $css);
+        $css = $this->guardPcre(preg_replace('/\/\*[\s\S]*?\*\//', '', $css));
 
         // Handle at-rules recursively
         $css = $this->processAtRules($css);
@@ -78,7 +81,7 @@ class Scoper
         // Match @media, @supports, @layer with their content
         $pattern = '/(@(?:media|supports|layer)[^{]*)\{((?:[^{}]|(?:\{[^{}]*\}))*)\}/s';
 
-        return preg_replace_callback($pattern, function ($matches) {
+        return $this->guardPcre(preg_replace_callback($pattern, function ($matches) {
             $atRule = $matches[1];
             $content = $matches[2];
 
@@ -86,7 +89,7 @@ class Scoper
             $processedContent = $this->processRules($content);
 
             return $atRule . '{' . $processedContent . '}';
-        }, $css) ?? $css;
+        }, $css));
     }
 
     /**
@@ -97,7 +100,7 @@ class Scoper
         // Match CSS rules: selector { declarations }
         $pattern = '/([^{}@]+)\{([^{}]*)\}/s';
 
-        return preg_replace_callback($pattern, function ($matches) {
+        return $this->guardPcre(preg_replace_callback($pattern, function ($matches) {
             $selectors = trim($matches[1]);
             $declarations = $matches[2];
 
@@ -126,7 +129,26 @@ class Scoper
             $scopedSelectors = $this->scopeSelectors($selectors);
 
             return $scopedSelectors . '{' . $declarations . '}';
-        }, $css) ?? $css;
+        }, $css));
+    }
+
+    /**
+     * Fail closed when PCRE gives up.
+     *
+     * preg_replace_callback() returns null on a backtrack/recursion/JIT-stack
+     * limit. Falling back to the raw input would persist UNSCOPED CSS as the
+     * live stylesheet (and isScoped() would still report true because of the
+     * header comment), so the only safe answer is to refuse the whole compile.
+     *
+     * @throws \RuntimeException
+     */
+    private function guardPcre(?string $result): string
+    {
+        if ($result === null) {
+            throw new \RuntimeException('Scoper: PCRE error while scoping CSS (' . preg_last_error_msg() . ').');
+        }
+
+        return $result;
     }
 
     /**

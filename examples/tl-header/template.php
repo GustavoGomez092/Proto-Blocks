@@ -5,6 +5,8 @@
  * @var array $attributes Block attributes
  */
 
+defined( 'ABSPATH' ) || exit;
+
 $fixed_class = !empty($attributes['fixedPosition']) ? 'fixed' : 'relative';
 $show_cta = $attributes['showCta'] ?? true;
 $nav_items = $attributes['navItems'] ?? [];
@@ -28,8 +30,7 @@ $logo = $attributes['logo'] ?? [];
     <div class="flex md:order-2 space-x-3 md:space-x-0 rtl:space-x-reverse">
       <?php if ($show_cta): ?>
       <a href="<?php echo esc_url($cta_button['url'] ?? '#'); ?>"
-        <?php echo !empty($cta_button['target']) ? 'target="' . esc_attr($cta_button['target']) . '"' : ''; ?>
-        <?php echo !empty($cta_button['rel']) ? 'rel="' . esc_attr($cta_button['rel']) . '"' : ''; ?>
+        <?php echo proto_blocks_link_attrs($cta_button); // target="_blank" always gets rel="noopener" ?>
         class="text-white bg-primary-600 hover:bg-primary-700 focus:ring-4 focus:ring-primary-300 font-medium rounded-lg text-sm px-4 py-2 focus:outline-none"
         data-proto-field="ctaButton"><?php echo esc_html($cta_button['text'] ?? 'Get started'); ?></a>
       <?php endif; ?>

@@ -27,6 +27,7 @@ use ProtoBlocks\Admin\SetupWizard;
 use ProtoBlocks\Tailwind\Manager as TailwindManager;
 use ProtoBlocks\Tailwind\AdminSettings as TailwindAdminSettings;
 use ProtoBlocks\Updater\GitHubUpdater;
+use ProtoBlocks\Security\AttributeSanitizer;
 
 /**
  * Main plugin singleton class
@@ -275,8 +276,17 @@ final class Plugin
         $providers = $this->getOptionsProviders();
 
         $providers->register('wp:posts', function (array $args): array {
+            // Only post types a visitor could view on the front end. Anything
+            // else (wp_template, wp_global_styles, wp_navigation, private
+            // CPTs such as coupons) is not something a contributor may list.
+            $postType = isset($args['post_type']) && is_string($args['post_type']) ? $args['post_type'] : 'post';
+            $typeObject = get_post_type_object($postType);
+            if (!$typeObject || !is_post_type_viewable($typeObject)) {
+                return [];
+            }
+
             $query = new \WP_Query([
-                'post_type'      => $args['post_type'] ?? 'post',
+                'post_type'      => $postType,
                 'post_status'    => 'publish',
                 'posts_per_page' => self::clampPerPage($args['per_page'] ?? null, 50),
                 's'              => (string) ($args['search'] ?? ''),
@@ -295,8 +305,16 @@ final class Plugin
         }, ['post_type', 'per_page', 'search']);
 
         $providers->register('wp:terms', function (array $args): array {
+            // Only taxonomies a visitor could query on the front end; this
+            // keeps nav_menu, wp_theme and private taxonomies out of reach.
+            $taxonomy = isset($args['taxonomy']) && is_string($args['taxonomy']) ? $args['taxonomy'] : 'category';
+            $taxonomyObject = get_taxonomy($taxonomy);
+            if (!$taxonomyObject || !is_taxonomy_viewable($taxonomyObject)) {
+                return [];
+            }
+
             $terms = get_terms([
-                'taxonomy'   => $args['taxonomy'] ?? 'category',
+                'taxonomy'   => $taxonomy,
                 'hide_empty' => false,
                 'number'     => self::clampPerPage($args['per_page'] ?? null, 100),
                 'search'     => (string) ($args['search'] ?? ''),
@@ -316,17 +334,39 @@ final class Plugin
         }, ['taxonomy', 'per_page', 'search']);
 
         $providers->register('wp:users', function (array $args): array {
-            $users = get_users([
-                'number'  => self::clampPerPage($args['per_page'] ?? null, 50),
-                'search'  => !empty($args['search']) ? '*' . $args['search'] . '*' : '',
-                'orderby' => 'display_name',
-                'order'   => 'ASC',
-            ]);
+            // Trust model (mirrors core's /wp/v2/users): the route is open to
+            // every edit_posts user, so without restrictions it is an e-mail
+            // and login enumeration oracle. We keep the source usable for
+            // author pickers by (a) searching display_name/user_nicename
+            // only -- never user_email or user_login -- and (b) limiting
+            // callers who lack `list_users` to users with published posts,
+            // which is exactly what core exposes publicly. Users with
+            // `list_users` get the unrestricted listing (still with the
+            // restricted search columns). Labels are display_name only; the
+            // login is never returned.
+            $query = [
+                'number'         => self::clampPerPage($args['per_page'] ?? null, 50),
+                'orderby'        => 'display_name',
+                'order'          => 'ASC',
+                'search_columns' => ['display_name', 'user_nicename'],
+            ];
+
+            if (!empty($args['search']) && is_string($args['search'])) {
+                $query['search'] = '*' . sanitize_text_field($args['search']) . '*';
+            }
+
+            if (!current_user_can('list_users')) {
+                $query['has_published_posts'] = true;
+            }
+
+            $users = get_users($query);
 
             return array_map(
                 static fn(\WP_User $user): array => [
                     'key'   => (string) $user->ID,
-                    'label' => $user->display_name !== '' ? $user->display_name : (string) $user->user_login,
+                    'label' => $user->display_name !== ''
+                        ? $user->display_name
+                        : sprintf(__('User #%d', 'proto-blocks'), $user->ID),
                 ],
                 $users
             );
@@ -440,6 +480,20 @@ final class Plugin
         // AJAX handlers
         add_action('wp_ajax_proto_blocks_preview', [$this->getAjaxHandler(), 'handlePreview']);
 
+        // Attribute trust boundary. Block-comment JSON is never touched by
+        // kses, so for users without `unfiltered_html` the plugin sanitises
+        // Proto-Blocks attributes itself: at save (wp_insert_post_data) and
+        // again at render (render_block_data) as defence in depth for
+        // content that was stored before this existed or bypassed save.
+        add_filter('wp_insert_post_data', [$this, 'sanitizePostContentAttributes'], 20, 2);
+        add_action('wp_after_insert_post', [$this, 'recordPostTrust'], 10, 2);
+        add_filter('render_block_data', [$this, 'sanitizeRenderedBlockAttributes'], 9);
+        // Trust-context stack: template parts are admin-only content and a
+        // synced pattern carries its own trust, so blocks rendered inside
+        // them must not be judged by the queried post's author.
+        add_filter('pre_render_block', [$this, 'pushRenderTrustContext'], PHP_INT_MAX, 2);
+        add_filter('render_block', [$this, 'popRenderTrustContext'], PHP_INT_MAX, 2);
+
         // Editor assets - localize data (script already registered on init)
         add_action('enqueue_block_editor_assets', [$this->getAssets(), 'enqueueEditorAssets']);
 
@@ -485,6 +539,270 @@ final class Plugin
 
         // Disable WordPress global styles if enabled in settings
         add_action('init', [$this->getTailwindManager(), 'maybeDisableGlobalStyles'], 10);
+    }
+
+    /**
+     * wp_insert_post_data (priority 20, 2 args): sanitise Proto-Blocks block
+     * attributes in post_content when the saving user lacks unfiltered_html.
+     *
+     * $data arrives slashed; the content is only re-serialised when a block
+     * actually changed so untouched posts keep byte-identical content.
+     *
+     * @param array $data    Slashed, sanitised post data.
+     * @param array $postarr Slashed post data as passed to wp_insert_post().
+     */
+    public function sanitizePostContentAttributes(array $data, array $postarr = []): array
+    {
+        $content = $data['post_content'] ?? null;
+        if (!is_string($content) || $content === '' || strpos($content, '<!-- wp:proto-blocks/') === false) {
+            return $data;
+        }
+
+        if (!$this->isAttributeSanitizationEnabled('save')) {
+            return $data;
+        }
+
+        if (!AttributeSanitizer::shouldSanitizeForUser((int) get_current_user_id())) {
+            return $data;
+        }
+
+        try {
+            $unslashed = wp_unslash($content);
+            $blocks    = parse_blocks($unslashed);
+            if (!is_array($blocks)) {
+                return $data;
+            }
+
+            $changed   = false;
+            $sanitized = $this->sanitizeBlockTree($blocks, $changed);
+
+            if ($changed) {
+                $data['post_content'] = wp_slash(serialize_blocks($sanitized));
+            }
+        } catch (\Throwable $e) {
+            // Parse/serialise failure: keep the original content rather than
+            // losing the post; the render-time pass still applies.
+            if (defined('PROTO_BLOCKS_DEBUG') && PROTO_BLOCKS_DEBUG) {
+                error_log('Proto-Blocks: attribute sanitisation on save failed: ' . $e->getMessage());
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Post meta recording whether the last save of a post that contains
+     * Proto-Blocks blocks was made by a user with `unfiltered_html`.
+     * '1' = trusted, '0' = sanitise at render, absent = legacy (fall back to
+     * the post author's capability).
+     */
+    public const TRUST_META_KEY = '_proto_blocks_unfiltered';
+
+    /**
+     * Stack of trust decisions for the enclosing template part / synced
+     * pattern currently being rendered (true = trusted). Empty outside them.
+     *
+     * @var bool[]
+     */
+    private array $renderTrustStack = [];
+
+    /**
+     * wp_after_insert_post: remember who last saved this post. Core's kses
+     * works the same way (it keys on the saving user, not the author), so an
+     * administrator editing a contributor's draft must not have their edits
+     * stripped at render, and a contributor re-saving an administrator's
+     * post must not inherit its trust.
+     */
+    public function recordPostTrust(int $postId, $post): void
+    {
+        if (!$post instanceof \WP_Post) {
+            return;
+        }
+        if (function_exists('wp_is_post_revision') && wp_is_post_revision($post)) {
+            return;
+        }
+        if (function_exists('wp_is_post_autosave') && wp_is_post_autosave($post)) {
+            return;
+        }
+
+        $content = (string) $post->post_content;
+        if (strpos($content, '<!-- wp:proto-blocks/') === false) {
+            delete_post_meta($postId, self::TRUST_META_KEY);
+            return;
+        }
+
+        $trusted = !AttributeSanitizer::shouldSanitizeForUser((int) get_current_user_id());
+        update_post_meta($postId, self::TRUST_META_KEY, $trusted ? '1' : '0');
+    }
+
+    /**
+     * Whether blocks stored in $post may render unsanitised.
+     */
+    private function isPostTrusted(\WP_Post $post): bool
+    {
+        $meta = get_post_meta($post->ID, self::TRUST_META_KEY, true);
+
+        return AttributeSanitizer::isPostTrusted(is_string($meta) ? $meta : '', (int) $post->post_author);
+    }
+
+    /**
+     * pre_render_block (last): entering a template part or synced pattern.
+     * Runs at PHP_INT_MAX so a short-circuit by another filter (non-null
+     * $preRender, after which core never fires `render_block`) is visible and
+     * nothing is pushed for it.
+     *
+     * @param string|null $preRender
+     * @param array       $parsedBlock
+     * @return string|null
+     */
+    public function pushRenderTrustContext($preRender, $parsedBlock)
+    {
+        if ($preRender !== null || !is_array($parsedBlock)) {
+            return $preRender;
+        }
+
+        $name = $parsedBlock['blockName'] ?? '';
+        if ($name === 'core/template-part') {
+            // Editing template parts requires edit_theme_options.
+            $this->renderTrustStack[] = true;
+        } elseif ($name === 'core/block') {
+            $ref  = (int) ($parsedBlock['attrs']['ref'] ?? 0);
+            $post = $ref > 0 ? get_post($ref) : null;
+            $this->renderTrustStack[] = $post instanceof \WP_Post ? $this->isPostTrusted($post) : false;
+        }
+
+        return $preRender;
+    }
+
+    /**
+     * render_block (last): leaving a template part or synced pattern.
+     *
+     * @param string $content
+     * @param array  $parsedBlock
+     * @return string
+     */
+    public function popRenderTrustContext($content, $parsedBlock)
+    {
+        $name = is_array($parsedBlock) ? ($parsedBlock['blockName'] ?? '') : '';
+        if (($name === 'core/template-part' || $name === 'core/block') && $this->renderTrustStack !== []) {
+            array_pop($this->renderTrustStack);
+        }
+
+        return $content;
+    }
+
+    /**
+     * render_block_data (priority 9, before core renders): sanitise a
+     * Proto-Blocks block's attributes unless the content it came from is
+     * trusted: the enclosing template part / synced pattern when inside one,
+     * otherwise the queried post (its recorded trust meta, or for legacy
+     * posts its author's capability). Inner blocks reach this filter on
+     * their own (WP_Block::render applies it per inner block), so only the
+     * current block's attrs are touched here.
+     *
+     * @param array $parsedBlock The block as returned by parse_blocks().
+     */
+    public function sanitizeRenderedBlockAttributes($parsedBlock)
+    {
+        if (!is_array($parsedBlock)) {
+            return $parsedBlock;
+        }
+
+        $protoConfig = $this->getProtoConfigForBlockName($parsedBlock['blockName'] ?? null);
+        if ($protoConfig === null || empty($parsedBlock['attrs']) || !is_array($parsedBlock['attrs'])) {
+            return $parsedBlock;
+        }
+
+        if (!$this->isAttributeSanitizationEnabled('render')) {
+            return $parsedBlock;
+        }
+
+        if ($this->renderTrustStack !== []) {
+            $trusted = (bool) end($this->renderTrustStack);
+        } else {
+            $post = get_post();
+            if (!$post instanceof \WP_Post) {
+                return $parsedBlock;
+            }
+            $trusted = $this->isPostTrusted($post);
+        }
+
+        if ($trusted) {
+            return $parsedBlock;
+        }
+
+        $parsedBlock['attrs'] = AttributeSanitizer::sanitize($parsedBlock['attrs'], $protoConfig);
+
+        return $parsedBlock;
+    }
+
+    /**
+     * Walk a parse_blocks() tree (innerBlocks included) and sanitise the
+     * attrs of every registered Proto-Blocks block.
+     *
+     * @param array $blocks  Blocks from parse_blocks().
+     * @param bool  $changed Set to true when any block's attrs changed.
+     */
+    private function sanitizeBlockTree(array $blocks, bool &$changed): array
+    {
+        foreach ($blocks as $i => $block) {
+            if (!is_array($block)) {
+                continue;
+            }
+
+            $protoConfig = $this->getProtoConfigForBlockName($block['blockName'] ?? null);
+            if ($protoConfig !== null && !empty($block['attrs']) && is_array($block['attrs'])) {
+                $sanitized = AttributeSanitizer::sanitize($block['attrs'], $protoConfig);
+                if ($sanitized !== $block['attrs']) {
+                    $block['attrs'] = $sanitized;
+                    $changed = true;
+                }
+            }
+
+            if (!empty($block['innerBlocks']) && is_array($block['innerBlocks'])) {
+                $block['innerBlocks'] = $this->sanitizeBlockTree($block['innerBlocks'], $changed);
+            }
+
+            $blocks[$i] = $block;
+        }
+
+        return $blocks;
+    }
+
+    /**
+     * The protoBlocks config for a registered Proto-Blocks block name
+     * ("proto-blocks/hero"), or null when the name is not one of ours.
+     */
+    private function getProtoConfigForBlockName(mixed $blockName): ?array
+    {
+        if (!is_string($blockName) || strpos($blockName, 'proto-blocks/') !== 0) {
+            return null;
+        }
+
+        if (!isset($this->services['registrar'])) {
+            return null;
+        }
+
+        $name       = substr($blockName, strlen('proto-blocks/'));
+        $registered = $this->getRegistrar()->getRegisteredBlocks();
+        if (!isset($registered[$name])) {
+            return null;
+        }
+
+        $protoConfig = $registered[$name]['schema']['protoBlocks'] ?? [];
+
+        return is_array($protoConfig) ? $protoConfig : [];
+    }
+
+    /**
+     * Whether the attribute trust boundary is active. Sites that trust every
+     * editing user can disable it:
+     *   add_filter('proto_blocks_sanitize_attributes', '__return_false');
+     * $context is 'save' or 'render'.
+     */
+    private function isAttributeSanitizationEnabled(string $context): bool
+    {
+        return (bool) apply_filters('proto_blocks_sanitize_attributes', true, $context);
     }
 
     /**

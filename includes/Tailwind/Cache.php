@@ -2,6 +2,15 @@
 /**
  * Cache - Manages compiled Tailwind CSS cache
  *
+ * Layout under wp-content/uploads/proto-blocks/tailwind/:
+ *
+ *   tailwind.css        compiled, scoped stylesheet — the only public file
+ *   tailwind.css.hash   content hash of the last compile (denied by .htaccess)
+ *   .htaccess / index.php   deny everything except *.css
+ *   .work/              compile inputs (content.html = raw block template
+ *                       source, input.css); deny-all guarded AND deleted after
+ *                       every compile, because nginx ignores .htaccess.
+ *
  * @package ProtoBlocks
  */
 
@@ -18,6 +27,11 @@ class Cache
      * Cache directory relative to uploads
      */
     private const CACHE_SUBDIR = 'proto-blocks/tailwind/';
+
+    /**
+     * Work (compile input) directory relative to the cache directory.
+     */
+    private const WORK_SUBDIR = '.work/';
 
     /**
      * Output CSS filename
@@ -45,6 +59,11 @@ class Cache
     private string $cacheDir;
 
     /**
+     * Work directory path (compile inputs)
+     */
+    private string $workDir;
+
+    /**
      * Cache URL
      */
     private string $cacheUrl;
@@ -52,11 +71,24 @@ class Cache
     /**
      * Constructor
      */
-    public function __construct(?string $cacheDir = null)
+    public function __construct(?string $cacheDir = null, ?string $workDir = null)
     {
         $uploadDir = \wp_upload_dir();
         $this->cacheDir = $cacheDir ?? $uploadDir['basedir'] . '/' . self::CACHE_SUBDIR;
         $this->cacheUrl = $uploadDir['baseurl'] . '/' . self::CACHE_SUBDIR;
+
+        $workDir = $workDir ?? $this->cacheDir . self::WORK_SUBDIR;
+        if (function_exists('apply_filters')) {
+            /**
+             * Filter the directory the compile inputs (block template source,
+             * input.css) are written to. Point it outside the web root when the
+             * host allows it; the default is a guarded subdirectory of uploads.
+             *
+             * @param string $workDir Absolute path with trailing slash.
+             */
+            $workDir = (string) \apply_filters('proto_blocks_tailwind_work_dir', $workDir);
+        }
+        $this->workDir = rtrim($workDir, '/\\') . '/';
     }
 
     /**
@@ -93,19 +125,19 @@ class Cache
     }
 
     /**
-     * Get input CSS path
+     * Get input CSS path (inside the work directory)
      */
     public function getInputPath(): string
     {
-        return $this->cacheDir . self::INPUT_FILE;
+        return $this->workDir . self::INPUT_FILE;
     }
 
     /**
-     * Get content HTML path
+     * Get content HTML path (inside the work directory)
      */
     public function getContentPath(): string
     {
-        return $this->cacheDir . self::CONTENT_FILE;
+        return $this->workDir . self::CONTENT_FILE;
     }
 
     /**
@@ -184,7 +216,7 @@ class Cache
             return false;
         }
 
-        return file_put_contents($this->getCssPath(), $css, LOCK_EX) !== false;
+        return self::atomicWrite($this->getCssPath(), $css);
     }
 
     /**
@@ -192,11 +224,11 @@ class Cache
      */
     public function saveInput(string $inputCss): bool
     {
-        if (!$this->ensureDirectory()) {
+        if (!$this->ensureWorkDirectory()) {
             return false;
         }
 
-        return file_put_contents($this->getInputPath(), $inputCss, LOCK_EX) !== false;
+        return self::atomicWrite($this->getInputPath(), $inputCss);
     }
 
     /**
@@ -208,7 +240,7 @@ class Cache
             return false;
         }
 
-        return file_put_contents($this->getHashPath(), $hash, LOCK_EX) !== false;
+        return self::atomicWrite($this->getHashPath(), $hash);
     }
 
     /**
@@ -223,6 +255,22 @@ class Cache
 
         $hash = file_get_contents($hashPath);
         return $hash !== false ? trim($hash) : null;
+    }
+
+    /**
+     * Remove the compile inputs (block source dump + input.css).
+     *
+     * Called after every CLI compile, success or failure: the content file is
+     * the verbatim PHP source of every block template and must never sit in a
+     * web-served directory longer than the compile itself.
+     */
+    public function removeCompileInputs(): void
+    {
+        foreach ([$this->getContentPath(), $this->getInputPath()] as $file) {
+            if (file_exists($file) || is_link($file)) {
+                @unlink($file);
+            }
+        }
     }
 
     /**
@@ -256,6 +304,7 @@ class Cache
     {
         return [
             'directory' => $this->cacheDir,
+            'work_directory' => $this->workDir,
             'css_exists' => $this->exists(),
             'css_path' => $this->getCssPath(),
             'css_url' => $this->getUrl(),
@@ -267,15 +316,31 @@ class Cache
     }
 
     /**
-     * Ensure cache directory exists
+     * Ensure the output directory exists and is guarded (css-only web access).
      */
     public function ensureDirectory(): bool
     {
-        if (is_dir($this->cacheDir)) {
-            return true;
+        if (!is_dir($this->cacheDir) && !\wp_mkdir_p($this->cacheDir)) {
+            return false;
         }
 
-        return \wp_mkdir_p($this->cacheDir);
+        DirectoryGuard::allowOnlyCss($this->cacheDir);
+
+        return true;
+    }
+
+    /**
+     * Ensure the work directory exists and is guarded (no web access).
+     */
+    public function ensureWorkDirectory(): bool
+    {
+        if (!is_dir($this->workDir) && !\wp_mkdir_p($this->workDir)) {
+            return false;
+        }
+
+        DirectoryGuard::denyAll($this->workDir);
+
+        return true;
     }
 
     /**
@@ -284,6 +349,14 @@ class Cache
     public function getCacheDir(): string
     {
         return $this->cacheDir;
+    }
+
+    /**
+     * Get work directory (compile inputs)
+     */
+    public function getWorkDir(): string
+    {
+        return $this->workDir;
     }
 
     /**
@@ -296,5 +369,40 @@ class Cache
         }
 
         return is_writable($this->cacheDir);
+    }
+
+    /**
+     * Write a file via temp file + rename, refusing to follow a symlink.
+     *
+     * The cache paths are fixed and predictable; a pre-planted symlink at one
+     * of them (uploads is the most writable directory on a WordPress host)
+     * would otherwise make the compile overwrite whatever it points at.
+     * rename() replaces the directory entry itself, so even if a link appears
+     * between the check and the rename the target is never written through.
+     */
+    public static function atomicWrite(string $path, string $data): bool
+    {
+        if (is_link($path)) {
+            return false;
+        }
+
+        $dir = dirname($path);
+        if (!is_dir($dir)) {
+            return false;
+        }
+
+        $tmp = $dir . '/.' . basename($path) . '.' . bin2hex(random_bytes(6)) . '.tmp';
+
+        if (file_put_contents($tmp, $data, LOCK_EX) === false) {
+            @unlink($tmp);
+            return false;
+        }
+
+        if (!@rename($tmp, $path)) {
+            @unlink($tmp);
+            return false;
+        }
+
+        return true;
     }
 }

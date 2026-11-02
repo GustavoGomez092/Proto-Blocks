@@ -5,14 +5,18 @@
  * Collapsible accordion sections with customizable content using the Interactivity API.
  *
  * @var array    $attributes Block attributes.
- * @var string   $content    Inner blocks content.
  * @var WP_Block $block      Block instance.
  */
+
+defined( 'ABSPATH' ) || exit;
 
 $items          = $attributes['items'] ?? [];
 $allow_multiple = $attributes['allowMultiple'] ?? false;
 $first_open     = $attributes['firstOpen'] ?? true;
 $icon_position  = $attributes['iconPosition'] ?? 'right';
+
+// Select values are not validated against `options` on the server: allowlist before use in a class.
+$icon_position = in_array( $icon_position, [ 'left', 'right' ], true ) ? $icon_position : 'right';
 
 // Check if we're in editor preview mode (no block instance = preview)
 $is_preview = ! isset( $block ) || $block === null;
@@ -36,7 +40,7 @@ $block_id = $is_preview ? 'preview-' . uniqid() : 'accordion-' . ( $block->conte
 $classes = [
     'wp-block-proto-blocks-accordion',
     'proto-accordion',
-    'proto-accordion--icon-' . esc_attr( $icon_position ),
+    'proto-accordion--icon-' . sanitize_html_class( $icon_position ),
 ];
 
 // Prepare Interactivity API state
@@ -63,7 +67,7 @@ $wrapper_attributes = get_block_wrapper_attributes( [
         <div
             class="proto-accordion__item"
             data-proto-repeater-item
-            data-wp-context='{"index": <?php echo $index; ?>}'
+            data-wp-context="<?php echo esc_attr( wp_json_encode( [ 'index' => (int) $index ] ) ); ?>"
             data-wp-class--is-open="state.isItemOpen"
         >
             <h3 class="proto-accordion__header">

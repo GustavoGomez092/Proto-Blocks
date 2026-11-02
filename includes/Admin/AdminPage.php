@@ -206,6 +206,8 @@ class AdminPage
         $tailwind_blocks = $this->getDemoBlockNamesByType('tailwind');
         $tailwindEnabled = TailwindManager::getInstance()->isEnabled();
         $installed_demo_blocks = $this->getInstalledDemoBlocks();
+        $conflicting_demo_blocks = $this->getConflictingDemoBlocks();
+        $this->printSkippedDemoBlocksNotice();
 
         // Example blocks toggle state. When forced via wp-config.php the constant wins and the toggle is read-only.
         $exampleBlocksFromConfig = defined('PROTO_BLOCKS_EXAMPLE_BLOCKS_FROM_CONFIG') && \PROTO_BLOCKS_EXAMPLE_BLOCKS_FROM_CONFIG;
@@ -340,9 +342,12 @@ class AdminPage
                                 <?php if (!$tailwindEnabled): ?>
                                     <div class="pb-bg-amber-50 pb-border-l-4 pb-border-amber-400 pb-p-3 pb-mb-4 pb-text-sm pb-text-amber-800">
                                         <?php
-                                        printf(
-                                            __('Enable Tailwind CSS support in <a href="%s" class="pb-underline pb-font-medium">Settings</a> to install these blocks.', 'proto-blocks'),
-                                            esc_url(admin_url('admin.php?page=proto-blocks-settings'))
+                                        echo wp_kses(
+                                            sprintf(
+                                                __('Enable Tailwind CSS support in <a href="%s" class="pb-underline pb-font-medium">Settings</a> to install these blocks.', 'proto-blocks'),
+                                                esc_url(admin_url('admin.php?page=proto-blocks-settings'))
+                                            ),
+                                            ['a' => ['href' => [], 'class' => []]]
                                         );
                                         ?>
                                     </div>
@@ -386,12 +391,31 @@ class AdminPage
                             $blocks_formatted = array_map(function($name) {
                                 return '<code class="pb-bg-blue-100 pb-px-1 pb-rounded">' . esc_html($name) . '</code>';
                             }, $installed_demo_blocks);
-                            printf(
-                                __('Demo blocks that will be removed: %s', 'proto-blocks'),
-                                implode(', ', $blocks_formatted)
+                            echo wp_kses(
+                                sprintf(
+                                    __('Demo blocks that will be removed: %s', 'proto-blocks'),
+                                    implode(', ', $blocks_formatted)
+                                ),
+                                ['code' => ['class' => []]]
                             );
                             ?>
                         </div>
+                        <?php if (!empty($conflicting_demo_blocks)): ?>
+                        <div class="pb-bg-amber-50 pb-border-l-4 pb-border-amber-400 pb-p-3 pb-mb-4 pb-text-sm pb-text-amber-800">
+                            <?php
+                            $conflicts_formatted = array_map(function ($name) {
+                                return '<code class="pb-bg-amber-100 pb-px-1 pb-rounded">' . esc_html($name) . '</code>';
+                            }, $conflicting_demo_blocks);
+                            echo wp_kses(
+                                sprintf(
+                                    __('Kept (modified or custom, not a demo copy): %s', 'proto-blocks'),
+                                    implode(', ', $conflicts_formatted)
+                                ),
+                                ['code' => ['class' => []]]
+                            );
+                            ?>
+                        </div>
+                        <?php endif; ?>
                         <form method="post" onsubmit="return confirm('<?php echo esc_js(__('Are you sure you want to remove all demo blocks? This action cannot be undone.', 'proto-blocks')); ?>');">
                             <?php wp_nonce_field('proto_blocks_remove_demos'); ?>
                             <button type="submit" name="proto_blocks_remove_demos" class="pb-bg-white pb-border pb-border-red-500 pb-text-red-600 hover:pb-bg-red-500 hover:pb-text-white pb-px-4 pb-py-2 pb-rounded pb-shadow-sm pb-text-sm pb-font-medium pb-flex pb-items-center pb-gap-2 pb-transition-colors">
@@ -773,23 +797,195 @@ class AdminPage
     }
 
     /**
-     * Get list of installed demo blocks in the theme
+     * Name of the manifest file written into every installed demo block.
+     * It records a checksum of each shipped file so install/remove can tell
+     * an untouched demo copy from a same-named custom or edited block.
+     */
+    public const DEMO_MARKER = '.proto-blocks-demo';
+
+    /**
+     * Demo block types accepted by installDemoBlocks().
+     */
+    public const DEMO_TYPES = ['vanilla', 'tailwind', 'all'];
+
+    /**
+     * Demo blocks skipped by the last install/remove because the on-disk
+     * directory is not an unmodified demo copy.
+     *
+     * @var string[]
+     */
+    private array $skippedDemoBlocks = [];
+
+    /**
+     * Whether WordPress allows this request to write code files
+     * (DISALLOW_FILE_MODS / DISALLOW_FILE_EDIT are not set).
+     */
+    public static function fileModsAllowed(): bool
+    {
+        if (defined('DISALLOW_FILE_MODS') && \DISALLOW_FILE_MODS) {
+            return false;
+        }
+        if (defined('DISALLOW_FILE_EDIT') && \DISALLOW_FILE_EDIT) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * sha256 of every regular file under $dir, keyed by path relative to
+     * $dir, sorted. The demo marker itself is excluded so the manifest can
+     * be stored inside the directory it describes.
+     *
+     * @return array<string, string>
+     */
+    public static function directoryManifest(string $dir): array
+    {
+        $manifest = [];
+        if (!is_dir($dir)) {
+            return $manifest;
+        }
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::LEAVES_ONLY
+        );
+        $base = rtrim($dir, '/') . '/';
+
+        foreach ($iterator as $file) {
+            /** @var \SplFileInfo $file */
+            if (!$file->isFile()) {
+                continue;
+            }
+            $relative = substr($file->getPathname(), strlen($base));
+            if ($relative === self::DEMO_MARKER) {
+                continue;
+            }
+            $hash = hash_file('sha256', $file->getPathname());
+            $manifest[str_replace('\\', '/', $relative)] = $hash === false ? '' : $hash;
+        }
+
+        ksort($manifest);
+        return $manifest;
+    }
+
+    /**
+     * Whether $installedDir is an unmodified copy of a shipped demo block.
+     *
+     * A block carrying the demo marker is compared against the manifest the
+     * installer recorded at install time (so a demo installed from an older
+     * plugin version still counts as a demo after the shipped files change).
+     * A block without the marker (installed before the marker existed, or a
+     * same-named custom block) is compared file-for-file with $shippedDir.
+     * Anything that differs is treated as the developer's own code.
+     */
+    public static function isDemoCopy(string $installedDir, string $shippedDir): bool
+    {
+        if (!is_dir($installedDir)) {
+            return false;
+        }
+
+        $current = self::directoryManifest($installedDir);
+        if ($current === []) {
+            return false;
+        }
+
+        $markerPath = rtrim($installedDir, '/') . '/' . self::DEMO_MARKER;
+        if (is_file($markerPath)) {
+            $raw = file_get_contents($markerPath);
+            $marker = is_string($raw) ? json_decode($raw, true) : null;
+            $recorded = is_array($marker) && isset($marker['files']) && is_array($marker['files'])
+                ? $marker['files']
+                : null;
+            if ($recorded !== null) {
+                ksort($recorded);
+                return $recorded === $current;
+            }
+            // Unreadable marker: fall through to the shipped comparison.
+        }
+
+        if (!is_dir($shippedDir)) {
+            return false;
+        }
+
+        return self::directoryManifest($shippedDir) === $current;
+    }
+
+    /**
+     * Get list of installed demo blocks in the theme.
+     * Only directories verified to be unmodified demo copies are listed;
+     * see getConflictingDemoBlocks() for same-named directories that are not.
      *
      * @return array List of installed demo block names
      */
     public function getInstalledDemoBlocks(): array
     {
-        $demo_block_names = $this->getDemoBlockNames();
-        $theme_blocks_dir = get_stylesheet_directory() . '/proto-blocks';
-        $installed = [];
+        return $this->classifyThemeDemoDirectories()['demo'];
+    }
 
-        foreach ($demo_block_names as $demo_name) {
-            if (is_dir($theme_blocks_dir . '/' . $demo_name)) {
-                $installed[] = $demo_name;
+    /**
+     * Same-named directories in the theme that are NOT unmodified demo
+     * copies (custom blocks, or demos the developer has edited). These are
+     * never overwritten or removed.
+     *
+     * @return string[]
+     */
+    public function getConflictingDemoBlocks(): array
+    {
+        return $this->classifyThemeDemoDirectories()['conflict'];
+    }
+
+    /**
+     * Demo blocks the last install/remove refused to touch.
+     *
+     * @return string[]
+     */
+    public function getSkippedDemoBlocks(): array
+    {
+        return $this->skippedDemoBlocks;
+    }
+
+    /**
+     * Split theme directories that share a demo block's name into verified
+     * demo copies and everything else.
+     *
+     * @return array{demo: string[], conflict: string[]}
+     */
+    private function classifyThemeDemoDirectories(): array
+    {
+        $source_dir = \PROTO_BLOCKS_DIR . 'examples';
+        $theme_blocks_dir = get_stylesheet_directory() . '/proto-blocks';
+        $result = ['demo' => [], 'conflict' => []];
+
+        foreach ($this->getDemoBlockNames() as $demo_name) {
+            $installed = $theme_blocks_dir . '/' . $demo_name;
+            if (!is_dir($installed)) {
+                continue;
+            }
+            if (self::isDemoCopy($installed, $source_dir . '/' . $demo_name)) {
+                $result['demo'][] = $demo_name;
+            } else {
+                $result['conflict'][] = $demo_name;
             }
         }
 
-        return $installed;
+        return $result;
+    }
+
+    /**
+     * Print an admin notice naming the blocks the last install/remove skipped.
+     */
+    private function printSkippedDemoBlocksNotice(): void
+    {
+        if ($this->skippedDemoBlocks === []) {
+            return;
+        }
+        echo '<div class="notice notice-warning"><p>';
+        echo esc_html(sprintf(
+            /* translators: %s: comma-separated block directory names */
+            __('Skipped %s: the directory in your theme is not an unmodified demo copy, so it was left untouched.', 'proto-blocks'),
+            implode(', ', $this->skippedDemoBlocks)
+        ));
+        echo '</p></div>';
     }
 
     /**
@@ -799,8 +995,31 @@ class AdminPage
      * @param string $type Type of blocks to install: 'vanilla', 'tailwind', or 'all'
      * @return int|\WP_Error Number of blocks installed or error
      */
-    private function installDemoBlocks(string $type = 'all'): int|\WP_Error
+    public function installDemoBlocks(string $type = 'all'): int|\WP_Error
     {
+        $this->skippedDemoBlocks = [];
+
+        if (!current_user_can('manage_options')) {
+            return new \WP_Error(
+                'forbidden',
+                __('You do not have permission to install demo blocks.', 'proto-blocks')
+            );
+        }
+
+        if (!self::fileModsAllowed()) {
+            return new \WP_Error(
+                'file_mods_disallowed',
+                __('File modifications are disabled on this site (DISALLOW_FILE_MODS), so demo blocks cannot be written to the theme.', 'proto-blocks')
+            );
+        }
+
+        if (!in_array($type, self::DEMO_TYPES, true)) {
+            return new \WP_Error(
+                'invalid_demo_type',
+                __('Unknown demo block type.', 'proto-blocks')
+            );
+        }
+
         // Get source and destination directories
         $source_dir = \PROTO_BLOCKS_DIR . 'examples';
         $dest_dir = get_stylesheet_directory() . '/proto-blocks';
@@ -862,13 +1081,20 @@ class AdminPage
             $source_block_path = $source_dir . '/' . $block_name;
             $dest_block_path = $dest_dir . '/' . $block_name;
 
-            // If destination exists, remove it first (only for demo blocks)
+            // A same-named directory is only replaced when it is verifiably an
+            // unmodified demo copy. Anything else is the developer's code: keep it.
             if (is_dir($dest_block_path)) {
+                if (!self::isDemoCopy($dest_block_path, $source_block_path)) {
+                    $this->skippedDemoBlocks[] = $block_name;
+                    continue;
+                }
                 $this->removeDirectory($dest_block_path);
             }
 
-            // Copy the block directory
-            if ($this->copyDirectory($source_block_path, $dest_block_path)) {
+            // Copy the block directory and record its manifest
+            if ($this->copyDirectory($source_block_path, $dest_block_path)
+                && $this->writeDemoMarker($dest_block_path)
+            ) {
                 $installed_count++;
             }
         }
@@ -887,6 +1113,23 @@ class AdminPage
      */
     private function removeDemoBlocks(): int|\WP_Error
     {
+        $this->skippedDemoBlocks = [];
+
+        if (!current_user_can('manage_options')) {
+            return new \WP_Error(
+                'forbidden',
+                __('You do not have permission to remove demo blocks.', 'proto-blocks')
+            );
+        }
+
+        if (!self::fileModsAllowed()) {
+            return new \WP_Error(
+                'file_mods_disallowed',
+                __('File modifications are disabled on this site (DISALLOW_FILE_MODS), so demo blocks cannot be removed from the theme.', 'proto-blocks')
+            );
+        }
+
+        $source_dir = \PROTO_BLOCKS_DIR . 'examples';
         $theme_blocks_dir = get_stylesheet_directory() . '/proto-blocks';
 
         // Check if theme blocks directory exists
@@ -897,8 +1140,10 @@ class AdminPage
             );
         }
 
-        // Get installed demo blocks
-        $installed_demo_blocks = $this->getInstalledDemoBlocks();
+        // Get installed demo blocks (verified copies only)
+        $classified = $this->classifyThemeDemoDirectories();
+        $installed_demo_blocks = $classified['demo'];
+        $this->skippedDemoBlocks = $classified['conflict'];
 
         if (empty($installed_demo_blocks)) {
             return new \WP_Error(
@@ -912,10 +1157,15 @@ class AdminPage
         foreach ($installed_demo_blocks as $block_name) {
             $block_path = $theme_blocks_dir . '/' . $block_name;
 
-            if (is_dir($block_path)) {
-                if ($this->removeDirectory($block_path)) {
-                    $removed_count++;
-                }
+            // Re-verify immediately before deleting: never remove a directory
+            // that is not an unmodified demo copy.
+            if (!is_dir($block_path) || !self::isDemoCopy($block_path, $source_dir . '/' . $block_name)) {
+                $this->skippedDemoBlocks[] = $block_name;
+                continue;
+            }
+
+            if ($this->removeDirectory($block_path)) {
+                $removed_count++;
             }
         }
 
@@ -974,6 +1224,24 @@ class AdminPage
 
         closedir($dir);
         return true;
+    }
+
+    /**
+     * Write the demo marker (a manifest of the files just copied) into an
+     * installed demo block directory.
+     */
+    private function writeDemoMarker(string $dest): bool
+    {
+        $marker = [
+            'source'  => 'proto-blocks/examples',
+            'version' => defined('PROTO_BLOCKS_VERSION') ? \PROTO_BLOCKS_VERSION : '',
+            'files'   => self::directoryManifest($dest),
+        ];
+        $json = wp_json_encode($marker, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        if (!is_string($json)) {
+            return false;
+        }
+        return file_put_contents(rtrim($dest, '/') . '/' . self::DEMO_MARKER, $json) !== false;
     }
 
     /**

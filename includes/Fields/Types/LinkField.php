@@ -23,6 +23,29 @@ class LinkField extends AbstractField
     ];
 
     /**
+     * Values the `target` attribute may take; anything else is dropped.
+     */
+    private const ALLOWED_TARGETS = ['_self', '_blank', '_parent', '_top'];
+
+    /**
+     * Inline-only kses profile for the link text.
+     *
+     * Link text is phrasing content, so block-level tags and anything that can
+     * carry a script (img/svg/iframe/style...) have no business here. This is
+     * deliberately narrower than wp_kses_post.
+     */
+    private const TEXT_ALLOWED_HTML = [
+        'a'      => ['href' => true, 'title' => true, 'target' => true, 'rel' => true, 'class' => true],
+        'strong' => ['class' => true],
+        'em'     => ['class' => true],
+        'b'      => ['class' => true],
+        'i'      => ['class' => true],
+        'span'   => ['class' => true],
+        'br'     => [],
+        'code'   => ['class' => true],
+    ];
+
+    /**
      * Get attribute schema
      */
     public static function getAttributeSchema(mixed $default = null, array $config = []): array
@@ -42,6 +65,9 @@ class LinkField extends AbstractField
 
     /**
      * Update element with link value
+     *
+     * The value is raw attribute JSON (see AbstractField::sanitizeHtmlForOutput
+     * for why), so every member is filtered here before it touches the DOM.
      */
     public static function updateElement(DOMElement $element, mixed $value, array $config = []): void
     {
@@ -54,44 +80,91 @@ class LinkField extends AbstractField
             $value = [];
         }
 
-        $url = $value['url'] ?? '';
-        $text = $value['text'] ?? '';
-        $target = $value['target'] ?? '';
-        $rel = $value['rel'] ?? '';
-        $title = $value['title'] ?? '';
+        $url = self::stringMember($value, 'url');
+        $text = self::stringMember($value, 'text');
+        $target = self::stringMember($value, 'target');
+        $rel = self::stringMember($value, 'rel');
+        $title = self::stringMember($value, 'title');
 
         // Set URL
-        if (!empty($url)) {
+        if ($url !== '') {
             $element->setAttribute('href', esc_url($url));
         } elseif ($element->hasAttribute('href')) {
             $element->removeAttribute('href');
         }
 
-        // Set target
-        if (!empty($target)) {
-            $element->setAttribute('target', esc_attr($target));
+        // Set target (allowlisted; arbitrary window names are dropped)
+        if (!in_array($target, self::ALLOWED_TARGETS, true)) {
+            $target = '';
+        }
+        if ($target !== '') {
+            $element->setAttribute('target', $target);
         } elseif ($element->hasAttribute('target')) {
             $element->removeAttribute('target');
         }
 
-        // Set rel (add noopener for external links)
-        if (!empty($rel)) {
-            $element->setAttribute('rel', esc_attr($rel));
-        } elseif ($target === '_blank') {
-            $element->setAttribute('rel', 'noopener noreferrer');
+        // Set rel. Tokens are merged, never replaced: a _blank link always
+        // ends up with noopener, and an explicit "opener" token (which would
+        // re-enable window.opener for the target page) is discarded.
+        $relTokens = self::relTokens($rel);
+        if ($target === '_blank') {
+            if ($relTokens === []) {
+                $relTokens = ['noopener', 'noreferrer'];
+            } elseif (!in_array('noopener', $relTokens, true)) {
+                $relTokens[] = 'noopener';
+            }
+        }
+        if ($relTokens !== []) {
+            $element->setAttribute('rel', implode(' ', $relTokens));
         } elseif ($element->hasAttribute('rel')) {
             $element->removeAttribute('rel');
         }
 
         // Set title
-        if (!empty($title)) {
+        if ($title !== '') {
             $element->setAttribute('title', esc_attr($title));
         }
 
-        // Set text content if provided
-        if (!empty($text)) {
+        // Set text content if provided. The raw value goes to the helper: it
+        // takes the text-node path when there is no markup (so "&" is encoded
+        // exactly once) and otherwise runs sanitizeHtmlForOutput() below.
+        if ($text !== '') {
             static::setHtmlContent($element, $text);
         }
+    }
+
+    /**
+     * Link text gets the inline-only profile, not wp_kses_post.
+     */
+    protected static function sanitizeHtmlForOutput(string $html): string
+    {
+        return wp_kses($html, self::TEXT_ALLOWED_HTML);
+    }
+
+    /**
+     * Read a member of the value as a string; non-scalars become ''.
+     */
+    private static function stringMember(array $value, string $key): string
+    {
+        $member = $value[$key] ?? '';
+
+        return is_scalar($member) ? (string) $member : '';
+    }
+
+    /**
+     * Split a rel attribute into lower-case `[a-z-]` tokens, dropping "opener".
+     *
+     * @return list<string>
+     */
+    private static function relTokens(string $rel): array
+    {
+        $tokens = preg_split('/\s+/', strtolower(trim($rel)), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $tokens = array_filter(
+            $tokens,
+            static fn (string $token): bool => $token !== 'opener' && preg_match('/^[a-z-]+$/', $token) === 1
+        );
+
+        return array_values(array_unique($tokens));
     }
 
     /**
@@ -129,9 +202,9 @@ class LinkField extends AbstractField
 
         $sanitized = [
             'url' => isset($value['url']) ? esc_url_raw($value['url']) : '',
-            'text' => isset($value['text']) ? wp_kses_post($value['text']) : '',
+            'text' => isset($value['text']) ? wp_kses($value['text'], self::TEXT_ALLOWED_HTML) : '',
             'target' => isset($value['target']) ? sanitize_key($value['target']) : '',
-            'rel' => isset($value['rel']) ? sanitize_text_field($value['rel']) : '',
+            'rel' => isset($value['rel']) ? implode(' ', self::relTokens(sanitize_text_field($value['rel']))) : '',
             'title' => isset($value['title']) ? sanitize_text_field($value['title']) : '',
         ];
 

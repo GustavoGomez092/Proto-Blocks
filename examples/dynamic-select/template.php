@@ -6,20 +6,29 @@
  * via `optionsSource` (wp:posts, wp:terms) instead of a static options array.
  *
  * @var array    $attributes Block attributes.
- * @var string   $content    Inner blocks content.
  * @var WP_Block $block      Block instance.
  */
+
+defined( 'ABSPATH' ) || exit;
 
 $heading     = $attributes['heading'] ?? '';
 $relatedPage = $attributes['relatedPage'] ?? '';
 $category    = $attributes['category'] ?? '';
 
-$pageTitle = $relatedPage ? get_the_title( (int) $relatedPage ) : '';
+// The stored value is just an integer the author can set to any ID, so only
+// print the title when the post is public or the current visitor may read it.
+$pageTitle = '';
+if ( $relatedPage ) {
+	$pageId = (int) $relatedPage;
+	if ( 'publish' === get_post_status( $pageId ) || current_user_can( 'read_post', $pageId ) ) {
+		$pageTitle = get_the_title( $pageId );
+	}
+}
 
 $termName = '';
 if ( $category ) {
-	$term = get_term( (int) $category );
-	if ( $term instanceof \WP_Term ) {
+	$term = get_term( (int) $category, 'category' );
+	if ( $term instanceof \WP_Term && is_taxonomy_viewable( $term->taxonomy ) ) {
 		$termName = $term->name;
 	}
 }
