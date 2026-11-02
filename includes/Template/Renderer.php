@@ -94,8 +94,62 @@ class Renderer
         $this->cleanupAttributes($dom);
 
         // Return final HTML
-        $html = $dom->saveHTML();
-        return html_entity_decode($html ?: '', ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        return self::decodeNonMarkupEntities($dom->saveHTML() ?: '');
+    }
+
+    /**
+     * Restore libxml's entity-encoded characters without undoing escaping.
+     *
+     * DOMDocument::saveHTML() serialises every non-ASCII character as an
+     * entity (&reg; &mdash; &ldquo; &#9731; ...), in text nodes, attribute
+     * values and even inside <script>/<style> raw text, which mangles UTF-8
+     * copy and JS string literals. The previous implementation ran the whole
+     * document through html_entity_decode(), which also turned the entities
+     * libxml uses for markup characters (&lt; &gt; &amp; &quot;) back into
+     * raw < > & " -- i.e. it undid every esc_html()/esc_attr() a template had
+     * applied and turned escaped visitor or contributor input into live
+     * markup (reflected and stored XSS).
+     *
+     * This decoder walks each entity individually and only restores it when
+     * the DECODED character contains none of < > & " '. It tests the decoded
+     * value, not the spelling, so &lt; &#60; &#x3C; &#X3C; &#0060; are all
+     * refused alike. Because libxml encodes every literal "&" as &amp; and
+     * &amp; is refused, decoding can never produce a new "&...;" sequence, so
+     * the pass cannot double-decode. Entities html_entity_decode() leaves
+     * alone (unknown names, U+0000, C0/C1 controls, surrogates, > U+10FFFF)
+     * are passed through untouched for the browser to handle. Multi-codepoint
+     * HTML5 entities are checked with strpbrk() over the whole decoded string.
+     *
+     * Attribute values are always quoted by libxml, so decoding whitespace,
+     * backtick or "=" inside one cannot open a new attribute, and the quote
+     * characters themselves are in the refused set.
+     *
+     * Note the one observable spelling change: a template that echoes
+     * "&#038;" (esc_html's spelling of "&") now reaches the browser as
+     * "&amp;" instead of a bare "&". The DOM is identical.
+     */
+    private static function decodeNonMarkupEntities(string $html): string
+    {
+        $decoded = preg_replace_callback(
+            '/&(#[0-9]+|#[xX][0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]*);/',
+            static function (array $m): string {
+                $entity  = $m[0];
+                $decoded = html_entity_decode($entity, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+                // Unknown or unrepresentable entity: leave it for the browser.
+                if ($decoded === $entity) {
+                    return $entity;
+                }
+
+                // Never restore a character that could open or close markup.
+                return false !== strpbrk($decoded, '<>&"\'') ? $entity : $decoded;
+            },
+            $html
+        );
+
+        // On a PCRE failure fall back to libxml's still-encoded output: it is
+        // valid HTML that renders correctly, merely with entities not restored.
+        return $decoded ?? $html;
     }
 
     /**
