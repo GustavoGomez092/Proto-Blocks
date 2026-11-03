@@ -76,6 +76,74 @@ for (const [alias, type] of Object.entries(aliasMap as Record<string, FieldType>
 	(TYPE_ALIASES[type] ??= []).push(alias);
 }
 
+/** One line per type for the type picker's tiles. */
+export const TYPE_TILE: Record<FieldType, string> = {
+	text: __('Single line', 'proto-blocks'),
+	textarea: __('Multiple lines', 'proto-blocks'),
+	number: __('Min, max, step', 'proto-blocks'),
+	email: __('Validated address', 'proto-blocks'),
+	url: __('Validated link', 'proto-blocks'),
+	password: __('Masked input', 'proto-blocks'),
+	wysiwyg: __('WYSIWYG editor', 'proto-blocks'),
+	image: __('One attachment', 'proto-blocks'),
+	file: __('Any attachment', 'proto-blocks'),
+	gallery: __('Ordered images', 'proto-blocks'),
+	video: __('Attachment or URL', 'proto-blocks'),
+	code: __('Syntax-highlighted', 'proto-blocks'),
+	select: __('One or many', 'proto-blocks'),
+	radio: __('One of few', 'proto-blocks'),
+	true_false: __('Checkbox or switch', 'proto-blocks'),
+	color: __('Hex picker', 'proto-blocks'),
+	date: __('ISO stored', 'proto-blocks'),
+	time: __('HH:MM', 'proto-blocks'),
+	datetime: __('Both', 'proto-blocks'),
+	link: __('URL, title, target', 'proto-blocks'),
+	relationship: __('Pick posts', 'proto-blocks'),
+	taxonomy: __('Pick terms', 'proto-blocks'),
+	group: __('Nested fields', 'proto-blocks'),
+	repeater: __('Repeating rows', 'proto-blocks'),
+	flexible_content: __('Layouts', 'proto-blocks'),
+	tab: __('Split the box', 'proto-blocks'),
+	accordion: __('Collapsible section', 'proto-blocks'),
+	message: __('Static text', 'proto-blocks'),
+};
+
+/** A sentence per type, under the Field type select. */
+export const TYPE_HELP: Record<FieldType, string> = {
+	text: __('A single line of plain text.', 'proto-blocks'),
+	textarea: __('Multiple lines of plain text.', 'proto-blocks'),
+	number: __('A number with optional min, max and step.', 'proto-blocks'),
+	email: __('An email address.', 'proto-blocks'),
+	url: __('A single web address.', 'proto-blocks'),
+	password: __('Text typed into a masked input.', 'proto-blocks'),
+	wysiwyg: __('Formatted text from the classic editor.', 'proto-blocks'),
+	image: __('An attachment id, URL or array.', 'proto-blocks'),
+	file: __('Any attachment from the media library.', 'proto-blocks'),
+	gallery: __('An ordered set of images.', 'proto-blocks'),
+	video: __('A video attachment or URL.', 'proto-blocks'),
+	code: __('Source code in a syntax-highlighted editor.', 'proto-blocks'),
+	select: __('One or more choices from a list.', 'proto-blocks'),
+	radio: __('One choice from a short list.', 'proto-blocks'),
+	true_false: __('A checkbox, or a switch with the UI option.', 'proto-blocks'),
+	color: __('A hex colour.', 'proto-blocks'),
+	date: __('Stored in ISO format; display format is separate.', 'proto-blocks'),
+	time: __('Stored as HH:MM:SS.', 'proto-blocks'),
+	datetime: __('A date and a time, stored in ISO format.', 'proto-blocks'),
+	link: __('URL, title and target.', 'proto-blocks'),
+	relationship: __('Posts picked from a list.', 'proto-blocks'),
+	taxonomy: __('Terms from one taxonomy.', 'proto-blocks'),
+	group: __('A set of sub-fields stored together.', 'proto-blocks'),
+	repeater: __('A row of sub-fields, repeated.', 'proto-blocks'),
+	flexible_content: __('Rows built from the layouts you define.', 'proto-blocks'),
+	tab: __('Groups the fields below it under a tab.', 'proto-blocks'),
+	accordion: __('Folds the fields below it into a collapsible section.', 'proto-blocks'),
+	message: __('Static text shown on the edit screen.', 'proto-blocks'),
+};
+
+/** Which settings-panel tab a setting sits on; everything else is General. */
+export const VALIDATION_KEYS = new Set(['required', 'minlength', 'maxlength', 'pattern', 'min', 'max', 'step']);
+export const PRESENTATION_KEYS = new Set(['placeholder', 'wrapper.width', 'wrapper.class']);
+
 /** "Date" for `date_picker`; the declared type itself when the server does not know it. */
 export function typeLabel(declared: unknown): string {
 	const type = canonicalType(declared);
@@ -85,14 +153,14 @@ export function typeLabel(declared: unknown): string {
 const opts = (pairs: [string, string][]) => pairs.map(([value, label]) => ({ value, label }));
 
 export const COMMON_SETTINGS: SettingSpec[] = [
-	{ key: 'label', label: __('Label', 'proto-blocks'), control: 'text' },
+	{ key: 'label', label: __('Label', 'proto-blocks'), control: 'text', help: __('What editors see.', 'proto-blocks') },
 	{ key: 'name', label: __('Field name', 'proto-blocks'), control: 'text', help: __('The meta key templates read the value by.', 'proto-blocks') },
 	{ key: 'type', label: __('Field type', 'proto-blocks'), control: 'select', options: FIELD_TYPES.map((t) => ({ value: t, label: TYPE_META[t].label })) },
 	{ key: 'instructions', label: __('Instructions', 'proto-blocks'), control: 'textarea' },
 	{ key: 'required', label: __('Required', 'proto-blocks'), control: 'switch', help: __("Editors can't save without it.", 'proto-blocks') },
 	{ key: 'default_value', label: __('Default value', 'proto-blocks'), control: 'text', help: __('Stored as plain text in the file.', 'proto-blocks') },
 	{ key: 'placeholder', label: __('Placeholder', 'proto-blocks'), control: 'text' },
-	{ key: 'wrapper.width', label: __('Width (%)', 'proto-blocks'), control: 'text' },
+	{ key: 'wrapper.width', label: __('Width', 'proto-blocks'), control: 'text', help: __('Share of the row on the edit screen; narrow boxes stack fields in one column.', 'proto-blocks') },
 	{ key: 'wrapper.class', label: __('CSS class', 'proto-blocks'), control: 'text' },
 ];
 
