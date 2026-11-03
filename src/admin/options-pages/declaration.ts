@@ -160,6 +160,8 @@ export interface OptionsIndex {
 	createTarget: { path: string; writable: boolean; reason: string | null };
 	pages: OptionsPageRow[];
 	external: ExternalRow[];
+	/** Every capability any role has. */
+	capabilities: string[];
 	warnings: { slug: string; source: string | null; message: string }[];
 }
 

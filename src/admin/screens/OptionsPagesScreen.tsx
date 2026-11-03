@@ -71,7 +71,7 @@ export default function OptionsPagesScreen() {
 		return <OptionsPageEditor key={view.slug} slug={view.slug} onBack={back} />;
 	}
 	if (view.creating && writeReason === null) {
-		return <NewOptionsPage taken={result?.pages.map((page) => page.slug) ?? []} onBack={back} onCreated={(slug) => go({ slug, creating: false })} />;
+		return <NewOptionsPage taken={result?.pages.map((page) => page.slug) ?? []} capabilities={result?.capabilities ?? []} onBack={back} onCreated={(slug) => go({ slug, creating: false })} />;
 	}
 	return (
 		<OptionsPageList
