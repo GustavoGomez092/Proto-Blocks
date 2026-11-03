@@ -332,6 +332,14 @@ JS;
      */
     public function enqueueAdminAssets(string $hook): void
     {
+        // Settings pages live under any menu, so their hook suffixes come
+        // from the filter rather than the 'proto-blocks' prefix.
+        $appHooks = apply_filters('proto_blocks_admin_app_hooks', []);
+        if ($hook !== '' && is_array($appHooks) && in_array($hook, $appHooks, true)) {
+            $this->enqueueAdminApp();
+            return;
+        }
+
         // Only load on Proto-Blocks admin pages
         if (!str_contains($hook, 'proto-blocks')) {
             return;
