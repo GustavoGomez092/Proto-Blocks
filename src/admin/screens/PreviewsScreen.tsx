@@ -6,6 +6,7 @@ import {
 	CircleXIcon,
 	ImageIcon,
 	ImageOffIcon,
+	SquareDashedIcon,
 	ListChecksIcon,
 	LoaderCircleIcon,
 	RefreshCwIcon,
@@ -32,6 +33,10 @@ export interface PreviewBlock {
 	/** '' or null when the block folder has no public URL. */
 	previewUrl: string | null;
 	previewMtime: number | null;
+	/** The stored capture is blank-looking (under 40px tall or 2KB); computed server-side. */
+	empty?: boolean;
+	previewWidth?: number | null;
+	previewHeight?: number | null;
 	renderUrl: string;
 }
 
@@ -81,12 +86,13 @@ async function rasterize(body: HTMLElement, { width, height }: { width: number; 
 }
 
 /** POST to the existing preview-capture route; REST errors keep their message. */
-async function upload(block: string, image: string): Promise<{ previewUrl: string; mtime: number }> {
+async function upload(block: string, image: string): Promise<{ previewUrl: string; mtime: number; empty: boolean }> {
 	try {
-		const result = await adminPost<{ previewUrl?: unknown; mtime?: unknown }>('preview-capture', { block, image });
+		const result = await adminPost<{ previewUrl?: unknown; mtime?: unknown; empty?: unknown }>('preview-capture', { block, image });
 		return {
 			previewUrl: typeof result?.previewUrl === 'string' ? result.previewUrl : '',
 			mtime: Number(result?.mtime) || Date.now(),
+			empty: result?.empty === true,
 		};
 	} catch (error) {
 		if (error instanceof ApiError && error.status > 0) {
@@ -127,13 +133,34 @@ function Thumbnail({ block, busy }: { block: PreviewBlock; busy: boolean }) {
 			</div>
 		);
 	}
+	if (block.previewUrl && block.empty) {
+		return (
+			<div className="absolute inset-0 grid place-items-center border-2 border-dashed border-divider bg-muted p-4 text-center">
+				<span className="grid justify-items-center gap-1.5 text-muted-foreground">
+					<SquareDashedIcon aria-hidden="true" className="size-5" strokeWidth={1.75} />
+					<span className="max-w-[34ch] text-micro text-pretty">
+						{__(
+							'Nothing rendered — the block printed no output with default attributes. Add sample content or recapture with a post selected.',
+							'proto-blocks'
+						)}
+					</span>
+				</span>
+			</div>
+		);
+	}
 	if (block.previewUrl) {
 		return (
 			<img
 				src={`${block.previewUrl}?v=${block.previewMtime ?? 0}`}
 				/* translators: %s: block title. */
 				alt={sprintf(__('%s preview', 'proto-blocks'), block.title)}
-				className="absolute inset-0 size-full object-cover object-top"
+				className={cn(
+					'absolute inset-0 size-full object-top',
+					// A short capture would be zoomed past recognition by cover.
+					block.previewHeight && block.previewWidth && block.previewHeight / block.previewWidth < 0.625
+						? 'bg-white object-contain'
+						: 'object-cover'
+				)}
 			/>
 		);
 	}
@@ -292,7 +319,7 @@ function CaptureGrid({
 			setRun({ phase: 'running', done: 0, total: targets.length });
 
 			const rows: CaptureRow[] = targets.map((t) => ({ name: t.name, renderUrl: t.renderUrl }));
-			const results = new Map<string, { previewUrl: string; mtime: number }>();
+			const results = new Map<string, { previewUrl: string; mtime: number; empty: boolean }>();
 			const deps: CaptureDeps = {
 				iframe,
 				width: data.width,
@@ -320,6 +347,7 @@ function CaptureGrid({
 											hasPreview: true,
 											previewUrl: result?.previewUrl || b.previewUrl,
 											previewMtime: result?.mtime ?? b.previewMtime,
+											empty: result?.empty ?? false,
 										}
 									: b
 							)
@@ -448,12 +476,14 @@ function CaptureGrid({
 										</div>
 										<div className="flex items-start justify-between gap-2">
 											<div className="grid min-w-0 gap-0.5">
-												{block.hasPreview ? (
+												{block.hasPreview && block.empty ? (
+													<span className="text-caption text-warning">{__('Empty capture', 'proto-blocks')}</span>
+												) : block.hasPreview ? (
 													<span className="text-caption text-success">{__('Present', 'proto-blocks')}</span>
 												) : (
 													<span className="text-caption text-muted-foreground">{__('Missing', 'proto-blocks')}</span>
 												)}
-												<LiveLine live={rowLive} />
+												{block.empty && rowLive?.status === 'captured' ? null : <LiveLine live={rowLive} />}
 											</div>
 											<Button
 												size="sm"
