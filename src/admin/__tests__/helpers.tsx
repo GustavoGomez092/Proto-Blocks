@@ -43,11 +43,14 @@ type Route = unknown | ((body: unknown) => unknown);
  * function value receives the request body. A value or function that throws
  * an object like { code, message, data: { status } } rejects the request, the
  * way apiFetch does for a REST error. Unknown routes reject with rest_no_route.
+ * The client sends full URLs; the path is the URL with restRoot removed.
  */
 export function mockApi(routes: Record<string, Route>): jest.Mock {
 	const mock = apiFetch as unknown as jest.Mock;
-	mock.mockImplementation(async (options: { path?: string; method?: string; data?: unknown }) => {
-		const path = options.path ?? '';
+	mock.mockImplementation(async (options: { path?: string; url?: string; method?: string; data?: unknown }) => {
+		const root = window.protoBlocksAdmin?.restRoot ?? '';
+		const url = options.url ?? '';
+		const path = options.path ?? (root !== '' && url.startsWith(root) ? url.slice(root.length) : url);
 		const method = (options.method ?? 'GET').toUpperCase();
 		const key = `${method} ${path}` in routes ? `${method} ${path}` : path;
 		if (!(key in routes)) {
