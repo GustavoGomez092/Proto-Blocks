@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use ProtoBlocks\CLI\FieldsCommand;
 use ProtoBlocks\Modules\Fields\Definition\GroupNormalizer;
 use ProtoBlocks\Modules\Fields\Definition\Report;
+use ProtoBlocks\Modules\Fields\FieldsModule;
 
 require_once __DIR__ . '/wp-stubs.php';
 require_once __DIR__ . '/wp-cli-stub.php';
@@ -152,5 +153,88 @@ final class FieldsCommandTest extends TestCase
         $this->assertFalse(FieldsCommand::isWide(self::located([[$rule('post_type', '==', 'event'), $rule('post_status', '==', 'draft')]])));
         $this->assertFalse(FieldsCommand::isWide(self::located([[$rule('user_role', '==', 'editor')]])));
         $this->assertFalse(FieldsCommand::isWide(self::located([[$rule('page_template', '==', 'x.php')]])));
+    }
+
+    protected function setUp(): void
+    {
+        \WP_CLI::reset();
+    }
+
+    private static function error(callable $run): string
+    {
+        try {
+            $run();
+        } catch (\RuntimeException $e) {
+            return $e->getMessage();
+        }
+        self::fail('WP_CLI::error was not called');
+    }
+
+    public function testListErrorsWhenTheModuleIsDisabled(): void
+    {
+        $command = new FieldsCommand(static fn() => null);
+
+        $this->assertStringContainsString('disabled', self::error(fn() => $command->list([], [])));
+    }
+
+    public function testListRejectsAnUnknownFormat(): void
+    {
+        $command = new FieldsCommand(static fn() => new FieldsModule());
+
+        $this->assertStringContainsString('Unknown format: xml', self::error(fn() => $command->list([], ['format' => 'xml'])));
+    }
+
+    public function testListLogsInsteadOfPrintingAnEmptyJsonTable(): void
+    {
+        (new FieldsCommand(static fn() => new FieldsModule()))->list([], ['format' => 'json']);
+
+        $this->assertSame(['No field groups.'], \WP_CLI::messages('log'));
+    }
+
+    public function testValidateExitsOneOnErrors(): void
+    {
+        $command = new FieldsCommand(static fn() => new FieldsModule());
+        $message = self::error(fn() => $command->validate([self::FIXTURES . '/groups-invalid/missing-key.json'], []));
+
+        $this->assertStringContainsString('error(s)', $message);
+        $this->assertStringStartsWith('ERROR', \WP_CLI::messages('line')[0]);
+    }
+
+    public function testValidateWarningsDoNotFail(): void
+    {
+        $command = new FieldsCommand(static fn() => new FieldsModule());
+        $command->validate([self::FIXTURES . '/groups-invalid/unknown-rule.json'], []);
+
+        $this->assertCount(1, \WP_CLI::messages('success'));
+    }
+
+    public function testValidateDisabledModule(): void
+    {
+        $command = new FieldsCommand(static fn() => null);
+
+        $this->assertStringContainsString('disabled', self::error(fn() => $command->validate([], [])));
+
+        $command->validate([self::FIXTURES . '/acf-export-realistic.json'], []);
+        $this->assertStringContainsString('disabled', \WP_CLI::messages('warning')[0]);
+        $this->assertCount(1, \WP_CLI::messages('success'));
+    }
+
+    public function testControlCharactersNeverReachTheTerminal(): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'pbe');
+        file_put_contents($file, (string) json_encode(['key' => "group_\x1b[31mred", 'title' => "T\x1b[0m", 'fields' => 'nope']));
+        $command = new FieldsCommand(static fn() => null);
+        try {
+            self::error(fn() => $command->validate([$file], []));
+        } finally {
+            unlink($file);
+        }
+
+        foreach (\WP_CLI::messages('line') as $line) {
+            $this->assertSame(0, preg_match('/[\x00-\x1F\x7F]/', $line));
+        }
+        $row = FieldsCommand::rows([self::group(self::FIXTURES . '/acf-export-realistic.json')], [['key' => "k\x1b", 'title' => "t\x1b", 'source' => "s\x1b"]]);
+        $this->assertSame('k', $row[1]['key']);
+        $this->assertSame('t', $row[1]['title']);
     }
 }

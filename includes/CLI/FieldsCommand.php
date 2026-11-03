@@ -28,6 +28,18 @@ final class FieldsCommand {
 	public const STATUS_UNRENDERABLE = 'unrenderable';
 	public const STATUS_SKIPPED_ACF  = 'skipped-acf';
 
+	/** @var \Closure(): ?FieldsModule */
+	private \Closure $resolve;
+
+	/**
+	 * @param (callable(): ?FieldsModule)|null $resolve The enabled Fields module, or null when it is disabled (default: the plugin's module manager).
+	 */
+	public function __construct( ?callable $resolve = null ) {
+		$this->resolve = null !== $resolve
+			? \Closure::fromCallable( $resolve )
+			: static fn(): ?FieldsModule => \ProtoBlocks\Core\Plugin::getInstance()->getModules()->fields();
+	}
+
 	private const LIST_COLUMNS = array( 'key', 'title', 'source', 'path', 'fields', 'location', 'status' );
 
 	/** Location params that confine a group to some posts. */
@@ -44,21 +56,21 @@ final class FieldsCommand {
 		$rows = array();
 		foreach ( $groups as $group ) {
 			$rows[] = array(
-				'key'      => $group->key,
-				'title'    => $group->title,
-				'source'   => $group->source,
-				'path'     => (string) ( $group->path ?? '' ),
+				'key'      => Commands::safeArg( $group->key ),
+				'title'    => Commands::safeArg( $group->title ),
+				'source'   => Commands::safeArg( $group->source ),
+				'path'     => Commands::safeArg( (string) ( $group->path ?? '' ) ),
 				'fields'   => count( $group->fields ),
-				'location' => AcfBridge::locationSummary( $group->location->or ),
+				'location' => Commands::safeArg( AcfBridge::locationSummary( $group->location->or ) ),
 				'status'   => $group->location->isRenderable() ? self::STATUS_ACTIVE : self::STATUS_UNRENDERABLE,
 			);
 		}
 		foreach ( $skipped as $one ) {
 			$rows[] = array(
-				'key'      => $one['key'],
-				'title'    => $one['title'],
+				'key'      => Commands::safeArg( $one['key'] ),
+				'title'    => Commands::safeArg( $one['title'] ),
 				'source'   => 'acf',
-				'path'     => $one['source'],
+				'path'     => Commands::safeArg( $one['source'] ),
 				'fields'   => 0,
 				'location' => '',
 				'status'   => self::STATUS_SKIPPED_ACF,
@@ -175,13 +187,16 @@ final class FieldsCommand {
 	 * @param array<string, mixed> $assoc Flags.
 	 */
 	public function list( $args, $assoc ): void {
-		$module = FieldsModule::instance();
-		$groups = $module->index()->all();
-		$rows   = self::rows( $groups, $module->acf()->skipped() );
 		$format = (string) ( $assoc['format'] ?? 'table' );
 		if ( ! in_array( $format, array( 'table', 'json', 'csv' ), true ) ) {
 			WP_CLI::error( 'Unknown format: ' . Commands::safeArg( $format ) );
 		}
+		$module = ( $this->resolve )();
+		if ( null === $module ) {
+			WP_CLI::error( 'The fields module is disabled.' );
+		}
+		$groups = $module->index()->all();
+		$rows   = self::rows( $groups, $module->acf()->skipped() );
 		if ( array() === $rows ) {
 			WP_CLI::log( 'No field groups.' );
 			return;
@@ -199,10 +214,16 @@ final class FieldsCommand {
 	 * @param array<string, mixed> $assoc Flags.
 	 */
 	public function validate( $args, $assoc ): void {
-		$module = FieldsModule::instance();
+		$module = ( $this->resolve )();
 		$paths  = array_values( array_map( 'strval', (array) $args ) );
 		$decode = array( FieldsModule::class, 'decodeFile' );
-		if ( array() === $paths ) {
+		if ( null === $module && array() === $paths ) {
+			WP_CLI::error( 'The fields module is disabled. Pass file paths to validate files anyway.' );
+		}
+		if ( null === $module ) {
+			WP_CLI::warning( 'The fields module is disabled; validating the given files only.' );
+		}
+		if ( null !== $module && array() === $paths ) {
 			$groups = $module->index()->all();
 			$report = $module->report();
 			foreach ( $groups as $group ) {
@@ -216,7 +237,7 @@ final class FieldsCommand {
 		}
 
 		foreach ( $result['lines'] as $line ) {
-			WP_CLI::line( sprintf( '%s %s %s %s: %s', $line['level'], $line['file'], '' === $line['path'] ? '-' : $line['path'], $line['code'], $line['message'] ) );
+			WP_CLI::line( sprintf( '%s %s %s %s: %s', $line['level'], Commands::safeArg( $line['file'] ), '' === $line['path'] ? '-' : Commands::safeArg( $line['path'] ), Commands::safeArg( $line['code'] ), Commands::safeArg( $line['message'] ) ) );
 		}
 		if ( $result['errors'] > 0 ) {
 			WP_CLI::error( sprintf( '%d error(s), %d warning(s).', $result['errors'], $result['warnings'] ) );
