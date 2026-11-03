@@ -13,6 +13,9 @@ module.exports = {
     output: {
         path: path.resolve(__dirname, 'assets/js'),
         filename: '[name].js',
+        // Lazy chunks (admin screens) load by URL with no ?ver= query, so
+        // the content hash is what busts the browser cache on update.
+        chunkFilename: '[name].[contenthash:8].js',
     },
     experiments: {
         ...(defaultConfig.experiments || {}),
