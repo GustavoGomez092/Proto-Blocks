@@ -337,6 +337,11 @@ JS;
             return;
         }
 
+        $this->enqueueAdminApp();
+
+        // Legacy PHP screens below: their stylesheet and its two Google font
+        // handles stay until those screens are replaced (admin cleanup task).
+
         // Enqueue Google Fonts (Inter)
         wp_enqueue_style(
             'proto-blocks-admin-fonts',
@@ -362,13 +367,58 @@ JS;
             PROTO_BLOCKS_VERSION
         );
 
-        // NOTE: the React admin app (assets/js/admin.js, built from
-        // src/admin/) is intentionally not enqueued. No PHP renders its
-        // `#proto-blocks-admin-app` mount node, so it never ran, yet it
-        // printed a `wp_rest` nonce into every Proto-Blocks admin page.
-        // The admin UI is PHP-rendered.
-
         $this->enqueueTailwindCompiler();
+    }
+
+    /**
+     * Enqueue the React admin (assets/js/admin.js + assets/css/admin.css,
+     * built from src/admin/). It mounts only where AdminApp::renderScreen()
+     * printed #proto-blocks-admin, and reads its data (REST nonce included)
+     * from the inline script renderScreen() adds, so pages without a mount
+     * node get no nonce.
+     */
+    private function enqueueAdminApp(): void
+    {
+        $assetPath = PROTO_BLOCKS_DIR . 'assets/js/admin.asset.php';
+        if (!file_exists($assetPath)) {
+            // Unbuilt checkout: nothing to load.
+            return;
+        }
+        $asset = require $assetPath;
+
+        $dependencies = array_values(array_unique(array_merge(
+            (array) ($asset['dependencies'] ?? []),
+            ['wp-i18n']
+        )));
+
+        // WordPress registers react-jsx-runtime from 6.6; the plugin
+        // supports 6.3, so rebuild it from window.React when it is missing.
+        if (in_array('react-jsx-runtime', $dependencies, true) && !wp_script_is('react-jsx-runtime', 'registered')) {
+            wp_register_script(
+                'react-jsx-runtime',
+                PROTO_BLOCKS_URL . 'assets/admin/react-jsx-runtime-polyfill.js',
+                ['react'],
+                PROTO_BLOCKS_VERSION,
+                true
+            );
+        }
+
+        wp_enqueue_style(
+            'proto-blocks-admin-app',
+            PROTO_BLOCKS_URL . 'assets/css/admin.css',
+            [],
+            PROTO_BLOCKS_VERSION
+        );
+
+        wp_enqueue_script(
+            AdminApp::SCRIPT_HANDLE,
+            PROTO_BLOCKS_URL . 'assets/js/admin.js',
+            $dependencies,
+            $asset['version'] ?? PROTO_BLOCKS_VERSION,
+            true
+        );
+
+        wp_set_script_translations(AdminApp::SCRIPT_HANDLE, 'proto-blocks');
     }
 
     /**

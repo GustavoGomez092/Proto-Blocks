@@ -18,25 +18,35 @@
 
 #proto-blocks-admin,
 #proto-blocks-admin-portal {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* Design guide tokens (light only; contrast checked on white). */
+  --radius: 0.5rem;
+  --background: #ffffff;
+  --foreground: #0f1d2e;
+  --card: #ffffff;
+  --card-foreground: #0f1d2e;
+  --popover: #ffffff;
+  --popover-foreground: #0f1d2e;
+  --primary: #002a5c;
+  --primary-foreground: #ffffff;
+  --secondary: #edf1f6;
+  --secondary-foreground: #002a5c;
+  --muted: #f5f7fa;
+  --muted-foreground: #5a6577;
+  --accent: #eef3f9;
+  --accent-foreground: #002a5c;
+  --destructive: #c4262e;
+  --border: #dde3ea;
+  --input: #c9d1db;
+  --ring: #002a5c;
+  /* Proto-Blocks additions. Teal is decorative only (1.9:1 on white). */
+  --brand: #4ecdc4;
+  --brand-soft: #e6f8f7;
+  --success: #177245;
+  --success-soft: #edf8f1;
+  --warning: #9a5b00;
+  --warning-soft: #fff8e6;
+  --warning-border: #f2d48a;
+  --destructive-soft: #fdf0f0;
 }
 
 @theme inline {
@@ -62,6 +72,25 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-border: var(--warning-border);
+  --color-destructive-soft: var(--destructive-soft);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/*
+ * Dialogs, tooltips and toasts portal here. A stacking context above the
+ * admin bar (z-index 99999) and admin menu keeps their z-50 overlays on top;
+ * position: relative does not affect their position: fixed layout.
+ */
+#proto-blocks-admin-portal {
+  position: relative;
+  z-index: 100000;
 }
 
 /* The slice of preflight the components rely on, scoped to the app (unlayered). */

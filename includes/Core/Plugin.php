@@ -20,6 +20,7 @@ use ProtoBlocks\Blocks\Discovery;
 use ProtoBlocks\Blocks\Category;
 use ProtoBlocks\API\RestAPI;
 use ProtoBlocks\API\AjaxHandler;
+use ProtoBlocks\Admin\AdminApp;
 use ProtoBlocks\Admin\AdminPage;
 use ProtoBlocks\Admin\PreviewCapture;
 use ProtoBlocks\Admin\Assets;
@@ -454,6 +455,9 @@ final class Plugin
         if (is_admin()) {
             $this->services['tailwind_admin'] = new TailwindAdminSettings($tailwindManager);
             $this->services['tailwind_admin']->init();
+
+            // React admin mount point and bootstrap data
+            $this->services['admin_app'] = new AdminApp($tailwindManager);
         }
     }
 
@@ -900,6 +904,14 @@ final class Plugin
     public function getTailwindAdminSettings(): ?TailwindAdminSettings
     {
         return $this->services['tailwind_admin'] ?? null;
+    }
+
+    /**
+     * The React admin's mount point; null outside wp-admin.
+     */
+    public function getAdminApp(): ?AdminApp
+    {
+        return $this->services['admin_app'] ?? null;
     }
 
     /**
