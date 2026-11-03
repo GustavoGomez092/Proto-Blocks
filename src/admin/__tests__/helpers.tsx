@@ -26,6 +26,7 @@ export function mockBootstrap(overrides: Partial<AdminBootstrap> = {}): AdminBoo
 		adminUrl: 'https://example.test/wp-admin/admin.php',
 		version: '9.9.9',
 		fileModsAllowed: true,
+		fileModsConstant: null,
 		assetBase: 'https://example.test/wp-content/plugins/proto-blocks/assets/js/',
 		tailwind: null,
 		...overrides,

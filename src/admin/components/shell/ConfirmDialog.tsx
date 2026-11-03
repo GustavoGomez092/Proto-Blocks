@@ -15,7 +15,8 @@ import {
  * Confirmation for a destructive or irreversible action. The title is a
  * question naming the count, the confirm label repeats the verb and count
  * ("Remove 4 blocks"). Cancel gets initial focus (Radix AlertDialog).
- * Controlled: Cancel, Escape and the overlay call onCancel; Confirm calls
+ * Controlled: Cancel and Escape call onCancel (an overlay click does nothing,
+ * as Radix AlertDialog does not dismiss on outside clicks); Confirm calls
  * only onConfirm, and the parent sets `open` false when it is done.
  */
 export function ConfirmDialog({

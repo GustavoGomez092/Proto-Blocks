@@ -15,7 +15,8 @@ use ProtoBlocks\Tailwind\Manager as TailwindManager;
 /**
  * Prints the React admin's mount and portal nodes and hands the app its
  * bootstrap data (window.protoBlocksAdmin). The app itself is
- * assets/js/admin.js, enqueued by Assets::enqueueAdminAssets().
+ * assets/js/admin.js, enqueued by Assets::enqueueAdminAssets() only on pages
+ * registered with addScreenHook().
  */
 final class AdminApp
 {
@@ -33,11 +34,64 @@ final class AdminApp
     /** Keeps the JSON safe inside a <script> element. */
     private const JSON_FLAGS = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 
+    /** Constants that turn file writes off, in AdminPage::fileModsAllowed() order. */
+    private const FILE_MODS_CONSTANTS = ['DISALLOW_FILE_MODS', 'DISALLOW_FILE_EDIT'];
+
     private ?TailwindManager $tailwind;
+
+    /**
+     * Admin page hook suffixes whose screen is the React app.
+     *
+     * @var array<string,string> hook suffix => screen
+     */
+    private array $screenHooks = [];
 
     public function __construct(?TailwindManager $tailwind)
     {
         $this->tailwind = $tailwind;
+    }
+
+    /**
+     * The wp-config constant that disables file writes, or null when writes
+     * are allowed. Tests pass $values (name => value) instead of reading
+     * the real constants.
+     *
+     * @param array<string,mixed>|null $values
+     */
+    public static function fileModsConstant(?array $values = null): ?string
+    {
+        foreach (self::FILE_MODS_CONSTANTS as $name) {
+            $value = $values === null
+                ? (defined($name) ? constant($name) : false)
+                : ($values[$name] ?? false);
+            if ($value) {
+                return $name;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Mark an admin page (the hook suffix add_menu_page/add_submenu_page
+     * returns) as rendered by the React app, so Assets loads the app there
+     * and nowhere else.
+     *
+     * @throws InvalidArgumentException When $screen is not one of SCREENS.
+     */
+    public function addScreenHook(string $hookSuffix, string $screen): void
+    {
+        if (!in_array($screen, self::SCREENS, true)) {
+            throw new InvalidArgumentException(sprintf('Unknown admin screen "%s".', $screen));
+        }
+        if ($hookSuffix !== '') {
+            $this->screenHooks[$hookSuffix] = $screen;
+        }
+    }
+
+    /** Whether the admin page with this hook suffix renders the React app. */
+    public function isScreenHook(string $hookSuffix): bool
+    {
+        return $hookSuffix !== '' && isset($this->screenHooks[$hookSuffix]);
     }
 
     /**
@@ -70,6 +124,8 @@ final class AdminApp
             'adminUrl' => esc_url_raw(admin_url('admin.php')),
             'version' => defined('PROTO_BLOCKS_VERSION') ? (string) \PROTO_BLOCKS_VERSION : '',
             'fileModsAllowed' => AdminPage::fileModsAllowed(),
+            // Which constant to name in the read-only banner; null when allowed.
+            'fileModsConstant' => self::fileModsConstant(),
             // Same base the Tailwind browser compiler uses to fetch its wasm.
             'assetBase' => esc_url_raw($pluginUrl . 'assets/js/'),
             'tailwind' => $tailwind,

@@ -11,7 +11,9 @@ import { Input } from '@/admin/components/ui/input';
 import { Checkbox } from '@/admin/components/ui/checkbox';
 import { Switch } from '@/admin/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/admin/components/ui/radio-group';
-import { Dialog, DialogContent, DialogTitle } from '@/admin/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogTitle, DialogTrigger } from '@/admin/components/ui/dialog';
+import { AlertDialog, AlertDialogTrigger } from '@/admin/components/ui/alert-dialog';
+import { Tooltip, TooltipProvider, TooltipTrigger } from '@/admin/components/ui/tooltip';
 import { ConfirmDialog } from '@/admin/components/shell/ConfirmDialog';
 
 test('form controls forward refs to their DOM element', () => {
@@ -38,6 +40,33 @@ test('form controls forward refs to their DOM element', () => {
 	expect(checkbox.current).toBeInstanceOf(HTMLButtonElement);
 	expect(toggle.current).toBeInstanceOf(HTMLButtonElement);
 	expect(radio.current).toBeInstanceOf(HTMLButtonElement);
+});
+
+test('triggers and close buttons forward refs', () => {
+	const dialogTrigger = createRef<HTMLButtonElement>();
+	const dialogClose = createRef<HTMLButtonElement>();
+	const alertTrigger = createRef<HTMLButtonElement>();
+	const tooltipTrigger = createRef<HTMLButtonElement>();
+
+	render(
+		<TooltipProvider>
+			<Dialog>
+				<DialogTrigger ref={dialogTrigger}>Open</DialogTrigger>
+				<DialogClose ref={dialogClose}>Close it</DialogClose>
+			</Dialog>
+			<AlertDialog>
+				<AlertDialogTrigger ref={alertTrigger}>Remove</AlertDialogTrigger>
+			</AlertDialog>
+			<Tooltip>
+				<TooltipTrigger ref={tooltipTrigger}>Help</TooltipTrigger>
+			</Tooltip>
+		</TooltipProvider>
+	);
+
+	expect(dialogTrigger.current).toBeInstanceOf(HTMLButtonElement);
+	expect(dialogClose.current).toBeInstanceOf(HTMLButtonElement);
+	expect(alertTrigger.current).toBeInstanceOf(HTMLButtonElement);
+	expect(tooltipTrigger.current).toBeInstanceOf(HTMLButtonElement);
 });
 
 test('dialogs render without ref warnings', () => {

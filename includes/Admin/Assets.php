@@ -337,7 +337,14 @@ JS;
             return;
         }
 
-        $this->enqueueAdminApp();
+        // Screens rendered by AdminApp::renderScreen() load the React app
+        // only; every other Proto-Blocks page is a legacy PHP screen.
+        $adminApp = Plugin::getInstance()->getAdminApp();
+        if ($adminApp !== null && $adminApp->isScreenHook($hook)) {
+            $this->enqueueAdminApp();
+            $this->enqueueTailwindCompiler();
+            return;
+        }
 
         // Legacy PHP screens below: their stylesheet and its two Google font
         // handles stay until those screens are replaced (admin cleanup task).
@@ -372,10 +379,10 @@ JS;
 
     /**
      * Enqueue the React admin (assets/js/admin.js + assets/css/admin.css,
-     * built from src/admin/). It mounts only where AdminApp::renderScreen()
-     * printed #proto-blocks-admin, and reads its data (REST nonce included)
-     * from the inline script renderScreen() adds, so pages without a mount
-     * node get no nonce.
+     * built from src/admin/) on pages registered with
+     * AdminApp::addScreenHook(). The menu callback for such a page calls
+     * AdminApp::renderScreen(), which prints the mount node and adds the
+     * bootstrap data (REST nonce included) to this script.
      */
     private function enqueueAdminApp(): void
     {

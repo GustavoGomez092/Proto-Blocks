@@ -11,13 +11,19 @@ function AlertDialog({
   return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />
 }
 
-function AlertDialogTrigger({
-  ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Trigger>) {
+// forwardRef: React 18 (WordPress) does not pass `ref` as a prop.
+const AlertDialogTrigger = React.forwardRef<
+  React.ElementRef<typeof AlertDialogPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Trigger>
+>(function AlertDialogTrigger(props, ref) {
   return (
-    <AlertDialogPrimitive.Trigger data-slot="alert-dialog-trigger" {...props} />
+    <AlertDialogPrimitive.Trigger
+      ref={ref}
+      data-slot="alert-dialog-trigger"
+      {...props}
+    />
   )
-}
+})
 
 function AlertDialogPortal({
   ...props

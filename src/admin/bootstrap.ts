@@ -5,6 +5,8 @@
 
 export type Screen = 'dashboard' | 'tailwind' | 'system' | 'previews' | 'wizard';
 
+export type FileModsConstant = 'DISALLOW_FILE_MODS' | 'DISALLOW_FILE_EDIT';
+
 export interface AdminBootstrap {
 	screen: Screen;
 	/** REST root for this plugin, ends with `/proto-blocks/v1/`. */
@@ -15,6 +17,8 @@ export interface AdminBootstrap {
 	version: string;
 	/** False when DISALLOW_FILE_MODS / DISALLOW_FILE_EDIT is set. */
 	fileModsAllowed: boolean;
+	/** The constant that disables file writes; null when they are allowed. */
+	fileModsConstant: FileModsConstant | null;
 	assetBase: string;
 	tailwind: { ajaxUrl: string; actionPrefix: string; nonce: string } | null;
 }

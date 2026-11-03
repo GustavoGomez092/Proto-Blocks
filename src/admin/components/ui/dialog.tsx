@@ -1,4 +1,5 @@
 import * as React from "react"
+import { __ } from "@wordpress/i18n"
 import { cn } from "@/admin/lib/utils"
 import { usePortalContainer } from "@/admin/components/shell/PortalProvider"
 import { XIcon } from "lucide-react"
@@ -12,11 +13,16 @@ function Dialog({
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
 }
 
-function DialogTrigger({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
-  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
-}
+// forwardRef on the trigger/close parts too: they are often wrapped by
+// asChild parents, and React 18 (WordPress) does not pass `ref` as a prop.
+const DialogTrigger = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Trigger>
+>(function DialogTrigger(props, ref) {
+  return (
+    <DialogPrimitive.Trigger ref={ref} data-slot="dialog-trigger" {...props} />
+  )
+})
 
 function DialogPortal({
   ...props
@@ -31,11 +37,12 @@ function DialogPortal({
   )
 }
 
-function DialogClose({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Close>) {
-  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
-}
+const DialogClose = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Close>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Close>
+>(function DialogClose(props, ref) {
+  return <DialogPrimitive.Close ref={ref} data-slot="dialog-close" {...props} />
+})
 
 // forwardRef: Radix's portal hands each child a ref, and React 18
 // (WordPress) does not pass `ref` to plain function components.
@@ -82,7 +89,7 @@ function DialogContent({
             className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{__("Close", "proto-blocks")}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
@@ -120,7 +127,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close asChild>
-          <Button variant="outline">Close</Button>
+          <Button variant="outline">{__("Close", "proto-blocks")}</Button>
         </DialogPrimitive.Close>
       )}
     </div>

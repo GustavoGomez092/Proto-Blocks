@@ -43,6 +43,21 @@ test('ReadOnlyBanner explains disabled file modifications', () => {
 	expect(screen.getByRole('status')).toHaveTextContent('File modifications are disabled on this site');
 });
 
+test('ReadOnlyBanner names DISALLOW_FILE_EDIT when the bootstrap says so', () => {
+	mockBootstrap({ fileModsAllowed: false, fileModsConstant: 'DISALLOW_FILE_EDIT' });
+	render(<ReadOnlyBanner reason="file_mods" />);
+
+	const banner = screen.getByRole('status');
+	expect(banner).toHaveTextContent('DISALLOW_FILE_EDIT is set in wp-config.php');
+	expect(banner).not.toHaveTextContent('DISALLOW_FILE_MODS');
+});
+
+test('ReadOnlyBanner takes the constant as a prop', () => {
+	render(<ReadOnlyBanner reason="file_mods" constant="DISALLOW_FILE_EDIT" />);
+
+	expect(screen.getByRole('status')).toHaveTextContent('DISALLOW_FILE_EDIT is set in wp-config.php');
+});
+
 test('ReadOnlyBanner names the unwritable path', () => {
 	render(<ReadOnlyBanner reason="not_writable" path="/x" />);
 

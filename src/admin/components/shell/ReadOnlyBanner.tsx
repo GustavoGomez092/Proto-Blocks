@@ -3,6 +3,7 @@ import { __ } from '@wordpress/i18n';
 import { LockIcon } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/admin/components/ui/alert';
 import { interpolate } from '@/admin/lib/interpolate';
+import type { FileModsConstant } from '@/admin/bootstrap';
 
 /** Id screens point disabled controls at with aria-describedby. */
 export const READ_ONLY_BANNER_ID = 'proto-blocks-read-only';
@@ -17,12 +18,20 @@ const code = (text: ReactNode) => <code className="font-mono text-[12.5px]">{tex
 export function ReadOnlyBanner({
 	reason,
 	path,
+	constant,
 	description,
 }: {
 	reason: 'file_mods' | 'not_writable';
 	path?: string;
+	/** Constant to name for file_mods; defaults to the bootstrap's fileModsConstant. */
+	constant?: FileModsConstant;
 	description?: ReactNode;
 }) {
+	const fileModsConstant: FileModsConstant =
+		constant ??
+		(typeof window === 'undefined' ? undefined : window.protoBlocksAdmin?.fileModsConstant) ??
+		'DISALLOW_FILE_MODS';
+
 	const title =
 		reason === 'file_mods'
 			? __('File modifications are disabled on this site', 'proto-blocks')
@@ -31,9 +40,9 @@ export function ReadOnlyBanner({
 	const body =
 		reason === 'file_mods'
 			? interpolate(
-					/* translators: %s: the DISALLOW_FILE_MODS constant. */
+					/* translators: %s: a wp-config.php constant, DISALLOW_FILE_MODS or DISALLOW_FILE_EDIT. */
 					__('%s is set in wp-config.php, so controls that write files are turned off.', 'proto-blocks'),
-					code('DISALLOW_FILE_MODS')
+					code(fileModsConstant)
 				)
 			: interpolate(
 					/* translators: %s: absolute path of the theme folder. */

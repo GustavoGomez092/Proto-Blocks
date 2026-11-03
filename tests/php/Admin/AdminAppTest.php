@@ -32,13 +32,49 @@ final class AdminAppTest extends TestCase
     {
         $data = (new AdminApp(null))->bootstrapData('system');
 
-        foreach (['screen', 'restRoot', 'restNonce', 'adminUrl', 'version', 'fileModsAllowed', 'assetBase', 'tailwind'] as $key) {
+        foreach (['screen', 'restRoot', 'restNonce', 'adminUrl', 'version', 'fileModsAllowed', 'fileModsConstant', 'assetBase', 'tailwind'] as $key) {
             self::assertArrayHasKey($key, $data);
         }
         self::assertSame('system', $data['screen']);
         self::assertStringEndsWith('/proto-blocks/v1/', $data['restRoot']);
         self::assertSame('nonce-wp_rest', $data['restNonce']);
         self::assertIsBool($data['fileModsAllowed']);
+    }
+
+    public function testFileModsConstantMatchesFileModsAllowed(): void
+    {
+        $data = (new AdminApp(null))->bootstrapData('system');
+
+        // Constants cannot be undefined within one process, so check the pairing.
+        if ($data['fileModsAllowed']) {
+            self::assertNull($data['fileModsConstant']);
+        } else {
+            self::assertContains($data['fileModsConstant'], ['DISALLOW_FILE_MODS', 'DISALLOW_FILE_EDIT']);
+        }
+    }
+
+    public function testFileModsConstantNamesTheFirstTruthyConstant(): void
+    {
+        self::assertNull(AdminApp::fileModsConstant([]));
+        self::assertNull(AdminApp::fileModsConstant(['DISALLOW_FILE_MODS' => false, 'DISALLOW_FILE_EDIT' => false]));
+        self::assertSame('DISALLOW_FILE_EDIT', AdminApp::fileModsConstant(['DISALLOW_FILE_MODS' => false, 'DISALLOW_FILE_EDIT' => true]));
+        self::assertSame('DISALLOW_FILE_MODS', AdminApp::fileModsConstant(['DISALLOW_FILE_MODS' => true, 'DISALLOW_FILE_EDIT' => true]));
+    }
+
+    public function testOnlyRegisteredScreenHooksLoadTheApp(): void
+    {
+        $app = new AdminApp(null);
+        $app->addScreenHook('proto-blocks_page_proto-blocks-system', 'system');
+
+        self::assertTrue($app->isScreenHook('proto-blocks_page_proto-blocks-system'));
+        self::assertFalse($app->isScreenHook('toplevel_page_proto-blocks'));
+        self::assertFalse($app->isScreenHook(''));
+    }
+
+    public function testAddScreenHookRejectsUnknownScreens(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        (new AdminApp(null))->addScreenHook('some_hook', 'nope');
     }
 
     public function testUnknownScreenThrows(): void
