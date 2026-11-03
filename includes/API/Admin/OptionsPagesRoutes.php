@@ -103,6 +103,7 @@ final class OptionsPagesRoutes
             'createTarget' => $this->createTarget(),
             'pages' => $rows,
             'external' => $externalRows,
+            'capabilities' => self::capabilities(),
             'warnings' => $this->warnings(),
         ];
     }

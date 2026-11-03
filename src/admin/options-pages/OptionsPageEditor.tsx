@@ -87,6 +87,8 @@ interface FormProps {
 	slug: string;
 	file: FileResult;
 	detail: OptionsDetail | null;
+	/** Capabilities from the index payload, for a page with no detail yet. */
+	fallbackCapabilities: string[];
 	save: ReturnType<typeof useDeclarationFile>['save'];
 	remove: ReturnType<typeof useDeclarationFile>['remove'];
 	reload: () => Promise<void>;
@@ -97,7 +99,7 @@ interface FormProps {
 	header?: ReactNode;
 }
 
-function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted, onBack, header }: FormProps) {
+function PageForm({ slug, file, detail, fallbackCapabilities, save, remove, reload, onSaved, onDeleted, onBack, header }: FormProps) {
 	const row = detail?.page ?? null;
 	const php = row?.origin === 'php';
 	// A PHP page's form shows its declaration; the file (a template) does not exist yet.
@@ -272,7 +274,7 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 							id="pb-op-capability"
 							label={__('Who can use this page', 'proto-blocks')}
 							value={form.capability}
-							capabilities={detail?.capabilities ?? []}
+							capabilities={detail?.capabilities ?? fallbackCapabilities}
 							disabled={readOnly}
 							onChange={(capability) => patch({ capability })}
 						/>
@@ -292,7 +294,7 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 						<ChildPagesEditor
 							parentSlug={slug}
 							children={form.children}
-							capabilities={detail?.capabilities ?? []}
+							capabilities={detail?.capabilities ?? fallbackCapabilities}
 							disabled={readOnly}
 							errors={childErrors}
 							onChange={(children) => patch({ children })}
@@ -370,7 +372,7 @@ function EditSkeleton() {
 	);
 }
 
-function FileForm({ slug, name, detail, onSaved, onBack, header }: { slug: string; name?: string; detail: OptionsDetail | null; onSaved: () => void; onBack: () => void; header?: ReactNode }) {
+function FileForm({ slug, name, detail, fallbackCapabilities = [], onSaved, onBack, header }: { slug: string; name?: string; detail: OptionsDetail | null; fallbackCapabilities?: string[]; onSaved: () => void; onBack: () => void; header?: ReactNode }) {
 	const { file, error, save, remove, reload } = useDeclarationFile('options', slug, name);
 	if (error && !file) {
 		return <ScreenError screen={slug} error={error} onRetry={() => void reload()} />;
@@ -384,6 +386,7 @@ function FileForm({ slug, name, detail, onSaved, onBack, header }: { slug: strin
 			slug={slug}
 			file={file}
 			detail={detail}
+			fallbackCapabilities={fallbackCapabilities}
 			save={save}
 			remove={remove}
 			reload={reload}
@@ -441,7 +444,7 @@ export function OptionsPageEditor({ slug, onBack }: { slug: string; onBack: () =
 }
 
 /** `?new=1`: a title proposes the slug; Continue loads the server template for it, which the form then edits. */
-export function NewOptionsPage({ taken, onCreated, onBack }: { taken: string[]; onCreated: (slug: string) => void; onBack: () => void }) {
+export function NewOptionsPage({ taken, capabilities = [], onCreated, onBack }: { taken: string[]; capabilities?: string[]; onCreated: (slug: string) => void; onBack: () => void }) {
 	const [title, setTitle] = useState('');
 	const [slug, setSlug] = useState('');
 	const [slugEdited, setSlugEdited] = useState(false);
@@ -456,7 +459,7 @@ export function NewOptionsPage({ taken, onCreated, onBack }: { taken: string[]; 
 				: null;
 
 	if (chosen) {
-		return <FileForm slug={chosen.slug} name={chosen.title} detail={null} onSaved={() => onCreated(chosen.slug)} onBack={onBack} />;
+		return <FileForm slug={chosen.slug} name={chosen.title} detail={null} fallbackCapabilities={capabilities} onSaved={() => onCreated(chosen.slug)} onBack={onBack} />;
 	}
 
 	return (

@@ -201,9 +201,11 @@ final class OptionsPagesRoutesTest extends ContentModelRoutesTestCase
 
     public function testIndexShape(): void
     {
+        $GLOBALS['pb_test_roles'] = ['editor' => ['capabilities' => ['read' => true, 'edit_posts' => true, 'denied' => false]]];
         $result = $this->routes()->index();
 
-        self::assertSame(['moduleEnabled', 'createTarget', 'pages', 'external', 'warnings'], array_keys($result));
+        self::assertSame(['moduleEnabled', 'createTarget', 'pages', 'external', 'capabilities', 'warnings'], array_keys($result));
+        self::assertSame(['edit_posts', 'read'], $result['capabilities']);
         self::assertTrue($result['moduleEnabled']);
         self::assertTrue($result['createTarget']['writable']);
         self::assertNull($result['createTarget']['reason']);

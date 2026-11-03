@@ -91,6 +91,7 @@ function index(overrides: Partial<OptionsIndex> = {}): OptionsIndex {
 		createTarget: { path: 'wp-content/themes/demo/proto-options', writable: true, reason: null },
 		pages: [row(), phpRow],
 		external: [{ slug: 'wc-settings', title: 'WooCommerce Settings', parent: 'woocommerce', origin: 'plugin', originLabel: 'Plugin: woocommerce' }],
+		capabilities: ['edit_posts', 'manage_options', 'read'],
 		warnings: [],
 		...overrides,
 	};
@@ -238,25 +239,20 @@ describe('editor', () => {
 		expect(screen.queryByLabelText('Position')).toBeNull();
 	});
 
-	test('capability warnings, validation and the written text', async () => {
+	test('capability dropdown: payload options, common first, a pick is written to the text', async () => {
 		const user = userEvent.setup();
-		routes({ [`POST admin/schema-files/options/${SLUG}`]: saved });
+		routes({
+			[`POST admin/schema-files/options/${SLUG}`]: saved,
+			[`admin/options-pages/${SLUG}`]: { ...detail, capabilities: ['zeta_cap', 'read', 'alpha_cap', 'manage_woocommerce', 'edit_posts', 'manage_options'] },
+		});
 		await openCadco();
 		const capability = screen.getByRole('combobox', { name: 'Who can use this page' });
 		const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
-
-		await user.clear(capability);
-		await user.type(capability, 'read');
-		expect(screen.getByText('Anyone who can log in will be able to change these settings.')).toBeTruthy();
-
-		await user.clear(capability);
-		await user.type(capability, 'Manage Options');
-		expect(screen.getAllByText('Use lowercase letters, digits and underscores.').length).toBeGreaterThan(0);
-		expect(save.disabled).toBe(true);
-
-		await user.clear(capability);
-		await user.type(capability, 'edit_products');
-		expect(screen.getByText('No role has this capability; only super admins will see the page.')).toBeTruthy();
+		expect(capability.textContent).toContain('manage_woocommerce');
+		await user.click(capability);
+		const names = screen.getAllByRole('option').map((o) => o.textContent);
+		expect(names).toEqual(['manage_options', 'edit_posts', 'read', 'alpha_cap', 'manage_woocommerce', 'zeta_cap']);
+		await user.click(screen.getByRole('option', { name: 'edit_posts' }));
 		expect(save.disabled).toBe(false);
 		await user.click(save);
 
@@ -265,8 +261,22 @@ describe('editor', () => {
 		expect(post.url).toBe(`admin/schema-files/options/${SLUG}`);
 		expect(post.data?.hash).toBe('h1');
 		expect(post.data?.acknowledge).toEqual([]);
-		expect(post.data?.text).toBe(cadcoText.replace('"capability": "manage_woocommerce"', '"capability": "edit_products"'));
+		expect(post.data?.text).toBe(cadcoText.replace('"capability": "manage_woocommerce"', '"capability": "edit_posts"'));
 		expect(post.data?.text).toContain('// CADCO product display settings');
+	});
+
+	test('an unknown current capability is kept as a selected option with a warning; read warns too', async () => {
+		const user = userEvent.setup();
+		routes({ [`admin/options-pages/${SLUG}`]: { ...detail, capabilities: ['edit_posts', 'read'] } });
+		await openCadco();
+		expect(screen.getByText('No role has this capability; only super admins will see the page.')).toBeTruthy();
+		const capability = screen.getByRole('combobox', { name: 'Who can use this page' });
+		expect(capability.textContent).toContain('manage_woocommerce');
+		await user.click(capability);
+		expect(screen.getByRole('option', { name: 'manage_woocommerce (not granted to any role)' })).toBeTruthy();
+		await user.click(screen.getByRole('option', { name: 'read' }));
+		expect(screen.getByText('Anyone who can log in will be able to change these settings.')).toBeTruthy();
+		expect(screen.queryByText('No role has this capability; only super admins will see the page.')).toBeNull();
 	});
 
 	test('a 409 conflict opens the ConflictDialog', async () => {
@@ -410,6 +420,24 @@ describe('editor', () => {
 		expect(parseJsonc(posts()[0].data?.text ?? '').data.children).toEqual([{ slug: 'footer', title: 'Footer', fields: [] }]);
 	});
 
+	test('a child page capability starts as Inherit from page and can be set and cleared', async () => {
+		const user = userEvent.setup();
+		routes({ [`POST admin/schema-files/options/${SLUG}`]: saved });
+		await openCadco();
+		await user.click(screen.getByRole('button', { name: 'Add child page' }));
+		await user.type(screen.getByRole('textbox', { name: 'Child page slug' }), 'footer');
+		await user.type(screen.getByRole('textbox', { name: 'Child page title' }), 'Footer');
+		const child = screen.getByRole('combobox', { name: 'Capability' });
+		expect(child.textContent).toContain('Inherit from page');
+		await user.click(child);
+		await user.click(screen.getByRole('option', { name: 'read' }));
+		await user.click(screen.getByRole('combobox', { name: 'Capability' }));
+		await user.click(screen.getByRole('option', { name: 'Inherit from page' }));
+		await user.click(screen.getByRole('button', { name: 'Save' }));
+		await waitFor(() => expect(posts()).toHaveLength(1));
+		expect(parseJsonc(posts()[0].data?.text ?? '').data.children).toEqual([{ slug: 'footer', title: 'Footer', fields: [] }]);
+	});
+
 	test('switching array storage to per field warns before saving', async () => {
 		const user = userEvent.setup();
 		routes();
@@ -467,6 +495,8 @@ describe('editor', () => {
 		const user = userEvent.setup();
 		const template = '{\n  // Shop Notices settings page.\n  "title": "Shop Notices"\n}\n';
 		routes({
+			'admin/options-pages': index({ capabilities: ['edit_posts', 'read'] }),
+			'admin/options-pages/shop-notices': { ...detail, page: row({ slug: 'shop-notices', title: 'Shop Notices' }), capabilities: [] },
 			'admin/schema-files/options/shop-notices?name=Shop%20Notices': file({ exists: false, hash: null, text: template, path: 'wp-content/themes/demo/proto-options/shop-notices/page.jsonc' }),
 			'POST admin/schema-files/options/shop-notices': { ...saved, created: true },
 			'admin/options-pages/shop-notices': { ...detail, page: row({ slug: 'shop-notices', title: 'Shop Notices' }) },
@@ -475,9 +505,8 @@ describe('editor', () => {
 		await user.type(await screen.findByRole('textbox', { name: 'Page title' }), 'Shop Notices');
 		expect((screen.getByRole('textbox', { name: 'Slug' }) as HTMLInputElement).value).toBe('shop-notices');
 		await user.click(screen.getByRole('button', { name: 'Continue' }));
-		const capability = await screen.findByRole('combobox', { name: 'Who can use this page' });
-		await user.clear(capability);
-		await user.type(capability, 'edit_posts');
+		await user.click(await screen.findByRole('combobox', { name: 'Who can use this page' }));
+		await user.click(screen.getByRole('option', { name: 'edit_posts' }));
 		await user.click(screen.getByRole('button', { name: 'Save' }));
 		await waitFor(() => expect(posts()).toHaveLength(1));
 		const [post] = posts();
