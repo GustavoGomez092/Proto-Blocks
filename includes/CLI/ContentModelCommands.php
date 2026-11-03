@@ -238,7 +238,7 @@ final class ContentModelCommands {
         );
 
         try {
-            $result = $scaffolder->scaffold( $slug, (bool) ( $type->data['has_archive'] ?? true ), $taxonomies, ! empty( $assoc['taxonomies'] ) );
+            $result = $scaffolder->scaffold( $slug, self::scaffoldArchive( $type->data, get_post_type_object( $slug ) ), $taxonomies, ! empty( $assoc['taxonomies'] ) );
         } catch ( WriteException $e ) {
             WP_CLI::error( $e->getMessage() );
             return;
@@ -251,6 +251,22 @@ final class ContentModelCommands {
             WP_CLI::log( 'skipped (exists): templates/' . $name );
         }
         WP_CLI::success( sprintf( '%d written, %d skipped.', count( $result['written'] ), count( $result['skipped'] ) ) );
+    }
+
+    /**
+     * Whether scaffolding writes an archive template: the registered type's
+     * effective `has_archive` (so an override of `post` without the key
+     * writes none), else the declared key, else the plugin default (true).
+     *
+     * @param array<string, mixed> $data       The declaration's data.
+     * @param object|null          $registered The registered post type object, when there is one.
+     */
+    public static function scaffoldArchive( array $data, ?object $registered ): bool {
+        if ( null !== $registered && property_exists( $registered, 'has_archive' ) ) {
+            return ! empty( $registered->has_archive );
+        }
+
+        return array_key_exists( 'has_archive', $data ) ? ! empty( $data['has_archive'] ) : true;
     }
 
     // ---- validate ----------------------------------------------------------
