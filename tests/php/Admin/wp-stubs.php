@@ -17,14 +17,6 @@
 
 declare(strict_types=1);
 
-if (!function_exists('update_option')) {
-    function update_option($option, $value, $autoload = null): bool
-    {
-        $GLOBALS['pb_test_options'][$option] = $value;
-        return true;
-    }
-}
-
 if (!function_exists('get_bloginfo')) {
     function get_bloginfo($show = '', $filter = 'raw'): string
     {
