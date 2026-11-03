@@ -214,7 +214,7 @@ Saving produces a JSONC edit, not a database write:
   (`jsonc-parser`'s `modify`/`applyEdits`, the library VS Code uses), so
   developer comments and key order survive.
 - The client sends the whole resulting file text to
-  `PUT /proto-blocks/v1/schema-files/<kind>/<slug>`.
+  `POST /proto-blocks/v1/admin/schema-files/<kind>/<slug>` (PUT also accepted).
 - The server re-parses it, validates it against the JSON Schema, confirms the
   path is inside an allowed root (active theme, child theme), confirms
   `manage_options`, the REST nonce, `AdminPage::fileModsAllowed()` and
@@ -429,8 +429,9 @@ module as disabled rather than failing.
 
 `wp proto-blocks type list|create|scaffold|validate`, `taxonomy list|create`,
 `fields list|validate`, `options list|create`. `create` writes a commented
-JSONC file from the defaults, reusing the block scaffold's validation rules
-(`^[a-z][a-z0-9-]*$` for slugs, reserved-name checks). `validate` covers all
+JSONC file from the defaults, reusing the block scaffold's reserved-name
+checks with the post type slug rule from section 2 (`^[a-z][a-z0-9_-]*$`,
+underscores allowed because existing types such as `oit_resource` use them). `validate` covers all
 schema files and reports double declarations.
 
 ### 10. Phases and what "done" means

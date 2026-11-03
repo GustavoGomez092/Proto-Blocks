@@ -221,7 +221,7 @@ Run: `npm run test:js -- src/admin/__tests__/api.test.ts src/admin/__tests__/app
 
 - [ ] **Step 7: Implement the shell**
 
-`api.ts` uses `@wordpress/api-fetch` with `createRootURLMiddleware(restRoot)` and `createNonceMiddleware(restNonce)` installed once from `getBootstrap()`. `app.tsx` switches on `bootstrap.screen` and renders a placeholder `<PageHeader title="System Status" />` for `system` (replaced in Task 3) and `ScreenError` for anything else for now; wraps in `PortalProvider` and shadcn `Toaster` (sonner). `index.tsx` mounts `<AdminApp bootstrap={getBootstrap()} />` with `createRoot` from `react-dom/client` into `#proto-blocks-admin` on `DOMContentLoaded`. `PortalProvider` creates a React context with the portal element; every shadcn component that renders a Radix `Portal` (`dialog`, `tooltip`, `select`, `popover`, `sonner`) is edited to pass `container={usePortalContainer()}`.
+`api.ts` uses `@wordpress/api-fetch` with `createRootURLMiddleware(restRoot)` and `createNonceMiddleware(restNonce)` installed once from `getBootstrap()`. `src/admin/screens/index.ts` exports `SCREENS: Record<Screen, React.LazyExoticComponent>` so later tasks add one line each; `app.tsx` renders `SCREENS[bootstrap.screen]` in `<Suspense>` and renders a placeholder `<PageHeader title="System Status" />` for `system` (replaced in Task 3) and `ScreenError` for anything else for now; wraps in `PortalProvider` and shadcn `Toaster` (sonner). `index.tsx` mounts `<AdminApp bootstrap={getBootstrap()} />` with `createRoot` from `react-dom/client` into `#proto-blocks-admin` on `DOMContentLoaded`. `PortalProvider` creates a React context with the portal element; every shadcn component that renders a Radix `Portal` (`dialog`, `tooltip`, `select`, `popover`, `sonner`) is edited to pass `container={usePortalContainer()}`.
 
 Run: `npx shadcn@latest add card badge switch radio-group input label table dialog alert tabs tooltip skeleton sonner checkbox separator`.
 
@@ -259,6 +259,11 @@ git commit -m "feat(admin): mount a React admin shell with bootstrap data"
       public static function fileModsError(): \WP_Error;   // 'proto_blocks_file_mods', status 403
   }
   ```
+  **Structure for parallel additions (controller ruling):** each screen's
+  routes live in their own class `includes/API/Admin/<Name>Routes.php` with
+  `registerRoutes(string $namespace, callable $permission, callable $writePermission): void`,
+  and `AdminRestController::ROUTE_GROUPS` lists those classes; this task
+  creates `SystemRoutes` and the list, later tasks add one class and one line.
   Routes this task: `GET admin/system` → `{ categoryName, config: {debug, cacheEnabled, exampleBlocks, exampleBlocksFromConfig}, system: {pluginVersion, wpVersion, phpVersion, cacheDir, cacheDirWritable} }`; `POST admin/system` body `{categoryName}` → same payload after `update_option(AdminPage::OPTION_CATEGORY_NAME, sanitize_text_field(...))`.
 - Produces (TS): `SystemScreen(): JSX.Element` fetching `admin/system`, editing the category name with a react-hook-form + zod form (`z.string().max(100)`), showing the two read-only tables, and toasting `Category name saved.`
 
