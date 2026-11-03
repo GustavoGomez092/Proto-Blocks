@@ -15,6 +15,8 @@ export const SCREENS: Partial<Record<Screen, ScreenComponent>> = {
 	dashboard: lazy(() => import('./DashboardScreen')),
 	tailwind: lazy(() => import('./TailwindScreen')),
 	previews: lazy(() => import('./PreviewsScreen')),
+	'post-types': lazy(() => import('./PostTypesScreen')),
+	taxonomies: lazy(() => import('./TaxonomiesScreen')),
 };
 
 /** Screen name as shown in the WordPress menu, for headings and errors. */
