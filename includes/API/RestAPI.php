@@ -95,6 +95,13 @@ class RestAPI
                     'validate_callback' => static fn($value): bool => is_array($value)
                         && ($value === [] || array_keys($value) !== range(0, count($value) - 1)),
                 ],
+                // The post being edited, so $template->field() previews its
+                // values. Used only when the user may edit that post.
+                'postId' => [
+                    'required' => false,
+                    'type' => 'integer',
+                    'minimum' => 1,
+                ],
             ],
         ]);
 
@@ -193,6 +200,9 @@ class RestAPI
             is_array($block['schema'] ?? null) ? $block['schema'] : []
         );
 
+        $previousPost = $GLOBALS['post'] ?? null;
+        $postSet = self::setupPreviewPost($request->get_param('postId'));
+
         try {
             $html = $this->engine->renderPreview($templatePath, $attributes, $block['schema']);
 
@@ -205,7 +215,38 @@ class RestAPI
                 self::errorMessage($e, __('Failed to generate preview.', 'proto-blocks')),
                 ['status' => 500]
             );
+        } finally {
+            if ($postSet) {
+                $GLOBALS['post'] = $previousPost;
+                if ($previousPost instanceof \WP_Post) {
+                    setup_postdata($previousPost);
+                }
+            }
         }
+    }
+
+    /**
+     * Make the preview's post the global post, so get_the_ID() and
+     * $template->field() read it. Only for a user who may edit that post;
+     * otherwise the preview renders without a post, as before.
+     */
+    private static function setupPreviewPost(mixed $postId): bool
+    {
+        if (!is_int($postId) && !(is_string($postId) && preg_match('/\A[1-9][0-9]{0,18}\z/D', $postId) === 1)) {
+            return false;
+        }
+        $postId = (int) $postId;
+        if ($postId <= 0 || !current_user_can('edit_post', $postId)) {
+            return false;
+        }
+        $post = get_post($postId);
+        if (!$post instanceof \WP_Post) {
+            return false;
+        }
+        $GLOBALS['post'] = $post;
+        setup_postdata($post);
+
+        return true;
     }
 
     /**
