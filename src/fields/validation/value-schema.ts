@@ -326,8 +326,10 @@ function scope(
 	valid: Record< string, unknown >
 ): void {
 	const byKey: Record< string, unknown > = {};
+	const types: Record< string, string > = {};
 	for ( const f of fields ) {
 		if ( f.name !== '' && ! LAYOUT_ONLY.has( f.type ) ) {
+			types[ f.key ] = f.type;
 			byKey[ f.key ] = input[ f.name ] ?? null;
 		}
 	}
@@ -336,7 +338,7 @@ function scope(
 			continue;
 		}
 		const path = [ ...prefix, f.name ];
-		if ( ! isVisible( f, byKey ) ) {
+		if ( ! isVisible( f, byKey, types ) ) {
 			out.hidden.push( path.join( '.' ) );
 			continue;
 		}
@@ -360,7 +362,7 @@ function field( f: FieldDef, value: unknown, path: ( string | number )[], opts: 
 	if ( f.type === 'group' && ( value === null || value === undefined || value === '' || ( isPhpArray( value ) && phpCount( value ) === 0 ) ) ) {
 		value = {}; // a group always descends so its required sub-fields are enforced
 	}
-	if ( f.type !== 'group' && isEmpty( value ) ) {
+	if ( f.type !== 'group' && isEmpty( value, f.type ) ) {
 		if ( f.required ) {
 			add( out, path, MESSAGES.required );
 		} else if ( COUNTED.has( f.type ) ) {

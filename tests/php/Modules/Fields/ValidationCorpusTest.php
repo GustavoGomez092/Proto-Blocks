@@ -91,6 +91,22 @@ final class ValidationCorpusTest extends TestCase
         self::assertFalse(ConditionEvaluator::rule('nonsense', 'a', 'a'));
     }
 
+    public function testIdTypesTreatZeroAsEmpty(): void
+    {
+        self::assertTrue(ConditionEvaluator::isEmpty(0, 'image'));
+        self::assertTrue(ConditionEvaluator::isEmpty('0', 'file'));
+        self::assertTrue(ConditionEvaluator::isEmpty(0, 'video'));
+        self::assertTrue(ConditionEvaluator::isEmpty([], 'relationship'));
+        self::assertTrue(ConditionEvaluator::isEmpty('0', 'taxonomy'));
+        self::assertFalse(ConditionEvaluator::isEmpty(12, 'image'));
+        self::assertFalse(ConditionEvaluator::isEmpty(0, 'number'));
+        self::assertFalse(ConditionEvaluator::isEmpty('0', 'text'));
+        self::assertFalse(ConditionEvaluator::isEmpty(0));
+        self::assertFalse(ConditionEvaluator::rule('!=empty', 0, null, 'image'));
+        self::assertTrue(ConditionEvaluator::rule('==empty', '0', null, 'image'));
+        self::assertTrue(ConditionEvaluator::rule('!=empty', 0, null, 'number'));
+    }
+
     public function testPatternGuards(): void
     {
         self::assertNull(ConditionEvaluator::compilePattern(''));

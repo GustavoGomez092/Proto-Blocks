@@ -251,7 +251,8 @@ function ConditionalRow( { field, scope, controllers }: { field: FieldDef; scope
 	controllers.forEach( ( c, i ) => {
 		byKey[ c.key ] = watched[ i ] ?? null;
 	} );
-	return <RowBody field={ field } scope={ scope } visible={ isVisible( field, byKey ) } />;
+	const types = Object.fromEntries( controllers.map( ( c ) => [ c.key, c.type ] ) );
+	return <RowBody field={ field } scope={ scope } visible={ isVisible( field, byKey, types ) } />;
 }
 
 function FieldRow( { field, scope, siblings }: RowProps ) {

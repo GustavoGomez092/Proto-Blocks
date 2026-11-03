@@ -48,8 +48,10 @@ final class ValueValidator
     private static function scope(array $fields, array $input, string $prefix, ?callable $choices, ?callable $maxRows, array &$out): bool
     {
         $byKey = [];
+        $types = [];
         foreach ($fields as $f) {
             if ($f->name !== '' && !in_array($f->type, self::LAYOUT_ONLY, true)) {
+                $types[$f->key] = $f->type;
                 $byKey[$f->key] = $input[$f->name] ?? null;
             }
         }
@@ -60,7 +62,7 @@ final class ValueValidator
                 continue;
             }
             $path = $prefix . $f->name;
-            if (!ConditionEvaluator::visible($f, $byKey)) {
+            if (!ConditionEvaluator::visible($f, $byKey, $types)) {
                 $out['hidden'][] = $path;
                 continue;
             }
@@ -89,7 +91,7 @@ final class ValueValidator
         if ($f->type === 'group' && ($value === null || $value === '' || $value === [])) {
             $value = []; // a group always descends so its required sub-fields are enforced
         }
-        if ($f->type !== 'group' && ConditionEvaluator::isEmpty($value)) {
+        if ($f->type !== 'group' && ConditionEvaluator::isEmpty($value, $f->type)) {
             if ($f->required) {
                 $out['errors'][$path] = __('This field is required.', 'proto-blocks');
             } elseif (in_array($f->type, self::COUNTED, true)) {
