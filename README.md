@@ -1391,7 +1391,7 @@ Proto-Blocks adds settings pages to the admin menu from one line of PHP or a sma
 
 ### One line of PHP
 
-Call it in `functions.php` (any time before the `admin_menu` action, priority 9 at the latest):
+Call it in `functions.php` (any time before the `wp_loaded` action):
 
 ```php
 proto_options_page('Site Notice', [
@@ -1401,7 +1401,9 @@ proto_options_page('Site Notice', [
 ]);
 ```
 
-The slug comes from the title (`site-notice`) unless you pass `slug`. The second argument takes any key a page file accepts.
+The slug comes from the title (`site-notice`) unless you pass `slug`. The second argument takes any key a page file accepts (`menu_title` is accepted as an alias of `menuTitle`).
+
+Declare pages in `functions.php` or on `init`. A call inside an `admin_menu` callback still adds the menu item, but that page is not available to REST saves or to `proto_field()` on other requests, so saving it fails. A call after `wp_loaded` (or after `admin_menu` 10 in the admin) is ignored with a `declared_too_late` warning.
 
 ### JSONC files
 
@@ -1459,12 +1461,18 @@ $hidden = proto_field('hide_children', 'option:cadco-display-settings');
 
 ### Capabilities and modules
 
-The menu item, the page and the `proto-blocks/v1/options/<slug>` route all require the page's declared capability (and a logged-in user); `manage_options` is not implied. Users without `unfiltered_html` see code fields read-only. Settings pages work with the Fields module switched off; switch the settings pages themselves off with `add_filter('proto_blocks_modules', fn ($m) => ['options_pages' => false] + $m);`.
+The menu item, the page and the `proto-blocks/v1/options/<slug>` route all require the page's declared capability (and a logged-in user); `manage_options` is not implied. For users without `unfiltered_html`, code and password fields are hidden: the form shows the label and a lock, never the value, and those fields cannot be saved. Settings pages work with the Fields module switched off; switch the settings pages themselves off with `add_filter('proto_blocks_modules', fn ($m) => ['options_pages' => false] + $m);`.
+
+### Options Pages screen and CLI
+
+**Proto Blocks > Options Pages** lists every settings page (file or PHP, with its menu, capability and storage) and, read-only, the settings pages other plugins and the theme add to the menu. The declaration editor writes `proto-options/<slug>/page.jsonc`: title, menu placement, capability, storage, tabs, child pages and fields. Comments are kept except inside an array you edit (for example `fields` or `tabs`). **New options page** takes two steps: a title (which proposes the slug), then the full form, and the file is written when you save. A PHP-declared page is shown read-only with **Create file**, which writes its declaration to a file that then takes over. Deleting a page removes its file only; saved values are kept. The editor is read-only with `DISALLOW_FILE_MODS`, for multisite non-network-admins and for files that cannot be written. A save that conflicts with a change on disk asks before overwriting.
 
 ```bash
 wp proto-blocks options list
 wp proto-blocks options create "Theme Settings" [--slug=<slug>] [--menu=<menu>] [--capability=<cap>] [--storage-option=<name>]
 ```
+
+`list` shows every page with its source, menu, capability and storage. `create` writes a page file into the active theme and prints its theme-relative path.
 
 ## Custom fields
 

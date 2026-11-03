@@ -149,6 +149,13 @@
   capability.
 - `options_pages` key in the `proto_blocks_modules` filter; settings pages
   keep working with the Fields module off.
+- **Proto Blocks > Options Pages** screen: lists the settings pages (and,
+  read-only, other plugins' settings pages) and edits a page's declaration,
+  writing `proto-options/<slug>/page.jsonc` (comments inside an edited array
+  are lost). New pages take a title, then the form; PHP pages get
+  "Create file"; deleting removes the file and keeps saved values.
+- `wp proto-blocks options list` and
+  `wp proto-blocks options create "<Title>" [--slug] [--menu] [--capability] [--storage-option]`.
 - `wp proto-blocks validate` reports settings-page findings
   (`shared_storage`, schema errors, skipped fields; menu warnings such as unknown capabilities appear only in the admin).
 

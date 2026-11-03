@@ -144,6 +144,13 @@ final class GuardrailsTest extends TestCase
         $this->assertSame(['count' => 3, 'taxonomies' => []], $g->contentFor('taxonomy', 'genre', ['name' => 'Genre']));
     }
 
+    public function testOptionsKindIgnoresATaxonomyOfTheSameName(): void
+    {
+        $g = self::guardrails([], ['genre' => 5]);
+        $this->assertSame(['count' => 0, 'taxonomies' => []], $g->contentFor('options', 'genre', ['title' => 'Genre']));
+        $this->assertSame([], $g->checkSave('options', 'genre', ['title' => 'G', 'fields' => [['name' => 'a']]], ['title' => 'G', 'fields' => []]));
+    }
+
     /**
      * @param array<string, int>          $posts
      * @param array<string, list<string>> $registered post type => registered supports

@@ -15,8 +15,9 @@ if (!function_exists('proto_options_page')) {
      * is only recorded (as a Phase 1 PHP declaration of kind `options`, so a
      * `proto-options/<slug>/page.jsonc` file of the same slug wins);
      * validation happens when the registry loads it, so a bad declaration never
-     * fatals the site at include time. Declare before the `admin_menu` action
-     * (priority 9 at the latest), for example in functions.php.
+     * fatals the site at include time. Declare in functions.php (any time
+     * before `wp_loaded`); a call inside `admin_menu` reaches the menu but
+     * not REST saves or proto_field() on other requests.
      *
      * @param string $title Page title.
      * @param array  $args  Same keys as a page.jsonc file (menu, capability, fields, ...).

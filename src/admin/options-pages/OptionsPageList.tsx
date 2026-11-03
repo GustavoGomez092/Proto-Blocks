@@ -16,11 +16,9 @@ import type { ExternalRow, OptionsIndex } from './declaration';
 function externalLabel(row: ExternalRow): string {
 	switch (row.origin) {
 		case 'plugin':
-			/* translators: %s: plugin folder name */
-			return sprintf(__('Plugin: %s', 'proto-blocks'), row.originLabel);
 		case 'theme':
-			/* translators: %s: theme folder name */
-			return sprintf(__('Theme: %s', 'proto-blocks'), row.originLabel);
+			// The server sends the full label ("Plugin: woocommerce").
+			return row.originLabel;
 		case 'core':
 			return __('WordPress', 'proto-blocks');
 		default:

@@ -175,6 +175,19 @@ final class Manager
     public static function sealDeclarations(Registry $registry, ?string $kind = null): bool
     {
         PhpDeclarations::seal($kind);
+
+        return self::refreshDeclarations($registry);
+    }
+
+    /**
+     * Like sealDeclarations() without sealing: invalidate the registry when
+     * a PHP declaration is missing from it.
+     *
+     * @internal Shared by the modules.
+     * @return bool whether the registry was invalidated
+     */
+    public static function refreshDeclarations(Registry $registry): bool
+    {
         if (!self::reflectsPhpDeclarations($registry)) {
             $registry->invalidate();
             return true;

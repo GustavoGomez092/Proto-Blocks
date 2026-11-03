@@ -251,7 +251,7 @@ final class OptionsPagesRegistry
                     'shared_storage',
                     sprintf(
                         /* translators: 1: page slug, 2: option name, 3: other page slug */
-                        __('The page "%1$s" stores values in the option "%2$s", which the page "%3$s" also uses. Saving one page overwrites the other; give each page its own option.', 'proto-blocks'),
+                        __('The page "%1$s" stores values in the option "%2$s", which the page "%3$s" also uses. Saving one page may overwrite fields of the same name on the other; give each page its own option.', 'proto-blocks'),
                         (string) $slug,
                         $name,
                         $owner

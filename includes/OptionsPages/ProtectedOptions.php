@@ -37,7 +37,12 @@ final class ProtectedOptions
         'medium_large_size_w', 'medium_large_size_h', 'large_size_w', 'large_size_h',
         'uploads_use_yearmonth_folders', 'comments_per_page', 'page_comments', 'thread_comments',
         'thread_comments_depth', 'posts_per_rss', 'rss_use_excerpt', 'use_smilies', 'use_balancetags',
-        'link_manager_enabled',
+        'link_manager_enabled', 'require_name_email', 'comment_previously_approved', 'comment_order',
+        'default_comments_page', 'close_comments_for_old_posts', 'close_comments_days_old',
+        'show_comments_cookies_opt_in', 'avatar_rating', 'default_email_category', 'default_link_category',
+        // other core state
+        'recovery_keys', 'admin_email_lifespan', 'wp_page_for_privacy_policy', 'site_logo', 'html_type',
+        'can_compress_scripts', 'auto_plugin_theme_update_emails', 'finished_splitting_shared_terms',
     ];
 
     private const PREFIXES = [

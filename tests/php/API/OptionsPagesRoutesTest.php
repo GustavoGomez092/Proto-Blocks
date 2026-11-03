@@ -373,6 +373,24 @@ final class OptionsPagesRoutesTest extends ContentModelRoutesTestCase
         self::assertSame(3600, $GLOBALS['pb_test_transients'][ExternalMenus::TRANSIENT]['expiration']);
     }
 
+    public function testCaptureIgnoresUsersWithoutManageOptions(): void
+    {
+        $GLOBALS['menu'] = [['Tools', 'manage_options', 'tools.php', '', 'menu-top']];
+        $_GET['page'] = ExternalMenus::SCREEN;
+        $external = new ExternalMenus();
+        $external->capture();
+        self::assertSame('tools.php', $external->get()['parents'][0]['slug']);
+
+        // A subscriber opening the screen URL (admin_menu runs before the access check).
+        $GLOBALS['pb_test_current_user'] = 7;
+        $GLOBALS['pb_test_caps'][7] = ['read'];
+        $GLOBALS['menu'] = [['Profile', 'read', 'profile.php', '', 'menu-top']];
+        $external->capture();
+
+        $GLOBALS['pb_test_current_user'] = 1;
+        self::assertSame('tools.php', $external->get()['parents'][0]['slug'], 'the cached admin menu is kept');
+    }
+
     public function testDeclaredPagesAreNotListedAsExternal(): void
     {
         $GLOBALS['menu'] = [

@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { applyDeclarationEdits, parseJsonc } from '@/admin/content-model/jsonc';
-import { CAPABILITY_PATTERN, dataFromForm, formFromData } from '@/admin/options-pages/declaration';
+import { CAPABILITY_PATTERN, OPTION_PATTERN, dataFromForm, formFromData } from '@/admin/options-pages/declaration';
 
 const cadcoText = readFileSync(join(__dirname, '../../../tests/fixtures/options-pages/cadco-display-settings/page.jsonc'), 'utf8');
 const cadcoData = { ...parseJsonc(cadcoText).data, acf_extra: { keep: true } };
@@ -67,4 +67,13 @@ test('CAPABILITY_PATTERN follows the schema grammar', () => {
 	expect(CAPABILITY_PATTERN.test('manage_woocommerce')).toBe(true);
 	expect(CAPABILITY_PATTERN.test('Manage Options')).toBe(false);
 	expect(CAPABILITY_PATTERN.test('9_lives')).toBe(false);
+});
+
+test('OPTION_PATTERN accepts what PageDefinition accepts', () => {
+	for (const ok of ['cadco_display_settings', 'Legacy_Settings', 'my-plugin-options', 'a'.repeat(191)]) {
+		expect(OPTION_PATTERN.test(ok)).toBe(true);
+	}
+	for (const bad of ['', 'a b', 'a.b', 'a'.repeat(192), 'x\n']) {
+		expect(OPTION_PATTERN.test(bad)).toBe(false);
+	}
 });

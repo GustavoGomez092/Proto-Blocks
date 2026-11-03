@@ -6,7 +6,7 @@ import { Switch } from '@/admin/components/ui/switch';
 import { OPTION_PATTERN, type OptionsPageForm } from './declaration';
 
 export function optionError(storage: OptionsPageForm['storage']): string | null {
-	return storage.mode === 'array' && !OPTION_PATTERN.test(storage.option) ? __('Use lowercase letters, digits and underscores.', 'proto-blocks') : null;
+	return storage.mode === 'array' && !OPTION_PATTERN.test(storage.option) ? __('Use letters, digits, underscores and hyphens (191 characters at most).', 'proto-blocks') : null;
 }
 
 /**
