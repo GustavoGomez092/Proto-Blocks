@@ -16,6 +16,7 @@ use ProtoBlocks\ContentModel\Guardrails;
 use ProtoBlocks\ContentModel\Inflector;
 use ProtoBlocks\ContentModel\Issue;
 use ProtoBlocks\ContentModel\Registry;
+use ProtoBlocks\ContentModel\RewriteHash;
 use ProtoBlocks\ContentModel\SchemaFileWriter;
 use ProtoBlocks\ContentModel\SchemaPaths;
 use ProtoBlocks\ContentModel\Slug;
@@ -280,19 +281,39 @@ final class ContentModelCommands {
      * @param list<array{kind: string, slug: string, level: string, code: string, message: string, source: string}> $rows
      */
     public static function printValidation( array $rows, string $format = 'table' ): void {
-        if ( array() === $rows ) {
-            WP_CLI::success( 'All post type and taxonomy declarations are valid.' );
+        if ( 'json' === $format ) {
+            WP_CLI::line( (string) json_encode( $rows, JSON_UNESCAPED_SLASHES ) );
+        } else {
+            self::printRows( $rows, $format );
+        }
+
+        if ( self::hasErrors( $rows ) ) {
+            WP_CLI::error( 'Validation failed for one or more declarations.' );
             return;
         }
+        WP_CLI::success( 'All post type and taxonomy declarations are valid.' );
+    }
 
-        WP_CLI\Utils\format_items( $format, $rows, array( 'kind', 'slug', 'level', 'code', 'message', 'source' ) );
+    /**
+     * Print the rows as a table (or csv, yaml), nothing for an empty report.
+     *
+     * @param list<array{kind: string, slug: string, level: string, code: string, message: string, source: string}> $rows
+     */
+    public static function printRows( array $rows, string $format = 'table' ): void {
+        if ( array() !== $rows ) {
+            WP_CLI\Utils\format_items( $format, $rows, array( 'kind', 'slug', 'level', 'code', 'message', 'source' ) );
+        }
+    }
 
+    /** @param list<array{level: string}> $rows */
+    public static function hasErrors( array $rows ): bool {
         foreach ( $rows as $row ) {
             if ( Issue::ERROR === $row['level'] ) {
-                WP_CLI::error( 'Validation failed for one or more declarations.' );
-                return;
+                return true;
             }
         }
+
+        return false;
     }
 
     /**
@@ -357,8 +378,28 @@ final class ContentModelCommands {
             return;
         }
 
-        $registry = Plugin::getInstance()->getContentModel();
-        $new      = self::normalizeSlug( $rawNew, $kind );
+        global $wpdb;
+
+        self::runRename( $kind, $old, $rawNew, $assoc, Plugin::getInstance()->getContentModel(), $this->writer(), $this->guardrails(), $wpdb );
+    }
+
+    /**
+     * The whole rename flow, with its collaborators passed in.
+     *
+     * @param array<string, mixed> $assoc
+     * @param object               $wpdb  Needs `update()`, `posts` and `term_taxonomy`.
+     */
+    public static function runRename(
+        string $kind,
+        string $old,
+        string $rawNew,
+        array $assoc,
+        Registry $registry,
+        SchemaFileWriter $writer,
+        Guardrails $guardrails,
+        object $wpdb
+    ): void {
+        $new = self::normalizeSlug( $rawNew, $kind );
         if ( null === $new ) {
             WP_CLI::error( "'" . Commands::safeArg( $rawNew ) . "' is not a valid slug." );
             return;
@@ -372,22 +413,31 @@ final class ContentModelCommands {
         }
 
         $unit    = Declaration::TYPE === $kind ? 'posts' : 'terms';
-        $count   = $this->guardrails()->contentFor( $kind, $old, $existing->data )['count'];
+        $count   = $guardrails->contentFor( $kind, $old, $existing->data )['count'];
         $migrate = ! empty( $assoc['migrate'] );
 
         if ( empty( $assoc['yes'] ) ) {
             WP_CLI::log( sprintf( 'Plan: move %s to %s/%s/ (%d %s affected).', self::relativeSource( $existing->source ), FileLoader::FOLDERS[ $kind ], $new, $count, $unit ) );
             WP_CLI::log(
                 $migrate
-                    ? sprintf( 'Existing %s would move to "%s" and rewrite rules would be flushed.', $unit, $new )
+                    ? sprintf( 'Existing %s would move to "%s".', $unit, $new )
                     : sprintf( 'Existing %s would stay under "%s"; add --migrate to move them.', $unit, $old )
             );
             WP_CLI::error( 'Nothing changed. Run again with --yes to apply.' );
             return;
         }
 
+        // Checked before anything moves, so a refusal leaves the site untouched.
+        if ( $migrate ) {
+            $taken = $guardrails->contentFor( $kind, $new, null )['count'];
+            if ( $taken > 0 ) {
+                WP_CLI::error( sprintf( '%d %s already exist under "%s"; migrating would mix them. Nothing changed.', $taken, $unit, $new ) );
+                return;
+            }
+        }
+
         try {
-            $moved = self::moveDeclaration( $kind, $old, $new, $existing, $this->writer() );
+            $moved = self::moveDeclaration( $kind, $old, $new, $existing, $writer );
         } catch ( WriteException $e ) {
             WP_CLI::error( $e->getMessage() );
             return;
@@ -399,9 +449,16 @@ final class ContentModelCommands {
         }
 
         if ( $migrate ) {
-            $affected = $this->migrateContent( $kind, $old, $new );
-            flush_rewrite_rules();
-            WP_CLI::log( sprintf( '%d %s moved to "%s"; rewrite rules flushed.', $affected, $unit, $new ) );
+            $affected = self::migrateContent( $kind, $old, $new, $wpdb );
+            if ( null === $affected ) {
+                WP_CLI::error( sprintf( 'The database update failed. The declaration is already renamed to "%s", but its %s are still stored under "%s". Fix the database error and update them yourself, or rename the folder back.', $new, $unit, $old ) );
+                return;
+            }
+            // The next web request sees a different declared set and flushes.
+            if ( function_exists( 'delete_option' ) ) {
+                delete_option( RewriteHash::OPTION );
+            }
+            WP_CLI::log( sprintf( '%d %s moved to "%s". Rewrite rules will refresh on the next page load.', $affected, $unit, $new ) );
         } elseif ( $count > 0 ) {
             WP_CLI::warning( sprintf( '%d existing %s stay under the old slug "%s" and are not shown under the new one. Move them yourself, or rename with --migrate.', $count, $unit, $old ) );
         }
@@ -449,6 +506,7 @@ final class ContentModelCommands {
             $deleted = $writer->delete( $kind, $old, $existing );
         } catch ( WriteException $e ) {
             @unlink( $written['path'] );
+            @rmdir( dirname( $written['path'] ) );
             throw $e;
         }
 
@@ -458,16 +516,31 @@ final class ContentModelCommands {
         );
     }
 
-    private function migrateContent( string $kind, string $old, string $new ): int {
-        global $wpdb;
-
+    /**
+     * Move stored content to the new slug.
+     *
+     * @param object $wpdb
+     * @return int|null Rows moved, or null when the database update failed.
+     */
+    public static function migrateContent( string $kind, string $old, string $new, object $wpdb ): ?int {
         if ( Declaration::TYPE === $kind ) {
             $affected = $wpdb->update( $wpdb->posts, array( 'post_type' => $new ), array( 'post_type' => $old ) );
         } else {
             $affected = $wpdb->update( $wpdb->term_taxonomy, array( 'taxonomy' => $new ), array( 'taxonomy' => $old ) );
         }
+        if ( false === $affected ) {
+            return null;
+        }
 
-        return is_int( $affected ) ? $affected : 0;
+        if ( function_exists( 'wp_cache_flush' ) ) {
+            wp_cache_flush();
+        }
+        if ( Declaration::TAXONOMY === $kind && function_exists( 'clean_taxonomy_cache' ) ) {
+            clean_taxonomy_cache( $old );
+            clean_taxonomy_cache( $new );
+        }
+
+        return (int) $affected;
     }
 
     // ---- wiring ------------------------------------------------------------
