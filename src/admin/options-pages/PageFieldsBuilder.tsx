@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from 'react';
-import { __, sprintf } from '@wordpress/i18n';
+import { __, _n, sprintf } from '@wordpress/i18n';
 import { PlusIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/admin/components/ui/button';
+import { cn } from '@/admin/lib/utils';
+import { BTN_PRIMARY, BTN_SECONDARY } from '@/admin/screens/fields/pb-ui';
 import {
 	AddFieldMenu,
 	FieldSettings,
@@ -15,6 +16,11 @@ import {
 	type RawGroup,
 } from '@/admin/fields/builder';
 import { fieldAt, isObject, siblingsAt, walkFields } from '@/admin/screens/fields/builder-state';
+
+function fieldCountLabel(n: number): string {
+	/* translators: %d: number of fields */
+	return sprintf(_n('%d field', '%d fields', n, 'proto-blocks'), n);
+}
 
 function pathOf(group: RawGroup, key: string | null): FieldPath | null {
 	let found: FieldPath | null = null;
@@ -44,7 +50,7 @@ function names(group: RawGroup): Map<string, string> {
  * builder-state's reducer. The location is the page itself, so there is no
  * location editor. Controlled: every action calls `onChange` with the next group.
  */
-export function PageFieldsBuilder({ group, onChange, readOnly }: { group: RawGroup; onChange(next: RawGroup): void; readOnly: boolean }) {
+export function PageFieldsBuilder({ group, onChange, readOnly, title, hint }: { group: RawGroup; onChange(next: RawGroup): void; readOnly: boolean; title: string; hint?: string }) {
 	const [selected, setSelected] = useState<string | null>(null);
 	const [adding, setAdding] = useState<{ parent: FieldPath | null; layout?: number; label: string } | null>(null);
 	const groupRef = useRef(group);
@@ -109,44 +115,64 @@ export function PageFieldsBuilder({ group, onChange, readOnly }: { group: RawGro
 	};
 
 	const atSelected = (): FieldPath | null => pathOf(groupRef.current, selected);
+	const addHere = () => openAdd(null);
 
 	return (
-		<div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
-			<div className="grid gap-3">
-				{fields.length === 0 ? <p className="text-body text-muted-foreground">{__('No fields yet.', 'proto-blocks')}</p> : null}
-				<FieldTree fields={fields as RawField[]} selectedKey={selected} onSelect={(_, key) => setSelected(key)} dispatch={dispatch} onAddField={openAdd} readOnly={readOnly} />
-				{readOnly ? null : (
-					<Button type="button" variant="outline" className="justify-self-start" onClick={() => openAdd(null)}>
-						<PlusIcon aria-hidden="true" />
-						{__('Add field', 'proto-blocks')}
-					</Button>
-				)}
+		<section aria-label={title} className="overflow-hidden rounded-xl border border-solid border-border bg-card">
+			<div className="flex flex-wrap items-center justify-between gap-4 border-0 border-b border-solid border-border px-5 py-3.5">
+				<div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-1">
+					<h3 className="text-section font-semibold">{title}</h3>
+					{hint ? <span className="text-label text-muted-foreground">{hint}</span> : null}
+				</div>
+				<button type="button" className={BTN_SECONDARY} disabled={readOnly} onClick={addHere}>
+					<PlusIcon aria-hidden="true" className="size-3.5" strokeWidth={2.5} />
+					{__('Add field', 'proto-blocks')}
+				</button>
 			</div>
-			<div className="rounded-lg border px-4 py-4">
-				{selectedField && selected ? (
-					<FieldSettings
-						key={selected}
-						field={selectedField}
-						siblings={siblings as RawField[]}
-						savedName={savedNames.get(selected)}
-						readOnly={readOnly}
-						idPrefix={`pb-option-field-${selected}`}
-						onChange={(patch) => {
-							const path = atSelected();
-							if (path) {
-								dispatch({ type: 'update', path, patch });
-							}
-						}}
-						onLayout={(action) => {
-							const path = atSelected();
-							if (path) {
-								dispatch({ ...action, path });
-							}
-						}}
-					/>
-				) : (
-					<p className="text-body text-muted-foreground">{__('Select a field to edit its settings.', 'proto-blocks')}</p>
+			{fields.length === 0 ? <p className="border-0 border-b border-solid border-divider px-5 py-6 text-label text-muted-foreground">{__('No fields yet.', 'proto-blocks')}</p> : null}
+			<FieldTree
+				fields={fields as RawField[]}
+				selectedKey={selected}
+				onSelect={(_, key) => setSelected((current) => (current === key ? null : key))}
+				dispatch={dispatch}
+				onAddField={openAdd}
+				readOnly={readOnly}
+				renderPanel={(field, _path, key) => (
+					<>
+						<FieldSettings
+							key={key}
+							field={field}
+							siblings={siblings as RawField[]}
+							savedName={savedNames.get(key)}
+							readOnly={readOnly}
+							idPrefix={`pb-option-field-${key}`}
+							onChange={(patch) => {
+								const path = pathOf(groupRef.current, key);
+								if (path) {
+									dispatch({ type: 'update', path, patch });
+								}
+							}}
+							onLayout={(action) => {
+								const path = pathOf(groupRef.current, key);
+								if (path) {
+									dispatch({ ...action, path });
+								}
+							}}
+						/>
+						<div className="mt-5 flex justify-end border-0 border-t border-solid border-border pt-3.5">
+							<button type="button" className={BTN_SECONDARY} onClick={() => setSelected(null)}>
+								{__('Close field', 'proto-blocks')}
+							</button>
+						</div>
+					</>
 				)}
+			/>
+			<div className="flex flex-wrap items-center justify-between gap-3 bg-subtle px-5 py-3.5">
+				<span className="text-caption text-muted-foreground">{fieldCountLabel(fields.length)}</span>
+				<button type="button" className={cn(BTN_PRIMARY, 'pl-3')} disabled={readOnly} onClick={addHere}>
+					<PlusIcon aria-hidden="true" className="size-4" />
+					{__('Add field', 'proto-blocks')}
+				</button>
 			</div>
 			<AddFieldMenu
 				open={adding !== null}
@@ -155,7 +181,7 @@ export function PageFieldsBuilder({ group, onChange, readOnly }: { group: RawGro
 				/* translators: %s: where the field is added */
 				target={adding ? sprintf(__('Adds to: %s', 'proto-blocks'), adding.label) : undefined}
 			/>
-		</div>
+		</section>
 	);
 }
 
@@ -168,21 +194,24 @@ export function isGroupList(fields: unknown[]): boolean {
  * The page's `fields` array in builders: bare fields are one implicit group
  * written back as bare fields; an array of groups gets one builder per group.
  */
-export function FieldsSection({ fields, onChange, readOnly }: { fields: unknown[]; onChange(next: unknown[]): void; readOnly: boolean }) {
+export function FieldsSection({ fields, onChange, readOnly, title = __('Fields', 'proto-blocks'), hint }: { fields: unknown[]; onChange(next: unknown[]): void; readOnly: boolean; title?: string; hint?: string }) {
 	if (isGroupList(fields)) {
 		return (
 			<div className="grid gap-6">
 				{fields.map((item, index) => {
 					const group = item as RawGroup;
 					return (
-						<section key={typeof group.key === 'string' ? group.key : index} className="grid gap-2">
-							<h3 className="text-label font-semibold">{String(group.title || sprintf(/* translators: %d: group number */ __('Group %d', 'proto-blocks'), index + 1))}</h3>
-							<PageFieldsBuilder group={group} readOnly={readOnly} onChange={(next) => onChange(fields.map((g, i) => (i === index ? next : g)))} />
-						</section>
+						<PageFieldsBuilder
+							key={typeof group.key === 'string' ? group.key : index}
+							title={String(group.title || sprintf(/* translators: %d: group number */ __('Group %d', 'proto-blocks'), index + 1))}
+							group={group}
+							readOnly={readOnly}
+							onChange={(next) => onChange(fields.map((g, i) => (i === index ? next : g)))}
+						/>
 					);
 				})}
 			</div>
 		);
 	}
-	return <PageFieldsBuilder group={{ fields }} readOnly={readOnly} onChange={(next) => onChange(Array.isArray(next.fields) ? next.fields : [])} />;
+	return <PageFieldsBuilder title={title} hint={hint} group={{ fields }} readOnly={readOnly} onChange={(next) => onChange(Array.isArray(next.fields) ? next.fields : [])} />;
 }

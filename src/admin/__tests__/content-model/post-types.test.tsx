@@ -592,14 +592,20 @@ test('the File panel previews the text Save would write', async () => {
 		'admin/schema-files/type/product': file({ text: '// keep me\n{ "name": "Product" }' }),
 	});
 
-	const toggle = screen.getByRole('button', { name: 'File' });
+	await user.click(screen.getByRole('radio', { name: /No archive/ }));
+	const toggle = screen.getByRole('button', { name: 'JSONC' });
 	await user.click(toggle);
 	expect(toggle).toHaveAttribute('aria-pressed', 'true');
-	await user.click(screen.getByRole('radio', { name: /No archive/ }));
+	expect(screen.getByRole('region', { name: 'JSONC' })).toBeInTheDocument();
+	expect(screen.queryByRole('radio', { name: /No archive/ })).toBeNull();
 
 	const preview = screen.getByLabelText('File text that Save to file writes');
 	expect(preview.textContent).toContain('// keep me');
 	expect(preview.textContent).toContain('"has_archive": false');
+
+	await user.click(screen.getByRole('button', { name: 'Editor' }));
+	expect(screen.queryByRole('region', { name: 'JSONC' })).toBeNull();
+	expect(screen.getByRole('radio', { name: /No archive/ })).toBeInTheDocument();
 });
 
 const DATA_ICON = 'data:image/svg+xml;base64,' + 'A'.repeat(3400);

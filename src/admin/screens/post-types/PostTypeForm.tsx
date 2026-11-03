@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { __, _n, sprintf } from '@wordpress/i18n';
-import { ArrowLeftIcon, BracesIcon, CircleDotIcon, InfoIcon, LockIcon, PlusIcon, SaveIcon, TriangleAlertIcon, XIcon } from 'lucide-react';
+import { ArrowLeftIcon, CircleDotIcon, InfoIcon, LockIcon, PlusIcon, SaveIcon, TriangleAlertIcon, XIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useForm, useFormState, useWatch, Controller, type Control, type FieldErrors, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,7 +12,7 @@ import { Panel, PanelHeader } from '@/admin/components/shell/Panel';
 import { ScreenError } from '@/admin/components/shell/ScreenError';
 import { ConflictDialog } from '@/admin/components/content-model/ConflictDialog';
 import { DeclarationShell } from '@/admin/components/content-model/DeclarationShell';
-import { FilePreview, FormPanel, FormSection } from '@/admin/components/content-model/Layout';
+import { CommitNotice, FormPanel, FormSection, JsoncView, ViewToggle, type EditorView } from '@/admin/components/content-model/Layout';
 import { DeleteDeclarationDialog } from '@/admin/components/content-model/DeleteDeclarationDialog';
 import { GuardrailDialog } from '@/admin/components/content-model/GuardrailDialog';
 import { LabelsEditor } from '@/admin/components/content-model/LabelsEditor';
@@ -583,13 +583,11 @@ function JsoncPanel({
 	file,
 	base,
 	defaults,
-	onClose,
 }: {
 	control: Control<Values>;
 	file: FileResult;
 	base: Values;
 	defaults: Values;
-	onClose: () => void;
 }) {
 	const values = useWatch({ control }) as Values;
 	const text = useMemo(() => {
@@ -601,14 +599,7 @@ function JsoncPanel({
 	}, [values, file, base, defaults]);
 
 	return (
-		<FilePreview
-			name="type.jsonc"
-			text={text}
-			label={__('File text that Save to file writes', 'proto-blocks')}
-			panelLabel={__('File preview', 'proto-blocks')}
-			note={__('Comments and key order are kept.', 'proto-blocks')}
-			onClose={onClose}
-		/>
+		<JsoncView path={file.path} text={text} label={__('File text that Save to file writes', 'proto-blocks')} note={__('Comments and key order are kept.', 'proto-blocks')} />
 	);
 }
 
@@ -755,7 +746,7 @@ function TypeForm({
 	const [conflict, setConflict] = useState(false);
 	const [deleting, setDeleting] = useState<{ count: number; taxonomies?: Record<string, number> } | null>(null);
 	const [discarding, setDiscarding] = useState(false);
-	const [panel, setPanel] = useState(false);
+	const [view, setView] = useState<EditorView>('editor');
 
 	const changes = () => changedValues(getValues(), defaultsRef.current, base);
 
@@ -888,10 +879,7 @@ function TypeForm({
 			}}
 			actions={
 				<>
-					<Button type="button" variant="outline" aria-pressed={panel} onClick={() => setPanel((open) => !open)}>
-						<BracesIcon aria-hidden="true" />
-						{__('File', 'proto-blocks')}
-					</Button>
+					<ViewToggle view={view} onChange={setView} />
 					{item.origin === 'file' ? (
 						<Button
 							type="button"
@@ -967,9 +955,11 @@ function TypeForm({
 				</Alert>
 			) : null}
 
-			<div className={panel ? 'grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]' : 'grid gap-6'}>
+			{view === 'editor' ? <CommitNotice /> : null}
+			<div className="grid gap-6">
 				<form onSubmit={submit} noValidate className="grid min-w-0 gap-6" aria-label={item.label}>
-					<fieldset disabled={readOnly} className="min-w-0">
+					{view === 'jsonc' ? <JsoncPanel control={control} file={file} base={base} defaults={defaults} /> : null}
+					<fieldset disabled={readOnly} hidden={view === 'jsonc'} className="min-w-0">
 						<FormPanel>
 						<Section id="pt-general" title={__('General', 'proto-blocks')}>
 							<div className="grid gap-4 sm:grid-cols-2">
@@ -1192,9 +1182,6 @@ function TypeForm({
 						onSave={() => void submit()}
 					/>
 				</form>
-				{panel ? (
-					<JsoncPanel control={control} file={file} base={base} defaults={defaults} onClose={() => setPanel(false)} />
-				) : null}
 			</div>
 
 			<TemplatesCard

@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { adminGet, ApiError } from '@/admin/api';
 import { getWriteReason } from '@/admin/bootstrap';
 import { ConflictDialog } from '@/admin/components/content-model/ConflictDialog';
-import { FilePreview, FormPanel, FormSection } from '@/admin/components/content-model/Layout';
+import { CommitNotice, FormPanel, FormSection, JsoncView, useSaveShortcut, ViewToggle, type EditorView } from '@/admin/components/content-model/Layout';
 import { DeclarationShell } from '@/admin/components/content-model/DeclarationShell';
 import { GuardrailDialog } from '@/admin/components/content-model/GuardrailDialog';
 import { OriginBadge } from '@/admin/components/content-model/OriginBadge';
@@ -108,6 +108,7 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 	const [pending, setPending] = useState<{ next: Data; guardrails: Guardrail[] } | null>(null);
 	const [serverErrors, setServerErrors] = useState<{ path: string; message: string }[]>([]);
 	const [deleting, setDeleting] = useState(false);
+	const [view, setView] = useState<EditorView>('editor');
 	const savedStorage = file.exists ? formFromData(file.data).storage : null;
 
 	const writeReason = getWriteReason();
@@ -150,6 +151,8 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 		}
 	};
 
+	useSaveShortcut(readOnly || saving || problems.length > 0 ? null : () => void write(next));
+
 	const childErrors: Record<number, string> = {};
 	for (const err of serverErrors) {
 		const match = /^\/children\/(\d+)\/slug$/.exec(err.path);
@@ -187,6 +190,7 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 			path={file.path}
 			actions={
 				<>
+					<ViewToggle view={view} onChange={setView} />
 					{row ? <OriginBadge origin={row.origin} label={row.originLabel} double={row.double} /> : null}
 					{row?.url && file.exists ? (
 						<Button variant="outline" asChild>
@@ -240,7 +244,8 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 				</Alert>
 			) : null}
 
-			<div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+			{view === 'editor' ? <CommitNotice /> : null}
+			<div className="grid gap-6">
 				<form
 					className="grid min-w-0 gap-6"
 					onSubmit={(event) => {
@@ -250,6 +255,10 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 						}
 					}}
 				>
+					{view === 'jsonc' ? (
+						<JsoncView path={file.path} text={preview} label={__('File text that Save writes', 'proto-blocks')} />
+					) : null}
+					<div hidden={view === 'jsonc'} className={view === 'jsonc' ? 'hidden' : 'grid gap-6'}>
 					<FormPanel>
 					<Section title={__('Page', 'proto-blocks')}>
 						<div className="grid gap-1.5">
@@ -269,9 +278,9 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 						/>
 						<StorageField slug={slug} firstField={firstFieldName(form.fields)} storage={form.storage} saved={savedStorage} autoload={form.autoload} disabled={readOnly} onChange={patch} />
 					</Section>
-					<Section title={__('Fields', 'proto-blocks')} description={__('Fields shown on the page, above any tabs.', 'proto-blocks')}>
-						<FieldsSection fields={form.fields} readOnly={readOnly} onChange={(fields) => patch({ fields })} />
-					</Section>
+					</FormPanel>
+					<FieldsSection fields={form.fields} readOnly={readOnly} hint={__('Fields shown on the page, above any tabs.', 'proto-blocks')} onChange={(fields) => patch({ fields })} />
+					<FormPanel>
 					<Section title={__('Tabs', 'proto-blocks')} description={__('Tabs split one page. Each holds its own fields.', 'proto-blocks')}>
 						<TabsEditor tabs={form.tabs} disabled={readOnly} onChange={(tabs) => patch({ tabs })} />
 					</Section>
@@ -290,6 +299,7 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 						/>
 					</Section>
 					</FormPanel>
+					</div>
 					<div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card px-5 py-3 shadow-sm">
 						<p className="min-w-0 text-label break-all" aria-live="polite">
 							{problems.length > 0
@@ -310,7 +320,6 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 						</div>
 					</div>
 				</form>
-				<FilePreview name="page.jsonc" text={preview} label={__('File text that Save writes', 'proto-blocks')} />
 			</div>
 
 			{conflict ? (
