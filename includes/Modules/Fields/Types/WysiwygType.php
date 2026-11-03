@@ -13,6 +13,11 @@ final class WysiwygType implements FieldTypeInterface
         return ['wysiwyg'];
     }
 
+    public function requiresUnfilteredHtml(): bool
+    {
+        return false;
+    }
+
     public function stores(): bool
     {
         return true;

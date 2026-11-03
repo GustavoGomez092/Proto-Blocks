@@ -15,6 +15,11 @@ final class LinkType implements FieldTypeInterface
         return ['link'];
     }
 
+    public function requiresUnfilteredHtml(): bool
+    {
+        return false;
+    }
+
     public function stores(): bool
     {
         return true;

@@ -10,11 +10,15 @@ use ProtoBlocks\Modules\Fields\Definition\Field;
 final class DateType implements FieldTypeInterface
 {
     private const FORMATS = ['date' => 'Y-m-d', 'time' => 'H:i:s', 'datetime' => 'Y-m-d H:i:s'];
-    private const REST_FORMATS = ['date' => 'date', 'time' => 'time', 'datetime' => 'date-time'];
 
     public function names(): array
     {
         return ['date', 'time', 'datetime'];
+    }
+
+    public function requiresUnfilteredHtml(): bool
+    {
+        return false;
     }
 
     public function stores(): bool
@@ -24,7 +28,10 @@ final class DateType implements FieldTypeInterface
 
     public function restSchema(Field $field): array
     {
-        return ['type' => 'string', 'format' => self::REST_FORMATS[$field->type] ?? 'date'];
+        // No `format`: core's date-time check rejects '' and the stored
+        // "Y-m-d H:i:s" shape is stricter than any JSON Schema format, so
+        // sanitize() is the only enforcement. Empty is a valid value.
+        return ['type' => 'string'];
     }
 
     /** Strict round trip: a date PHP would roll over (2026-02-30) is rejected. */

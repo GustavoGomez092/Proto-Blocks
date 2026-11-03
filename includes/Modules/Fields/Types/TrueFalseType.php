@@ -13,6 +13,11 @@ final class TrueFalseType implements FieldTypeInterface
         return ['true_false'];
     }
 
+    public function requiresUnfilteredHtml(): bool
+    {
+        return false;
+    }
+
     public function stores(): bool
     {
         return true;
@@ -34,7 +39,7 @@ final class TrueFalseType implements FieldTypeInterface
             return $value;
         }
         if (is_int($value) || is_float($value)) {
-            return $value != 0;
+            return !(is_float($value) && is_nan($value)) && $value != 0;
         }
 
         return is_string($value) && in_array(strtolower(trim($value)), ['1', 'true', 'on', 'yes'], true);

@@ -19,6 +19,11 @@ final class ChoiceType implements FieldTypeInterface
         return ['select', 'radio'];
     }
 
+    public function requiresUnfilteredHtml(): bool
+    {
+        return false;
+    }
+
     public function stores(): bool
     {
         return true;
@@ -28,11 +33,13 @@ final class ChoiceType implements FieldTypeInterface
     {
         $item = ['type' => 'string'];
         $keys = $this->choiceKeys($field);
+        $multiple = $this->multiple($field);
         if ($keys !== null && !$this->hasSource($field)) {
-            $item['enum'] = $keys;
+            // A single, optional select may be cleared, so '' must validate.
+            $item['enum'] = !$multiple && !$field->required ? ['', ...$keys] : $keys;
         }
 
-        return $this->multiple($field) ? ['type' => 'array', 'items' => $item] : $item;
+        return $multiple ? ['type' => 'array', 'items' => $item] : $item;
     }
 
     public function sanitize(mixed $value, Field $field): mixed
@@ -51,15 +58,15 @@ final class ChoiceType implements FieldTypeInterface
         };
 
         if ($this->multiple($field)) {
-            $out = [];
+            $seen = [];
             foreach (is_array($value) ? $value : [$value] as $item) {
                 $clean = $keep($item);
-                if ($clean !== null && !in_array($clean, $out, true)) {
-                    $out[] = $clean;
+                if ($clean !== null) {
+                    $seen[$clean] = true; // keyed by value: de-dup without a quadratic scan
                 }
             }
 
-            return $out;
+            return array_map('strval', array_keys($seen));
         }
 
         return $keep($value) ?? '';
@@ -118,6 +125,13 @@ final class ChoiceType implements FieldTypeInterface
         $choices = $field->setting('choices');
         if (!is_array($choices) || $choices === []) {
             return null;
+        }
+
+        if (array_is_list($choices)) {
+            // ['a', 'b'] is a list of values, not a map with keys 0 and 1.
+            $values = array_filter($choices, static fn(mixed $c): bool => is_string($c) || is_int($c));
+
+            return $values === [] ? null : array_values(array_unique(array_map('strval', $values)));
         }
 
         return array_map('strval', array_keys($choices));

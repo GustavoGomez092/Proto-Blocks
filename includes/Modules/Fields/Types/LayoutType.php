@@ -14,6 +14,11 @@ final class LayoutType implements FieldTypeInterface
         return ['tab', 'accordion', 'message'];
     }
 
+    public function requiresUnfilteredHtml(): bool
+    {
+        return false;
+    }
+
     public function stores(): bool
     {
         return false;

@@ -13,6 +13,11 @@ final class ColorType implements FieldTypeInterface
         return ['color'];
     }
 
+    public function requiresUnfilteredHtml(): bool
+    {
+        return false;
+    }
+
     public function stores(): bool
     {
         return true;

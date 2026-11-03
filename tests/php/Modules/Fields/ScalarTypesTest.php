@@ -115,21 +115,38 @@ final class ScalarTypesTest extends TestCase
         $registry = TypeRegistry::withCoreTypes();
         $schema = static fn(Field $f): array => $registry->for($f)->restSchema($f);
 
-        $this->assertSame(['type' => 'number'], $schema(self::field('number')));
+        $this->assertSame(['type' => ['number', 'null']], $schema(self::field('number')));
+        $this->assertSame(['type' => ['number', 'null']], $schema(self::field('number', ['step' => 0.5])));
+        $this->assertSame(['type' => ['integer', 'null']], $schema(self::field('number', ['step' => 1])));
         $this->assertSame(['type' => 'string'], $schema(self::field('text')));
-        $this->assertSame(['type' => 'string', 'format' => 'email'], $schema(self::field('email')));
-        $this->assertSame(['type' => 'string', 'format' => 'uri'], $schema(self::field('url')));
+        $this->assertSame(
+            ['anyOf' => [['type' => 'string', 'format' => 'email'], ['type' => 'string', 'maxLength' => 0]]],
+            $schema(self::field('email'))
+        );
+        $this->assertSame(
+            ['anyOf' => [['type' => 'string', 'format' => 'uri'], ['type' => 'string', 'maxLength' => 0]]],
+            $schema(self::field('url'))
+        );
         $this->assertSame(['type' => 'boolean'], $schema(self::field('true_false')));
-        $this->assertSame(['type' => 'string', 'format' => 'date'], $schema(self::field('date')));
-        $this->assertSame(['type' => 'string', 'format' => 'date-time'], $schema(self::field('datetime')));
+        // Dates carry no `format` (core rejects '' for it); sanitize() enforces the shape.
+        foreach (['date', 'time', 'datetime'] as $type) {
+            $this->assertSame(['type' => 'string'], $schema(self::field($type)), $type);
+        }
         $this->assertSame(
             ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['a', 'b']]],
             $schema(self::field('select', ['multiple' => 1, 'choices' => ['a' => 'A', 'b' => 'B']]))
         );
         $this->assertSame(
-            ['type' => 'string', 'enum' => ['a', 'b']],
+            ['type' => 'string', 'enum' => ['', 'a', 'b']],
             $schema(self::field('radio', ['choices' => ['a' => 'A', 'b' => 'B']]))
         );
+        $required = new Field('field_x', 'x', 'X', 'select', 'select', true, null, '', '', [], [], [], ['choices' => ['a' => 'A']]);
+        $this->assertSame(['type' => 'string', 'enum' => ['a']], $registry->for($required)->restSchema($required));
+        $this->assertSame(
+            ['type' => 'string', 'enum' => ['', 'a', 'b']],
+            $schema(self::field('select', ['choices' => ['a', 'b']]))
+        );
+        $this->assertSame(['type' => 'string'], $schema(self::field('select', ['optionsSource' => 'wp:posts'])));
         $this->assertSame(
             ['type' => 'array', 'items' => ['type' => 'string']],
             $schema(self::field('select', ['multiple' => true, 'optionsSource' => 'wp:posts', 'choices' => ['a' => 'A']]))
@@ -209,6 +226,36 @@ final class ScalarTypesTest extends TestCase
         foreach (['text', 'code', 'link', 'select', 'wysiwyg'] as $type) {
             $this->assertTrue($registry->for(self::field($type))->stores(), $type);
         }
+    }
+
+    public function testOnlyCodeRequiresUnfilteredHtml(): void
+    {
+        $registry = TypeRegistry::withCoreTypes();
+        foreach (['text', 'password', 'textarea', 'number', 'email', 'url', 'wysiwyg', 'select', 'radio', 'true_false', 'color', 'date', 'time', 'datetime', 'link', 'tab', 'accordion', 'message'] as $type) {
+            $this->assertFalse($registry->for(self::field($type))->requiresUnfilteredHtml(), $type);
+        }
+        $code = self::field('code');
+        $handler = $registry->for($code);
+        $this->assertTrue($handler->requiresUnfilteredHtml());
+        $this->assertNull($handler->sanitize('<script>x</script>', $code));
+        // number's null is "empty", not "refuse": the flag is what tells them apart.
+        $number = self::field('number');
+        $this->assertNull($registry->for($number)->sanitize('', $number));
+        $this->assertFalse($registry->for($number)->requiresUnfilteredHtml());
+    }
+
+    public function testChoiceListChoicesAndDedupe(): void
+    {
+        $field = self::field('select', ['multiple' => 1, 'choices' => ['x', 'y']]);
+        $handler = TypeRegistry::withCoreTypes()->for($field);
+
+        $this->assertSame(['x', 'y'], $handler->sanitize(['x', 'q', 'y', 'x'], $field));
+    }
+
+    public function testTrueFalseNanIsFalse(): void
+    {
+        $field = self::field('true_false');
+        $this->assertFalse(TypeRegistry::withCoreTypes()->for($field)->sanitize(NAN, $field));
     }
 
     public function testRegistryRejectsUnknown(): void

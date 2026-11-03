@@ -19,6 +19,11 @@ final class CodeType implements FieldTypeInterface
         return ['code'];
     }
 
+    public function requiresUnfilteredHtml(): bool
+    {
+        return true;
+    }
+
     public function stores(): bool
     {
         return true;

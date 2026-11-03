@@ -21,6 +21,14 @@ interface FieldTypeInterface
      */
     public function names(): array;
 
+    /**
+     * True when only users with unfiltered_html may write this type (code).
+     * Task 5's trust gate must use this, never sanitize()'s return value:
+     * null from sanitize() also means "empty" for number. For these types
+     * escape() returns the stored content raw.
+     */
+    public function requiresUnfilteredHtml(): bool;
+
     /** False for presentation-only types (tab, accordion, message). */
     public function stores(): bool;
 
@@ -33,15 +41,16 @@ interface FieldTypeInterface
 
     /**
      * Untrusted-user sanitiser; returns the storable shape. A type that cannot
-     * be written by an untrusted user (code) returns null, the "refuse"
-     * sentinel.
+     * be written by an untrusted user (requiresUnfilteredHtml()) returns null,
+     * meaning "keep the previous value". null is also number's empty value, so
+     * callers decide trust from requiresUnfilteredHtml(), not from null.
      */
     public function sanitize(mixed $value, Field $field): mixed;
 
     /** Shape coercion (types, array keys) for every user; no content filtering. */
     public function normalize(mixed $value, Field $field): mixed;
 
-    /** Getter output: a stored value made safe for HTML output. */
+    /** Getter output: a stored value made safe for HTML output (raw for requiresUnfilteredHtml() types). */
     public function escape(mixed $stored, Field $field): mixed;
 
     /** The value of an unset field. */

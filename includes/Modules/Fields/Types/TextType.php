@@ -15,6 +15,11 @@ final class TextType implements FieldTypeInterface
         return ['text', 'password', 'textarea', 'number', 'email', 'url'];
     }
 
+    public function requiresUnfilteredHtml(): bool
+    {
+        return false;
+    }
+
     public function stores(): bool
     {
         return true;
@@ -22,10 +27,16 @@ final class TextType implements FieldTypeInterface
 
     public function restSchema(Field $field): array
     {
+        // Core rejects '' for a `format`, so email/url accept the empty string
+        // explicitly; number accepts null (the empty value).
+        $orEmpty = static fn(string $format): array => [
+            'anyOf' => [['type' => 'string', 'format' => $format], ['type' => 'string', 'maxLength' => 0]],
+        ];
+
         return match ($field->type) {
-            'number' => ['type' => 'number'],
-            'email' => ['type' => 'string', 'format' => 'email'],
-            'url' => ['type' => 'string', 'format' => 'uri'],
+            'number' => ['type' => [$this->integralStep($field) ? 'integer' : 'number', 'null']],
+            'email' => $orEmpty('email'),
+            'url' => $orEmpty('uri'),
             default => ['type' => 'string'],
         };
     }
@@ -83,6 +94,13 @@ final class TextType implements FieldTypeInterface
         return '';
     }
 
+    private function integralStep(Field $field): bool
+    {
+        $step = $field->setting('step');
+
+        return is_numeric($step) && (float) $step != 0.0 && floor((float) $step) == (float) $step;
+    }
+
     /**
      * int when `step` is integral, float when it is fractional or "any"; with
      * no step, the number's natural type. '', non-numeric input, INF/NaN and
@@ -103,7 +121,7 @@ final class TextType implements FieldTypeInterface
 
         $step = $field->setting('step');
         $unset = $step === null || $step === '';
-        $integral = is_numeric($step) && (float) $step != 0.0 && floor((float) $step) == (float) $step;
+        $integral = $this->integralStep($field);
         if (is_int($number)) {
             return $integral || $unset ? $number : (float) $number;
         }
