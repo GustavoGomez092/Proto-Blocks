@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AdminApp } from '@/admin/app';
 import type { AdminBootstrap } from '@/admin/bootstrap';
+import { lastCompiledLabel } from '@/admin/screens/TailwindScreen';
 
 type Status = Record<string, unknown>;
 
@@ -255,4 +256,19 @@ test('shows ScreenError when the request fails', async () => {
 	renderScreen();
 
 	expect(await screen.findByText("Couldn't load Tailwind Settings")).toBeInTheDocument();
+});
+
+describe('lastCompiledLabel', () => {
+	const now = 1_800_000_000_000;
+	const ago = (seconds: number) => now / 1000 - seconds;
+
+	test.each([
+		['never', null, 'Never'],
+		['5 seconds', ago(5), 'just now'],
+		['59 seconds', ago(59), 'just now'],
+		['3 minutes', ago(180), '3 minutes ago'],
+		['2 hours', ago(7200), '2 hours ago'],
+	])('%s', (_label, timestamp, expected) => {
+		expect(lastCompiledLabel(timestamp, now)).toBe(expected);
+	});
 });

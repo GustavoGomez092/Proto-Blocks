@@ -11,6 +11,48 @@ import {
 	AlertDialogTitle,
 } from '@/admin/components/ui/alert-dialog';
 
+/** How long to wait for a disabled opener to come back before giving up. */
+export const OPENER_WAIT_MS = 5000;
+
+function focusHeading() {
+	const heading = document.querySelector<HTMLElement>('#proto-blocks-admin h1') ?? document.querySelector<HTMLElement>('h1');
+	if (heading) {
+		if (!heading.hasAttribute('tabindex')) {
+			heading.setAttribute('tabindex', '-1');
+		}
+		heading.focus();
+	}
+}
+
+/**
+ * Focus `target`. A disabled button cannot take focus, and the opener is
+ * disabled while the confirmed request runs, so wait for it to be enabled
+ * again (up to OPENER_WAIT_MS) and fall back to the screen heading.
+ */
+function focusWhenEnabled(target: HTMLElement) {
+	const isDisabled = () => target.hasAttribute('disabled');
+	if (!isDisabled()) {
+		target.focus();
+		return;
+	}
+	const finish = (fallback: boolean) => {
+		observer.disconnect();
+		window.clearTimeout(timer);
+		if (!target.isConnected || (fallback && isDisabled())) {
+			focusHeading();
+		} else {
+			target.focus();
+		}
+	};
+	const observer = new MutationObserver(() => {
+		if (!isDisabled() || !target.isConnected) {
+			finish(false);
+		}
+	});
+	observer.observe(target, { attributes: true, attributeFilter: ['disabled'] });
+	const timer = window.setTimeout(() => finish(true), OPENER_WAIT_MS);
+}
+
 /**
  * Confirmation for a destructive or irreversible action. The title is a
  * question naming the count, the confirm label repeats the verb and count
@@ -29,6 +71,7 @@ export function ConfirmDialog({
 	description,
 	confirmLabel,
 	destructive = false,
+	confirmDisabled = false,
 	onConfirm,
 	onCancel,
 	children,
@@ -38,6 +81,8 @@ export function ConfirmDialog({
 	description?: ReactNode;
 	confirmLabel: string;
 	destructive?: boolean;
+	/** Disables the confirm button (nothing to confirm). */
+	confirmDisabled?: boolean;
 	onConfirm: () => void;
 	onCancel: () => void;
 	/** Extra content under the description (a list of names, a warning). */
@@ -68,7 +113,11 @@ export function ConfirmDialog({
 					opener.current = null;
 					if (target && target.isConnected) {
 						event.preventDefault();
-						target.focus();
+						focusWhenEnabled(target);
+					} else if (target) {
+						// The opener left the page (e.g. a list re-render): land on the screen heading.
+						event.preventDefault();
+						focusHeading();
 					}
 				}}
 			>
@@ -81,6 +130,7 @@ export function ConfirmDialog({
 					<AlertDialogCancel>{__('Cancel', 'proto-blocks')}</AlertDialogCancel>
 					<AlertDialogAction
 						variant={destructive ? 'destructive' : 'default'}
+						disabled={confirmDisabled}
 						onClick={(event) => {
 							// Keep Radix from closing (and reporting a cancel): the
 							// parent closes it, e.g. once an async action finishes.

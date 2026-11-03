@@ -267,12 +267,21 @@ function ClearCache({ cachedTemplates, onData }: { cachedTemplates: number; onDa
 			</div>
 			<ConfirmDialog
 				open={open}
-				title={sprintf(
-					/* translators: %d: number of cached templates */
-					_n('Clear %d cached template?', 'Clear %d cached templates?', cachedTemplates, 'proto-blocks'),
-					cachedTemplates
-				)}
-				description={__('Templates are compiled again the next time each block renders.', 'proto-blocks')}
+				title={
+					cachedTemplates === 0
+						? __('No cached templates to clear.', 'proto-blocks')
+						: sprintf(
+								/* translators: %d: number of cached templates */
+								_n('Clear %d cached template?', 'Clear %d cached templates?', cachedTemplates, 'proto-blocks'),
+								cachedTemplates
+							)
+				}
+				confirmDisabled={cachedTemplates === 0}
+				description={
+					cachedTemplates === 0
+						? undefined
+						: __('Templates are compiled again the next time each block renders.', 'proto-blocks')
+				}
 				confirmLabel={clearing ? __('Clearing…', 'proto-blocks') : __('Clear cache', 'proto-blocks')}
 				onConfirm={clear}
 				onCancel={() => {
