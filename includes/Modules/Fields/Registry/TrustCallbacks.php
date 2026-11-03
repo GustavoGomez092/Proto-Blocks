@@ -29,6 +29,10 @@ use ProtoBlocks\Security\AttributeSanitizer;
  *   callback cannot know the previous value; it returns the empty value,
  *   which the guard then refuses to write. A direct sanitize_meta() caller
  *   gets the empty value: nothing untrusted, nothing from another object.
+ * - Context-less writes are untrusted by design: with no current user (user
+ *   0: cron, WP-CLI without --user, importers, background jobs) code-holding
+ *   fields are refused like any other untrusted write; run such jobs as a
+ *   user with unfiltered_html to write code values.
  * - Options: the options page is known, so the sanitize_option callback
  *   returns the stored option (or the empty value when none exists).
  *
@@ -79,8 +83,14 @@ final class TrustCallbacks
             add_filter("add_{$kind}_metadata", $byObject, self::GUARD_PRIORITY, 3);
             add_filter("update_{$kind}_metadata", $byObject, self::GUARD_PRIORITY, 3);
             add_filter("delete_{$kind}_metadata", $byObject, self::GUARD_PRIORITY, 3);
-            add_filter("update_{$kind}_metadata_by_mid", function ($check, $metaId = 0, $value = null, $metaKey = '') use ($kind) {
-                return $this->guardWrite($check, $kind, $this->objectOfMeta($kind, (int) $metaId), (string) $metaKey);
+            add_filter("update_{$kind}_metadata_by_mid", function ($check, $metaId = 0, $value = null, $metaKey = false) use ($kind) {
+                // update_metadata_by_mid() passes false when the caller omits the key; core then
+                // writes under the row's own key, so the guard must check that key.
+                $row = $this->metaRow($kind, (int) $metaId);
+                $key = is_string($metaKey) && $metaKey !== '' ? $metaKey : (string) ($row->meta_key ?? '');
+                $objectId = $row !== null ? (int) ($row->{$kind . '_id'} ?? 0) : 0;
+
+                return $this->guardWrite($check, $kind, $objectId, $key);
             }, self::GUARD_PRIORITY, 4);
         }
     }
@@ -215,15 +225,15 @@ final class TrustCallbacks
         return is_object($term) && isset($term->taxonomy) ? (string) $term->taxonomy : null;
     }
 
-    private function objectOfMeta(string $kind, int $metaId): int
+    /** The meta row (meta_key, <kind>_id, ...) or null. */
+    private function metaRow(string $kind, int $metaId): ?object
     {
         if ($metaId <= 0 || !function_exists('get_metadata_by_mid')) {
-            return 0;
+            return null;
         }
         $row = get_metadata_by_mid($kind, $metaId);
-        $column = $kind . '_id';
 
-        return is_object($row) && isset($row->{$column}) ? (int) $row->{$column} : 0;
+        return is_object($row) ? $row : null;
     }
 
     private function refuse(string $object, Field $f): void

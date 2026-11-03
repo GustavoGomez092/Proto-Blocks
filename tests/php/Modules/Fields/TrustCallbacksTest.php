@@ -41,7 +41,7 @@ final class TrustCallbacksTest extends TestCase
 
     protected function setUp(): void
     {
-        foreach (['pb_test_filters', 'pb_test_hooks', 'pb_test_meta', 'pb_test_meta_reg', 'pb_test_terms', 'pb_test_options', 'pb_test_users'] as $g) {
+        foreach (['pb_test_filters', 'pb_test_hooks', 'pb_test_meta', 'pb_test_meta_rows', 'pb_test_meta_reg', 'pb_test_terms', 'pb_test_options', 'pb_test_users'] as $g) {
             $GLOBALS[$g] = [];
         }
         $GLOBALS['pb_test_caps'] = [
@@ -178,6 +178,26 @@ final class TrustCallbacksTest extends TestCase
 
         $this->as(self::ADMIN);
         $this->assertNull(pb_test_apply_hooks('update_post_metadata', null, 11, 'snippet', 'x', ''));
+    }
+
+    public function testKeylessUpdateByMidIsGuardedByTheRowsKey(): void
+    {
+        // update_metadata_by_mid('post', $mid, $value) passes $meta_key === false; core writes under the row's key.
+        $GLOBALS['pb_test_meta']['post'][11]['snippet'] = ['<script>ok()</script>'];
+        $GLOBALS['pb_test_meta_rows'] = [
+            501 => (object) ['meta_id' => 501, 'post_id' => 11, 'meta_key' => 'snippet', 'meta_value' => '<script>ok()</script>'],
+            502 => (object) ['meta_id' => 502, 'post_id' => 11, 'meta_key' => 'subtitle', 'meta_value' => 'x'],
+        ];
+        $this->register(self::field('code', 'snippet'));
+
+        $this->assertFalse(update_metadata_by_mid('post', 501, '<script>evil()</script>'));
+        $this->assertSame(['<script>ok()</script>'], $GLOBALS['pb_test_meta']['post'][11]['snippet']);
+        $this->assertSame('post:11:event', $this->trust->takeRefusals()[0]['object']);
+        $this->assertNull(pb_test_apply_hooks('update_post_metadata_by_mid', null, 502, 'y', false), 'other keys pass');
+
+        $this->as(self::ADMIN);
+        $this->assertTrue(update_metadata_by_mid('post', 501, '<script>new()</script>'));
+        $this->assertSame(['<script>new()</script>'], $GLOBALS['pb_test_meta']['post'][11]['snippet']);
     }
 
     public function testNoValueFromAnotherObjectLeaks(): void

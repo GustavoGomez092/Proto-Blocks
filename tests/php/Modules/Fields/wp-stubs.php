@@ -27,6 +27,7 @@ declare(strict_types=1);
  *   pb_test_terms[$id]            array|object: term_id, taxonomy, name, slug
  *   pb_test_object_terms[$objectId][$taxonomy]  list of term ids
  *   pb_test_set_terms[]           wp_set_object_terms calls
+ *   pb_test_meta_rows[$mid]       object rows for get_metadata_by_mid / update_metadata_by_mid
  *   pb_test_users[$id]            array|object: ID, roles, user_login, ...
  *   pb_test_supports[$postType][$feature]  true or the feature args
  *   pb_test_attachments[$id]      ['url', 'width', 'height', 'mime', 'metadata']
@@ -170,6 +171,31 @@ if (!function_exists('pb_test_get_meta')) {
     }
 }
 
+if (!function_exists('get_metadata_by_mid')) {
+    /** Rows from pb_test_meta_rows[$mid]: object with meta_id, <type>_id, meta_key, meta_value. */
+    function get_metadata_by_mid($meta_type, $meta_id)
+    {
+        $row = $GLOBALS['pb_test_meta_rows'][(int) $meta_id] ?? null;
+        return is_object($row) && isset($row->{$meta_type . '_id'}) ? $row : false;
+    }
+}
+if (!function_exists('update_metadata_by_mid')) {
+    /** Core order: short-circuit filter with the given key (false when omitted), then the row's key is used. */
+    function update_metadata_by_mid($meta_type, $meta_id, $meta_value, $meta_key = false)
+    {
+        $check = pb_test_apply_hooks("update_{$meta_type}_metadata_by_mid", null, (int) $meta_id, $meta_value, $meta_key);
+        if ($check !== null) {
+            return (bool) $check;
+        }
+        $row = get_metadata_by_mid($meta_type, $meta_id);
+        if (!$row) {
+            return false;
+        }
+        $key = $meta_key === false ? $row->meta_key : (string) $meta_key;
+        $GLOBALS['pb_test_meta'][$meta_type][(int) $row->{$meta_type . '_id'}][$key] = [wp_unslash($meta_value)];
+        return true;
+    }
+}
 if (!function_exists('metadata_exists')) {
     /** A stored row, regardless of registered defaults. */
     function metadata_exists($meta_type, $object_id, $meta_key)

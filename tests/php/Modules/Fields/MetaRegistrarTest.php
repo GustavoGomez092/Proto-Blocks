@@ -183,10 +183,34 @@ final class MetaRegistrarTest extends TestCase
             self::text('field_u4', 'session_tokens'),
             self::text('field_u5', 'capabilities'),
             self::text('field_u6', 'phone'),
+            self::text('field_u7', 'shop_capabilities'),
         ])]);
-        $this->assertSame([['user', '', 'phone']], $r->registered());
-        $this->assertSame(array_fill(0, 5, 'protected_meta_key'), array_column($r->report()->warnings, 'code'));
+        $this->assertSame([['user', '', 'capabilities'], ['user', '', 'phone'], ['user', '', 'shop_capabilities']], $r->registered());
+        $this->assertSame(array_fill(0, 4, 'protected_meta_key'), array_column($r->report()->warnings, 'code'));
         $this->assertFalse(MetaRegistrar::isProtectedUserKey('my_capability_note'));
+        $this->assertFalse(MetaRegistrar::isProtectedUserKey('xwp_capabilities'));
+        $this->assertFalse(MetaRegistrar::isProtectedUserKey('wp_x_user_level'));
+        $this->assertFalse(MetaRegistrar::isProtectedUserKey('session_tokens_copy'));
+    }
+
+    public function testProtectedUserKeysFollowTheDatabasePrefix(): void
+    {
+        $GLOBALS['wpdb'] = new class {
+            public string $base_prefix = 'site_';
+            public function get_blog_prefix(): string
+            {
+                return 'site_3_';
+            }
+        };
+        try {
+            $this->assertTrue(MetaRegistrar::isProtectedUserKey('site_3_capabilities'));
+            $this->assertTrue(MetaRegistrar::isProtectedUserKey('site_user_level'));
+            $this->assertTrue(MetaRegistrar::isProtectedUserKey('site_capabilities'), 'main site');
+            $this->assertTrue(MetaRegistrar::isProtectedUserKey('site_12_capabilities'));
+            $this->assertFalse(MetaRegistrar::isProtectedUserKey('wp_capabilities'), 'not this install\'s prefix');
+        } finally {
+            unset($GLOBALS['wpdb']);
+        }
     }
 
     public function testCodeFieldsAreGuardedAfterRegistration(): void

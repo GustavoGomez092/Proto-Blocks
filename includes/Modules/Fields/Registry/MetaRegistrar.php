@@ -29,7 +29,7 @@ use ProtoBlocks\OptionsPages\ProtectedOptions;
  * because the auth callback decides on its own.
  *
  * User fields may not use core's sensitive user-meta keys (`<prefix>capabilities`,
- * `<prefix>user_level`, multisite `wp_<n>_capabilities`, `session_tokens`):
+ * `<prefix>user_level`, multisite `<base prefix><n>_capabilities`, `session_tokens`):
  * they are refused with a `protected_meta_key` warning. Post and term keys
  * need no such list: field names start with a letter (GroupValidator::
  * NAME_PATTERN), so core's underscore-prefixed keys (`_edit_lock`,
@@ -166,17 +166,26 @@ final class MetaRegistrar
         return isset($this->protected[$metaType][$metaKey]) ? true : (bool) $protected;
     }
 
-    /** Core user-meta keys that grant roles, levels or sessions. */
+    /**
+     * Core user-meta keys that grant roles, levels or sessions: exactly
+     * `session_tokens`, `<blog prefix>capabilities|user_level` and, for
+     * multisite, `<base prefix>[<n>_]capabilities|user_level` (main site and every site). Prefixes come
+     * from $wpdb (default `wp_`). Other names ending in "capabilities" are
+     * ordinary keys.
+     */
     public static function isProtectedUserKey(string $name): bool
     {
-        if ($name === 'session_tokens' || preg_match('/(?:^|_)capabilities\z|user_level\z/D', $name)) {
+        if ($name === 'session_tokens') {
             return true;
         }
-        $prefix = isset($GLOBALS['wpdb']) && is_object($GLOBALS['wpdb']) && method_exists($GLOBALS['wpdb'], 'get_blog_prefix')
-            ? (string) $GLOBALS['wpdb']->get_blog_prefix()
-            : '';
+        $wpdb = $GLOBALS['wpdb'] ?? null;
+        $blog = is_object($wpdb) && method_exists($wpdb, 'get_blog_prefix') ? (string) $wpdb->get_blog_prefix() : '';
+        $base = is_object($wpdb) && isset($wpdb->base_prefix) && is_string($wpdb->base_prefix) ? $wpdb->base_prefix : '';
+        $blog = $blog !== '' ? $blog : ($base !== '' ? $base : 'wp_');
+        $base = $base !== '' ? $base : 'wp_';
 
-        return $prefix !== '' && ($name === $prefix . 'capabilities' || $name === $prefix . 'user_level');
+        return (bool) preg_match('/^' . preg_quote($blog, '/') . '(?:capabilities|user_level)\z/D', $name)
+            || (bool) preg_match('/^' . preg_quote($base, '/') . '(?:[0-9]+_)?(?:capabilities|user_level)\z/D', $name);
     }
 
     private function storedType(Field $field): ?FieldTypeInterface
