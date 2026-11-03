@@ -16,10 +16,16 @@
     "test:scripts": "node --test scripts/*.test.mjs",
     "packages-update": "wp-scripts packages-update",
     "zip": "node scripts/build-zip.js",
-    "dist": "npm run build && npm run zip"
+    "dist": "npm run build && npm run zip",
+    "wp-env": "wp-env",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@wordpress/api-fetch": "^7.46.0",
+    "@wordpress/e2e-test-utils-playwright": "3.1.0",
+    "@wordpress/env": "12.0.0",
     "@wordpress/scripts": "^37.0.0",
     "@wordpress/url": "^4.46.0",
     "archiver": "^7.0.1",

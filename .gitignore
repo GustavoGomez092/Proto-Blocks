@@ -42,3 +42,8 @@ yarn-error.log*
 # Package manager locks (optional - remove if you want to commit)
 # package-lock.json
 # yarn.lock
+
+# E2E
+test-results/
+playwright-report/
+tests/e2e/.auth/
