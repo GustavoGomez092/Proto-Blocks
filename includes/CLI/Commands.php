@@ -1155,6 +1155,9 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
         ( new ContentModelCommands() )->taxonomy( $args, $assoc_args );
     } );
 
+    // Settings pages.
+    WP_CLI::add_command( 'proto-blocks options', OptionsCommand::class );
+
     // Add cache subcommand
     WP_CLI::add_command( 'proto-blocks cache', function( $args, $assoc_args ) {
         $commands = new Commands();
