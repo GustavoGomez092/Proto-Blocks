@@ -20,7 +20,7 @@ test('AdminApp renders the System Status screen', async () => {
 });
 
 test('AdminApp shows ScreenError for a screen with no component', async () => {
-	render(<AdminApp bootstrap={mockBootstrap({ screen: 'wizard' })} />);
+	render(<AdminApp bootstrap={mockBootstrap({ screen: 'no-such-screen' as never })} />);
 
 	expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load");
 });
