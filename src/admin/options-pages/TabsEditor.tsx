@@ -78,7 +78,7 @@ export function TabsEditor({ tabs, disabled, onChange }: { tabs: Tab[]; disabled
 
 	return (
 		<div className="grid gap-3">
-			{tabs.length === 0 ? <p className="text-[13px] text-muted-foreground">{__('No tabs. All fields show on one screen.', 'proto-blocks')}</p> : null}
+			{tabs.length === 0 ? <p className="text-label text-muted-foreground">{__('No tabs. All fields show on one screen.', 'proto-blocks')}</p> : null}
 			<ol className="grid gap-2">
 				{tabs.map((tab, index) => {
 					const name = tab.title || __('(untitled tab)', 'proto-blocks');
@@ -90,7 +90,7 @@ export function TabsEditor({ tabs, disabled, onChange }: { tabs: Tab[]; disabled
 									<Label htmlFor={`pb-op-tab-${index}`}>{__('Tab title', 'proto-blocks')}</Label>
 									<Input id={`pb-op-tab-${index}`} value={tab.title} disabled={disabled} onChange={(e) => set(index, { title: e.target.value })} />
 								</div>
-								<span className="pb-2 text-[12.5px] text-muted-foreground">{fieldCount(tab.fields)}</span>
+								<span className="pb-2 text-caption text-muted-foreground">{fieldCount(tab.fields)}</span>
 								<Button type="button" variant="outline" size="sm" onClick={() => setOpen(open === id ? null : id)} aria-expanded={open === id}>
 									{/* translators: %s: tab title */}
 									<span className="sr-only">{sprintf(__('Edit fields of %s', 'proto-blocks'), name)}</span>

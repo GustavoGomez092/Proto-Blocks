@@ -113,7 +113,7 @@ export function PageFieldsBuilder({ group, onChange, readOnly }: { group: RawGro
 	return (
 		<div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
 			<div className="grid gap-3">
-				{fields.length === 0 ? <p className="text-sm text-muted-foreground">{__('No fields yet.', 'proto-blocks')}</p> : null}
+				{fields.length === 0 ? <p className="text-body text-muted-foreground">{__('No fields yet.', 'proto-blocks')}</p> : null}
 				<FieldTree fields={fields as RawField[]} selectedKey={selected} onSelect={(_, key) => setSelected(key)} dispatch={dispatch} onAddField={openAdd} readOnly={readOnly} />
 				{readOnly ? null : (
 					<Button type="button" variant="outline" className="justify-self-start" onClick={() => openAdd(null)}>
@@ -145,7 +145,7 @@ export function PageFieldsBuilder({ group, onChange, readOnly }: { group: RawGro
 						}}
 					/>
 				) : (
-					<p className="text-sm text-muted-foreground">{__('Select a field to edit its settings.', 'proto-blocks')}</p>
+					<p className="text-body text-muted-foreground">{__('Select a field to edit its settings.', 'proto-blocks')}</p>
 				)}
 			</div>
 			<AddFieldMenu
@@ -176,7 +176,7 @@ export function FieldsSection({ fields, onChange, readOnly }: { fields: unknown[
 					const group = item as RawGroup;
 					return (
 						<section key={typeof group.key === 'string' ? group.key : index} className="grid gap-2">
-							<h3 className="text-[13px] font-semibold">{String(group.title || sprintf(/* translators: %d: group number */ __('Group %d', 'proto-blocks'), index + 1))}</h3>
+							<h3 className="text-label font-semibold">{String(group.title || sprintf(/* translators: %d: group number */ __('Group %d', 'proto-blocks'), index + 1))}</h3>
 							<PageFieldsBuilder group={group} readOnly={readOnly} onChange={(next) => onChange(fields.map((g, i) => (i === index ? next : g)))} />
 						</section>
 					);

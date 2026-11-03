@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { __, sprintf } from '@wordpress/i18n';
-import { ArrowLeftIcon, FilePlusIcon, SaveIcon, Trash2Icon } from 'lucide-react';
+import { ArrowLeftIcon, ArrowRightIcon, FilePlusIcon, SaveIcon, Trash2Icon } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminGet, ApiError } from '@/admin/api';
 import { getWriteReason } from '@/admin/bootstrap';
 import { ConflictDialog } from '@/admin/components/content-model/ConflictDialog';
+import { FilePreview, FormPanel, FormSection } from '@/admin/components/content-model/Layout';
 import { DeclarationShell } from '@/admin/components/content-model/DeclarationShell';
 import { GuardrailDialog } from '@/admin/components/content-model/GuardrailDialog';
 import { OriginBadge } from '@/admin/components/content-model/OriginBadge';
@@ -14,11 +15,11 @@ import { ReadOnlyBanner, READ_ONLY_BANNER_ID } from '@/admin/components/shell/Re
 import { ScreenError } from '@/admin/components/shell/ScreenError';
 import { Alert, AlertDescription, AlertTitle } from '@/admin/components/ui/alert';
 import { Button } from '@/admin/components/ui/button';
-import { Card } from '@/admin/components/ui/card';
 import { Input } from '@/admin/components/ui/input';
 import { Label } from '@/admin/components/ui/label';
 import { Skeleton } from '@/admin/components/ui/skeleton';
 import { applyDeclarationEdits, parseJsonc } from '@/admin/content-model/jsonc';
+import { interpolate } from '@/admin/lib/interpolate';
 import { optionsSchema } from '@/admin/content-model/schema';
 import type { FileResult, Guardrail } from '@/admin/content-model/types';
 import { useDeclarationFile } from '@/admin/content-model/useDeclarationFile';
@@ -42,13 +43,9 @@ type Data = Record<string, unknown>;
 
 function Section({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
 	return (
-		<Card className="grid gap-4 px-6 py-5 shadow-xs">
-			<div className="grid gap-0.5">
-				<h2 className="text-[15px] font-semibold">{title}</h2>
-				{description ? <p className="text-[13px] text-muted-foreground">{description}</p> : null}
-			</div>
+		<FormSection title={title} description={description}>
 			{children}
-		</Card>
+		</FormSection>
 	);
 }
 
@@ -196,12 +193,9 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 							<a href={row.url}>{__('Open page', 'proto-blocks')}</a>
 						</Button>
 					) : null}
-					<Button type="button" variant="ghost" onClick={onBack}>
-						<ArrowLeftIcon aria-hidden="true" />
-						{__('All options pages', 'proto-blocks')}
-					</Button>
 				</>
 			}
+			back={{ label: __('All options pages', 'proto-blocks'), onClick: onBack }}
 		>
 			{header}
 			{reason === 'unknown' ? (
@@ -246,9 +240,9 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 				</Alert>
 			) : null}
 
-			<div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+			<div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
 				<form
-					className="grid gap-6"
+					className="grid min-w-0 gap-6"
 					onSubmit={(event) => {
 						event.preventDefault();
 						if (!readOnly && problems.length === 0) {
@@ -256,6 +250,7 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 						}
 					}}
 				>
+					<FormPanel>
 					<Section title={__('Page', 'proto-blocks')}>
 						<div className="grid gap-1.5">
 							<Label htmlFor="pb-op-title">{__('Title', 'proto-blocks')}</Label>
@@ -294,8 +289,9 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 							onChange={(children) => patch({ children })}
 						/>
 					</Section>
-					<div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background px-4 py-3 shadow-sm">
-						<p className="text-[13px]" aria-live="polite">
+					</FormPanel>
+					<div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card px-5 py-3 shadow-sm">
+						<p className="min-w-0 text-label break-all" aria-live="polite">
 							{problems.length > 0
 								? problems[0]
 								: sprintf(/* translators: %s: path of the declaration file */ __('Saves to %s', 'proto-blocks'), file.path)}
@@ -314,16 +310,7 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 						</div>
 					</div>
 				</form>
-				<Card className="gap-0 overflow-hidden py-0 shadow-xs xl:sticky xl:top-10">
-					<div className="border-b px-4 py-2 font-mono text-[12.5px]">page.jsonc</div>
-					<pre
-						tabIndex={0}
-						aria-label={__('File text that Save writes', 'proto-blocks')}
-						className="max-h-[70vh] overflow-auto bg-[#0f1d2e] p-4 font-mono text-[12.5px] leading-relaxed text-[#d6e2f0]"
-					>
-						{preview}
-					</pre>
-				</Card>
+				<FilePreview name="page.jsonc" text={preview} label={__('File text that Save writes', 'proto-blocks')} />
 			</div>
 
 			{conflict ? (
@@ -424,9 +411,9 @@ export function OptionsPageEditor({ slug, onBack }: { slug: string; onBack: () =
 
 	if (error && !detail) {
 		return (
-			<div className="grid gap-6">
+			<div className="grid gap-6 [&>header]:mb-0">
 				<PageHeader
-					title={__('Options Pages', 'proto-blocks')}
+					title={__('Options pages', 'proto-blocks')}
 					actions={
 						<Button type="button" variant="ghost" onClick={onBack}>
 							<ArrowLeftIcon aria-hidden="true" />
@@ -464,33 +451,53 @@ export function NewOptionsPage({ taken, onCreated, onBack }: { taken: string[]; 
 	}
 
 	return (
-		<div className="grid gap-6">
-			<PageHeader
-				title={__('New options page', 'proto-blocks')}
-				actions={
-					<Button type="button" variant="ghost" onClick={onBack}>
-						<ArrowLeftIcon aria-hidden="true" />
-						{__('All options pages', 'proto-blocks')}
-					</Button>
-				}
-			/>
-			<Card className="grid gap-4 px-6 py-5 shadow-xs sm:grid-cols-2">
+		<div className="grid gap-8 [&>header]:mb-0">
+			<PageHeader title={__('New options page', 'proto-blocks')} back={{ label: __('All options pages', 'proto-blocks'), onClick: onBack }} />
+			<div className="mx-auto grid w-full max-w-[640px] gap-5 rounded-2xl border bg-card p-8">
+				<ol aria-label={__('Steps', 'proto-blocks')} className="flex flex-wrap items-center gap-3 text-caption text-muted-foreground">
+					{[__('Name', 'proto-blocks'), __('Menu & access', 'proto-blocks'), __('Fields', 'proto-blocks')].map((step, i) => (
+						<li key={step} className="flex items-center gap-3" aria-current={i === 0 ? 'step' : undefined}>
+							{i > 0 ? <span aria-hidden="true" className="h-px w-6 bg-border" /> : null}
+							<span className={i === 0 ? 'inline-flex items-center gap-1.5 font-medium text-primary' : 'inline-flex items-center gap-1.5'}>
+								<span
+									aria-hidden="true"
+									className={
+										i === 0
+											? 'grid size-5 place-items-center rounded-full bg-primary text-[11px] text-primary-foreground'
+											: 'grid size-5 place-items-center rounded-full border border-input text-[11px]'
+									}
+								>
+									{i + 1}
+								</span>
+								{step}
+							</span>
+						</li>
+					))}
+				</ol>
 				<form
-					className="contents"
+					className="grid gap-5"
 					onSubmit={(event) => {
 						event.preventDefault();
 						if (title.trim() !== '' && effective !== '' && !slugError) setChosen({ slug: effective, title: title.trim() });
 					}}
 				>
 					<div className="grid gap-1.5">
-						<Label htmlFor="pb-op-new-title">{__('Title', 'proto-blocks')}</Label>
-						<Input id="pb-op-new-title" value={title} onChange={(e) => setTitle(e.target.value)} />
+						<Label htmlFor="pb-op-new-title">{__('Page title', 'proto-blocks')}</Label>
+						<Input id="pb-op-new-title" className="h-10 text-section" value={title} aria-describedby="pb-op-new-title-hint" onChange={(e) => setTitle(e.target.value)} />
+						<p id="pb-op-new-title-hint" className="text-label text-muted-foreground">
+							{__('Shown in the admin menu and at the top of the page.', 'proto-blocks')}
+						</p>
 					</div>
 					<div className="grid gap-1.5">
-						<Label htmlFor="pb-op-new-slug">{__('Slug', 'proto-blocks')}</Label>
+						<Label htmlFor="pb-op-new-slug">
+							{__('Slug', 'proto-blocks')}
+							<span aria-hidden="true" className="font-normal text-muted-foreground">
+								{__('· generated', 'proto-blocks')}
+							</span>
+						</Label>
 						<Input
 							id="pb-op-new-slug"
-							className="font-mono"
+							className="font-mono text-label"
 							value={effective}
 							aria-invalid={slugError ? true : undefined}
 							aria-describedby="pb-op-new-slug-hint"
@@ -499,15 +506,26 @@ export function NewOptionsPage({ taken, onCreated, onBack }: { taken: string[]; 
 								setSlug(e.target.value);
 							}}
 						/>
-						<p id="pb-op-new-slug-hint" role={slugError ? 'alert' : undefined} className={slugError ? 'text-[12.5px] text-destructive' : 'font-mono text-[12.5px] text-muted-foreground'}>
-							{slugError ?? `proto-options/${effective || '…'}/page.jsonc`}
+						<p id="pb-op-new-slug-hint" role={slugError ? 'alert' : undefined} className={slugError ? 'text-label text-destructive' : 'text-label text-muted-foreground'}>
+							{slugError ??
+								interpolate(
+									/* translators: %s: path of the declaration file that will be written. */
+									__('Writes %s', 'proto-blocks'),
+									<code className="font-mono text-micro text-link">{`proto-options/${effective || '…'}/page.jsonc`}</code>
+								)}
 						</p>
 					</div>
-					<Button type="submit" className="justify-self-start" disabled={title.trim() === '' || effective === '' || slugError !== null}>
-						{__('Continue', 'proto-blocks')}
-					</Button>
+					<div className="flex justify-end gap-2 pt-1">
+						<Button type="button" variant="ghost" onClick={onBack}>
+							{__('Cancel', 'proto-blocks')}
+						</Button>
+						<Button type="submit" disabled={title.trim() === '' || effective === '' || slugError !== null}>
+							{__('Continue', 'proto-blocks')}
+							<ArrowRightIcon aria-hidden="true" />
+						</Button>
+					</div>
 				</form>
-			</Card>
+			</div>
 		</div>
 	);
 }

@@ -145,7 +145,7 @@ describe('Fields list', () => {
 		expect(within(rowOf('SEO extras')).getByText('Plugin: Advanced Custom Fields')).toBeInTheDocument();
 		expect(within(rowOf('Product')).getByText('Declared twice')).toBeInTheDocument();
 		expect(within(rowOf('Event details')).getByText('group_events')).toBeInTheDocument();
-		expect(within(rowOf('Event details')).getByText('post_type == event')).toBeInTheDocument();
+		expect(within(rowOf('Event details')).getByTitle('post_type == event')).toHaveTextContent('Post typeevent');
 	});
 
 	it('marks a group skipped because ACF registers its key', async () => {

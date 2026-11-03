@@ -437,7 +437,7 @@ describe('editor', () => {
 			'admin/options-pages/shop-notices': { ...detail, page: row({ slug: 'shop-notices', title: 'Shop Notices' }) },
 		});
 		renderScreen('&new=1');
-		await user.type(await screen.findByRole('textbox', { name: 'Title' }), 'Shop Notices');
+		await user.type(await screen.findByRole('textbox', { name: 'Page title' }), 'Shop Notices');
 		expect((screen.getByRole('textbox', { name: 'Slug' }) as HTMLInputElement).value).toBe('shop-notices');
 		await user.click(screen.getByRole('button', { name: 'Continue' }));
 		const capability = await screen.findByRole('combobox', { name: 'Who can use this page' });

@@ -46,7 +46,7 @@ export function StorageField({
 
 	return (
 		<fieldset className="grid gap-3" disabled={disabled}>
-			<legend className="mb-2 text-[13px] font-semibold">{__('How values are saved', 'proto-blocks')}</legend>
+			<legend className="mb-2 text-label font-semibold">{__('How values are saved', 'proto-blocks')}</legend>
 			<RadioGroup
 				value={storage.mode}
 				disabled={disabled}
@@ -58,7 +58,7 @@ export function StorageField({
 					<RadioGroupItem value="fields" id="pb-op-storage-fields" />
 					<Label htmlFor="pb-op-storage-fields" className="grid gap-0.5 font-normal">
 						<span>{__('One setting per field', 'proto-blocks')}</span>
-						<span className="text-[12.5px] text-muted-foreground">
+						<span className="text-caption text-muted-foreground">
 							{sprintf(
 								/* translators: %s: example option name, <page slug>_<field name> */
 								__('Saved as %s. Recommended.', 'proto-blocks'),
@@ -71,7 +71,7 @@ export function StorageField({
 					<RadioGroupItem value="array" id="pb-op-storage-array" />
 					<Label htmlFor="pb-op-storage-array" className="grid gap-0.5 font-normal">
 						<span>{__('Single array option', 'proto-blocks')}</span>
-						<span className="text-[12.5px] text-muted-foreground">{__('For sites that already store these values together.', 'proto-blocks')}</span>
+						<span className="text-caption text-muted-foreground">{__('For sites that already store these values together.', 'proto-blocks')}</span>
 					</Label>
 				</div>
 			</RadioGroup>
@@ -87,21 +87,21 @@ export function StorageField({
 						onChange={(e) => onChange({ storage: { mode: 'array', option: e.target.value } })}
 					/>
 					{error ? (
-						<p id="pb-op-option-error" role="alert" className="text-[12.5px] text-destructive">
+						<p id="pb-op-option-error" role="alert" className="text-caption text-destructive">
 							{error}
 						</p>
 					) : null}
 				</div>
 			) : null}
 			{switched ? (
-				<p role="status" className="rounded-md border border-warning-border bg-warning-soft px-3 py-2 text-[12.5px]">
+				<p role="status" className="rounded-md border border-warning-border bg-warning-soft px-3 py-2 text-caption">
 					{switched}
 				</p>
 			) : null}
 			<div className="flex items-center justify-between gap-3">
 				<Label htmlFor="pb-op-autoload" className="grid gap-0.5 font-normal">
 					<span>{__('Load on every page', 'proto-blocks')}</span>
-					<span className="text-[12.5px] text-muted-foreground">{__('Keep on for values used site-wide (autoload).', 'proto-blocks')}</span>
+					<span className="text-caption text-muted-foreground">{__('Keep on for values used site-wide (autoload).', 'proto-blocks')}</span>
 				</Label>
 				<Switch id="pb-op-autoload" checked={autoload} disabled={disabled} onCheckedChange={(checked) => onChange({ autoload: checked === true })} />
 			</div>

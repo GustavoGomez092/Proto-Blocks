@@ -50,7 +50,7 @@ export function ChildPagesEditor({
 
 	return (
 		<div className="grid gap-3">
-			{children.length === 0 ? <p className="text-[13px] text-muted-foreground">{__('No child pages.', 'proto-blocks')}</p> : null}
+			{children.length === 0 ? <p className="text-label text-muted-foreground">{__('No child pages.', 'proto-blocks')}</p> : null}
 			<ul className="grid gap-2">
 				{children.map((child, index) => {
 					const slugError = childSlugError(child.slug) ?? errors?.[index] ?? null;
@@ -74,7 +74,7 @@ export function ChildPagesEditor({
 										aria-describedby={`pb-op-child-${index}-slug-hint`}
 										onChange={(e) => set(index, { slug: e.target.value })}
 									/>
-									<p id={`pb-op-child-${index}-slug-hint`} role={slugError ? 'alert' : undefined} className={slugError ? 'text-[12.5px] text-destructive' : 'font-mono text-[12.5px] text-muted-foreground'}>
+									<p id={`pb-op-child-${index}-slug-hint`} role={slugError ? 'alert' : undefined} className={slugError ? 'text-caption text-destructive' : 'font-mono text-caption text-muted-foreground'}>
 										{slugError ?? `${parentSlug}-${child.slug}`}
 									</p>
 								</div>
@@ -89,7 +89,7 @@ export function ChildPagesEditor({
 								/>
 							</div>
 							<div className="flex items-center gap-2">
-								<span className="text-[12.5px] text-muted-foreground">{fieldCount(child.fields)}</span>
+								<span className="text-caption text-muted-foreground">{fieldCount(child.fields)}</span>
 								<Button type="button" variant="outline" size="sm" aria-expanded={open === id} onClick={() => setOpen(open === id ? null : id)}>
 									{/* translators: %s: child page title */}
 									<span className="sr-only">{sprintf(__('Edit fields of %s', 'proto-blocks'), name)}</span>
