@@ -9,7 +9,6 @@ namespace ProtoBlocks\Tests\API;
 require_once __DIR__ . '/../Security/wp-stubs.php';
 require_once __DIR__ . '/../Admin/wp-stubs.php';
 require_once __DIR__ . '/../CLI/wp-stubs.php';
-require_once __DIR__ . '/../ContentModel/stubs/theme.php';
 require_once __DIR__ . '/../ContentModel/stubs/hooks.php';
 require_once __DIR__ . '/content-model-stubs.php';
 
