@@ -9,6 +9,8 @@ module.exports = {
         // React admin app; also emits assets/css/admin.css from its import.
         admin: path.resolve(__dirname, 'src/admin/index.tsx'),
         'tailwind-compiler': path.resolve(__dirname, 'src/tailwind/compiler.ts'),
+        // React field boxes in the post editor; also emits assets/css/fields-box.css.
+        'fields-box': './src/fields/box/index.tsx',
     },
     output: {
         path: path.resolve(__dirname, 'assets/js'),
