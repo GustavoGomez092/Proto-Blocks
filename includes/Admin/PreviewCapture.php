@@ -93,7 +93,54 @@ class PreviewCapture
             wp_die(esc_html__('Missing block parameter.', 'proto-blocks'), '', ['response' => 400]);
         }
 
-        $this->renderBlockDocument($blockName);
+        $postId = isset($_GET['post_id']) ? sanitize_text_field(wp_unslash($_GET['post_id'])) : '';
+
+        $this->renderBlockDocument($blockName, $postId);
+    }
+
+    /**
+     * The published post a capture renders against, so templates that read
+     * `$template->field()` or the loop have a post to read. Preference: the
+     * most recent published post of the post types block.json declares
+     * (`protoBlocks.postTypes`), else the most recent published post of any
+     * public type. 0 when the site has no published post.
+     *
+     * `$finder` takes the post types (empty = any) and returns a post id; it
+     * defaults to a get_posts() query and exists so the choice is testable.
+     *
+     * @param array<string,mixed> $schema
+     */
+    public static function contextPostId(array $schema, ?callable $finder = null): int
+    {
+        $declared = $schema['protoBlocks']['postTypes'] ?? $schema['postTypes'] ?? [];
+        $types    = [];
+        foreach (is_array($declared) ? $declared : [] as $type) {
+            if (is_string($type) && preg_match('/\A[a-z0-9_-]{1,20}\z/D', $type) === 1) {
+                $types[] = $type;
+            }
+        }
+
+        $finder ??= static function (array $types): int {
+            $ids = get_posts([
+                'post_type'        => $types === [] ? 'any' : $types,
+                'post_status'      => 'publish',
+                'posts_per_page'   => 1,
+                'orderby'          => 'date',
+                'order'            => 'DESC',
+                'fields'           => 'ids',
+                'no_found_rows'    => true,
+                'suppress_filters' => true,
+            ]);
+            return is_array($ids) && $ids !== [] ? (int) $ids[0] : 0;
+        };
+
+        if ($types !== []) {
+            $id = (int) $finder($types);
+            if ($id > 0) {
+                return $id;
+            }
+        }
+        return (int) $finder([]);
     }
 
     /**
@@ -282,7 +329,7 @@ class PreviewCapture
      * as the iframe target during capture. Calls `exit` so WP's admin
      * chrome is never emitted.
      */
-    private function renderBlockDocument(string $blockName): void
+    private function renderBlockDocument(string $blockName, string $postId = ''): void
     {
         $registrar = Plugin::getInstance()->getRegistrar();
         $registered = $registrar->getRegisteredBlocks();
@@ -298,10 +345,19 @@ class PreviewCapture
 
         $attributes = $this->captureAttributes($blockName, $block);
 
+        // Same post context as the editor preview (edit_post-checked); without
+        // a post the template's field()/loop output is empty.
+        $previousPost = $GLOBALS['post'] ?? null;
+        $postSet      = $postId !== '' && \ProtoBlocks\API\RestAPI::setupPreviewPost($postId);
+
         $engine = Plugin::getInstance()->getEngine();
         $html   = '<div class="proto-blocks-scope">'
                 . $engine->renderPreview($templatePath, $attributes, $schema)
                 . '</div>';
+
+        if ($postSet) {
+            $GLOBALS['post'] = $previousPost;
+        }
 
         // Build the minimal document. We deliberately bypass
         // get_header() / wp_head() so we don't paint the site nav /
@@ -359,7 +415,7 @@ wp_print_footer_scripts();
      * Every registered block with its preview status, for the Preview
      * Capture screen (GET admin/previews drops `path`).
      *
-     * @return array<int, array{name:string,title:string,path:string,hasPreview:bool,previewUrl:?string,previewMtime:?int,renderUrl:string}>
+     * @return array<int, array{name:string,title:string,path:string,hasPreview:bool,previewUrl:?string,previewMtime:?int,empty:bool,previewWidth:?int,previewHeight:?int,renderUrl:string}>
      */
     public function collectBlocks(): array
     {
@@ -371,6 +427,7 @@ wp_print_footer_scripts();
             $path        = $block['path'];
             $previewPath = $this->findPreview($path);
             $previewUrl  = $previewPath ? $this->pathToUrl($previewPath) : null;
+            $shape       = $previewPath ? self::emptyShape($previewPath) : ['empty' => false, 'width' => null, 'height' => null];
             $items[] = [
                 'name'         => $name,
                 'title'        => $block['schema']['title'] ?? $name,
@@ -378,7 +435,10 @@ wp_print_footer_scripts();
                 'hasPreview'   => (bool) $previewPath,
                 'previewUrl'   => $previewUrl,
                 'previewMtime' => $previewPath ? @filemtime($previewPath) : null,
-                'renderUrl'    => $this->buildRenderUrl($name),
+                'empty'        => $shape['empty'],
+                'previewWidth' => $shape['width'],
+                'previewHeight' => $shape['height'],
+                'renderUrl'    => $this->buildRenderUrl($name, self::contextPostId($block['schema'] ?? [])),
             ];
         }
 
@@ -506,16 +566,46 @@ wp_print_footer_scripts();
         return '';
     }
 
-    public function buildRenderUrl(string $blockName): string
+    public function buildRenderUrl(string $blockName, int $postId = 0): string
     {
-        return add_query_arg(
-            [
-                'action'   => self::RENDER_ACTION,
-                'block'    => $blockName,
-                '_wpnonce' => wp_create_nonce(self::RENDER_NONCE),
-            ],
-            admin_url('admin-ajax.php')
-        );
+        $args = [
+            'action'   => self::RENDER_ACTION,
+            'block'    => $blockName,
+            '_wpnonce' => wp_create_nonce(self::RENDER_NONCE),
+        ];
+        if ($postId > 0) {
+            $args['post_id'] = $postId;
+        }
+        return add_query_arg($args, admin_url('admin-ajax.php'));
+    }
+
+    /** Captures shorter than this many px, or smaller than MIN_BYTES, are flagged empty. */
+    public const MIN_HEIGHT = 40;
+    public const MIN_BYTES  = 2048;
+
+    /**
+     * Whether a stored capture is blank-looking: under MIN_HEIGHT px tall or
+     * MIN_BYTES large. Non-raster or unreadable files are not flagged.
+     *
+     * @return array{empty:bool,width:?int,height:?int}
+     */
+    public static function emptyShape(string $path): array
+    {
+        $info = is_file($path) ? @getimagesize($path) : false;
+        if (!is_array($info)) {
+            return ['empty' => false, 'width' => null, 'height' => null];
+        }
+        return self::emptyFromDimensions((int) $info[0], (int) $info[1], (int) @filesize($path));
+    }
+
+    /** @return array{empty:bool,width:int,height:int} */
+    public static function emptyFromDimensions(int $width, int $height, int $bytes): array
+    {
+        return [
+            'empty'  => $height < self::MIN_HEIGHT || $bytes < self::MIN_BYTES,
+            'width'  => $width,
+            'height' => $height,
+        ];
     }
 
     /**
@@ -611,6 +701,7 @@ wp_print_footer_scripts();
             'bytes'      => $written,
             'previewUrl' => $this->pathToUrl($targetPath),
             'mtime'      => filemtime($targetPath),
+            'empty'      => self::emptyShape($targetPath)['empty'],
         ]);
     }
 

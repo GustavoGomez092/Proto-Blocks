@@ -221,3 +221,17 @@ test('no blocks shows the empty state', async () => {
 	);
 	await waitFor(() => expect(screen.queryByRole('article')).toBeNull());
 });
+
+test('an empty capture shows the placeholder, an Empty capture status and keeps Recapture', async () => {
+	const data = payload();
+	data.blocks[0] = { ...data.blocks[0], empty: true, previewWidth: 1280, previewHeight: 22 } as (typeof data.blocks)[0];
+	mockApi({ ...routes(), 'admin/previews': data });
+	renderScreen();
+
+	const hero = await screen.findByRole('article', { name: /Hero Banner/ });
+	expect(within(hero).getByText(/Nothing rendered/)).toBeInTheDocument();
+	expect(within(hero).queryByRole('img')).toBeNull();
+	expect(within(hero).getByText('Empty capture')).toHaveClass('text-warning');
+	expect(within(hero).queryByText('Present')).toBeNull();
+	expect(within(hero).getByRole('button', { name: 'Recapture' })).toBeEnabled();
+});

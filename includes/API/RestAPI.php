@@ -230,7 +230,7 @@ class RestAPI
      * $template->field() read it. Only for a user who may edit that post;
      * otherwise the preview renders without a post, as before.
      */
-    private static function setupPreviewPost(mixed $postId): bool
+    public static function setupPreviewPost(mixed $postId): bool
     {
         if (!is_int($postId) && !(is_string($postId) && preg_match('/\A[1-9][0-9]{0,18}\z/D', $postId) === 1)) {
             return false;
