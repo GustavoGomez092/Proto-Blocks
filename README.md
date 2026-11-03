@@ -1385,6 +1385,87 @@ wp proto-blocks taxonomy rename genre category-genre --yes [--migrate]
 
 `rename` without `--yes` only prints the plan (the file move and how many posts or terms are affected) and exits with an error; nothing changes. `wp proto-blocks validate` reports blocks and declarations together.
 
+## Settings pages
+
+Proto-Blocks adds settings pages to the admin menu from one line of PHP or a small JSONC file in your theme. The page renders with the same field form as the Fields module, saves through the REST API behind the page's own capability, and its values are read with `proto_field()`.
+
+### One line of PHP
+
+Call it in `functions.php` (any time before the `admin_menu` action, priority 9 at the latest):
+
+```php
+proto_options_page('Site Notice', [
+    'menu'       => 'options-general.php',
+    'capability' => 'edit_pages',
+    'fields'     => [['name' => 'message', 'label' => 'Message', 'type' => 'text']],
+]);
+```
+
+The slug comes from the title (`site-notice`) unless you pass `slug`. The second argument takes any key a page file accepts.
+
+### JSONC files
+
+One folder per page (the folder name is the slug):
+
+```
+your-theme/
+  proto-options/
+    theme-settings/page.jsonc
+```
+
+```jsonc
+// proto-options/theme-settings/page.jsonc
+{
+  "title": "Theme Settings",
+  "menu": "top",                       // or a parent menu: "options-general.php", "edit.php?post_type=product", another page's slug
+  "icon": "dashicons-admin-generic",   // top-level pages: a dashicon or a theme .svg
+  "capability": "manage_options",      // the default
+  "tabs": [
+    { "title": "General", "fields": [ { "name": "phone", "label": "Phone", "type": "text" } ] },
+    { "title": "Tracking", "fields": [ { "name": "head_scripts", "type": "code" } ] },
+  ],
+  "children": [
+    { "slug": "footer", "title": "Footer", "fields": [ { "name": "copyright", "type": "text" } ] },
+  ],
+}
+```
+
+Fields use the Fields module's types and settings; `tabs` split them across tabs. A child page's slug is `<parent>-<child>` (`theme-settings-footer`) and it inherits the parent's capability and autoload. A file beats a PHP call for the same slug, and a child theme's folder beats the parent's. Invalid files are skipped and reported by `wp proto-blocks validate`.
+
+### Where values are stored
+
+Each field is its own option, named `<page_slug>_<field_name>` (hyphens kept): `theme-settings_phone`, `theme-settings-footer_copyright`. To keep an existing option, store every field in one array instead:
+
+```jsonc
+{
+  "title": "Display Settings",
+  "menu": "edit.php?post_type=product",
+  "capability": "manage_woocommerce",
+  "storage": { "mode": "array", "option": "cadco_display_settings" },
+  "fields": [ { "name": "hide_children", "type": "true_false" } ],
+}
+```
+
+Core and plugin-critical options (`siteurl`, `active_plugins`, `*_user_roles`, transients, `proto_blocks_*`, …) can never be a storage target; extend the list with the `proto_blocks_protected_options` filter. Two pages writing the same option get a `shared_storage` warning.
+
+### Reading values
+
+```php
+$phone  = proto_field('phone', 'option:theme-settings');
+$hidden = proto_field('hide_children', 'option:cadco-display-settings');
+```
+
+`option:<page_slug>` reads either storage mode, escaped like any other field (pass `true` as the third argument for the stored value). Standalone field groups can target a page with the location rule `options_page == <slug>`.
+
+### Capabilities and modules
+
+The menu item, the page and the `proto-blocks/v1/options/<slug>` route all require the page's declared capability (and a logged-in user); `manage_options` is not implied. Users without `unfiltered_html` see code fields read-only. Settings pages work with the Fields module switched off; switch the settings pages themselves off with `add_filter('proto_blocks_modules', fn ($m) => ['options_pages' => false] + $m);`.
+
+```bash
+wp proto-blocks options list
+wp proto-blocks options create "Theme Settings" [--slug=<slug>] [--menu=<menu>] [--capability=<cap>] [--storage-option=<name>]
+```
+
 ## WP-CLI Commands
 
 ```bash

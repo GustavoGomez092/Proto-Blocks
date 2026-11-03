@@ -195,7 +195,9 @@ final class OptionsCommand
 
     private function registry(): OptionsPagesRegistry
     {
-        return $this->registry ??= new OptionsPagesRegistry(Plugin::getInstance()->getContentModel());
+        // The module's registry when it is booted; otherwise one over the content model (files are still listed and created).
+        return $this->registry ??= Plugin::getInstance()->getModules()->optionsPages()?->registry()
+            ?? new OptionsPagesRegistry(Plugin::getInstance()->getContentModel());
     }
 
     private function writer(): SchemaFileWriter

@@ -7,8 +7,10 @@ namespace ProtoBlocks\ContentModel;
 /**
  * Collects proto_post_type() / proto_taxonomy() / proto_options_page() calls made by the theme.
  *
- * Declarations are accepted until seal() (called when post types register at
- * `init` priority 9); a later call is ignored with a `declared_too_late` warning.
+ * Declarations are accepted until their kind is sealed: post types and
+ * taxonomies when post types register (`init` priority 9), options pages when
+ * their menus are built (`admin_menu` priority 10). A later call is ignored
+ * with a `declared_too_late` warning.
  */
 final class PhpDeclarations
 {
@@ -18,7 +20,8 @@ final class PhpDeclarations
     /** @var list<Issue> */
     private static array $issues = [];
 
-    private static bool $sealed = false;
+    /** @var array<string, true> sealed kinds */
+    private static array $sealed = [];
 
     /**
      * @param string               $kind   Declaration::TYPE, Declaration::TAXONOMY or Declaration::OPTIONS
@@ -32,16 +35,23 @@ final class PhpDeclarations
             throw new \InvalidArgumentException("Unknown declaration kind \"$kind\".");
         }
 
-        if (self::$sealed) {
+        if (isset(self::$sealed[$kind])) {
             self::$issues[] = new Issue(
                 Issue::WARNING,
                 'declared_too_late',
-                sprintf(
-                    /* translators: 1: declared name, 2: call site */
-                    __('"%1$s" was declared at %2$s after post types were registered and was ignored. Declare it before the init action (priority 9), for example in functions.php.', 'proto-blocks'),
-                    $name,
-                    $source
-                ),
+                $kind === Declaration::OPTIONS
+                    ? sprintf(
+                        /* translators: 1: declared page title, 2: call site */
+                        __('"%1$s" was declared at %2$s after the settings pages were added to the admin menu and was ignored. Declare it before the admin_menu action (priority 9 at the latest), for example in functions.php.', 'proto-blocks'),
+                        $name,
+                        $source
+                    )
+                    : sprintf(
+                        /* translators: 1: declared name, 2: call site */
+                        __('"%1$s" was declared at %2$s after post types were registered and was ignored. Declare it before the init action (priority 9), for example in functions.php.', 'proto-blocks'),
+                        $name,
+                        $source
+                    ),
                 $source,
                 null,
                 $kind
@@ -105,9 +115,15 @@ final class PhpDeclarations
         return self::$issues;
     }
 
-    public static function seal(): void
+    /**
+     * Stop accepting declarations of $kind; without one, post types and
+     * taxonomies (options pages stay open until `admin_menu`).
+     */
+    public static function seal(?string $kind = null): void
     {
-        self::$sealed = true;
+        foreach ($kind === null ? [Declaration::TYPE, Declaration::TAXONOMY] : [$kind] as $one) {
+            self::$sealed[$one] = true;
+        }
     }
 
     /** Tests only: forget every declaration and issue, and unseal. */
@@ -115,6 +131,6 @@ final class PhpDeclarations
     {
         self::$declarations = [];
         self::$issues = [];
-        self::$sealed = false;
+        self::$sealed = [];
     }
 }

@@ -333,10 +333,7 @@ final class OptionsPagesRoutes
         if (!$this->pagesResolved) {
             $this->pagesResolved = true;
             $modules = Plugin::getInstance()->getModules();
-            // Task 11 adds Manager::optionsPages(); until then build it over the content model.
-            $this->pages = method_exists($modules, 'optionsPages')
-                ? $modules->optionsPages()
-                : new OptionsPagesRegistry($this->declarations());
+            $this->pages = $modules->optionsPages()?->registry();
         }
 
         return $this->pages;
