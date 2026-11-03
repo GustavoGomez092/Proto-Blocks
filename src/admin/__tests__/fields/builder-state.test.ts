@@ -123,6 +123,18 @@ describe('helpers', () => {
 		]);
 	});
 
+	it('refuses duplicate layout names', () => {
+		const g: RawGroup = {
+			key: 'g',
+			title: 'G',
+			fields: [{ key: 'f', name: 'sections', type: 'flexible_content', layouts: [
+				{ key: 'l1', name: 'quote', sub_fields: [] },
+				{ key: 'l2', name: 'quote', sub_fields: [] },
+			] }],
+		};
+		expect(validateGroup(g)).toEqual([{ path: [0], setting: 'layouts', message: 'The layout name "quote" is used more than once.' }]);
+	});
+
 	it('maps server error paths to field paths', () => {
 		expect(parseErrorPath('fields[5].sub_fields[0].name', [])).toEqual({ path: [5, 0], setting: 'name' });
 		expect(parseErrorPath('fields[1].fields[0].layouts[2].sub_fields[1].type', ['fields', 1])).toEqual({ path: [0, 'layouts', 2, 1], setting: 'type' });

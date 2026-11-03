@@ -36,7 +36,7 @@ function setup(overrides: Partial<Parameters<typeof FieldTree>[0]> = {}) {
 describe('FieldTree', () => {
 	it('shows label, name, type and the required marker per row', () => {
 		setup();
-		const row = screen.getByRole('button', { name: /^Start date/ });
+		const row = screen.getByRole('button', { name: 'Field 1 of 4, Start date, Date, required' });
 		expect(row).toHaveTextContent('start_date');
 		expect(row).toHaveTextContent('Date');
 		expect(row).toHaveTextContent('required');
@@ -50,6 +50,7 @@ describe('FieldTree', () => {
 		expect(screen.getByText(/^Picked up Start date\./)).toBeInTheDocument();
 		await userEvent.keyboard('{ArrowDown}');
 		expect(dispatch).toHaveBeenCalledWith({ type: 'move', from: [0], to: [1] });
+		expect(screen.getByText('Moved Start date to position 2 of 4.')).toBeInTheDocument();
 		await userEvent.keyboard(' ');
 		expect(screen.getByText('Dropped Start date.')).toBeInTheDocument();
 		expect(dispatch).toHaveBeenCalledTimes(1);
@@ -61,10 +62,12 @@ describe('FieldTree', () => {
 		sections.focus();
 		await userEvent.keyboard(' {ArrowRight}');
 		expect(dispatch).toHaveBeenLastCalledWith({ type: 'move', from: [3], to: [2, 2] });
+		expect(screen.getByText('Moved Sections to position 3 of 3.')).toBeInTheDocument();
 
 		screen.getByRole('button', { name: 'Reorder Speaker' }).focus();
 		await userEvent.keyboard(' {ArrowLeft}');
 		expect(dispatch).toHaveBeenLastCalledWith({ type: 'move', from: [2, 1], to: [3] });
+		expect(screen.getByText('Moved Speaker to position 4 of 5.')).toBeInTheDocument();
 	});
 
 	it('renders a repeater’s sub-fields in their own list with their own Add field button', async () => {
@@ -74,14 +77,14 @@ describe('FieldTree', () => {
 		await userEvent.click(screen.getByRole('button', { name: 'Add field to Agenda' }));
 		expect(onAddField).toHaveBeenCalledWith([2], undefined);
 
-		await userEvent.click(within(nested).getByRole('button', { name: /^Speaker/ }));
+		await userEvent.click(within(nested).getByRole('button', { name: 'Field 2 of 2, Speaker, Text' }));
 		expect(onSelect).toHaveBeenCalledWith([2, 1], 'field_h');
 	});
 
 	it('renders flexible content layouts with their fields and an Add layout button', async () => {
 		const { onAddField, dispatch } = setup();
 		const layout = screen.getByRole('list', { name: 'Fields of layout Quote' });
-		expect(within(layout).getByRole('button', { name: /^Text/ })).toBeInTheDocument();
+		expect(within(layout).getByRole('button', { name: 'Field 1 of 1, Text, Text area' })).toBeInTheDocument();
 		await userEvent.click(screen.getByRole('button', { name: 'Add field to Quote' }));
 		expect(onAddField).toHaveBeenCalledWith([3], 0);
 		await userEvent.click(screen.getByRole('button', { name: 'Add layout to Sections' }));

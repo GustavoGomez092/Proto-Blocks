@@ -509,9 +509,19 @@ export function validateGroup(group: RawGroup): BuilderError[] {
 				if (layouts.length === 0) {
 					errors.push({ path, setting: 'layouts', message: __('A flexible_content field needs at least one layout.', 'proto-blocks') });
 				}
+				const seen = new Set<string>();
 				layouts.forEach((layout, l) => {
 					if (typeof layout.name !== 'string' || !NAME_PATTERN.test(layout.name)) {
 						errors.push({ path, setting: 'layouts', message: invalidNameMessage(String(layout.name ?? '')) });
+					} else if (seen.has(layout.name)) {
+						errors.push({
+							path,
+							setting: 'layouts',
+							/* translators: %s: layout name */
+							message: sprintf(__('The layout name "%s" is used more than once.', 'proto-blocks'), layout.name),
+						});
+					} else {
+						seen.add(layout.name);
 					}
 					check(layout.sub_fields, [...path, 'layouts', l]);
 				});
