@@ -2,10 +2,11 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { __, _n, sprintf } from '@wordpress/i18n';
 import { useForm, type FieldErrors, type Resolver } from 'react-hook-form';
 import { toast } from 'sonner';
-import { ArrowLeftIcon, LockIcon, TrashIcon } from 'lucide-react';
+import { LockIcon, TrashIcon } from 'lucide-react';
 import { adminGet, adminPost, ApiError } from '@/admin/api';
 import { getWriteReason } from '@/admin/bootstrap';
 import { ConflictDialog } from '@/admin/components/content-model/ConflictDialog';
+import { FormPanel, FormSection } from '@/admin/components/content-model/Layout';
 import { DeclarationShell } from '@/admin/components/content-model/DeclarationShell';
 import { DeleteDeclarationDialog } from '@/admin/components/content-model/DeleteDeclarationDialog';
 import { GuardrailDialog } from '@/admin/components/content-model/GuardrailDialog';
@@ -14,7 +15,6 @@ import { OriginBadge } from '@/admin/components/content-model/OriginBadge';
 import { ScreenError } from '@/admin/components/shell/ScreenError';
 import { Alert, AlertDescription } from '@/admin/components/ui/alert';
 import { Button } from '@/admin/components/ui/button';
-import { Card } from '@/admin/components/ui/card';
 import { Checkbox } from '@/admin/components/ui/checkbox';
 import { Input } from '@/admin/components/ui/input';
 import { Label } from '@/admin/components/ui/label';
@@ -33,7 +33,7 @@ type Reason = ListItem['readOnlyReason'];
 const FIELDS = ['name', 'plural', 'post_types', 'hierarchical', 'public', 'show_in_rest', 'show_admin_column', 'rewrite', 'labels'] as const;
 const SLUG_PATTERN = /^[a-z][a-z0-9_-]{0,31}$/;
 
-const code = (text: ReactNode) => <code className="font-mono text-[12.5px]">{text}</code>;
+const code = (text: ReactNode) => <code className="font-mono text-caption">{text}</code>;
 const isObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /** Drops unset keys and empty strings, one level into objects, so they read as "not in the file". */
@@ -87,17 +87,10 @@ function slugify(name: string): string {
 }
 
 function Section({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
-	const id = useId();
 	return (
-		<Card role="region" aria-labelledby={id} className="gap-4 rounded-lg p-5 shadow-xs">
-			<div className="grid gap-1">
-				<h2 id={id} className="text-[15px] leading-[1.3] font-semibold">
-					{title}
-				</h2>
-				{description ? <p className="text-[13px] text-muted-foreground">{description}</p> : null}
-			</div>
+		<FormSection title={title} description={description}>
 			{children}
-		</Card>
+		</FormSection>
 	);
 }
 
@@ -106,8 +99,10 @@ function SwitchRow({ label, description, checked, disabled, onChange }: { label:
 	return (
 		<div className="flex items-start justify-between gap-4">
 			<div className="grid gap-0.5">
-				<Label htmlFor={id}>{label}</Label>
-				{description ? <p className="text-[13px] text-muted-foreground">{description}</p> : null}
+				<Label htmlFor={id} className="font-medium">
+					{label}
+				</Label>
+				{description ? <p className="text-label text-muted-foreground">{description}</p> : null}
 			</div>
 			<Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
 		</div>
@@ -191,7 +186,7 @@ function Fields({
 	const message = (key: string) => {
 		const error = (errors as Record<string, { message?: string } | undefined>)[key];
 		return error?.message ? (
-			<p role="alert" className="text-[13px] text-destructive">
+			<p role="alert" className="text-label text-destructive">
 				{error.message}
 			</p>
 		) : null;
@@ -199,10 +194,10 @@ function Fields({
 	const slugInvalid = mode === 'create' && slug !== '' && !SLUG_PATTERN.test(slug);
 
 	return (
-		<>
-			<Section title={__('Names', 'proto-blocks')}>
-				<div className="grid gap-4 sm:grid-cols-3">
-					<div className="grid gap-1.5">
+		<FormPanel>
+			<Section title={__('Names', 'proto-blocks')} description={mode === 'create' ? __('The plural and slug fill in from the name; edit them if needed.', 'proto-blocks') : undefined}>
+				<div className="grid gap-4 sm:grid-cols-2">
+					<div className="grid gap-1.5 sm:col-span-2">
 						<Label htmlFor={nameId}>{__('Name', 'proto-blocks')}</Label>
 						<Input
 							id={nameId}
@@ -218,12 +213,12 @@ function Fields({
 						/>
 						{message('name')}
 					</div>
-					<div className="grid gap-1.5">
+					<div className="grid content-start gap-1.5">
 						<Label htmlFor={pluralId}>{__('Plural name', 'proto-blocks')}</Label>
 						<Input id={pluralId} disabled={disabled} aria-invalid={errors.plural ? true : undefined} {...register('plural')} />
 						{message('plural')}
 					</div>
-					<div className="grid gap-1.5">
+					<div className="grid content-start gap-1.5">
 						<Label htmlFor={slugId}>
 							{__('Slug', 'proto-blocks')}
 							{mode === 'edit' ? <LockIcon aria-hidden="true" className="size-3 text-muted-foreground" /> : null}
@@ -237,9 +232,9 @@ function Fields({
 							aria-invalid={slugInvalid ? true : undefined}
 							onChange={(event) => onSlug?.(event.target.value)}
 						/>
-						<p className="text-[13px] text-muted-foreground">{slugHint}</p>
+						<p className="text-label text-muted-foreground">{slugHint}</p>
 						{slugInvalid ? (
-							<p role="alert" className="text-[13px] text-destructive">
+							<p role="alert" className="text-label text-destructive">
 								{__('Use lowercase letters, numbers, dashes and underscores, starting with a letter (32 characters at most).', 'proto-blocks')}
 							</p>
 						) : null}
@@ -247,12 +242,12 @@ function Fields({
 				</div>
 			</Section>
 
-			<Section title={__('Attached post types', 'proto-blocks')} description={__('Where this taxonomy appears. It may attach to types it does not own.', 'proto-blocks')}>
-				<div className="grid gap-2 sm:grid-cols-2">
+			<Section title={__('Attached to', 'proto-blocks')} description={__('Where editors see it. A taxonomy may attach to types it does not own.', 'proto-blocks')}>
+				<div className="grid divide-y divide-divider overflow-hidden rounded-lg border">
 					{types.map((type) => {
 						const id = `${slugId}-${type.slug}`;
 						return (
-							<div key={type.slug} className="flex items-center gap-3 rounded-md border p-3">
+							<div key={type.slug} className="flex items-center gap-3 px-3.5 py-2.5 transition-colors hover:bg-subtle has-data-[state=checked]:bg-code">
 								<Checkbox
 									id={id}
 									disabled={disabled}
@@ -261,9 +256,9 @@ function Fields({
 										set('post_types', checked === true ? [...attached.filter((s) => s !== type.slug), type.slug] : attached.filter((s) => s !== type.slug))
 									}
 								/>
-								<Label htmlFor={id} className="flex-1 flex-wrap gap-x-2">
-									<span>{type.label}</span>
-									<code className="font-mono text-[12.5px] font-normal text-muted-foreground">{type.slug}</code>
+								<Label htmlFor={id} className="flex-1 flex-wrap items-baseline gap-x-2">
+									<span className="font-medium">{type.label}</span>
+									<code className="font-mono text-caption font-normal text-muted-foreground">{type.slug}</code>
 								</Label>
 								<OriginBadge origin={type.origin} label={type.originLabel} />
 							</div>
@@ -304,7 +299,7 @@ function Fields({
 			</Section>
 
 			<Section title={__('URLs', 'proto-blocks')}>
-				{rewriteOff ? <p className="text-[13px] text-muted-foreground">{interpolate(__('Pretty URLs are turned off in the file (%s).', 'proto-blocks'), code('"rewrite": false'))}</p> : null}
+				{rewriteOff ? <p className="text-label text-muted-foreground">{interpolate(__('Pretty URLs are turned off in the file (%s).', 'proto-blocks'), code('"rewrite": false'))}</p> : null}
 				<div className="grid gap-1.5 sm:max-w-sm">
 					<Label htmlFor={rewriteId}>{__('URL slug', 'proto-blocks')}</Label>
 					<Input
@@ -332,16 +327,7 @@ function Fields({
 					onChange={(next) => set('labels', next)}
 				/>
 			</Section>
-		</>
-	);
-}
-
-function BackButton({ onBack }: { onBack: () => void }) {
-	return (
-		<Button type="button" variant="ghost" onClick={onBack}>
-			<ArrowLeftIcon aria-hidden="true" />
-			{__('All taxonomies', 'proto-blocks')}
-		</Button>
+		</FormPanel>
 	);
 }
 
@@ -403,12 +389,15 @@ function CreateTaxonomy({ types, onBack, onOpen }: { types: ListItem[]; onBack: 
 
 	return (
 		<DeclarationShell
-			title={__('Add taxonomy', 'proto-blocks')}
+			title={__('New taxonomy', 'proto-blocks')}
+			back={{ label: __('All taxonomies', 'proto-blocks'), onClick: onBack }}
 			readOnlyReason={writeReason}
 			path={slug ? `proto-taxonomies/${slug}/taxonomy.jsonc` : ''}
 			actions={
 				<>
-					<BackButton onBack={onBack} />
+					<Button type="button" variant="outline" onClick={onBack}>
+						{__('Discard', 'proto-blocks')}
+					</Button>
 					<Button type="submit" form={formId} disabled={readOnly || saving || !SLUG_PATTERN.test(slug)}>
 						{__('Save to file', 'proto-blocks')}
 					</Button>
@@ -570,11 +559,11 @@ function EditForm({
 	return (
 		<DeclarationShell
 			title={String(file.data.name ?? item.label)}
+			back={{ label: __('All taxonomies', 'proto-blocks'), onClick: onBack }}
 			readOnlyReason={reason}
 			path={file.path}
 			actions={
 				<>
-					<BackButton onBack={onBack} />
 					{file.exists ? (
 						<Button type="button" variant="outline" disabled={readOnly} onClick={() => setDeleting(true)}>
 							<TrashIcon aria-hidden="true" />
@@ -590,7 +579,7 @@ function EditForm({
 			<div className="flex flex-wrap items-center gap-2">
 				<OriginBadge origin={item.origin} label={item.originLabel} double={item.double} />
 				{item.origin === 'php' && !file.exists && item.source ? (
-					<span className="text-[13px] text-muted-foreground">
+					<span className="text-label text-muted-foreground">
 						{interpolate(/* translators: %s: PHP file that declares the taxonomy. */ __('Declared in PHP at %s. Saving writes a file that takes over.', 'proto-blocks'), code(item.source))}
 					</span>
 				) : null}
@@ -667,12 +656,8 @@ function EditTaxonomy({ slug, types, onBack }: { slug: string; types: ListItem[]
 				title={detail.data.item.label}
 				readOnlyReason={null}
 				path={detail.data.item.source ?? ''}
-				actions={
-					<>
-						<BackButton onBack={onBack} />
-						<EditInPostTypeLink type={parent} />
-					</>
-				}
+				back={{ label: __('All taxonomies', 'proto-blocks'), onClick: onBack }}
+				actions={<EditInPostTypeLink type={parent} />}
 			>
 				<Alert role="status">
 					<AlertDescription>

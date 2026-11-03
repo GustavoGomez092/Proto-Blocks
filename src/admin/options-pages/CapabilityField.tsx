@@ -60,7 +60,7 @@ export function CapabilityField({
 				))}
 			</datalist>
 			{hint ? (
-				<p id={`${id}-hint`} role={error ? 'alert' : 'status'} className={error ? 'text-[12.5px] text-destructive' : 'text-[12.5px] text-warning'}>
+				<p id={`${id}-hint`} role={error ? 'alert' : 'status'} className={error ? 'text-caption text-destructive' : 'text-caption text-warning'}>
 					{hint}
 				</p>
 			) : null}

@@ -33,7 +33,7 @@ export function MenuPlacementField({
 
 	return (
 		<fieldset className="grid gap-3" disabled={disabled}>
-			<legend className="mb-2 text-[13px] font-semibold">{__('Menu placement', 'proto-blocks')}</legend>
+			<legend className="mb-2 text-label font-medium">{__('Menu placement', 'proto-blocks')}</legend>
 			<RadioGroup
 				value={top ? 'top' : 'under'}
 				disabled={disabled}
@@ -49,9 +49,9 @@ export function MenuPlacementField({
 				</div>
 			</RadioGroup>
 			{top ? (
-				<div className="grid gap-3 sm:grid-cols-2">
+				<div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_140px]">
 					<MenuIconField id="pb-op-icon" value={value.icon} disabled={disabled} onChange={(icon) => onChange({ icon })} />
-					<div className="grid gap-1.5">
+					<div className="grid content-start gap-1.5">
 						<Label htmlFor="pb-op-position">{__('Position', 'proto-blocks')}</Label>
 						<Input
 							id="pb-op-position"
@@ -66,7 +66,7 @@ export function MenuPlacementField({
 					<Label htmlFor="pb-op-parent">{__('Parent menu', 'proto-blocks')}</Label>
 					<select
 						id="pb-op-parent"
-						className="h-9 rounded-md border bg-background px-2 text-sm"
+						className="h-[38px] rounded-md border border-input bg-background px-3 text-body hover:border-[#b5bfcc] focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-brand-soft focus-visible:outline-none disabled:bg-muted disabled:opacity-60"
 						value={value.menu}
 						onChange={(e) => onChange({ menu: e.target.value })}
 					>

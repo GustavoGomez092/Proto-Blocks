@@ -166,7 +166,7 @@ test('the list shows names, origins and the declared-twice badge', async () => {
 	expect(within(resource).getByText('Proto-Blocks PHP')).toBeInTheDocument();
 	expect(within(resource).getByText('Declared twice')).toBeInTheDocument();
 
-	const posts = screen.getByRole('cell', { name: 'Posts' }).closest('tr') as HTMLElement;
+	const posts = screen.getByRole('cell', { name: 'Posts post' }).closest('tr') as HTMLElement;
 	expect(within(posts).getByText('Core')).toBeInTheDocument();
 	expect(within(posts).getByText('12')).toBeInTheDocument();
 	expect(within(posts).getByRole('button', { name: 'Override Posts' })).toBeInTheDocument();
@@ -428,7 +428,7 @@ test('Override opens a create form without a name and saves an override file', a
 	});
 	renderScreen();
 
-	const posts = (await screen.findByRole('cell', { name: 'Posts' })).closest('tr') as HTMLElement;
+	const posts = (await screen.findByRole('cell', { name: 'Posts post' })).closest('tr') as HTMLElement;
 	await user.click(within(posts).getByRole('button', { name: 'Override Posts' }));
 	const submit = await screen.findByRole('button', { name: 'Create override file' });
 	expect(submit).toBeEnabled();
@@ -534,9 +534,9 @@ test('creating a post type fetches the template, posts it and opens the edit for
 
 	expect(within(dialog).getByLabelText('Slug')).toHaveValue('case-study');
 	expect(within(dialog).getByText('Case Studies')).toBeInTheDocument();
-	expect(within(dialog).getByText('wp-content/themes/demo/proto-types/case-study/type.jsonc')).toBeInTheDocument();
+	expect(within(dialog).getByTitle('wp-content/themes/demo/proto-types/case-study/type.jsonc')).toHaveTextContent('proto-types/case-study/type.jsonc');
 
-	await user.click(within(dialog).getByRole('button', { name: 'Create post type' }));
+	await user.click(within(dialog).getByRole('button', { name: 'Create & open' }));
 
 	await waitFor(() => expect(post).toHaveBeenCalled());
 	const get = calls().find((call) => call.url === 'admin/schema-files/type/case-study?name=Case%20Study');
@@ -559,11 +559,11 @@ test('the create dialog rejects a taken slug and shows server slug errors', asyn
 	const dialog = await screen.findByRole('dialog');
 	await user.type(within(dialog).getByLabelText('Singular name'), 'Product');
 	expect(within(dialog).getByText('A post type with this slug already exists.')).toBeInTheDocument();
-	expect(within(dialog).getByRole('button', { name: 'Create post type' })).toBeDisabled();
+	expect(within(dialog).getByRole('button', { name: 'Create & open' })).toBeDisabled();
 
 	await user.clear(within(dialog).getByLabelText('Singular name'));
 	await user.type(within(dialog).getByLabelText('Singular name'), 'Order');
-	await user.click(within(dialog).getByRole('button', { name: 'Create post type' }));
+	await user.click(within(dialog).getByRole('button', { name: 'Create & open' }));
 	expect(await within(dialog).findByText('This slug is reserved by WordPress.')).toBeInTheDocument();
 });
 

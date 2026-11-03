@@ -13,7 +13,8 @@ import {
 } from '@/admin/components/ui/dialog';
 import { Input } from '@/admin/components/ui/input';
 import { Label } from '@/admin/components/ui/label';
-import { interpolate } from '@/admin/lib/interpolate';
+import { Eyebrow } from '@/admin/components/shell/Signals';
+import { themeRelative } from '@/admin/components/content-model/Layout';
 import type { FileResult } from '@/admin/content-model/types';
 
 const SLUG = /^[a-z][a-z0-9_-]{0,19}$/;
@@ -78,7 +79,7 @@ export function pluralize(singular: string): string {
 	return head + plural;
 }
 
-const code = (text: string) => <code className="font-mono text-[12.5px] break-all">{text}</code>;
+const code = (text: string) => <code className="font-mono text-micro break-all text-link">{text}</code>;
 
 /**
  * A1 "Add post type": singular name → live plural, slug and target file.
@@ -159,68 +160,73 @@ export function CreatePostTypeDialog({
 		}
 	};
 
+	// Shown relative to the theme ("proto-types/<slug>/type.jsonc"); the full path is in the title.
+	const folder = root !== '' ? root.replace(/\/+$/, '') : 'proto-types';
+	const fullFile = `${folder}/${slug !== '' ? slug : '…'}/type.jsonc`;
+	const file = themeRelative(fullFile);
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent>
-				<form onSubmit={submit} className="grid gap-4" noValidate>
+			<DialogContent className="sm:max-w-[520px]">
+				<form onSubmit={submit} className="grid gap-5" noValidate>
 					<DialogHeader>
 						<DialogTitle>{__('Add post type', 'proto-blocks')}</DialogTitle>
 						<DialogDescription>
-							{__('Type the singular name. The plural, the slug and every admin label are generated from it.', 'proto-blocks')}
+							{__('Type the singular name. Everything else is generated — you can edit it after.', 'proto-blocks')}
 						</DialogDescription>
 					</DialogHeader>
-					<div className="grid gap-2">
+					<div className="grid gap-1.5">
 						<Label htmlFor={nameId}>{__('Singular name', 'proto-blocks')}</Label>
 						<Input
 							id={nameId}
 							value={name}
 							autoComplete="off"
 							maxLength={100}
+							className="h-10 text-section"
 							onChange={(event) => {
 								setName(event.target.value);
 								setServerError(null);
 							}}
 						/>
 					</div>
-					<dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[13px]">
-						<dt className="text-muted-foreground">{__('Plural', 'proto-blocks')}</dt>
-						<dd>{name.trim() !== '' ? pluralize(name) : '—'}</dd>
-					</dl>
-					<div className="grid gap-2">
-						<Label htmlFor={slugId}>{__('Slug', 'proto-blocks')}</Label>
-						<Input
-							id={slugId}
-							value={slug}
-							className="font-mono"
-							autoComplete="off"
-							spellCheck={false}
-							maxLength={20}
-							aria-invalid={slugError ? true : undefined}
-							aria-describedby={slugHelpId}
-							onChange={(event) => {
-								setSlugText(event.target.value);
-								setServerError(null);
-							}}
-						/>
-						<div id={slugHelpId} className="grid gap-1 text-[13px]">
-							{slugError ? (
-								<p className="text-destructive" role="alert">
-									{slugError}
-								</p>
-							) : null}
-							{slug !== '' ? (
-								<p className="text-muted-foreground">
-									{interpolate(
-										/* translators: %s: path of the declaration file that will be created. */
-										__('Will create %s', 'proto-blocks'),
-										code(`${root !== '' ? root.replace(/\/+$/, '') : 'proto-types'}/${slug}/type.jsonc`)
-									)}
-								</p>
-							) : null}
+					<div className="grid gap-2.5 rounded-lg bg-muted px-4 py-3.5">
+						<Eyebrow>{__('Generated', 'proto-blocks')}</Eyebrow>
+						<div className="grid grid-cols-[90px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 text-label">
+							<span className="text-muted-foreground">{__('Plural', 'proto-blocks')}</span>
+							<span>{name.trim() !== '' ? pluralize(name) : '—'}</span>
+							<Label htmlFor={slugId} className="font-normal text-muted-foreground">
+								{__('Slug', 'proto-blocks')}
+							</Label>
+							<span className="flex flex-wrap items-center gap-2">
+								<Input
+									id={slugId}
+									value={slug}
+									className="h-[30px] w-[180px] bg-background px-2.5 font-mono text-caption"
+									autoComplete="off"
+									spellCheck={false}
+									maxLength={20}
+									aria-invalid={slugError ? true : undefined}
+									aria-describedby={slugHelpId}
+									onChange={(event) => {
+										setSlugText(event.target.value);
+										setServerError(null);
+									}}
+								/>
+								<span className="text-micro text-muted-foreground">{__('20 chars max', 'proto-blocks')}</span>
+							</span>
+							<span className="text-muted-foreground">{__('File', 'proto-blocks')}</span>
+							<span id={slugHelpId} className="grid min-w-0 gap-1">
+								{slug !== '' ? <span title={fullFile}>{code(file)}</span> : <span className="text-faint">—</span>}
+								{slugError ? (
+									<span className="text-destructive" role="alert">
+										{slugError}
+									</span>
+								) : null}
+							</span>
 						</div>
 					</div>
 					{serverError && !serverError.slug ? (
-						<p className="text-[13px] text-destructive" role="alert">
+						<p className="text-label text-destructive" role="alert">
 							{serverError.message}
 						</p>
 					) : null}
@@ -229,7 +235,7 @@ export function CreatePostTypeDialog({
 							{__('Cancel', 'proto-blocks')}
 						</Button>
 						<Button type="submit" disabled={!ready}>
-							{__('Create post type', 'proto-blocks')}
+							{__('Create & open', 'proto-blocks')}
 						</Button>
 					</DialogFooter>
 				</form>

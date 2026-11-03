@@ -9,10 +9,11 @@ import { PageHeader } from '@/admin/components/shell/PageHeader';
 import { ReadOnlyBanner, READ_ONLY_BANNER_ID } from '@/admin/components/shell/ReadOnlyBanner';
 import { ScreenError } from '@/admin/components/shell/ScreenError';
 import { IssueList } from '@/admin/components/content-model/IssueList';
+import { EmptyCallout, NameCell, ValuePill } from '@/admin/components/content-model/Layout';
 import { OriginBadge } from '@/admin/components/content-model/OriginBadge';
+import { Panel } from '@/admin/components/shell/Panel';
 import { Badge } from '@/admin/components/ui/badge';
 import { Button } from '@/admin/components/ui/button';
-import { Card } from '@/admin/components/ui/card';
 import { Input } from '@/admin/components/ui/input';
 import { Label } from '@/admin/components/ui/label';
 import { Skeleton } from '@/admin/components/ui/skeleton';
@@ -21,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/admin/components/ui/t
 import type { Guardrail, Issue, Origin } from '@/admin/content-model/types';
 import { parseJsonc } from '@/admin/content-model/jsonc';
 import { interpolate } from '@/admin/lib/interpolate';
+import { cn } from '@/admin/lib/utils';
 import { setAtPath } from './jsonc-edit';
 import { deleteSchemaFile, getSchemaFile, putSchemaFile, type SchemaKind } from './schema-files';
 
@@ -72,7 +74,7 @@ export interface FieldsListResult {
 	issues: Issue[];
 }
 
-const code = (text: string) => <code className="font-mono text-[12.5px] break-all">{text}</code>;
+const code = (text: string) => <code className="font-mono text-caption break-all">{text}</code>;
 
 function originBadge(origin: GroupOrigin): { origin: Origin; label: string } {
 	switch (origin) {
@@ -129,6 +131,80 @@ function readOnlyExplanation(row: GroupRow): string {
 function notShownText(row: GroupRow): string {
 	const rule = row.issues.find((issue) => issue.code === 'unsupported_location_rule' || issue.code === 'empty_location_branch');
 	return rule ? rule.message : __('No location rule can match, so this group is not shown anywhere.', 'proto-blocks');
+}
+
+type Screen = 'types' | 'options' | 'taxonomies' | 'users' | 'other';
+
+/** Which screen a location parameter targets, for the filter chips. */
+function screenOf(param: string): Screen {
+	if (param === 'post_type' || param.startsWith('post') || param.startsWith('page')) {
+		return 'types';
+	}
+	if (param === 'options_page') {
+		return 'options';
+	}
+	if (param === 'taxonomy') {
+		return 'taxonomies';
+	}
+	return param.startsWith('user') ? 'users' : 'other';
+}
+
+function paramLabel(param: string): string {
+	switch (param) {
+		case 'post_type':
+			return __('Post type', 'proto-blocks');
+		case 'options_page':
+			return __('Options page', 'proto-blocks');
+		case 'taxonomy':
+			return __('Taxonomy', 'proto-blocks');
+		case 'user_form':
+			return __('User form', 'proto-blocks');
+		case 'user_role':
+		case 'user_roles':
+			return __('User role', 'proto-blocks');
+		default:
+			return param;
+	}
+}
+
+/** "post_type == event or post_type == talk" → its rules; one rule per branch is the common case. */
+function locationRules(location: string): { param: string; operator: string; value: string }[][] {
+	return location
+		.split(' or ')
+		.map((branch) =>
+			branch.split(' and ').map((rule) => {
+				const match = /^(\S+)\s+(\S+)\s+(.*)$/.exec(rule.trim());
+				return match ? { param: match[1], operator: match[2], value: match[3] } : { param: rule.trim(), operator: '', value: '' };
+			})
+		)
+		.filter((branch) => branch.length > 0 && branch[0].param !== '');
+}
+
+/** The screens a group shows on, from the first rule of each branch. */
+function screensOf(row: GroupRow): Screen[] {
+	return [...new Set(locationRules(row.location).map((branch) => screenOf(branch[0].param)))];
+}
+
+/** "Post type · event, talk" when every branch is one `param == value` rule on the same param; else the raw summary. */
+function ShowsOn({ location }: { location: string }) {
+	if (!location) {
+		return <span className="text-label text-faint">—</span>;
+	}
+	const branches = locationRules(location);
+	const simple =
+		branches.length > 0 &&
+		branches.every((branch) => branch.length === 1 && branch[0].operator === '==' && branch[0].param === branches[0][0].param);
+	if (!simple) {
+		return <code className="font-mono text-micro break-all text-link">{location}</code>;
+	}
+	return (
+		<span className="inline-flex flex-wrap items-center gap-1.5 text-label" title={location}>
+			<span className="text-micro text-muted-foreground">{paramLabel(branches[0][0].param)}</span>
+			{branches.map((branch, i) => (
+				<ValuePill key={`${branch[0].value}-${i}`}>{branch[0].value}</ValuePill>
+			))}
+		</span>
+	);
 }
 
 function LoadingRows() {
@@ -314,7 +390,7 @@ export function DeleteGroupDialog({ row, onCancel, onDone }: { row: DeletableGro
 		>
 			{ownFile ? (
 				<div className="grid gap-2">
-					<Label htmlFor={inputId} className="text-sm font-normal">
+					<Label htmlFor={inputId} className="font-normal">
 						{interpolate(
 							/* translators: %s: the folder slug to type. */
 							__('Type %s to confirm', 'proto-blocks'),
@@ -332,7 +408,7 @@ export function DeleteGroupDialog({ row, onCancel, onDone }: { row: DeletableGro
 				</div>
 			) : null}
 			{siblings !== null && siblings.length > 0 ? (
-				<p className="text-sm">
+				<p className="text-body">
 					{sprintf(
 						/* translators: %s: comma-separated titles of the other field groups in the same file. */
 						__('The file also holds %s; those groups are kept.', 'proto-blocks'),
@@ -341,7 +417,7 @@ export function DeleteGroupDialog({ row, onCancel, onDone }: { row: DeletableGro
 				</p>
 			) : null}
 			{guardrails ? (
-				<ul className="list-disc ps-5 text-sm">
+				<ul className="list-disc ps-5 text-body">
 					{guardrails.map((guardrail) => (
 						<li key={guardrail.code}>{guardrail.message}</li>
 					))}
@@ -373,14 +449,16 @@ export function GroupList({
 	onDeleted: () => void;
 }) {
 	const [deleting, setDeleting] = useState<GroupRow | null>(null);
-	const title = __('Fields', 'proto-blocks');
+	const [filter, setFilter] = useState<Screen | 'all'>('all');
+	const title = __('Field groups', 'proto-blocks');
 	const enabled = result?.moduleEnabled !== false;
 	const createReadOnly = readOnly !== null || result?.createTarget.writable === false;
 
 	const header = (
 		<PageHeader
 			title={title}
-			description={__('Groups of custom fields and where they appear. Proto-Blocks ones are saved as files in your theme.', 'proto-blocks')}
+			eyebrow={__('Content model', 'proto-blocks')}
+			description={__('Custom fields and where they appear. File-based groups are editable here; PHP groups are read-only.', 'proto-blocks')}
 			actions={
 				result && enabled ? (
 					<Button onClick={onCreate} disabled={createReadOnly} aria-describedby={createReadOnly ? READ_ONLY_BANNER_ID : undefined}>
@@ -394,7 +472,7 @@ export function GroupList({
 
 	if (error && !result) {
 		return (
-			<div className="grid gap-6">
+			<div className="grid gap-6 [&>header]:mb-0">
 				{header}
 				<ScreenError screen={title} error={error} onRetry={onRetry} />
 			</div>
@@ -403,29 +481,56 @@ export function GroupList({
 
 	if (!result) {
 		return (
-			<div className="grid gap-6">
+			<div className="grid gap-6 [&>header]:mb-0">
 				{header}
-				<Card className="py-0 shadow-xs">
+				<Panel>
 					<LoadingRows />
-				</Card>
+				</Panel>
 			</div>
 		);
 	}
 
 	if (!enabled) {
 		return (
-			<div className="grid gap-6">
+			<div className="grid gap-6 [&>header]:mb-0">
 				{header}
-				<Card className="flex flex-row items-center gap-3 px-6 py-6 shadow-xs">
+				<Panel className="flex items-center gap-3 p-6">
 					<PowerOffIcon aria-hidden="true" className="size-5 flex-none text-muted-foreground" />
-					<p className="text-sm">{__('The Fields module is turned off by the proto_blocks_modules filter.', 'proto-blocks')}</p>
-				</Card>
+					<p className="text-body">{__('The Fields module is turned off by the proto_blocks_modules filter.', 'proto-blocks')}</p>
+				</Panel>
 			</div>
 		);
 	}
 
+	const counts: Record<Screen, number> = { types: 0, options: 0, taxonomies: 0, users: 0, other: 0 };
+	const screensByRow = new Map(result.groups.map((row) => [row, screensOf(row)]));
+	for (const list of screensByRow.values()) {
+		for (const key of list) {
+			counts[key] += 1;
+		}
+	}
+	const chipLabels: Record<Screen, string> = {
+		/* translators: %d: number of field groups. */
+		types: sprintf(__('Post types · %d', 'proto-blocks'), counts.types),
+		/* translators: %d: number of field groups. */
+		options: sprintf(__('Options pages · %d', 'proto-blocks'), counts.options),
+		/* translators: %d: number of field groups. */
+		taxonomies: sprintf(__('Taxonomies · %d', 'proto-blocks'), counts.taxonomies),
+		/* translators: %d: number of field groups. */
+		users: sprintf(__('Users · %d', 'proto-blocks'), counts.users),
+		/* translators: %d: number of field groups. */
+		other: sprintf(__('Other · %d', 'proto-blocks'), counts.other),
+	};
+	const chips: { key: Screen | 'all'; label: string }[] = [
+		/* translators: %d: number of field groups. */
+		{ key: 'all', label: sprintf(__('All · %d', 'proto-blocks'), result.groups.length) },
+		...(['types', 'options', 'taxonomies', 'users', 'other'] as Screen[]).filter((key) => counts[key] > 0).map((key) => ({ key, label: chipLabels[key] })),
+	];
+	const active = chips.some((chip) => chip.key === filter) ? filter : 'all';
+	const visible = active === 'all' ? result.groups : result.groups.filter((row) => (screensByRow.get(row) ?? []).includes(active));
+
 	return (
-		<div className="grid gap-6">
+		<div className="grid gap-6 [&>header]:mb-0">
 			{header}
 			{readOnly !== null ? (
 				<ReadOnlyBanner
@@ -440,21 +545,47 @@ export function GroupList({
 			) : null}
 			<IssueList issues={result.issues} />
 			{result.groups.length === 0 ? (
-				<Card className="grid justify-items-center gap-2 px-6 py-8 text-center shadow-xs">
-					<h2 className="text-[15px] font-semibold">{__('No field groups yet', 'proto-blocks')}</h2>
-					<p className="text-[13px] text-muted-foreground">
-						{__('Add one here, or declare it in your theme with proto_field_group().', 'proto-blocks')}
-					</p>
-				</Card>
+				<EmptyCallout
+					icon={<PlusIcon />}
+					title={__('No field groups yet', 'proto-blocks')}
+					action={
+						createReadOnly ? null : (
+							<Button variant="outline" size="sm" onClick={onCreate}>
+								{__('Add field group', 'proto-blocks')}
+							</Button>
+						)
+					}
+				>
+					{__('Add one here, or declare it in your theme with proto_field_group().', 'proto-blocks')}
+				</EmptyCallout>
 			) : (
-				<Card className="py-0 shadow-xs" aria-busy={loading}>
+				<div className="grid gap-3">
+					{chips.length > 2 ? (
+						<div role="group" aria-label={__('Filter by where groups show', 'proto-blocks')} className="flex flex-wrap gap-2">
+							{chips.map((chip) => (
+								<button
+									key={chip.key}
+									type="button"
+									aria-pressed={active === chip.key}
+									onClick={() => setFilter(chip.key)}
+									className={cn(
+										'cursor-pointer rounded-full border px-3 py-1.5 text-label font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+										active === chip.key ? 'border-primary bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground'
+									)}
+								>
+									{chip.label}
+								</button>
+							))}
+						</div>
+					) : null}
+				<Panel className="overflow-hidden" aria-busy={loading}>
 					<Table>
 						<TableHeader>
 							<TableRow>
 								<TableHead>{__('Group', 'proto-blocks')}</TableHead>
 								<TableHead className="hidden md:table-cell">{__('Shows on', 'proto-blocks')}</TableHead>
+								<TableHead className="hidden md:table-cell">{__('Placement', 'proto-blocks')}</TableHead>
 								<TableHead className="text-right">{__('Fields', 'proto-blocks')}</TableHead>
-								<TableHead className="hidden md:table-cell">{__('Position', 'proto-blocks')}</TableHead>
 								<TableHead>{__('Origin', 'proto-blocks')}</TableHead>
 								<TableHead>
 									<span className="sr-only">{__('Actions', 'proto-blocks')}</span>
@@ -462,7 +593,7 @@ export function GroupList({
 							</TableRow>
 						</TableHeader>
 						<TableBody>
-							{result.groups.map((row) => {
+							{visible.map((row) => {
 								const name = row.title || row.key;
 								const canWrite = readOnly === null && row.editable;
 								const badge = originBadge(row.origin);
@@ -472,45 +603,35 @@ export function GroupList({
 								return (
 									<TableRow key={`${row.origin}:${row.key}`}>
 										<TableCell className="max-w-[320px] whitespace-normal">
-											<div className="grid gap-0.5">
-												<span className="font-medium">{name}</span>
-												<code className="font-mono text-[12px] break-all text-muted-foreground">{row.key}</code>
+											<NameCell label={name} slug={row.key}>
 												{row.status === 'unrenderable' ? (
-													<span className="text-[12.5px] text-muted-foreground">{notShownText(row)}</span>
+													<span className="text-caption text-muted-foreground">{notShownText(row)}</span>
 												) : null}
-											</div>
+											</NameCell>
 										</TableCell>
-										<TableCell className="hidden max-w-[260px] whitespace-normal md:table-cell">
-											{row.location ? (
-												<code className="font-mono text-[12px] break-all">{row.location}</code>
-											) : (
-												<span className="text-muted-foreground">—</span>
-											)}
+										<TableCell className="hidden max-w-[300px] whitespace-normal md:table-cell">
+											<ShowsOn location={row.location} />
 										</TableCell>
+										<TableCell className="hidden text-label md:table-cell">{positionLabel(row.position)}</TableCell>
 										<TableCell className="text-right tabular-nums">{row.fieldCount}</TableCell>
-										<TableCell className="hidden md:table-cell">{positionLabel(row.position)}</TableCell>
-										<TableCell>
-											<span className="inline-flex flex-wrap items-center gap-1.5">
+										<TableCell className="whitespace-normal">
+											<span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1">
 												<OriginBadge origin={badge.origin} label={badge.label} />
 												{row.doubleDeclared ? (
-													<Badge variant="outline" className="border-warning-border bg-warning-soft text-foreground [&>svg]:text-warning">
+													<Badge variant="warning">
 														<TriangleAlertIcon aria-hidden="true" />
 														{__('Declared twice', 'proto-blocks')}
 													</Badge>
 												) : null}
 												{row.status === 'unrenderable' ? (
-													<Badge variant="outline" className="border-warning-border bg-warning-soft text-foreground">
+													<Badge variant="warning">
 														<EyeOffIcon aria-hidden="true" />
 														{__('Not shown', 'proto-blocks')}
 													</Badge>
 												) : null}
-												{row.status === 'skipped-acf' ? (
-													<Badge variant="outline" className="border-warning-border bg-warning-soft text-foreground">
-														{__('Skipped: ACF registers this key', 'proto-blocks')}
-													</Badge>
-												) : null}
+												{row.status === 'skipped-acf' ? <Badge variant="warning">{__('Skipped: ACF registers this key', 'proto-blocks')}</Badge> : null}
 												{row.issues.length > 0 ? (
-													<Badge variant="outline">
+													<Badge variant="dashed">
 														{sprintf(
 															/* translators: %d: number of problems found in the group. */
 															_n('%d issue', '%d issues', row.issues.length, 'proto-blocks'),
@@ -521,9 +642,9 @@ export function GroupList({
 											</span>
 										</TableCell>
 										<TableCell className="text-right">
-											<span className="inline-flex items-center justify-end gap-1">
+											<span className="inline-flex items-center justify-end gap-1.5">
 												<Button
-													variant="ghost"
+													variant={canWrite ? 'outline' : 'ghost'}
 													size="sm"
 													aria-label={sprintf(
 														/* translators: %s: field group title. */
@@ -532,12 +653,22 @@ export function GroupList({
 													)}
 													onClick={() => onEdit(row.key)}
 												>
-													{canWrite ? __('Edit', 'proto-blocks') : __('View', 'proto-blocks')}
+													{canWrite ? (
+														__('Edit', 'proto-blocks')
+													) : (
+														<>
+															{__('View', 'proto-blocks')}
+															{explained ? (
+																<span className="font-normal text-muted-foreground">{__('· read-only', 'proto-blocks')}</span>
+															) : null}
+														</>
+													)}
 												</Button>
 												{!explained ? (
 													<Button
 														variant="ghost"
 														size="icon"
+														className="size-[30px] text-muted-foreground hover:bg-destructive-soft hover:text-destructive"
 														aria-label={sprintf(
 															/* translators: %s: field group title. */
 															__('Delete %s', 'proto-blocks'),
@@ -552,7 +683,7 @@ export function GroupList({
 												) : (
 													<Tooltip>
 														<TooltipTrigger asChild>
-															<Button variant="ghost" size="icon" aria-label={explanation}>
+															<Button variant="ghost" size="icon" className="size-[30px] text-muted-foreground" aria-label={explanation}>
 																<InfoIcon aria-hidden="true" />
 															</Button>
 														</TooltipTrigger>
@@ -566,7 +697,8 @@ export function GroupList({
 							})}
 						</TableBody>
 					</Table>
-				</Card>
+				</Panel>
+				</div>
 			)}
 			{deleting && deleting.file ? (
 				<DeleteGroupDialog

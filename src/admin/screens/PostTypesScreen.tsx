@@ -92,7 +92,7 @@ export default function PostTypesScreen() {
 			onEdit={(slug) => go({ type: slug, creating: false })}
 			onCreateOpen={(open) => go({ type: null, creating: open })}
 			onCreated={(slug) => go({ type: slug, creating: false })}
-			title={__('Post Types', 'proto-blocks')}
+			title={__('Post types', 'proto-blocks')}
 		/>
 	);
 }

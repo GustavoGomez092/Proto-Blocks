@@ -21,7 +21,7 @@ export function IssueList({ issues }: { issues: Issue[] }) {
 			{items.map((issue, i) => (
 				<li key={`${issue.code}-${issue.source}-${i}`} className="grid gap-0.5">
 					<span className="text-foreground">{issue.message}</span>
-					{issue.source ? <code className="font-mono text-[12.5px] break-all text-muted-foreground">{issue.source}</code> : null}
+					{issue.source ? <code className="font-mono text-caption break-all text-muted-foreground">{issue.source}</code> : null}
 				</li>
 			))}
 		</ul>

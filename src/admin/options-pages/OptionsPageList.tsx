@@ -1,14 +1,16 @@
-import { __, sprintf } from '@wordpress/i18n';
-import { PlusIcon, PowerOffIcon } from 'lucide-react';
+import { __, _n, sprintf } from '@wordpress/i18n';
+import { ChevronDownIcon, PlusIcon, PowerOffIcon, TriangleAlertIcon } from 'lucide-react';
 import type { WriteReason } from '@/admin/bootstrap';
 import { IssueList } from '@/admin/components/content-model/IssueList';
-import { OriginBadge } from '@/admin/components/content-model/OriginBadge';
+import { EmptyCallout } from '@/admin/components/content-model/Layout';
+import { DoubleBadge, ORIGIN_TONES } from '@/admin/components/content-model/OriginBadge';
+import { Panel } from '@/admin/components/shell/Panel';
+import { Dot } from '@/admin/components/shell/Signals';
 import { PageHeader } from '@/admin/components/shell/PageHeader';
 import { ReadOnlyBanner, READ_ONLY_BANNER_ID } from '@/admin/components/shell/ReadOnlyBanner';
 import { ScreenError } from '@/admin/components/shell/ScreenError';
 import { Badge } from '@/admin/components/ui/badge';
 import { Button } from '@/admin/components/ui/button';
-import { Card } from '@/admin/components/ui/card';
 import { Skeleton } from '@/admin/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/admin/components/ui/table';
 import type { ExternalRow, OptionsIndex } from './declaration';
@@ -49,13 +51,14 @@ export function OptionsPageList({
 	onEdit: (slug: string) => void;
 	onCreate: () => void;
 }) {
-	const title = __('Options Pages', 'proto-blocks');
+	const title = __('Options pages', 'proto-blocks');
 	const enabled = result?.moduleEnabled !== false;
 	const createReadOnly = readOnly !== null || result?.createTarget.writable === false;
 	const header = (
 		<PageHeader
 			title={title}
-			description={__('Site-wide settings screens for things like contact details, tracking and footer content.', 'proto-blocks')}
+			eyebrow={__('Content model', 'proto-blocks')}
+			description={__('Site-wide settings screens — contact details, tracking, footer content.', 'proto-blocks')}
 			actions={
 				result && enabled ? (
 					<Button onClick={onCreate} disabled={createReadOnly} aria-describedby={createReadOnly ? READ_ONLY_BANNER_ID : undefined}>
@@ -69,7 +72,7 @@ export function OptionsPageList({
 
 	if (error && !result) {
 		return (
-			<div className="grid gap-6">
+			<div className="grid gap-6 [&>header]:mb-0">
 				{header}
 				<ScreenError screen={title} error={error} onRetry={onRetry} />
 			</div>
@@ -77,24 +80,24 @@ export function OptionsPageList({
 	}
 	if (!result) {
 		return (
-			<div className="grid gap-6" aria-busy="true">
+			<div className="grid gap-6 [&>header]:mb-0" aria-busy="true">
 				{header}
-				<Card className="grid gap-3 p-4 shadow-xs">
+				<Panel className="grid gap-3 p-4">
 					{[0, 1, 2].map((i) => (
 						<Skeleton key={i} className="h-8 w-full" />
 					))}
-				</Card>
+				</Panel>
 			</div>
 		);
 	}
 	if (!enabled) {
 		return (
-			<div className="grid gap-6">
+			<div className="grid gap-6 [&>header]:mb-0">
 				{header}
-				<Card className="flex flex-row items-center gap-3 px-6 py-6 shadow-xs">
+				<Panel className="flex items-center gap-3 p-6">
 					<PowerOffIcon aria-hidden="true" className="size-5 flex-none text-muted-foreground" />
-					<p className="text-sm">{__('The Options Pages module is disabled by the proto_blocks_modules filter.', 'proto-blocks')}</p>
-				</Card>
+					<p className="text-body">{__('The Options Pages module is disabled by the proto_blocks_modules filter.', 'proto-blocks')}</p>
+				</Panel>
 			</div>
 		);
 	}
@@ -102,7 +105,7 @@ export function OptionsPageList({
 	const issues = result.warnings.map((w) => ({ level: 'warning' as const, code: 'options_warning', message: w.message, source: w.source ?? '', slug: w.slug }));
 
 	return (
-		<div className="grid gap-6">
+		<div className="grid gap-6 [&>header]:mb-0">
 			{header}
 			{readOnly !== null ? (
 				<ReadOnlyBanner
@@ -114,21 +117,29 @@ export function OptionsPageList({
 			) : null}
 			<IssueList issues={issues} />
 			{result.pages.length === 0 ? (
-				<Card className="grid justify-items-center gap-2 px-6 py-8 text-center shadow-xs">
-					<h2 className="text-[15px] font-semibold">{__('No options pages yet', 'proto-blocks')}</h2>
-					<p className="text-[13px] text-muted-foreground">{__('Give editors one place for phone numbers, social links and tracking codes.', 'proto-blocks')}</p>
-					<code className="rounded bg-muted px-2 py-1 font-mono text-[12.5px]">proto_options_page('Theme Settings');</code>
-				</Card>
+				<EmptyCallout
+					icon={<PlusIcon />}
+					title={__('No options pages yet', 'proto-blocks')}
+					action={
+						createReadOnly ? null : (
+							<Button variant="outline" size="sm" onClick={onCreate}>
+								{__('New options page', 'proto-blocks')}
+							</Button>
+						)
+					}
+				>
+					{__('Give editors one place for phone numbers, social links and tracking codes.', 'proto-blocks')}{' '}
+					<code className="font-mono text-micro text-link">proto_options_page('Theme Settings');</code>
+				</EmptyCallout>
 			) : (
-				<Card className="py-0 shadow-xs" aria-busy={loading}>
+				<Panel className="overflow-hidden" aria-busy={loading}>
 					<Table>
 						<TableHeader>
 							<TableRow>
 								<TableHead>{__('Page', 'proto-blocks')}</TableHead>
-								<TableHead>{__('Menu', 'proto-blocks')}</TableHead>
-								<TableHead>{__('Who can use it', 'proto-blocks')}</TableHead>
+								<TableHead>{__('Menu placement', 'proto-blocks')}</TableHead>
+								<TableHead>{__('Capability', 'proto-blocks')}</TableHead>
 								<TableHead>{__('Storage', 'proto-blocks')}</TableHead>
-								<TableHead>{__('Origin', 'proto-blocks')}</TableHead>
 								<TableHead>
 									<span className="sr-only">{__('Actions', 'proto-blocks')}</span>
 								</TableHead>
@@ -139,73 +150,90 @@ export function OptionsPageList({
 								const edit = readOnly !== null || !page.editable ? __('View', 'proto-blocks') : __('Edit', 'proto-blocks');
 								return (
 									<TableRow key={page.slug}>
-										<TableCell>
-											<span className="grid">
-												<span className="font-medium">{page.title}</span>
-												<code className="font-mono text-[12px] text-muted-foreground">{page.slug}</code>
-											</span>
+										<TableCell className="whitespace-normal">
+											<div className="grid gap-0.5">
+												<div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+													<Dot tone={ORIGIN_TONES[page.origin] ?? 'neutral'} className="text-body font-medium">
+														{page.title}
+													</Dot>
+													<span className="sr-only">{page.originLabel}</span>
+													{page.double ? (
+														<DoubleBadge double={page.double} />
+													) : null}
+													{page.warnings.length > 0 ? (
+														<Badge variant="warning" title={page.warnings.join(' ')}>
+															<TriangleAlertIcon aria-hidden="true" />
+															{__('Warning', 'proto-blocks')}
+														</Badge>
+													) : null}
+												</div>
+												<code className="ms-4 font-mono text-micro text-muted-foreground">{page.slug}</code>
+											</div>
 										</TableCell>
-										<TableCell>{page.menuLabel}</TableCell>
+										<TableCell className="text-label">{page.menuLabel}</TableCell>
 										<TableCell>
-											<code className="font-mono text-[12.5px]">{page.capability}</code>
+											<code className="font-mono text-micro text-link">{page.capability}</code>
 										</TableCell>
-										<TableCell className="text-[13px]">{page.storage}</TableCell>
-										<TableCell>
-											<span className="inline-flex flex-wrap items-center gap-1.5">
-												<OriginBadge origin={page.origin} label={page.originLabel} double={page.double} />
-												{page.warnings.length > 0 ? (
-													<Badge variant="outline" className="border-warning-border bg-warning-soft" title={page.warnings.join(' ')}>
-														{__('Warning', 'proto-blocks')}
-													</Badge>
-												) : null}
-											</span>
-										</TableCell>
+										<TableCell className="text-label">{page.storage}</TableCell>
 										<TableCell className="text-right whitespace-nowrap">
-											{/* translators: 1: Edit or View, 2: page title */}
-											<Button variant="ghost" size="sm" aria-label={sprintf(__('%1$s %2$s', 'proto-blocks'), edit, page.title)} onClick={() => onEdit(ownerOf(result, page.slug))}>
-												{edit}
-											</Button>
-											<Button variant="ghost" size="sm" asChild>
-												<a href={page.url}>{__('Open page', 'proto-blocks')}</a>
-											</Button>
+											<span className="inline-flex items-center justify-end gap-1.5">
+												<Button variant="ghost" size="sm" asChild>
+													<a href={page.url}>{__('Open page', 'proto-blocks')}</a>
+												</Button>
+												{/* translators: 1: Edit or View, 2: page title */}
+												<Button variant="outline" size="sm" aria-label={sprintf(__('%1$s %2$s', 'proto-blocks'), edit, page.title)} onClick={() => onEdit(ownerOf(result, page.slug))}>
+													{edit}
+												</Button>
+											</span>
 										</TableCell>
 									</TableRow>
 								);
 							})}
 						</TableBody>
 					</Table>
-				</Card>
+				</Panel>
 			)}
 			{result.external.length > 0 ? (
-				<section aria-labelledby="pb-op-external" className="grid gap-3">
-					<div>
-						<h2 id="pb-op-external" className="text-[15px] font-semibold">
-							{__('Other settings pages', 'proto-blocks')}
-						</h2>
-						<p className="text-[13px] text-muted-foreground">{__('Added by plugins, the theme or WordPress. Listed for reference; they are not edited here.', 'proto-blocks')}</p>
-					</div>
-					<Card className="py-0 shadow-xs">
-						<Table>
-							<TableHeader>
-								<TableRow>
-									<TableHead>{__('Page', 'proto-blocks')}</TableHead>
-									<TableHead>{__('Slug', 'proto-blocks')}</TableHead>
-									<TableHead>{__('Added by', 'proto-blocks')}</TableHead>
-								</TableRow>
-							</TableHeader>
-							<TableBody>
-								{result.external.map((row) => (
-									<TableRow key={`${row.parent}:${row.slug}`}>
-										<TableCell className="font-medium">{row.title}</TableCell>
-										<TableCell>
-											<code className="font-mono text-[12.5px]">{row.slug}</code>
-										</TableCell>
-										<TableCell>{externalLabel(row)}</TableCell>
+				<section aria-labelledby="pb-op-external">
+					<details className="group rounded-xl border bg-card">
+						<summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-6 py-3.5 [&::-webkit-details-marker]:hidden">
+							<span className="flex flex-wrap items-baseline gap-x-2.5">
+								<h2 id="pb-op-external" className="text-body font-medium">
+									{__('Other settings pages', 'proto-blocks')}
+								</h2>
+								<span className="text-label text-muted-foreground">
+									{sprintf(
+										/* translators: %d: number of settings pages added by WordPress, plugins or the theme. */
+										_n('%d from WordPress, plugins and the theme · reference only', '%d from WordPress, plugins and the theme · reference only', result.external.length, 'proto-blocks'),
+										result.external.length
+									)}
+								</span>
+							</span>
+							<ChevronDownIcon aria-hidden="true" className="size-4 flex-none text-muted-foreground transition-transform group-open:rotate-180" />
+						</summary>
+						<div className="border-t">
+							<Table>
+								<TableHeader>
+									<TableRow>
+										<TableHead>{__('Page', 'proto-blocks')}</TableHead>
+										<TableHead>{__('Slug', 'proto-blocks')}</TableHead>
+										<TableHead>{__('Added by', 'proto-blocks')}</TableHead>
 									</TableRow>
-								))}
-							</TableBody>
-						</Table>
-					</Card>
+								</TableHeader>
+								<TableBody>
+									{result.external.map((row) => (
+										<TableRow key={`${row.parent}:${row.slug}`}>
+											<TableCell className="font-medium">{row.title}</TableCell>
+											<TableCell>
+												<code className="font-mono text-micro text-muted-foreground">{row.slug}</code>
+											</TableCell>
+											<TableCell className="text-label">{externalLabel(row)}</TableCell>
+										</TableRow>
+									))}
+								</TableBody>
+							</Table>
+						</div>
+					</details>
 				</section>
 			) : null}
 		</div>

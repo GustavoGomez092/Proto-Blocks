@@ -63,7 +63,7 @@ export const MenuIconField = forwardRef<
 
 	return (
 		<div className="grid min-w-0 gap-2 [overflow-wrap:anywhere]">
-			<Label htmlFor={id} className="text-sm font-medium">
+			<Label htmlFor={id}>
 				{__('Menu icon', 'proto-blocks')}
 			</Label>
 			<div className="flex min-w-0 items-center gap-2">
@@ -75,7 +75,7 @@ export const MenuIconField = forwardRef<
 				</div>
 				{summary !== null ? (
 					<div className="flex min-w-0 flex-1 items-center gap-2">
-						<p id={hintId} className="min-w-0 flex-1 break-all text-sm text-muted-foreground">
+						<p id={hintId} className="min-w-0 flex-1 break-all text-body text-muted-foreground">
 							{sprintf(__('Registered icon: %s', 'proto-blocks'), summary)}
 						</p>
 						<Button
@@ -124,14 +124,14 @@ export const MenuIconField = forwardRef<
 					</Popover>
 				) : null}
 			</div>
-			<p id={summary !== null ? `${hintId}-help` : hintId} className="text-[13px] text-muted-foreground">
+			<p id={summary !== null ? `${hintId}-help` : hintId} className="text-label text-muted-foreground">
 				{__(
 					'A dashicon name, a file in your theme (assets/icon.svg) or an https URL. SVGs are cleaned of scripts and tinted to match the admin colour scheme.',
 					'proto-blocks'
 				)}
 			</p>
 			{insecure ? (
-				<p id={warningId} className="flex items-start gap-1.5 text-[13px] text-foreground">
+				<p id={warningId} className="flex items-start gap-1.5 text-label text-foreground">
 					<TriangleAlertIcon aria-hidden="true" className="mt-0.5 size-4 flex-none text-warning" />
 					{__("This URL isn't https, so browsers block it on an https admin. Use an https URL or a theme file.", 'proto-blocks')}
 				</p>

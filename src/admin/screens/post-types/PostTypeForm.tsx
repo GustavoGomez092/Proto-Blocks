@@ -8,9 +8,11 @@ import { adminGet, ApiError } from '@/admin/api';
 import { getWriteReason } from '@/admin/bootstrap';
 import { ConfirmDialog } from '@/admin/components/shell/ConfirmDialog';
 import { PageHeader } from '@/admin/components/shell/PageHeader';
+import { Panel, PanelHeader } from '@/admin/components/shell/Panel';
 import { ScreenError } from '@/admin/components/shell/ScreenError';
 import { ConflictDialog } from '@/admin/components/content-model/ConflictDialog';
 import { DeclarationShell } from '@/admin/components/content-model/DeclarationShell';
+import { FilePreview, FormPanel, FormSection } from '@/admin/components/content-model/Layout';
 import { DeleteDeclarationDialog } from '@/admin/components/content-model/DeleteDeclarationDialog';
 import { GuardrailDialog } from '@/admin/components/content-model/GuardrailDialog';
 import { LabelsEditor } from '@/admin/components/content-model/LabelsEditor';
@@ -18,7 +20,6 @@ import { MenuIconField, isPrefillableIcon } from '@/admin/components/content-mod
 import { OriginBadge } from '@/admin/components/content-model/OriginBadge';
 import { Alert, AlertDescription, AlertTitle } from '@/admin/components/ui/alert';
 import { Button } from '@/admin/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/admin/components/ui/card';
 import { Checkbox } from '@/admin/components/ui/checkbox';
 import { Input } from '@/admin/components/ui/input';
 import { Label } from '@/admin/components/ui/label';
@@ -241,7 +242,7 @@ function FieldError({ control, name, id }: { control: Control<Values>; name: str
 		return null;
 	}
 	return (
-		<p id={id} className="text-[13px] text-destructive" role="alert">
+		<p id={id} className="text-label text-destructive" role="alert">
 			{messages.join(' ')}
 		</p>
 	);
@@ -249,17 +250,9 @@ function FieldError({ control, name, id }: { control: Control<Values>; name: str
 
 function Section({ id, title, description, children }: { id: string; title: string; description?: string; children: ReactNode }) {
 	return (
-		<section id={id} aria-labelledby={`${id}-title`}>
-			<Card className="shadow-xs">
-				<CardHeader>
-					<CardTitle role="heading" aria-level={2} id={`${id}-title`}>
-						{title}
-					</CardTitle>
-					{description ? <CardDescription>{description}</CardDescription> : null}
-				</CardHeader>
-				<CardContent className="grid gap-4">{children}</CardContent>
-			</Card>
-		</section>
+		<FormSection id={id} title={title} description={description}>
+			{children}
+		</FormSection>
 	);
 }
 
@@ -284,11 +277,11 @@ function SwitchRow({
 			render={({ field }) => (
 				<div className="flex items-start justify-between gap-4 py-1">
 					<div className="grid gap-0.5">
-						<Label htmlFor={id} className="text-sm font-medium">
+						<Label htmlFor={id} className="text-label font-medium">
 							{label}
 						</Label>
 						{help ? (
-							<p id={`${id}-help`} className="text-[13px] text-muted-foreground">
+							<p id={`${id}-help`} className="text-label text-muted-foreground">
 								{help}
 							</p>
 						) : null}
@@ -323,7 +316,7 @@ function ArchiveField({ control, slug, disabled }: { control: Control<Values>; s
 				}
 				return (
 					<fieldset className="grid gap-2">
-						<legend className="mb-2 text-sm font-medium">{__('Archive page', 'proto-blocks')}</legend>
+						<legend className="mb-2 text-label font-medium">{__('Archive page', 'proto-blocks')}</legend>
 						<RadioGroup
 							value={mode}
 							disabled={disabled}
@@ -404,7 +397,7 @@ function SupportsField({
 				};
 				return (
 					<fieldset className="grid gap-3">
-						<legend className="mb-2 text-sm font-medium">{__('Supports', 'proto-blocks')}</legend>
+						<legend className="mb-2 text-label font-medium">{__('Supports', 'proto-blocks')}</legend>
 						<div className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
 							{SUPPORTS.map((support) => (
 								<div key={support.key} className="flex items-center gap-2">
@@ -484,7 +477,7 @@ function TaxonomiesField({ control, disabled }: { control: Control<Values>; disa
 				return (
 					<div className="grid gap-3">
 						{list.length === 0 ? (
-							<p className="text-[13px] text-muted-foreground">{__('No taxonomies are attached in this file.', 'proto-blocks')}</p>
+							<p className="text-label text-muted-foreground">{__('No taxonomies are attached in this file.', 'proto-blocks')}</p>
 						) : (
 							<ul className="grid gap-2">
 								{list.map((entry, index) => {
@@ -608,22 +601,14 @@ function JsoncPanel({
 	}, [values, file, base, defaults]);
 
 	return (
-		<Card className="sticky top-10 gap-0 overflow-hidden py-0 shadow-xs" aria-label={__('File preview', 'proto-blocks')}>
-			<div className="flex items-center justify-between gap-2 border-b px-4 py-2">
-				<span className="font-mono text-[12.5px]">type.jsonc</span>
-				<Button type="button" variant="ghost" size="icon" aria-label={__('Close the file preview', 'proto-blocks')} onClick={onClose}>
-					<XIcon aria-hidden="true" />
-				</Button>
-			</div>
-			<pre
-				tabIndex={0}
-				aria-label={__('File text that Save to file writes', 'proto-blocks')}
-				className="max-h-[70vh] max-w-full overflow-auto whitespace-pre-wrap break-all bg-[#0f1d2e] p-4 font-mono text-[12.5px] leading-relaxed text-[#d6e2f0]"
-			>
-				{text}
-			</pre>
-			<p className="border-t px-4 py-2 text-[12px] text-muted-foreground">{__('Comments and key order are kept.', 'proto-blocks')}</p>
-		</Card>
+		<FilePreview
+			name="type.jsonc"
+			text={text}
+			label={__('File text that Save to file writes', 'proto-blocks')}
+			panelLabel={__('File preview', 'proto-blocks')}
+			note={__('Comments and key order are kept.', 'proto-blocks')}
+			onClose={onClose}
+		/>
 	);
 }
 
@@ -676,8 +661,8 @@ function SaveBar({
 	}, [isDirty, readOnly]);
 
 	return (
-		<div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background px-4 py-3 shadow-sm">
-			<p className="flex min-w-0 items-center gap-2 text-[13px]" aria-live="polite">
+		<div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card px-5 py-3 shadow-sm">
+			<p className="flex min-w-0 items-center gap-2 text-label" aria-live="polite">
 				{isDirty ? <CircleDotIcon aria-hidden="true" className="size-4 flex-none text-warning" /> : null}
 				<span className="min-w-0">
 					{isDirty
@@ -690,7 +675,7 @@ function SaveBar({
 					{interpolate(
 						/* translators: %s: path of the declaration file. */
 						__('saves to %s', 'proto-blocks'),
-						<code className="font-mono text-[12.5px] break-all">{path}</code>
+						<code className="font-mono text-caption break-all">{path}</code>
 					)}
 					{problems > 0
 						? ' · ' +
@@ -878,7 +863,7 @@ function TypeForm({
 		shellReason = 'not_writable';
 	}
 
-	const code = (text: string) => <code className="font-mono text-[12.5px] break-all">{text}</code>;
+	const code = (text: string) => <code className="font-mono text-caption break-all">{text}</code>;
 	const nameHelpId = `${ids}-name-help`;
 	const slugHelpId = `${ids}-slug-help`;
 	const effRewrite = isObject(effective.rewrite) ? effective.rewrite : {};
@@ -891,22 +876,18 @@ function TypeForm({
 			title={item.label}
 			readOnlyReason={shellReason}
 			path={file.path}
+			back={{
+				label: __('All post types', 'proto-blocks'),
+				onClick: () => {
+					if (!readOnly && Object.keys(changes()).length > 0) {
+						setDiscarding(true);
+					} else {
+						onBack();
+					}
+				},
+			}}
 			actions={
 				<>
-					<Button
-						type="button"
-						variant="ghost"
-						onClick={() => {
-							if (!readOnly && Object.keys(changes()).length > 0) {
-								setDiscarding(true);
-							} else {
-								onBack();
-							}
-						}}
-					>
-						<ArrowLeftIcon aria-hidden="true" />
-						{__('All post types', 'proto-blocks')}
-					</Button>
 					<Button type="button" variant="outline" aria-pressed={panel} onClick={() => setPanel((open) => !open)}>
 						<BracesIcon aria-hidden="true" />
 						{__('File', 'proto-blocks')}
@@ -915,7 +896,7 @@ function TypeForm({
 						<Button
 							type="button"
 							variant="outline"
-							className="text-destructive"
+							className="text-destructive hover:text-destructive"
 							disabled={readOnly}
 							onClick={() => setDeleting(content)}
 						>
@@ -986,9 +967,10 @@ function TypeForm({
 				</Alert>
 			) : null}
 
-			<div className={panel ? 'grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_400px]' : 'grid gap-6'}>
+			<div className={panel ? 'grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]' : 'grid gap-6'}>
 				<form onSubmit={submit} noValidate className="grid min-w-0 gap-6" aria-label={item.label}>
-					<fieldset disabled={readOnly} className="grid min-w-0 gap-6">
+					<fieldset disabled={readOnly} className="min-w-0">
+						<FormPanel>
 						<Section id="pt-general" title={__('General', 'proto-blocks')}>
 							<div className="grid gap-4 sm:grid-cols-2">
 								<div className="grid gap-1.5">
@@ -1015,7 +997,7 @@ function TypeForm({
 									aria-describedby={slugHelpId}
 									className="bg-muted font-mono"
 								/>
-								<p id={slugHelpId} className="text-[13px] text-muted-foreground">
+								<p id={slugHelpId} className="text-label text-muted-foreground">
 									{content.count > 0
 										? interpolate(
 												sprintf(
@@ -1033,7 +1015,7 @@ function TypeForm({
 						</Section>
 
 						<Section id="pt-visibility" title={__('Visibility', 'proto-blocks')}>
-							<div className="grid divide-y">
+							<div className="grid gap-3">
 								<SwitchRow
 									control={control}
 									name="public"
@@ -1064,7 +1046,7 @@ function TypeForm({
 								<div className="grid gap-1.5">
 									<Label htmlFor={`${ids}-rewrite-slug`}>{__('URL slug', 'proto-blocks')}</Label>
 									<Input id={`${ids}-rewrite-slug`} className="font-mono" disabled value="" aria-describedby={`${ids}-rewrite-off`} />
-									<p id={`${ids}-rewrite-off`} className="text-[13px] text-muted-foreground">
+									<p id={`${ids}-rewrite-off`} className="text-label text-muted-foreground">
 										{interpolate(
 											/* translators: %s: the JSON setting "rewrite": false. */
 											__('Pretty URLs are off for this type (%s in the file). Change it in the file to set a URL slug.', 'proto-blocks'),
@@ -1107,7 +1089,7 @@ function TypeForm({
 											id={`${ids}-lock`}
 											ref={field.ref}
 											disabled={readOnly}
-											className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs"
+											className="h-[38px] rounded-md border border-input bg-background px-3 text-body hover:border-[#b5bfcc] focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-brand-soft focus-visible:outline-none disabled:bg-muted disabled:opacity-60"
 											value={field.value === undefined ? '' : String(field.value)}
 											onBlur={field.onBlur}
 											onChange={(event) => {
@@ -1146,7 +1128,7 @@ function TypeForm({
 											onBlur={field.onBlur}
 											onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
 										/>
-										<p id={`${ids}-position-help`} className="text-[13px] text-muted-foreground">
+										<p id={`${ids}-position-help`} className="text-label text-muted-foreground">
 											{__('22 = just below Pages', 'proto-blocks')}
 										</p>
 										<FieldError control={control} name="menu_position" />
@@ -1198,6 +1180,7 @@ function TypeForm({
 						>
 							<TaxonomiesField control={control} disabled={readOnly} />
 						</Section>
+						</FormPanel>
 					</fieldset>
 
 					<SaveBar
@@ -1222,23 +1205,22 @@ function TypeForm({
 				onScaffolded={onSaved}
 			/>
 
-			<Card className="shadow-xs">
-				<CardHeader>
-					<CardTitle role="heading" aria-level={2}>
-						{__('Effective settings', 'proto-blocks')}
-					</CardTitle>
-					<CardDescription>{__('What WordPress registers, after defaults. Read-only.', 'proto-blocks')}</CardDescription>
-				</CardHeader>
-				<CardContent>
+			<Panel aria-labelledby={`${ids}-effective`}>
+				<PanelHeader
+					id={`${ids}-effective`}
+					title={__('Effective settings', 'proto-blocks')}
+					description={__('What WordPress registers, after defaults. Read-only.', 'proto-blocks')}
+				/>
+				<div className="p-6">
 					<pre
 						tabIndex={0}
 						aria-label={__('Effective settings', 'proto-blocks')}
-						className="max-h-[360px] max-w-full overflow-x-auto overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-muted p-3 font-mono text-[12px]"
+						className="m-0 max-h-[360px] max-w-full overflow-x-auto overflow-y-auto rounded-md bg-muted px-3.5 py-3 font-mono text-micro leading-[1.65] break-all whitespace-pre-wrap"
 					>
 						{JSON.stringify(effective, previewReplacer, 2)}
 					</pre>
-				</CardContent>
-			</Card>
+				</div>
+			</Panel>
 
 			{pending ? (
 				<GuardrailDialog
@@ -1322,7 +1304,7 @@ function TypeFile({
 
 	if (error && !file) {
 		return (
-			<div className="grid gap-6">
+			<div className="grid gap-6 [&>header]:mb-0">
 				<PageHeader
 					title={detail.item.label}
 					actions={
@@ -1384,9 +1366,9 @@ export function PostTypeEdit({ slug, readOnly, onBack }: { slug: string; readOnl
 
 	if (error && !detail) {
 		return (
-			<div className="grid gap-6">
+			<div className="grid gap-6 [&>header]:mb-0">
 				<PageHeader
-					title={__('Post Types', 'proto-blocks')}
+					title={__('Post types', 'proto-blocks')}
 					actions={
 						<Button type="button" variant="ghost" onClick={onBack}>
 							<ArrowLeftIcon aria-hidden="true" />

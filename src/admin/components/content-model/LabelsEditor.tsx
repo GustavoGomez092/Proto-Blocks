@@ -61,7 +61,7 @@ export function LabelsEditor({
 				<Badge variant="outline">
 					{autoText}
 				</Badge>
-				<Badge variant="outline" className="border-transparent bg-brand-soft text-[#0b5f5a]">
+				<Badge variant="brand">
 					{customText}
 				</Badge>
 			</div>
@@ -71,7 +71,7 @@ export function LabelsEditor({
 					const overridden = typeof overrides[key] === 'string' && overrides[key] !== '';
 					return (
 						<div key={key} className="grid items-center gap-1 sm:grid-cols-[200px_minmax(0,1fr)_auto] sm:gap-3">
-							<label htmlFor={id} className="font-mono text-[13px] text-muted-foreground">
+							<label htmlFor={id} className="font-mono text-label text-muted-foreground">
 								{key}
 							</label>
 							<Input
