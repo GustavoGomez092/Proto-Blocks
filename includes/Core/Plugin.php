@@ -912,11 +912,6 @@ final class Plugin
         return $this->services['tailwind_manager'];
     }
 
-    public function getTailwindAdminSettings(): ?TailwindAdminSettings
-    {
-        return $this->services['tailwind_admin'] ?? null;
-    }
-
     /**
      * The React admin's mount point; null outside wp-admin.
      */

@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased — admin rebuild
+
+### Changed
+- **Admin rebuilt in React + Tailwind 4 + shadcn/ui.** The Blocks, Tailwind
+  Settings, System Status, Block Previews and Setup Wizard screens are one
+  React app (`assets/js/admin.js`, `assets/css/admin.css`); no admin screen is
+  rendered by PHP any more.
+- **PHP 8.1 is now required** (`Requires PHP: 8.1`).
+
+### Added
+- REST routes under `proto-blocks/v1/admin/*`: `dashboard`, `cache`,
+  `example-blocks`, `demos/install`, `demos/remove`, `tailwind`,
+  `tailwind/settings`, `tailwind/compile`, `tailwind/cache`, `tailwind/cli`,
+  `tailwind/theme-file`, `system`, `previews`, `wizard`, `wizard/style`,
+  `wizard/demos`, `wizard/complete`.
+- E2E harness (wp-env + Playwright): `npm run test:e2e`.
+
+### Removed
+- Tailwind v3 (the frozen `assets/css/admin-legacy.css` build) and the Google
+  Fonts and Material Icons admin stylesheets.
+- Per-control `admin-ajax.php` actions. Only
+  `proto_blocks_tailwind_get_compile_inputs` and
+  `proto_blocks_tailwind_store_css` remain, for the in-browser Tailwind compiler.
+- `Plugin::getTailwindAdminSettings()` and the PHP page renderers
+  (`AdminPage::renderSettingsPage`, `SetupWizard::renderWizard`,
+  `PreviewCapture::renderAdminUi`, `Tailwind\AdminSettings::render`).
+
 ## Unreleased — security hardening
 
 ### Security

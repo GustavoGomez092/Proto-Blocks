@@ -75,7 +75,9 @@ class AdminPage
             __('Tailwind Settings', 'proto-blocks'),
             'manage_options',
             self::SLUG . '-settings',
-            [$this, 'renderSettingsPage']
+            static function (): void {
+                Plugin::getInstance()->getAdminApp()?->renderScreen('tailwind');
+            }
         );
         if (is_string($tailwindHook)) {
             Plugin::getInstance()->getAdminApp()?->addScreenHook($tailwindHook, 'tailwind');
@@ -166,14 +168,6 @@ class AdminPage
             get_stylesheet_directory() . '/proto-blocks',
             defined('ABSPATH') ? (string) \ABSPATH : ''
         );
-    }
-
-    /**
-     * Render settings page (Tailwind Settings): the React Tailwind screen.
-     */
-    public function renderSettingsPage(): void
-    {
-        Plugin::getInstance()->getAdminApp()?->renderScreen('tailwind');
     }
 
     /**
