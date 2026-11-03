@@ -217,12 +217,12 @@ function ChooseStyle({
 							<span className="flex w-full items-center gap-3">
 								<RadioGroupItem id={id} value={option.value} />
 								<span className="text-sm font-medium">{option.label}</span>
-								{option.badge ? (
-									<Badge variant="secondary" className="ml-auto rounded-sm">
-										{option.badge}
-									</Badge>
-								) : null}
 							</span>
+							{option.badge ? (
+								<Badge variant="secondary" className="ml-7 h-auto w-fit rounded-sm whitespace-normal">
+									{option.badge}
+								</Badge>
+							) : null}
 							<span className="pl-7 text-[13px] text-muted-foreground">{option.help}</span>
 						</label>
 					);
@@ -317,12 +317,17 @@ function Finish({
 			<h2 className="mt-6 mb-2 text-sm font-medium">{__('Setup Summary', 'proto-blocks')}</h2>
 			<dl className="divide-y rounded-md border text-sm">
 				{rows.map((row) => (
-					<div key={row.label} className="flex items-center justify-between gap-4 px-4 py-2.5">
+					<div key={row.label} className="flex items-baseline justify-between gap-4 px-4 py-2.5">
 						<dt className="text-muted-foreground">{row.label}</dt>
 						<dd className="font-medium">{row.value}</dd>
 					</div>
 				))}
 			</dl>
+			{data.style === 'vanilla' && data.tailwindEnabled ? (
+				<p className="mt-3 text-[13px] text-muted-foreground">
+					{__('Tailwind stays enabled; turn it off in Tailwind Settings if you no longer need it.', 'proto-blocks')}
+				</p>
+			) : null}
 			<div className="mt-8 flex justify-end">
 				<Button onClick={onComplete} disabled={completing}>
 					{completing ? (

@@ -1416,7 +1416,7 @@ The **Proto-Blocks** admin is a React app (Tailwind 4 + shadcn/ui, built from `s
 | `/admin/wizard/style`, `/admin/wizard/complete` | POST | Wizard steps |
 | `/admin/wizard/demos` | POST | Install the demo blocks for the chosen style (*writes files*; not used by the UI since 2.15) |
 
-The preview capture upload keeps its own route, `POST /preview-capture`, which also writes files and is gated the same way. Four `admin-ajax.php` actions remain, none of them used by the admin screens' controls: `proto_blocks_tailwind_get_compile_inputs` and `proto_blocks_tailwind_store_css` (the in-browser Tailwind compiler), `proto_blocks_preview` (block previews in the editor) and `proto_blocks_capture_render` (the page Preview Capture renders in its hidden iframe).
+The preview capture upload keeps its own route, `POST /preview-capture`, which also writes files and is gated the same way. Four `admin-ajax.php` actions remain: `proto_blocks_tailwind_get_compile_inputs` and `proto_blocks_tailwind_store_css` (the in-browser Tailwind compiler), `proto_blocks_preview` (block previews in the editor) and `proto_blocks_capture_render` (the page Preview Capture renders in its hidden iframe).
 
 Admin development: `npm run build` compiles the app, `npm run test:js` runs the Jest suite, and `npm run test:e2e` runs the Playwright suite against a wp-env site (see `tests/e2e/README.md`). PHP 8.1 or newer is required.
 

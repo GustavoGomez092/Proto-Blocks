@@ -256,6 +256,12 @@ class SchemaReader
      */
     private function detectPreviewImage(string $blockDir): ?string
     {
+        // A Preview Capture of a bundled example lives in uploads and wins.
+        $uploads = \ProtoBlocks\Admin\PreviewCapture::uploadsPreviewFor($blockDir);
+        if ($uploads !== null) {
+            return $uploads['path'];
+        }
+
         $extensions = ['png', 'jpg', 'jpeg', 'webp'];
 
         foreach ($extensions as $ext) {
