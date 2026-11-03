@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace ProtoBlocks\API;
 
 use ProtoBlocks\Admin\AdminPage;
+use ProtoBlocks\API\Admin\PreviewsRoutes;
 use ProtoBlocks\API\Admin\SystemRoutes;
 use WP_Error;
 
@@ -34,6 +35,7 @@ final class AdminRestController
      */
     public const ROUTE_GROUPS = [
         SystemRoutes::class,
+        PreviewsRoutes::class,
     ];
 
     /**
