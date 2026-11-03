@@ -27,11 +27,11 @@ test('plugin scopes top-level utility rules, including inside @media', () => {
 	assert.match(out, new RegExp(`@media \\(hover:hover\\)\\{${escape(SCOPE)} \\.c:hover`));
 });
 
-test('plugin leaves non-utility layers, keyframe steps and nested rules alone', () => {
+test('plugin moves theme variables onto the roots and leaves keyframe steps alone', () => {
 	const out = run(
 		'@layer theme{:root{--x:1}}#proto-blocks-admin{color:red}@layer utilities{.p{color:red;&:hover{color:blue}}}@keyframes spin{to{transform:rotate(1turn)}}'
 	);
-	assert.match(out, /@layer theme\{:root\{--x:1\}\}/);
+	assert.match(out, /@layer theme\{#proto-blocks-admin,#proto-blocks-admin-portal\{--x:1\}\}/);
 	assert.match(out, /^@layer theme.*\}#proto-blocks-admin\{color:red\}/);
 	assert.match(out, /&:hover\{color:blue\}/);
 	assert.match(out, /@keyframes pb-spin\{to\{/);
