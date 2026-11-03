@@ -77,6 +77,8 @@ export interface TailwindData {
 		preview: string;
 		dirWritable?: boolean;
 	};
+	/** Compiled CSS size in bytes. */
+	cssSize?: number;
 	cssSizeFormatted: string;
 }
 
@@ -603,7 +605,7 @@ function StatusCard({
 					<div className="grid grid-cols-2 gap-3">
 						<div className={tile}>
 							<dt className={overline}>{__('Last Compiled', 'proto-blocks')}</dt>
-							<dd className="mt-1 font-medium tabular-nums">{lastCompiledLabel(data.settings.lastCompiled)}</dd>
+							<dd className="mt-1 font-medium tabular-nums">{lastCompiledLabel(data.cssSize === 0 ? null : data.settings.lastCompiled)}</dd>
 						</div>
 						<div className={tile}>
 							<dt className={overline}>{__('CSS Size', 'proto-blocks')}</dt>

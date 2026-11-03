@@ -260,7 +260,12 @@ function ClearCache({ cachedTemplates, onData }: { cachedTemplates: number; onDa
 		<>
 			<div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-muted-foreground">
 				<p>{__('Clear the template cache to force every block to recompile. Useful while developing.', 'proto-blocks')}</p>
-				<Button variant="outline" size="sm" disabled={clearing} onClick={() => setOpen(true)}>
+				<Button
+					variant="outline"
+					size="sm"
+					disabled={clearing || cachedTemplates === 0}
+					onClick={() => setOpen(true)}
+				>
 					<EraserIcon aria-hidden="true" />
 					{__('Clear cache', 'proto-blocks')}
 				</Button>

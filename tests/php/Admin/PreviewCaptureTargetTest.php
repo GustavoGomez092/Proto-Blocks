@@ -29,7 +29,7 @@ namespace ProtoBlocks\Tests\Admin {
                 \RecursiveIteratorIterator::CHILD_FIRST
             );
             foreach ($it as $f) {
-                $f->isDir() ? rmdir($f->getPathname()) : unlink($f->getPathname());
+                $f->isDir() && !$f->isLink() ? rmdir($f->getPathname()) : unlink($f->getPathname());
             }
             rmdir($this->root);
         }
@@ -62,6 +62,35 @@ namespace ProtoBlocks\Tests\Admin {
             $outside = $this->root . '/plugin/examples/cta/../../../theme/blocks/hero';
             $t = PreviewCapture::captureTarget($outside, $this->root . '/plugin/examples', $this->root . '/uploads/x');
             self::assertFalse($t['redirected']);
+        }
+
+        public function testSiblingFolderWithSharedPrefixIsNotInsideExamples(): void
+        {
+            mkdir($this->root . '/plugin/examples-evil/cta', 0777, true);
+            $t = PreviewCapture::captureTarget($this->root . '/plugin/examples-evil/cta', $this->root . '/plugin/examples', $this->root . '/uploads/x');
+            self::assertFalse($t['redirected']);
+        }
+
+        public function testSymlinkOutOfExamplesIsNotRedirected(): void
+        {
+            symlink($this->root . '/theme/blocks/hero', $this->root . '/plugin/examples/linked');
+            $t = PreviewCapture::captureTarget($this->root . '/plugin/examples/linked', $this->root . '/plugin/examples', $this->root . '/uploads/x');
+            self::assertFalse($t['redirected']);
+            self::assertSame($this->root . '/plugin/examples/linked/preview.png', $t['path']);
+        }
+
+        public function testUnsafeFolderNamesAreRejectedNotStripped(): void
+        {
+            mkdir($this->root . '/plugin/examples/Bad_Name', 0777, true);
+            $t = PreviewCapture::captureTarget($this->root . '/plugin/examples/Bad_Name', $this->root . '/plugin/examples', $this->root . '/uploads/x');
+            self::assertTrue($t['invalid']);
+            self::assertSame('', $t['path']);
+        }
+
+        public function testNoUploadsFolderRejectsExampleWrites(): void
+        {
+            $t = PreviewCapture::captureTarget($this->root . '/plugin/examples/cta', $this->root . '/plugin/examples', '');
+            self::assertTrue($t['invalid']);
         }
 
         public function testExamplesFolderItselfIsNotRedirected(): void

@@ -272,3 +272,14 @@ describe('lastCompiledLabel', () => {
 		expect(lastCompiledLabel(timestamp, now)).toBe(expected);
 	});
 });
+
+test('Last Compiled reads Never while the compiled CSS size is 0', async () => {
+	const data = payload();
+	data.settings.lastCompiled = Math.round(Date.now() / 1000) - 5;
+	mockApi({ 'admin/tailwind': { ...data, cssSize: 0, cssSizeFormatted: '0 B' } });
+	renderScreen();
+
+	expect(await screen.findByText('0 B')).toBeInTheDocument();
+	expect(screen.getByText('Never')).toBeInTheDocument();
+	expect(screen.queryByText('just now')).not.toBeInTheDocument();
+});

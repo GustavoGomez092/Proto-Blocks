@@ -75,3 +75,55 @@ test('ConfirmDialog focus falls back to the h1 when the opener never re-enables'
 		jest.useRealTimers();
 	}
 });
+
+test('ConfirmDialog does not steal focus the user moved elsewhere before the opener re-enabled', async () => {
+	render(
+		<>
+			<input aria-label="Elsewhere" />
+			<DisabledOpenerHarness reenableAfter={200} />
+		</>
+	);
+	const opener = await openAndConfirm();
+	const elsewhere = screen.getByLabelText('Elsewhere');
+	elsewhere.focus();
+
+	await waitFor(() => expect(opener).toBeEnabled());
+	await act(async () => {
+		await new Promise((resolve) => setTimeout(resolve, 50));
+	});
+	expect(elsewhere).toHaveFocus();
+});
+
+test('unmounting cancels the pending wait (observer disconnected, timer cleared)', async () => {
+	const disconnect = jest.spyOn(MutationObserver.prototype, 'disconnect');
+	const clear = jest.spyOn(window, 'clearTimeout');
+	const view = render(<DisabledOpenerHarness reenableAfter={null} />);
+	await openAndConfirm();
+	disconnect.mockClear();
+	clear.mockClear();
+
+	view.unmount();
+
+	expect(disconnect).toHaveBeenCalled();
+	expect(clear).toHaveBeenCalled();
+	disconnect.mockRestore();
+	clear.mockRestore();
+});
+
+test('the h1 fallback removes the tabindex it added once focus leaves', async () => {
+	jest.useFakeTimers({ advanceTimers: true });
+	try {
+		render(<DisabledOpenerHarness reenableAfter={null} />);
+		await openAndConfirm();
+		await act(async () => {
+			jest.advanceTimersByTime(5100);
+		});
+		const heading = screen.getByRole('heading', { level: 1 });
+		expect(heading).toHaveAttribute('tabindex', '-1');
+
+		act(() => heading.blur());
+		expect(heading).not.toHaveAttribute('tabindex');
+	} finally {
+		jest.useRealTimers();
+	}
+});
