@@ -112,6 +112,19 @@ function file(overrides: Partial<FileResult> = {}): FileResult {
 	};
 }
 
+const CORE_POST_SUPPORTS = [
+	'title',
+	'editor',
+	'author',
+	'thumbnail',
+	'excerpt',
+	'trackbacks',
+	'custom-fields',
+	'comments',
+	'revisions',
+	'post-formats',
+];
+
 const saved = { path: 'wp-content/themes/demo/proto-types/product/type.jsonc', hash: 'h2', created: false, warnings: [] };
 
 function renderScreen(query = '', bootstrap = {}) {
@@ -384,6 +397,8 @@ test('Override opens a create form without a name and saves an override file', a
 		'admin/types': list(),
 		'admin/types/post': detail({
 			item: item({ slug: 'post', label: 'Posts', origin: 'core', originLabel: 'Core', source: null, editable: false, readOnlyReason: 'not_proto' }),
+			// As PostTypesRoutes sends it: array_keys(get_all_post_type_supports('post')).
+			effective: { ...detail().effective, supports: CORE_POST_SUPPORTS },
 		}),
 		'schema-files/type/post': file({
 			exists: false,
@@ -400,7 +415,11 @@ test('Override opens a create form without a name and saves an override file', a
 	const submit = await screen.findByRole('button', { name: 'Create override file' });
 	expect(submit).toBeEnabled();
 
-	await user.click(screen.getByRole('checkbox', { name: 'Excerpt' }));
+	for (const name of ['Title', 'Editor', 'Featured image', 'Excerpt', 'Revisions', 'Custom fields', 'Comments', 'Author']) {
+		expect(screen.getByRole('checkbox', { name })).toBeChecked();
+	}
+	expect(screen.getByRole('checkbox', { name: 'Page attributes' })).not.toBeChecked();
+	await user.click(screen.getByRole('checkbox', { name: 'Page attributes' }));
 	await user.click(submit);
 
 	await waitFor(() => expect(post).toHaveBeenCalled());
@@ -408,7 +427,76 @@ test('Override opens a create form without a name and saves an override file', a
 	expect(body.hash).toBeNull();
 	const data = parseJsonc(body.text).data;
 	expect(data.name).toBeUndefined();
-	expect(data.supports).toEqual(['title', 'editor', 'thumbnail', 'excerpt']);
+	expect(data.supports).toEqual([...CORE_POST_SUPPORTS, 'page-attributes']);
+});
+
+test('a Proto-Blocks type with no supports anywhere shows the plugin defaults and keeps them on save', async () => {
+	const user = userEvent.setup();
+	const { supports: _supports, ...effective } = detail().effective;
+	await openEdit({
+		'admin/types/product': detail({ effective }),
+		'schema-files/type/product': file(),
+		'POST schema-files/type/product': () => saved,
+	});
+
+	for (const name of ['Title', 'Editor', 'Featured image', 'Excerpt', 'Revisions']) {
+		expect(screen.getByRole('checkbox', { name })).toBeChecked();
+	}
+	await user.click(screen.getByRole('checkbox', { name: 'Comments' }));
+	await user.click(screen.getByRole('button', { name: 'Save to file' }));
+
+	await waitFor(() => expect(posted('schema-files/type/product')).toHaveLength(1));
+	expect(parseJsonc(posted('schema-files/type/product')[0].text).data.supports).toEqual([
+		'title',
+		'editor',
+		'thumbnail',
+		'excerpt',
+		'revisions',
+		'comments',
+	]);
+});
+
+test('rewrite: false keeps the URL controls off and is never re-enabled by a save', async () => {
+	const user = userEvent.setup();
+	await openEdit({
+		'admin/types/product': detail(),
+		'schema-files/type/product': file({ text: '{ "name": "Product", "rewrite": false }' }),
+		'POST schema-files/type/product': () => saved,
+	});
+
+	expect(screen.getByLabelText('URL slug')).toBeDisabled();
+	expect(screen.getByText(/Pretty URLs are off for this type/)).toBeInTheDocument();
+	expect(screen.queryByRole('switch', { name: 'Prefix with permalink base' })).not.toBeInTheDocument();
+
+	await user.click(screen.getByRole('checkbox', { name: 'Comments' }));
+	await user.click(screen.getByRole('button', { name: 'Save to file' }));
+
+	await waitFor(() => expect(posted('schema-files/type/product')).toHaveLength(1));
+	expect(parseJsonc(posted('schema-files/type/product')[0].text).data.rewrite).toBe(false);
+});
+
+test('removing a taxonomy row keeps the next row and its typed value', async () => {
+	const user = userEvent.setup();
+	await openEdit({
+		'admin/types/product': detail(),
+		'schema-files/type/product': file({ text: '{ "name": "Product", "taxonomies": [{ "name": "Brand" }, { "name": "Colour" }] }' }),
+	});
+
+	const names = screen.getAllByLabelText('Taxonomy name');
+	expect(names.map((input) => (input as HTMLInputElement).value)).toEqual(['Brand', 'Colour']);
+	const colour = names[1];
+	await user.click(screen.getByRole('button', { name: 'Remove Brand' }));
+
+	const after = screen.getAllByLabelText('Taxonomy name');
+	expect(after).toHaveLength(1);
+	expect(after[0]).toBe(colour);
+	expect(after[0]).toHaveValue('Colour');
+});
+
+test('form sections are labelled regions', async () => {
+	await openEdit({ 'admin/types/product': detail(), 'schema-files/type/product': file() });
+	expect(screen.getByRole('region', { name: 'Editor' })).toBeInTheDocument();
+	expect(screen.getByRole('region', { name: 'Archive and URLs' })).toBeInTheDocument();
 });
 
 test('creating a post type fetches the template, posts it and opens the edit form', async () => {
@@ -428,7 +516,7 @@ test('creating a post type fetches the template, posts it and opens the edit for
 
 	expect(within(dialog).getByLabelText('Slug')).toHaveValue('case-study');
 	expect(within(dialog).getByText('Case Studies')).toBeInTheDocument();
-	expect(within(dialog).getByText('proto-types/case-study/type.jsonc')).toBeInTheDocument();
+	expect(within(dialog).getByText('wp-content/themes/demo/proto-types/case-study/type.jsonc')).toBeInTheDocument();
 
 	await user.click(within(dialog).getByRole('button', { name: 'Create post type' }));
 

@@ -213,6 +213,7 @@ export function PostTypeList({
 			<CreatePostTypeDialog
 				open={creating && !createReadOnly}
 				taken={result.items.map((item) => item.slug)}
+				root={result.createTarget.path}
 				onOpenChange={onCreateOpen}
 				onCreated={onCreated}
 			/>

@@ -88,10 +88,13 @@ const code = (text: string) => <code className="font-mono text-[12.5px] break-al
 export function CreatePostTypeDialog({
 	open,
 	taken,
+	root = '',
 	onOpenChange,
 	onCreated,
 }: {
 	open: boolean;
+	/** The folder new declarations go in (createTarget.path), relative to ABSPATH. */
+	root?: string;
 	/** Slugs already registered. */
 	taken: string[];
 	onOpenChange: (open: boolean) => void;
@@ -210,7 +213,7 @@ export function CreatePostTypeDialog({
 									{interpolate(
 										/* translators: %s: path of the declaration file that will be created. */
 										__('Will create %s', 'proto-blocks'),
-										code(`proto-types/${slug}/type.jsonc`)
+										code(`${root !== '' ? root.replace(/\/+$/, '') : 'proto-types'}/${slug}/type.jsonc`)
 									)}
 								</p>
 							) : null}

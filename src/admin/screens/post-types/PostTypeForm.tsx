@@ -94,7 +94,17 @@ export const SUPPORTS: { key: string; label: string }[] = [
 	{ key: 'author', label: __('Author', 'proto-blocks') },
 ];
 
-function effectiveSupports(effective: Values): string[] {
+/** What a Proto-Blocks declaration supports when its file sets no `supports` (PostTypeArgs defaults). */
+export const PLUGIN_SUPPORTS = ['title', 'editor', 'thumbnail', 'excerpt', 'revisions'];
+/** register_post_type's own default, for types registered elsewhere. */
+const WORDPRESS_SUPPORTS = ['title', 'editor'];
+
+/**
+ * The registered features: the server sends a list (get_all_post_type_supports
+ * keys); a `{feature: true}` map is accepted too. Without either, the
+ * defaults of whoever registers the type.
+ */
+function effectiveSupports(effective: Values, origin: ListItem['origin'] | undefined): string[] {
 	const supports = effective.supports;
 	if (Array.isArray(supports)) {
 		return supports.filter((entry): entry is string => typeof entry === 'string');
@@ -102,7 +112,7 @@ function effectiveSupports(effective: Values): string[] {
 	if (isObject(supports)) {
 		return Object.keys(supports).filter((key) => Boolean(supports[key]));
 	}
-	return ['title', 'editor'];
+	return origin === 'file' || origin === 'php' || origin === undefined ? PLUGIN_SUPPORTS : WORDPRESS_SUPPORTS;
 }
 
 /**
@@ -110,7 +120,7 @@ function effectiveSupports(effective: Values): string[] {
  * out filled from the effective settings so the controls show what
  * WordPress does. Only values that then differ are written back.
  */
-export function toFormValues(data: Values, effective: Values): Values {
+export function toFormValues(data: Values, effective: Values, origin?: ListItem['origin']): Values {
 	const bool = (key: string, fallback: boolean) => {
 		if (typeof data[key] === 'boolean') {
 			return data[key];
@@ -125,7 +135,7 @@ export function toFormValues(data: Values, effective: Values): Values {
 	}
 	let supports: unknown = data.supports;
 	if (!Array.isArray(supports) && supports !== false) {
-		supports = effectiveSupports(effective);
+		supports = effectiveSupports(effective, origin);
 	}
 	let menuPosition: unknown = data.menu_position;
 	if (typeof menuPosition !== 'number' && typeof effective.menu_position === 'number') {
@@ -148,7 +158,8 @@ export function toFormValues(data: Values, effective: Values): Values {
 		show_in_rest: bool('show_in_rest', false),
 		hierarchical: bool('hierarchical', false),
 		has_archive: hasArchive,
-		rewrite: { ...fileRewrite, with_front: withFront },
+		// `rewrite: false` (no pretty URLs) stays as it is: the URL controls are off.
+		rewrite: data.rewrite === false ? false : { ...fileRewrite, with_front: withFront },
 		supports,
 		menu_position: menuPosition,
 		menu_icon: menuIcon,
@@ -226,15 +237,17 @@ function FieldError({ control, name, id }: { control: Control<Values>; name: str
 
 function Section({ id, title, description, children }: { id: string; title: string; description?: string; children: ReactNode }) {
 	return (
-		<Card className="shadow-xs" id={id} aria-labelledby={`${id}-title`}>
-			<CardHeader>
-				<CardTitle role="heading" aria-level={2} id={`${id}-title`}>
-					{title}
-				</CardTitle>
-				{description ? <CardDescription>{description}</CardDescription> : null}
-			</CardHeader>
-			<CardContent className="grid gap-4">{children}</CardContent>
-		</Card>
+		<section id={id} aria-labelledby={`${id}-title`}>
+			<Card className="shadow-xs">
+				<CardHeader>
+					<CardTitle role="heading" aria-level={2} id={`${id}-title`}>
+						{title}
+					</CardTitle>
+					{description ? <CardDescription>{description}</CardDescription> : null}
+				</CardHeader>
+				<CardContent className="grid gap-4">{children}</CardContent>
+			</Card>
+		</section>
 	);
 }
 
@@ -424,6 +437,17 @@ type TaxonomyEntry = string | Record<string, unknown>;
 
 function TaxonomiesField({ control, disabled }: { control: Control<Values>; disabled: boolean }) {
 	const id = useId();
+	// Row keys that follow the rows (not their index), so removing a row
+	// doesn't hand its inputs' state to the next one.
+	const keys = useRef<string[]>([]);
+	const counter = useRef(0);
+	const keysFor = (length: number) => {
+		while (keys.current.length < length) {
+			keys.current.push(`row-${counter.current++}`);
+		}
+		keys.current.length = length;
+		return keys.current;
+	};
 	return (
 		<Controller
 			control={control}
@@ -431,7 +455,11 @@ function TaxonomiesField({ control, disabled }: { control: Control<Values>; disa
 			render={({ field }) => {
 				const list = Array.isArray(field.value) ? (field.value as TaxonomyEntry[]) : [];
 				const update = (index: number, next: TaxonomyEntry) => field.onChange(list.map((entry, i) => (i === index ? next : entry)));
-				const remove = (index: number) => field.onChange(list.filter((_, i) => i !== index));
+				const rowKeys = keysFor(list.length);
+				const remove = (index: number) => {
+					keys.current.splice(index, 1);
+					field.onChange(list.filter((_, i) => i !== index));
+				};
 				const setKey = (index: number, entry: Record<string, unknown>, key: string, value: unknown) => {
 					const next = { ...entry };
 					if (value === undefined || value === '') {
@@ -448,10 +476,10 @@ function TaxonomiesField({ control, disabled }: { control: Control<Values>; disa
 						) : (
 							<ul className="grid gap-2">
 								{list.map((entry, index) => {
-									const rowId = `${id}-${index}`;
+									const rowId = `${id}-${rowKeys[index]}`;
 									if (typeof entry === 'string') {
 										return (
-											<li key={index} className="flex flex-wrap items-end gap-2 rounded-md border p-3">
+											<li key={rowKeys[index]} className="flex flex-wrap items-end gap-2 rounded-md border p-3">
 												<div className="grid min-w-[200px] flex-1 gap-1.5">
 													<Label htmlFor={`${rowId}-slug`}>{__('Existing taxonomy slug', 'proto-blocks')}</Label>
 													<Input
@@ -468,7 +496,7 @@ function TaxonomiesField({ control, disabled }: { control: Control<Values>; disa
 										);
 									}
 									return (
-										<li key={index} className="flex flex-wrap items-end gap-2 rounded-md border p-3">
+										<li key={rowKeys[index]} className="flex flex-wrap items-end gap-2 rounded-md border p-3">
 											<div className="grid min-w-[160px] flex-1 gap-1.5">
 												<Label htmlFor={`${rowId}-name`}>{__('Taxonomy name', 'proto-blocks')}</Label>
 												<Input
@@ -712,7 +740,7 @@ function TypeForm({
 	// file text starts the form over.
 	const effectiveRef = useRef(effective);
 	effectiveRef.current = effective;
-	const defaults = useMemo(() => toFormValues(base, effectiveRef.current), [base]);
+	const defaults = useMemo(() => toFormValues(base, effectiveRef.current, item.origin), [base, item.origin]);
 	const defaultsRef = useRef(defaults);
 
 	const form = useForm<Values>({ defaultValues: defaults, resolver, mode: 'onSubmit', reValidateMode: 'onChange' });
@@ -1017,23 +1045,39 @@ function TypeForm({
 
 						<Section id="pt-urls" title={__('Archive and URLs', 'proto-blocks')}>
 							<ArchiveField control={control} slug={slug} disabled={readOnly} />
-							<div className="grid gap-1.5">
-								<Label htmlFor={`${ids}-rewrite-slug`}>{__('URL slug', 'proto-blocks')}</Label>
-								<Input
-									id={`${ids}-rewrite-slug`}
-									className="font-mono"
-									spellCheck={false}
-									placeholder={typeof effRewrite.slug === 'string' ? effRewrite.slug : slug}
-									{...register('rewrite.slug', textValue)}
-								/>
-								<FieldError control={control} name="rewrite" />
-							</div>
-							<SwitchRow
-								control={control}
-								name="rewrite.with_front"
-								label={__('Prefix with permalink base', 'proto-blocks')}
-								disabled={readOnly}
-							/>
+							{defaults.rewrite === false ? (
+								<div className="grid gap-1.5">
+									<Label htmlFor={`${ids}-rewrite-slug`}>{__('URL slug', 'proto-blocks')}</Label>
+									<Input id={`${ids}-rewrite-slug`} className="font-mono" disabled value="" aria-describedby={`${ids}-rewrite-off`} />
+									<p id={`${ids}-rewrite-off`} className="text-[13px] text-muted-foreground">
+										{interpolate(
+											/* translators: %s: the JSON setting "rewrite": false. */
+											__('Pretty URLs are off for this type (%s in the file). Change it in the file to set a URL slug.', 'proto-blocks'),
+											code('"rewrite": false')
+										)}
+									</p>
+								</div>
+							) : (
+								<>
+									<div className="grid gap-1.5">
+										<Label htmlFor={`${ids}-rewrite-slug`}>{__('URL slug', 'proto-blocks')}</Label>
+										<Input
+											id={`${ids}-rewrite-slug`}
+											className="font-mono"
+											spellCheck={false}
+											placeholder={typeof effRewrite.slug === 'string' ? effRewrite.slug : slug}
+											{...register('rewrite.slug', textValue)}
+										/>
+										<FieldError control={control} name="rewrite" />
+									</div>
+									<SwitchRow
+										control={control}
+										name="rewrite.with_front"
+										label={__('Prefix with permalink base', 'proto-blocks')}
+										disabled={readOnly}
+									/>
+								</>
+							)}
 						</Section>
 
 						<Section id="pt-editor" title={__('Editor', 'proto-blocks')} description={__('What appears on the edit screen.', 'proto-blocks')}>
