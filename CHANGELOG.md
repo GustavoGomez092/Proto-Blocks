@@ -127,6 +127,11 @@
 - The getter does no read-permission check; never pass visitor input as
   `$context`. Bindings exclude `code` and `password`, and options-page
   fields are bindable by any author unless `"bindings": false`.
+- User fields are not exposed over REST unless the field sets
+  `"show_in_rest": true`.
+- A lowered `proto_blocks_repeater_max_items` never truncates stored rows:
+  the box shows them with a warning and the save is refused until rows are
+  removed.
 
 ### Phase 3: settings pages
 

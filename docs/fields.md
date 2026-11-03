@@ -28,7 +28,7 @@ your-theme/
     speaker/group.jsonc
 ```
 
-The folder name is the slug (`^[a-z][a-z0-9_-]*$`). The file may hold one group or an ACF Tools export (an array of groups). Comments and trailing commas are allowed.
+The folder name is the slug (`^[a-z][a-z0-9_-]*$`, 32 characters at most). The file may hold one group or an ACF Tools export (an array of groups). Comments and trailing commas are allowed.
 
 ```jsonc
 // proto-fields/speaker/group.jsonc
@@ -208,7 +208,7 @@ Trust is decided per user, at write time, for posts, terms, users and options al
 - `code` and `password` fields are written only by users with `unfiltered_html`. Everyone else sees them hidden: "Hidden; only users with unfiltered HTML may view and edit this field." Saving as such a user leaves the stored value untouched.
 - Other fields are sanitised for their type when the writer lacks `unfiltered_html`.
 - A `code` value is trusted because only a trusted user could write it through the plugin. Values written some other way (another plugin, `update_post_meta`, the database) are not vouched for, and **re-typing a field to `code` renders the values already stored under the old type raw**. Clear them first if they came from untrusted writers.
-- Repeater rows are capped for every writer: the field's `max`, never above the `proto_blocks_repeater_max_items` filter (default 500; `0` means no rows).
+- Repeater rows are capped for every writer: the field's `max`, never above the `proto_blocks_repeater_max_items` filter (default 500; `0` means no rows). Lowering the cap never drops stored rows: the box shows them all with "This repeater has N rows; the limit is M. Remove rows to save.", saving is refused until enough rows are removed, and at `0` the rows are read-only.
 
 ```php
 add_filter('proto_blocks_repeater_max_items', fn ($max, $name, $settings) => 100, 10, 3);
@@ -228,6 +228,7 @@ Copy an ACF Tools export into `proto-fields/<slug>/group.json` and it works unch
 ## REST, storage and performance
 
 - Every field is registered meta with a REST schema derived from its type. `show_in_rest` is on by default and can be set per field (`"show_in_rest": false`). `password` and `code` fields, and groups or repeaters that contain one, default to off. Core serves exposed meta to anonymous visitors for published posts, so turn it off for anything private.
+- User fields are off by default; set `"show_in_rest": true` to expose one. Term meta of public taxonomies and post meta of password-protected posts are returned by core's REST API without the password, so set `"show_in_rest": false` on sensitive fields of those objects.
 - Post meta is registered with `revisions_enabled` where the post type supports revisions.
 - Boxes render in the block editor, the classic editor and Elementor's classic mode, and on term and user edit screens. Inputs carry real `name` attributes and save through the ordinary form submit, with a nonce.
 - Heavy pickers (relationship, gallery, wysiwyg) load lazily, so a post with 50 fields stays interactive.
