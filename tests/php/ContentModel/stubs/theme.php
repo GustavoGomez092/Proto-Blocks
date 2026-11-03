@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-// Theme directory and filter stand-ins for the content-model tests. Every stub
+// Theme directory stand-ins for the content-model tests. Every stub
 // is guarded so the first definition wins (PHPUnit loads all test files into
 // one process); each has the same shape as its siblings elsewhere in tests/php.
 //
@@ -36,15 +36,4 @@ if (!function_exists('wp_is_block_theme')) {
         return (bool) ($GLOBALS['pb_test_block_theme'] ?? true);
     }
 }
-if (!function_exists('apply_filters')) {
-    /**
-     * Same shape as tests/php/Fields/wp-stubs.php so either definition may
-     * win: tests register callbacks in $GLOBALS['pb_test_filters'][$hook][].
-     */
-    function apply_filters($hook, $value, ...$args) {
-        foreach ($GLOBALS['pb_test_filters'][$hook] ?? [] as $callback) {
-            $value = $callback($value, ...$args);
-        }
-        return $value;
-    }
-}
+// apply_filters() is stubbed once in tests/php/bootstrap.php.

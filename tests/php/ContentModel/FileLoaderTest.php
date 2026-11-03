@@ -216,6 +216,17 @@ final class FileLoaderTest extends TestCase
         $this->assertSame('error', $this->issue($result, 'slug_pattern')->level);
     }
 
+    public function testTrailingNewlineFolderIsPatternError(): void
+    {
+        $this->write("proto-types/product\n/type.jsonc", '{"name": "Product"}');
+
+        $result = (new FileLoader())->load([$this->parent]);
+
+        $this->assertArrayNotHasKey("product\n", $result['declarations']['type']);
+        $this->assertSame("product\n", $this->issue($result, 'slug_pattern')->slug);
+        $this->assertArrayHasKey('product', $result['declarations']['type']);
+    }
+
     public function testChildRootReplacesParent(): void
     {
         $result = (new FileLoader())->load([$this->parent, $this->child]);

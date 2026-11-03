@@ -33,5 +33,6 @@ final class SlugTest extends TestCase
         $this->assertNull(Slug::error('category', 'taxonomy'));
         $this->assertSame('reserved', Slug::error('post_format', 'taxonomy'));
         $this->assertNull(Slug::error('oit_resource', 'type'));
+        $this->assertSame('pattern', Slug::error("product\n", 'type'));
     }
 }

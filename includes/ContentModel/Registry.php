@@ -9,7 +9,10 @@ namespace ProtoBlocks\ContentModel;
  *
  * Precedence: a file beats a PHP declaration of the same kind and slug
  * entirely (warning `double_declaration`); a standalone taxonomy (file or
- * PHP) beats one declared inline in a type (warning `double_declaration`).
+ * PHP) beats one declared inline in a type (warning `double_declaration`),
+ * and the inline taxonomy's type joins the winner's `post_types`. Two types
+ * that inline the same taxonomy with the same data apart from `post_types`
+ * share it with no warning; any other difference is a `double_declaration`.
  * The result is memoised until invalidate().
  */
 final class Registry
@@ -95,12 +98,18 @@ final class Registry
         foreach ($merged[Declaration::TYPE] as $type) {
             foreach ($this->inlineTaxonomies($type, $issues) as $slug => $inline) {
                 $existing = $merged[Declaration::TAXONOMY][$slug] ?? null;
-                if ($existing !== null) {
-                    // A standalone declaration (or an earlier type's inline one) wins.
-                    $issues[] = self::doubleIssue(Declaration::TAXONOMY, $slug, $existing->source, $inline->source);
+                if ($existing === null) {
+                    $merged[Declaration::TAXONOMY][$slug] = $inline;
                     continue;
                 }
-                $merged[Declaration::TAXONOMY][$slug] = $inline;
+                // The existing declaration (standalone, or an earlier type's
+                // inline one) wins, and the losing type is attached to it.
+                $merged[Declaration::TAXONOMY][$slug] = self::withPostType($existing, (string) $inline->parentType);
+                $sharedInline = $existing->parentType !== null
+                    && self::sameApartFromPostTypes($existing->data, $inline->data);
+                if (!$sharedInline) {
+                    $issues[] = self::inlineDoubleIssue($slug, $existing->source, $inline->source, (string) $inline->parentType);
+                }
             }
         }
 
@@ -156,6 +165,69 @@ final class Registry
         }
 
         return $out;
+    }
+
+    private static function withPostType(Declaration $declaration, string $type): Declaration
+    {
+        $listed = is_array($declaration->data['post_types'] ?? null) ? $declaration->data['post_types'] : [];
+        if (in_array($type, $listed, true)) {
+            return $declaration;
+        }
+        $data = $declaration->data;
+        $data['post_types'] = [...array_values($listed), $type];
+
+        return new Declaration(
+            $declaration->kind,
+            $declaration->slug,
+            $data,
+            $declaration->origin,
+            $declaration->source,
+            $declaration->root,
+            $declaration->parentType
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $a
+     * @param array<string, mixed> $b
+     */
+    private static function sameApartFromPostTypes(array $a, array $b): bool
+    {
+        unset($a['post_types'], $b['post_types']);
+
+        return self::canonical($a) === self::canonical($b);
+    }
+
+    /** Sort object keys recursively so key order does not count as a difference. */
+    private static function canonical(mixed $value): mixed
+    {
+        if (!is_array($value)) {
+            return $value;
+        }
+        if (!array_is_list($value)) {
+            ksort($value, SORT_STRING);
+        }
+
+        return array_map([self::class, 'canonical'], $value);
+    }
+
+    private static function inlineDoubleIssue(string $slug, string $winner, string $loser, string $type): Issue
+    {
+        return new Issue(
+            Issue::WARNING,
+            'double_declaration',
+            sprintf(
+                /* translators: 1: taxonomy slug, 2: location that is used, 3: location that is ignored, 4: post type slug */
+                __('"%1$s" is declared twice: %2$s is used and %3$s is ignored; the post type "%4$s" was added to its post types. Remove one of them.', 'proto-blocks'),
+                $slug,
+                $winner,
+                $loser,
+                $type
+            ),
+            $winner,
+            $slug,
+            Declaration::TAXONOMY
+        );
     }
 
     private static function doubleIssue(string $kind, string $slug, string $winner, string $loser): Issue

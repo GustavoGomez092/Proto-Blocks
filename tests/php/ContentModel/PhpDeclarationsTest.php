@@ -94,6 +94,14 @@ final class PhpDeclarationsTest extends TestCase
         $this->assertSame('slug_pattern', PhpDeclarations::issues()[0]->code);
     }
 
+    public function testTrailingNewlineSlugIsRefused(): void
+    {
+        proto_post_type('X', ['slug' => "x\n"]);
+
+        $this->assertSame([], PhpDeclarations::all()['type']);
+        $this->assertSame('slug_pattern', PhpDeclarations::issues()[0]->code);
+    }
+
     public function testDeclaredAfterSealIsIgnoredWithWarning(): void
     {
         PhpDeclarations::seal();

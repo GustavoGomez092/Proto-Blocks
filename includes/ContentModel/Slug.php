@@ -47,7 +47,7 @@ final class Slug
      */
     public static function error(string $slug, string $kind): ?string
     {
-        if (!preg_match('/^[a-z][a-z0-9_-]*$/', $slug)) {
+        if (!preg_match('/^[a-z][a-z0-9_-]*$/D', $slug)) {
             return 'pattern';
         }
 

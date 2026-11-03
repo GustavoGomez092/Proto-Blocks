@@ -91,14 +91,4 @@ if (!function_exists('esc_attr')) {
         return htmlspecialchars((string) $text, ENT_QUOTES, 'UTF-8', false);
     }
 }
-if (!function_exists('apply_filters')) {
-    define('PB_FIELDS_TEST_APPLY_FILTERS', true);
-    /** Tests register callbacks in $GLOBALS['pb_test_filters'][$hook][]. */
-    function apply_filters($hook, $value, ...$args)
-    {
-        foreach ($GLOBALS['pb_test_filters'][$hook] ?? [] as $callback) {
-            $value = $callback($value, ...$args);
-        }
-        return $value;
-    }
-}
+// apply_filters() is stubbed once in tests/php/bootstrap.php.

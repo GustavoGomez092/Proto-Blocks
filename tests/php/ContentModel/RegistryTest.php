@@ -108,7 +108,7 @@ final class RegistryTest extends TestCase
     public function testStandaloneTaxonomyBeatsInline(): void
     {
         $this->write('proto-types/book/type.jsonc', '{"name": "Book", "taxonomies": [{"name": "Genre", "hierarchical": true}]}');
-        $standalone = $this->write('proto-taxonomies/genre/taxonomy.jsonc', '{"name": "Genre", "post_types": ["book", "film"]}');
+        $standalone = $this->write('proto-taxonomies/genre/taxonomy.jsonc', '{"name": "Genre", "post_types": ["film"]}');
 
         $registry = $this->registry();
         $genre = $registry->get('taxonomy', 'genre');
@@ -116,10 +116,49 @@ final class RegistryTest extends TestCase
         $this->assertSame($standalone, $genre->source);
         $this->assertNull($genre->parentType);
         $this->assertArrayNotHasKey('hierarchical', $genre->data);
+        $this->assertSame(['film', 'book'], $genre->data['post_types']);
         $issue = $this->issue($registry, 'double_declaration');
         $this->assertSame('warning', $issue->level);
         $this->assertSame('genre', $issue->slug);
         $this->assertSame('taxonomy', $issue->kind);
+        $this->assertStringContainsString('"book" was added', $issue->message);
+    }
+
+    public function testStandaloneTaxonomyWithoutPostTypesGetsInlineParent(): void
+    {
+        $this->write('proto-types/book/type.jsonc', '{"name": "Book", "taxonomies": [{"name": "Genre"}]}');
+        $this->write('proto-taxonomies/genre/taxonomy.jsonc', '{"name": "Genre"}');
+
+        $this->assertSame(['book'], $this->registry()->get('taxonomy', 'genre')->data['post_types']);
+    }
+
+    public function testIdenticalInlineTaxonomiesAreSharedWithoutWarning(): void
+    {
+        $this->write('proto-types/book/type.jsonc', '{"name": "Book", "taxonomies": [{"name": "Genre", "hierarchical": true, "labels": {"a": "1", "b": "2"}}]}');
+        $this->write('proto-types/film/type.jsonc', '{"name": "Film", "taxonomies": [{"labels": {"b": "2", "a": "1"}, "hierarchical": true, "name": "Genre", "post_types": ["series"]}]}');
+
+        $registry = $this->registry();
+        $genre = $registry->get('taxonomy', 'genre');
+
+        $this->assertSame('book', $genre->parentType);
+        $this->assertSame(['book', 'film'], $genre->data['post_types']);
+        $this->assertSame([], $registry->issues());
+    }
+
+    public function testConflictingInlineTaxonomiesWarn(): void
+    {
+        $book = $this->write('proto-types/book/type.jsonc', '{"name": "Book", "taxonomies": [{"name": "Genre", "hierarchical": true}]}');
+        $film = $this->write('proto-types/film/type.jsonc', '{"name": "Film", "taxonomies": [{"name": "Genre", "hierarchical": false}]}');
+
+        $registry = $this->registry();
+        $genre = $registry->get('taxonomy', 'genre');
+
+        $this->assertSame('book', $genre->parentType);
+        $this->assertTrue($genre->data['hierarchical']);
+        $this->assertSame(['book', 'film'], $genre->data['post_types']);
+        $issue = $this->issue($registry, 'double_declaration');
+        $this->assertStringContainsString($book, $issue->message);
+        $this->assertStringContainsString($film, $issue->message);
     }
 
     public function testInvalidateReloads(): void

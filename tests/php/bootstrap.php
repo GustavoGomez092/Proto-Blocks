@@ -14,6 +14,19 @@ if (!function_exists('sanitize_text_field')) {
     // Minimal stub — does not strip tags or normalize whitespace like the real WP function.
     function sanitize_text_field($text) { return is_string($text) ? trim($text) : $text; }
 }
+if (!function_exists('apply_filters')) {
+    // The one apply_filters() stub for every test directory, so load order
+    // never decides which shape wins. Tests register callbacks in
+    // $GLOBALS['pb_test_filters'][$hook][]; the constant lets a test assert
+    // this stub (not a real or foreign one) is active.
+    define('PB_FIELDS_TEST_APPLY_FILTERS', true);
+    function apply_filters($hook, $value, ...$args) {
+        foreach ($GLOBALS['pb_test_filters'][$hook] ?? [] as $callback) {
+            $value = $callback($value, ...$args);
+        }
+        return $value;
+    }
+}
 if (!function_exists('wp_upload_dir')) {
     function wp_upload_dir() {
         $base = sys_get_temp_dir() . '/pb-uploads';
