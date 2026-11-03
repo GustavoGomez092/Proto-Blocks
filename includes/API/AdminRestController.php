@@ -34,6 +34,7 @@ final class AdminRestController
      */
     public const ROUTE_GROUPS = [
         SystemRoutes::class,
+        Admin\TailwindRoutes::class,
     ];
 
     /**
