@@ -113,11 +113,11 @@ final class ScalarTypesTest extends TestCase
         $this->assertSame(['type' => ['integer', 'null']], $schema(self::field('number', ['step' => 1])));
         $this->assertSame(['type' => 'string'], $schema(self::field('text')));
         $this->assertSame(
-            ['anyOf' => [['type' => 'string', 'format' => 'email'], ['type' => 'string', 'maxLength' => 0]]],
+            ['type' => 'string', 'anyOf' => [['type' => 'string', 'format' => 'email'], ['type' => 'string', 'maxLength' => 0]]],
             $schema(self::field('email'))
         );
         $this->assertSame(
-            ['anyOf' => [['type' => 'string', 'format' => 'uri'], ['type' => 'string', 'maxLength' => 0]]],
+            ['type' => 'string', 'anyOf' => [['type' => 'string', 'format' => 'uri'], ['type' => 'string', 'maxLength' => 0]]],
             $schema(self::field('url'))
         );
         $this->assertSame(['type' => 'boolean'], $schema(self::field('true_false')));

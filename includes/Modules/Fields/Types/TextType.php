@@ -36,6 +36,9 @@ final class TextType implements FieldTypeInterface
         // Core rejects '' for a `format`, so email/url accept the empty string
         // explicitly; number accepts null (the empty value).
         $orEmpty = static fn(string $format): array => [
+            // A top-level type is required: core reads $schema['type'] while
+            // building REST schemas and warns (corrupting JSON under WP_DEBUG).
+            'type' => 'string',
             'anyOf' => [['type' => 'string', 'format' => $format], ['type' => 'string', 'maxLength' => 0]],
         ];
 

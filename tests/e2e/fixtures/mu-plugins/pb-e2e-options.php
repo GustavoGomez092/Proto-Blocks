@@ -32,7 +32,7 @@ add_action('init', static function (): void {
     }
 
     // First load only: the role, the capability and the user persist.
-    if (get_option('pb_e2e_options_setup') === '1') {
+    if (get_option('pb_e2e_options_setup') === '2') {
         return;
     }
 
@@ -46,6 +46,12 @@ add_action('init', static function (): void {
             'manage_woocommerce' => true,
         ]);
     }
+    // Version 2: edit_posts (the stand-in product type uses post capabilities)
+    // so the Products menu, and its Display Settings item, shows for the role.
+    $shop = get_role('pb_shop_manager');
+    if ($shop !== null) {
+        $shop->add_cap('edit_posts');
+    }
     if (!username_exists('shopmanager')) {
         wp_insert_user([
             'user_login' => 'shopmanager',
@@ -54,5 +60,5 @@ add_action('init', static function (): void {
             'role' => 'pb_shop_manager',
         ]);
     }
-    update_option('pb_e2e_options_setup', '1', false);
+    update_option('pb_e2e_options_setup', '2', false);
 }, 1);
