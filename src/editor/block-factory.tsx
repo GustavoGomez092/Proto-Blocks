@@ -13,6 +13,7 @@ import { BlockData, BlockAttributes, BlockEditProps } from './types';
 import { processHtmlToReact } from './utils/html-to-react';
 import { renderControl } from './controls/render';
 import { useDebouncedCallback } from './utils/debounce';
+import { buildPreviewBody } from './utils/preview-request';
 import {
     isInsideRepeaterItem,
     RepeaterItemProvider,
@@ -267,12 +268,7 @@ export function createEditComponent(block: BlockData) {
                         headers: {
                             'Content-Type': 'application/x-www-form-urlencoded',
                         },
-                        body: new URLSearchParams({
-                            action: 'proto_blocks_preview',
-                            template: block.name,
-                            attributes: JSON.stringify(attrs),
-                            nonce: previewNonce,
-                        }),
+                        body: buildPreviewBody(block.name, attrs, previewNonce),
                     });
 
                     const data = await response.json();

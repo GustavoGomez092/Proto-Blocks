@@ -200,11 +200,11 @@ class RestAPI
             is_array($block['schema'] ?? null) ? $block['schema'] : []
         );
 
-        $previousPost = $GLOBALS['post'] ?? null;
-        $postSet = self::setupPreviewPost($request->get_param('postId'));
-
         try {
-            $html = $this->engine->renderPreview($templatePath, $attributes, $block['schema']);
+            $html = AjaxHandler::renderWithPreviewPost(
+                $request->get_param('postId'),
+                fn(): string => $this->engine->renderPreview($templatePath, $attributes, $block['schema'])
+            );
 
             return new WP_REST_Response([
                 'html' => $html,
@@ -215,13 +215,6 @@ class RestAPI
                 self::errorMessage($e, __('Failed to generate preview.', 'proto-blocks')),
                 ['status' => 500]
             );
-        } finally {
-            if ($postSet) {
-                $GLOBALS['post'] = $previousPost;
-                if ($previousPost instanceof \WP_Post) {
-                    setup_postdata($previousPost);
-                }
-            }
         }
     }
 
