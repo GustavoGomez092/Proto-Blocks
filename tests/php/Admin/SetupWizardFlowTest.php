@@ -128,4 +128,25 @@ final class SetupWizardFlowTest extends TestCase
         );
         self::assertTrue($GLOBALS['pb_test_options']['proto_blocks_wizard_completed']);
     }
+
+    public function testGetRouteWorksInRestContextWithNoAdminServices(): void
+    {
+        // A REST request is not is_admin(): only the cache is registered.
+        $plugin = \ProtoBlocks\Core\Plugin::getInstance();
+        $services = new \ReflectionProperty($plugin, 'services');
+        $services->setAccessible(true);
+        $before = $services->getValue($plugin);
+        $services->setValue($plugin, ['cache' => new Cache($this->cacheDir)]);
+
+        try {
+            $data = (new WizardRoutes())->get();
+            self::assertSame(
+                ['style', 'categoryName', 'demos', 'installPath', 'tailwindEnabled', 'completed'],
+                array_keys($data)
+            );
+            self::assertInstanceOf(AdminPage::class, $plugin->getAdminPage());
+        } finally {
+            $services->setValue($plugin, $before);
+        }
+    }
 }

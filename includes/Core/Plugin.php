@@ -894,8 +894,15 @@ final class Plugin
         return $this->services['assets'];
     }
 
+    /**
+     * Built eagerly under is_admin(); constructed on first use otherwise so
+     * REST requests (which are not is_admin()) can reach it.
+     */
     public function getAdminPage(): AdminPage
     {
+        if (!isset($this->services['admin_page'])) {
+            $this->services['admin_page'] = new AdminPage($this->getCache());
+        }
         return $this->services['admin_page'];
     }
 
