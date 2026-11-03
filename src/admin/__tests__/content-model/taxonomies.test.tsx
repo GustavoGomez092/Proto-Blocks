@@ -22,9 +22,27 @@ const item = (over: Record<string, unknown>) => ({
 	...over,
 });
 
-const genre = item({ slug: 'genre', label: 'Genre', source: 'wp-content/themes/x/proto-types/book/type.jsonc', count: 2 });
+const genre = item({
+	slug: 'genre',
+	label: 'Genre',
+	source: 'wp-content/themes/x/proto-types/book/type.jsonc',
+	count: 2,
+	editable: false,
+	readOnlyReason: 'inline',
+	readOnlyMessage: 'Declared inline in proto-types/book/type.jsonc; edit it there.',
+	objectTypes: ['book'],
+	parentType: 'book',
+});
 const mediaType = (count: number) =>
-	item({ slug: 'media-type', label: 'Media Type', source: 'wp-content/themes/x/proto-taxonomies/media-type/taxonomy.jsonc', count });
+	item({
+		slug: 'media-type',
+		label: 'Media Type',
+		source: 'wp-content/themes/x/proto-taxonomies/media-type/taxonomy.jsonc',
+		count,
+		readOnlyMessage: null,
+		objectTypes: ['resource'],
+		parentType: null,
+	});
 
 const FILE_PATH = 'wp-content/themes/x/proto-taxonomies/media-type/taxonomy.jsonc';
 const FILE_TEXT = '// keep me\n{ "name": "Media Type" }';
@@ -104,11 +122,57 @@ test('the list shows an inline taxonomy attached to its type with an Edit in pos
 	expect(await within(row).findByText('Book')).toBeInTheDocument();
 	const link = within(row).getByRole('link', { name: 'Edit in post type' });
 	expect(link.getAttribute('href')).toContain('?page=proto-blocks-post-types&type=book');
+	expect(link).toHaveAttribute('title', 'Declared inline in proto-types/book/type.jsonc; edit it there.');
 	expect(within(row).queryByRole('link', { name: /^Edit$/ })).not.toBeInTheDocument();
 
 	const other = screen.getByText('Media Type').closest('tr') as HTMLElement;
 	expect(await within(other).findByText('Resource')).toBeInTheDocument();
 	expect(within(other).getByText('5')).toBeInTheDocument();
+	expect(within(other).queryByRole('link', { name: 'Edit in post type' })).not.toBeInTheDocument();
+});
+
+test('the list makes exactly one taxonomies request, with no per-row detail fetch', async () => {
+	const api = mockApi(routes());
+	open('');
+
+	const row = (await screen.findByText('Media Type')).closest('tr') as HTMLElement;
+	expect(within(row).getByText('Resource')).toBeInTheDocument();
+	// Let any stray effect fire before counting.
+	await new Promise((resolve) => setTimeout(resolve, 0));
+
+	const urls = calls(api).map((o) => o.url ?? '');
+	expect(urls.filter((url) => /admin\/taxonomies$/.test(url))).toHaveLength(1);
+	expect(urls.filter((url) => /admin\/taxonomies\//.test(url))).toHaveLength(0);
+});
+
+test('an inline taxonomy opened directly links to its type instead of a form', async () => {
+	mockApi(routes());
+	open('&taxonomy=genre');
+
+	expect(await screen.findByText(/is declared inside the/)).toBeInTheDocument();
+	expect(screen.getByRole('link', { name: 'Edit in post type' }).getAttribute('href')).toContain('type=book');
+	expect(screen.queryByRole('button', { name: 'Save to file' })).not.toBeInTheDocument();
+});
+
+test('the slug follows the name until it is edited by hand', async () => {
+	const user = userEvent.setup();
+	mockApi(routes());
+	open('&new=1');
+
+	const name = await screen.findByLabelText('Name');
+	const slug = screen.getByLabelText('Slug');
+	await user.type(name, 'Media');
+	expect(slug).toHaveValue('media');
+	expect(screen.getByText('Filled in from the name.')).toBeInTheDocument();
+
+	await user.clear(slug);
+	await user.type(slug, 'formats');
+	expect(screen.getByText('The folder name of the declaration.')).toBeInTheDocument();
+
+	await user.type(name, ' Type');
+	expect(name).toHaveValue('Media Type');
+	expect(slug).toHaveValue('formats');
+	expect(screen.getByText('The folder name of the declaration.')).toBeInTheDocument();
 });
 
 test('creating Media Type posts the file with name and post_types', async () => {
