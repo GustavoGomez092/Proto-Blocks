@@ -174,42 +174,137 @@ final class PageRendererTest extends TestCase
         self::assertTrue($data['trusted']);
     }
 
-    public function testTabsCarryTheirGroupsAndCodeIsReadOnlyForUntrustedUsers(): void
+    public function testTabsCarryTheirGroupsAndCodeIsHiddenFromUntrustedUsers(): void
     {
+        $GLOBALS['pb_test_options']['theme-settings_head_scripts'] = '<script>track("raw-code-marker")</script>';
+
         $data = $this->renderer()->pageData($this->page('theme-settings'), 4);
 
         self::assertSame([], $data['groups']);
         self::assertSame(['General', 'Tracking'], array_column($data['tabs'], 'title'));
         self::assertSame('phone', $data['tabs'][0]['groups'][0]['fields'][0]['name']);
-        self::assertSame('head_scripts', $data['tabs'][1]['groups'][0]['fields'][0]['name']);
         self::assertFalse($data['trusted']);
         self::assertSame(['head_scripts' => 'unfiltered_html'], $data['readOnly']);
+        $tracking = $data['tabs'][1]['groups'][0];
+        self::assertSame([], $tracking['fields'], 'the hidden field is not in the form');
+        self::assertNull(((array) $tracking['values'])['head_scripts']);
+        self::assertSame([['name' => 'head_scripts', 'label' => 'Head scripts', 'reason' => 'unfiltered_html']], $tracking['hidden']);
+        self::assertStringNotContainsString('raw-code-marker', (string) json_encode($data));
 
-        self::assertSame([], $this->renderer()->pageData($this->page('theme-settings'), 3)['readOnly']);
+        $trusted = $this->renderer()->pageData($this->page('theme-settings'), 3);
+        self::assertSame([], $trusted['readOnly']);
+        self::assertSame('head_scripts', $trusted['tabs'][1]['groups'][0]['fields'][0]['name']);
+        self::assertSame([], $trusted['tabs'][1]['groups'][0]['hidden']);
+        self::assertStringContainsString('raw-code-marker', (string) json_encode($trusted));
     }
 
-    public function testStandaloneGroupsFollowThePageGroups(): void
+    public function testContainerHoldingCodeIsHiddenFromUntrustedUsers(): void
+    {
+        $renderer = $this->rendererWith([self::standalone('group_extra', [
+            ['key' => 'field_extra_note', 'name' => 'note', 'type' => 'text'],
+            ['key' => 'field_extra_embed', 'name' => 'embed', 'label' => 'Embed', 'type' => 'group', 'sub_fields' => [
+                ['key' => 'field_extra_embed_html', 'name' => 'html', 'label' => 'HTML', 'type' => 'code'],
+            ]],
+        ])]);
+        $GLOBALS['pb_test_options']['theme-settings_embed'] = ['html' => '<b>raw-code-marker</b>'];
+
+        $group = $renderer->pageData($this->page('theme-settings'), 4)['groups'][0];
+
+        self::assertSame(['note'], array_column($group['fields'], 'name'));
+        self::assertSame(['embed'], array_column($group['hidden'], 'name'));
+        self::assertNull(((array) $group['values'])['embed']);
+        self::assertStringNotContainsString('raw-code-marker', (string) json_encode($group));
+    }
+
+    /** @param list<\ProtoBlocks\Modules\Fields\Definition\FieldGroup> $extra */
+    private function rendererWith(array $extra): PageRenderer
     {
         $registry = $this->registry();
         $types = TypeRegistry::withCoreTypes();
         $store = new OptionsStore();
-        $standalone = \ProtoBlocks\Modules\Fields\Definition\GroupNormalizer::normalize([
-            'key' => 'group_extra',
-            'title' => 'Extra',
-            'fields' => [['key' => 'field_extra_note', 'name' => 'extra_note', 'type' => 'text']],
-            'location' => [[['param' => 'options_page', 'operator' => '==', 'value' => 'theme-settings']]],
-        ], 'php')['group'];
-        $renderer = new PageRenderer(
-            new OptionsValues($registry, $store, $types, static fn (string $slug): array => $slug === 'theme-settings' ? [$standalone] : []),
+
+        return new PageRenderer(
+            new OptionsValues($registry, $store, $types, static fn (string $slug): array => $slug === 'theme-settings' ? $extra : []),
             new OptionsFieldStore($registry, $store),
             $types,
             new AdminApp(null)
         );
+    }
+
+    /** @param list<array<string, mixed>> $fields */
+    private static function standalone(string $key, array $fields): \ProtoBlocks\Modules\Fields\Definition\FieldGroup
+    {
+        $group = \ProtoBlocks\Modules\Fields\Definition\GroupNormalizer::normalize([
+            'key' => $key,
+            'title' => 'Extra',
+            'fields' => $fields,
+            'location' => [[['param' => 'options_page', 'operator' => '==', 'value' => 'theme-settings']]],
+        ], 'php')['group'];
+        self::assertNotNull($group);
+
+        return $group;
+    }
+
+    public function testStandaloneGroupsFollowThePageGroups(): void
+    {
+        $renderer = $this->rendererWith([
+            self::standalone('group_extra', [['key' => 'field_extra_note', 'name' => 'extra_note', 'type' => 'text']]),
+        ]);
 
         $data = $renderer->pageData($this->page('theme-settings'), 3);
 
         self::assertSame(['group_extra'], array_column($data['groups'], 'groupKey'));
         self::assertCount(2, $data['tabs']);
+    }
+
+    /** @return list<string> every listed field name and every value key across the page */
+    private static function names(array $data, string $list): array
+    {
+        $out = [];
+        foreach ([...$data['groups'], ...array_merge(...array_column($data['tabs'], 'groups'))] as $group) {
+            $out = [...$out, ...($list === 'fields' ? array_column($group['fields'], 'name') : array_keys((array) $group['values']))];
+        }
+
+        return $out;
+    }
+
+    public function testDuplicateNamedFieldAppearsOnce(): void
+    {
+        $renderer = $this->rendererWith([
+            self::standalone('group_extra', [
+                ['key' => 'field_extra_phone', 'name' => 'phone', 'type' => 'text'],
+                ['key' => 'field_extra_fax', 'name' => 'fax', 'type' => 'text'],
+            ]),
+        ]);
+
+        $data = $renderer->pageData($this->page('theme-settings'), 3);
+
+        self::assertSame(1, count(array_keys(self::names($data, 'fields'), 'phone', true)));
+        self::assertSame(1, count(array_keys(self::names($data, 'values'), 'phone', true)));
+        self::assertSame(['fax'], array_column($data['groups'][0]['fields'], 'name'));
+        self::assertSame(self::names($data, 'fields'), self::names($data, 'values'), 'fields and values agree');
+    }
+
+    public function testFieldUnderAProtectedNameIsInNeitherList(): void
+    {
+        $renderer = $this->renderer();
+        $page = $this->page('theme-settings');
+        $renderer->pageData($page, 3); // definitions memoised before the filter runs
+        $GLOBALS['pb_test_filters']['proto_blocks_protected_options'][] = static fn (array $list): array => [...$list, 'theme-settings_phone'];
+
+        $data = $renderer->pageData($page, 3);
+
+        self::assertNotContains('phone', self::names($data, 'fields'));
+        self::assertNotContains('phone', self::names($data, 'values'));
+        self::assertContains('head_scripts', self::names($data, 'fields'));
+    }
+
+    public function testUnstoredFieldCarriesItsDefault(): void
+    {
+        $data = $this->renderer()->pageData($this->page(self::CADCO), 1);
+
+        self::assertSame(self::names($data, 'fields'), self::names($data, 'values'));
+        self::assertSame('related', ((array) $data['groups'][0]['values'])['children_placement']);
     }
 
     public function testRenderDeniesUsersWithoutTheCapability(): void
@@ -240,6 +335,8 @@ final class PageRendererTest extends TestCase
         self::assertStringContainsString('<script type="application/json" id="' . PageRenderer::DATA_ID . '">', $output);
         self::assertStringContainsString('data-screen="options-page"', $output);
         self::assertStringNotContainsString('<script>alert', $output);
+        self::assertStringNotContainsString('window.protoBlocksOptionsPage', $output);
+        self::assertStringNotContainsString('protoBlocksOptionsPage', implode("\n", array_column($GLOBALS['pb_test_inline'], 'data')));
         self::assertSame(1, preg_match('#<script type="application/json" id="[^"]+">(.*?)</script>#s', $output, $m));
         self::assertStringNotContainsString('<', $m[1]);
         $decoded = json_decode($m[1], true);

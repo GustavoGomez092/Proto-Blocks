@@ -81,14 +81,21 @@ function themeSettings(trusted = true): OptionsPageData {
 			{ title: 'General', groups: [box('group_theme_settings_1', slug, fields([{ name: 'phone', label: 'Phone', type: 'text' }]), { phone: '555' }, trusted)] },
 			{
 				title: 'Tracking',
+				// Mirrors PageRenderer: for an untrusted user the code field is left
+				// out of the form, its value is null and it is listed as hidden.
 				groups: [
-					box(
-						'group_theme_settings_2',
-						slug,
-						fields([{ name: 'head_scripts', label: 'Head scripts', type: 'code' }]),
-						{ head_scripts: '<script>track()</script>' },
-						trusted
-					),
+					trusted
+						? box(
+								'group_theme_settings_2',
+								slug,
+								fields([{ name: 'head_scripts', label: 'Head scripts', type: 'code' }]),
+								{ head_scripts: '<script>track()</script>' },
+								trusted
+							)
+						: {
+								...box('group_theme_settings_2', slug, [], { head_scripts: null }, trusted),
+								hidden: [{ name: 'head_scripts', label: 'Head scripts', reason: 'unfiltered_html' }],
+							},
 				],
 			},
 		],
@@ -228,15 +235,18 @@ test('tabs are one form: fields on inactive tabs are still submitted', async () 
 	expect(sent.fields.group_theme_settings_2).toEqual({ head_scripts: '<script>track()</script>' });
 });
 
-test('untrusted users see code read-only and never submit it', async () => {
+test('untrusted users see code as hidden, with no value and no input', async () => {
 	const user = userEvent.setup();
 	const { container } = renderPage(themeSettings(false));
 
 	await user.click(screen.getByRole('tab', { name: /Tracking/ }));
 
-	expect(screen.getAllByText('<script>track()</script>').length).toBeGreaterThan(0);
+	expect(screen.getByText('Head scripts')).toBeInTheDocument();
+	expect(screen.getByRole('note', { name: 'Head scripts' })).toHaveTextContent(
+		'Hidden; only users with unfiltered HTML may view and edit this field.'
+	);
+	expect(container.textContent).not.toContain('track()');
 	expect(container.querySelector('[name*="head_scripts"]')).toBeNull();
-	expect(screen.getByText(/Only users with unfiltered HTML may edit this field\./)).toBeInTheDocument();
 });
 
 test('the edit link shows only with an editUrl', () => {
@@ -282,6 +292,99 @@ test('the save button is disabled while saving', async () => {
 
 	release({ values: {}, notices: [] });
 	await waitFor(() => expect(screen.getByRole('button', { name: 'Save settings' })).toBeEnabled());
+});
+
+/** Whether leaving the page now would prompt. */
+function leavePrompts(): boolean {
+	const event = new Event('beforeunload', { cancelable: true });
+	window.dispatchEvent(event);
+	return event.defaultPrevented;
+}
+
+test('a successful save clears the unsaved-changes guard', async () => {
+	const user = userEvent.setup();
+	mockApi({
+		'POST options/cadco-display-settings': () => ({
+			values: { hide_children: false, children_placement: 'section', children_heading: '' },
+			notices: [],
+		}),
+	});
+	const success = jest.spyOn(toast, 'success');
+	renderPage(cadco());
+
+	await user.click(screen.getByRole('radio', { name: 'Own section' }));
+	expect(leavePrompts()).toBe(true);
+	await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+	await waitFor(() => expect(success).toHaveBeenCalled());
+	expect(leavePrompts()).toBe(false);
+});
+
+test('a 422 keeps the unsaved-changes guard', async () => {
+	const user = userEvent.setup();
+	mockApi({
+		'POST options/cadco-display-settings': () => {
+			throw { code: 'proto_blocks_invalid_values', message: 'No', data: { status: 422, errors: { children_heading: 'This field is required.' } } };
+		},
+	});
+	const error = jest.spyOn(toast, 'error');
+	renderPage(cadco());
+
+	await user.click(screen.getByRole('radio', { name: 'Own section' }));
+	await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+	await waitFor(() => expect(error).toHaveBeenCalledWith('Nothing was saved: 1 field needs attention.'));
+	expect(leavePrompts()).toBe(true);
+});
+
+test('a network error keeps every edit and the guard', async () => {
+	const user = userEvent.setup();
+	mockApi({
+		'POST options/cadco-display-settings': () => {
+			throw { code: 'fetch_error', message: 'You are probably offline.' };
+		},
+	});
+	const error = jest.spyOn(toast, 'error');
+	renderPage(cadco());
+
+	await user.click(screen.getByRole('radio', { name: 'Own section' }));
+	const heading = await screen.findByRole('textbox', { name: 'Section heading' });
+	await user.type(heading, 'Kept');
+	await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+	await waitFor(() =>
+		expect(error).toHaveBeenCalledWith("Couldn't reach the server.", { description: 'Your changes are still here.' })
+	);
+	// Same element (no re-mount) with the typed value.
+	expect(screen.getByRole('textbox', { name: 'Section heading' })).toBe(heading);
+	expect(heading).toHaveValue('Kept');
+	expect(screen.getByRole('radio', { name: 'Own section' })).toBeChecked();
+	expect(leavePrompts()).toBe(true);
+});
+
+test('toggling a switch counts as an unsaved change', async () => {
+	const user = userEvent.setup();
+	renderPage(cadco());
+
+	await user.click(screen.getByRole('switch', { name: 'Hide child products' }));
+
+	expect(leavePrompts()).toBe(true);
+});
+
+test('a 422 path no field owns is listed in the footer', async () => {
+	const user = userEvent.setup();
+	mockApi({
+		'POST options/cadco-display-settings': () => {
+			throw { code: 'proto_blocks_invalid_values', message: 'No', data: { status: 422, errors: { ghost_field: 'Not allowed.' } } };
+		},
+	});
+	renderPage(cadco());
+
+	await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+	const item = (await screen.findByText(/Not allowed\./)).closest('li');
+	expect(item).toHaveTextContent('ghost_field: Not allowed.');
+	expect(item?.closest('[role="alert"]')).toHaveTextContent('Nothing was saved.');
 });
 
 test('leaving with unsaved changes asks first', async () => {

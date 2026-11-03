@@ -1,5 +1,16 @@
 import type { BoxPayload } from '@/fields/model/types';
 
+/** A field this user may neither see nor edit; its value is never sent to the page. */
+export interface HiddenField {
+	name: string;
+	label: string;
+	/** Why, e.g. 'unfiltered_html'. */
+	reason: string;
+}
+
+/** One field group: a BoxPayload plus the fields left out of it for this user. */
+export type OptionsGroupPayload = BoxPayload & { hidden?: HiddenField[] };
+
 /**
  * The rendered settings page's data, printed by includes/OptionsPages/PageRenderer.php
  * as JSON in <script type="application/json" id="proto-blocks-options-page-data">.
@@ -8,8 +19,8 @@ export interface OptionsPageData {
 	slug: string;
 	title: string;
 	/** Untabbed page groups, then standalone groups targeting the page. */
-	groups: BoxPayload[];
-	tabs: { title: string; groups: BoxPayload[] }[];
+	groups: OptionsGroupPayload[];
+	tabs: { title: string; groups: OptionsGroupPayload[] }[];
 	/** False when the user lacks unfiltered_html (values are sanitised on save). */
 	trusted: boolean;
 	/** The declaration editor, for manage_options users only. */
