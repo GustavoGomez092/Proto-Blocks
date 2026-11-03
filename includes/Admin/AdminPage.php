@@ -294,9 +294,21 @@ class AdminPage
     }
 
     /**
+     * Whether $relative (a path inside a block folder) is the block's
+     * inserter preview image. Preview Capture writes preview.png into the
+     * block folder; that is generated output, not an edit to the block.
+     */
+    public static function isPreviewImage(string $relative): bool
+    {
+        return (bool) preg_match('/^preview\.(png|jpe?g|webp)$/i', str_replace('\\', '/', $relative));
+    }
+
+    /**
      * sha256 of every regular file under $dir, keyed by path relative to
      * $dir, sorted. The demo marker itself is excluded so the manifest can
-     * be stored inside the directory it describes.
+     * be stored inside the directory it describes, and so are top-level
+     * preview images (see isPreviewImage()), so capturing a preview does not
+     * turn a demo copy into "modified" developer code.
      *
      * @return array<string, string>
      */
@@ -319,7 +331,7 @@ class AdminPage
                 continue;
             }
             $relative = substr($file->getPathname(), strlen($base));
-            if ($relative === self::DEMO_MARKER) {
+            if ($relative === self::DEMO_MARKER || self::isPreviewImage($relative)) {
                 continue;
             }
             $hash = hash_file('sha256', $file->getPathname());
@@ -359,6 +371,12 @@ class AdminPage
                 ? $marker['files']
                 : null;
             if ($recorded !== null) {
+                // Markers written before previews were excluded may list one.
+                $recorded = array_filter(
+                    $recorded,
+                    static fn($path): bool => !self::isPreviewImage((string) $path),
+                    ARRAY_FILTER_USE_KEY
+                );
                 ksort($recorded);
                 return $recorded === $current;
             }
