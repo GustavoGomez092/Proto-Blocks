@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\CLI;
 
+use ProtoBlocks\API\AdminRestController;
 use ProtoBlocks\ContentModel\Declaration;
 use ProtoBlocks\ContentModel\DeclarationTemplate;
 use ProtoBlocks\ContentModel\FileLoader;
@@ -234,7 +235,7 @@ final class ContentModelCommands {
             get_stylesheet_directory(),
             get_template_directory(),
             (bool) wp_is_block_theme(),
-            ! defined( 'DISALLOW_FILE_MODS' ) || ! DISALLOW_FILE_MODS
+            AdminRestController::fileWritesAllowed()
         );
 
         try {
@@ -576,7 +577,8 @@ final class ContentModelCommands {
     // ---- wiring ------------------------------------------------------------
 
     private function writer(): SchemaFileWriter {
-        return new SchemaFileWriter( SchemaPaths::writableRoots(), ! defined( 'DISALLOW_FILE_MODS' ) || ! DISALLOW_FILE_MODS );
+        // The REST routes' gate: DISALLOW_FILE_MODS / DISALLOW_FILE_EDIT, and on multisite a super admin (--user=<login>).
+        return new SchemaFileWriter( SchemaPaths::writableRoots(), AdminRestController::fileWritesAllowed() );
     }
 
     private function guardrails(): Guardrails {

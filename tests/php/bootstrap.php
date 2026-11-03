@@ -23,6 +23,8 @@ require __DIR__ . '/../../vendor/autoload.php';
  *   pb_test_current_user           acting user id (default 0, logged out)
  *   pb_test_caps[$userId]          list of that user's capabilities
  *   pb_test_users[$id]             array|object user records (wp_get_current_user)
+ *   pb_test_multisite              is_multisite() value (default false)
+ *   pb_test_super_admins           list of super admin user ids (is_super_admin)
  *   pb_test_routes[]               ['namespace', 'route', 'args'] per register_rest_route()
  *   pb_test_options[$name]         option store (see get_option below)
  *   pb_test_transients[$key]       ['value' => ..., 'expiration' => int]
@@ -354,6 +356,19 @@ if (!function_exists('wp_get_current_user')) {
         $user = is_object($user) ? $user : (object) $user;
         $user->ID = $user->ID ?? $id;
         return $user;
+    }
+}
+if (!function_exists('is_multisite')) {
+    function is_multisite(): bool
+    {
+        return (bool) ($GLOBALS['pb_test_multisite'] ?? false);
+    }
+}
+if (!function_exists('is_super_admin')) {
+    function is_super_admin($user_id = false): bool
+    {
+        $id = $user_id === false ? get_current_user_id() : (int) $user_id;
+        return $id > 0 && in_array($id, $GLOBALS['pb_test_super_admins'] ?? [], true);
     }
 }
 

@@ -22,19 +22,19 @@ use WP_Error;
 use WP_REST_Request;
 
 /**
- * schema-files/<kind>/<slug> (kind `type`, `taxonomy` or `options`): the
+ * admin/schema-files/<kind>/<slug> (kind `type`, `taxonomy` or `options`): the
  * boundary between the admin UI and the theme's JSONC declaration files.
  * Every write goes through SchemaFileWriter (validation, confinement to the
  * theme roots, hash check, atomic swap); this class adds the slug check, the content guardrails and
  * the typed-slug confirmation for deletes.
  *
- * - GET schema-files/<kind>/<slug> (permission), query `name?` → FileResult
- * - POST|PUT|PATCH schema-files/<kind>/<slug> (writePermission), body
+ * - GET admin/schema-files/<kind>/<slug> (permission), query `name?` → FileResult
+ * - POST|PUT|PATCH admin/schema-files/<kind>/<slug> (writePermission), body
  *   {text: string, hash: string|null, acknowledge: string[]} → {path, hash, created, warnings: Issue[]}
  *   400 proto_blocks_invalid_slug / _invalid_request / _invalid_jsonc / _schema_invalid / _slug_mismatch,
  *   403 proto_blocks_file_mods / _path_outside_root / _not_writable, 409 proto_blocks_conflict {hash},
  *   409 proto_blocks_needs_confirmation {guardrails}, 413 proto_blocks_file_too_large, 500 proto_blocks_write_failed
- * - DELETE schema-files/<kind>/<slug> (writePermission), query `confirm` (the typed slug; the client's
+ * - DELETE admin/schema-files/<kind>/<slug> (writePermission), query `confirm` (the typed slug; the client's
  *   adminDelete sends no body) → {deleted, kept}
  *   400 proto_blocks_invalid_slug, 403 proto_blocks_file_mods / _path_outside_root / _not_writable,
  *   404 proto_blocks_not_found, 409 proto_blocks_not_a_file (PHP or inline declaration),
@@ -49,7 +49,7 @@ final class SchemaFilesRoutes extends ContentModelRoutes
     public function registerRoutes(string $namespace, callable $permission, callable $writePermission): void
     {
         // The pattern only bounds the characters; slugError() applies each kind's own grammar and length.
-        register_rest_route($namespace, '/schema-files/(?P<kind>type|taxonomy|options)/(?P<slug>[a-z][a-z0-9_-]{0,63})', [
+        register_rest_route($namespace, '/' . AdminRestController::BASE . '/schema-files/(?P<kind>type|taxonomy|options)/(?P<slug>[a-z][a-z0-9_-]{0,63})', [
             [
                 'methods' => 'GET',
                 'callback' => [$this, 'get'],

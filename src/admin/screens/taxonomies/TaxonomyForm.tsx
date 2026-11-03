@@ -363,7 +363,7 @@ function CreateTaxonomy({ types, onBack, onOpen }: { types: ListItem[]; onBack: 
 		setSaving(true);
 		setFailure(null);
 		try {
-			const base = `schema-files/taxonomy/${slug}`;
+			const base = `admin/schema-files/taxonomy/${slug}`;
 			const template = await adminGet<FileResult>(`${base}?name=${encodeURIComponent(name)}`);
 			if (template.exists) {
 				throw new Error(sprintf(/* translators: %s: path of the existing declaration file. */ __('A file already exists at %s. Open it from the list instead.', 'proto-blocks'), template.path));

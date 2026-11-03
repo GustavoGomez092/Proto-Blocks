@@ -37,7 +37,7 @@ export interface ListResult {
 	issues: Issue[];
 }
 
-/** GET schema-files/<kind>/<slug>. */
+/** GET admin/schema-files/<kind>/<slug>. */
 export interface FileResult {
 	exists: boolean;
 	path: string;

@@ -15,12 +15,12 @@ use ProtoBlocks\ContentModel\PhpDeclarations;
 use ProtoBlocks\ContentModel\SchemaFileWriter;
 
 /**
- * schema-files/<kind>/<slug>: the boundary between the admin UI and the
+ * admin/schema-files/<kind>/<slug>: the boundary between the admin UI and the
  * theme's declaration files.
  */
 final class SchemaFilesRoutesTest extends ContentModelRoutesTestCase
 {
-    private const ROUTE = 'schema-files/(?P<kind>type|taxonomy|options)/(?P<slug>[a-z][a-z0-9_-]{0,63})';
+    private const ROUTE = 'admin/schema-files/(?P<kind>type|taxonomy|options)/(?P<slug>[a-z][a-z0-9_-]{0,63})';
 
     private function routes(bool $fileMods = true): SchemaFilesRoutes
     {
@@ -99,11 +99,11 @@ final class SchemaFilesRoutesTest extends ContentModelRoutesTestCase
     {
         $match = static fn (string $path): bool => preg_match('@^' . self::ROUTE . '$@i', $path) === 1;
 
-        foreach (['schema-files/type/../x', 'schema-files/type/a/b', 'schema-files/type/%2e%2e', 'schema-files/plugin/x', 'schema-files/type/', 'schema-files/type/.x'] as $path) {
+        foreach (['admin/schema-files/type/../x', 'admin/schema-files/type/a/b', 'admin/schema-files/type/%2e%2e', 'admin/schema-files/plugin/x', 'admin/schema-files/type/', 'admin/schema-files/type/.x'] as $path) {
             self::assertFalse($match($path), $path);
         }
-        self::assertTrue($match('schema-files/type/Product'));
-        self::assertTrue($match('schema-files/TYPE/product'));
+        self::assertTrue($match('admin/schema-files/type/Product'));
+        self::assertTrue($match('admin/schema-files/TYPE/product'));
 
         $routes = $this->routes();
         foreach (['Product', "product\n", 'post_type', 'abcdefghijklmnopqrstu'] as $slug) {
