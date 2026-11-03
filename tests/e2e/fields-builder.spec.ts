@@ -70,7 +70,7 @@ function saveButton( page: Page ) {
 }
 
 function settingsPanel( page: Page ) {
-	return page.getByRole( 'complementary', { name: /^Field settings/ } );
+	return page.getByRole( 'region', { name: /^Field settings/ } );
 }
 
 /**
@@ -86,7 +86,10 @@ async function addField(
 	type: string,
 	label: string
 ) {
-	await page.getByRole( 'button', { name: opener, exact: true } ).click();
+	await page
+		.getByRole( 'button', { name: opener, exact: true } )
+		.first()
+		.click();
 	await page
 		.getByRole( 'dialog', { name: 'Add field' } )
 		.getByRole( 'button', { name: new RegExp( `^${ type }` ) } )

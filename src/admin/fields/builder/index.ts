@@ -7,7 +7,8 @@
  * FieldTree — the nested, reorderable field list.
  *   Props: fields (top-level raw fields), selectedKey, onSelect(path, key),
  *   dispatch(action) (move / duplicate / remove / addLayout / removeLayout),
- *   onAddField(parent | null, layout?), readOnly?.
+ *   onAddField(parent | null, layout?), readOnly?, renderPanel?(field, path, key)
+ *   (the open row's settings, shown inline under it as an accordion).
  *   Pointer drag via dnd-kit; keyboard: focus a grip, Space, arrows
  *   (Right into the repeater/group above, Left out of the parent), Space.
  *
@@ -20,8 +21,9 @@
  *   Key it by field key so it remounts per selection.
  *
  * AddFieldMenu — the type picker dialog.
- *   Props: open, onOpenChange(open), onPick(type), target? (description).
- *   Lists TYPE_META (every type the server accepts) by category with ACF aliases.
+ *   Props: open, onOpenChange(open), onPick(type), target? (footer text, a node).
+ *   Lists TYPE_META (every type the server accepts) as tiles by category; the
+ *   search also matches the ACF aliases.
  *
  * ConditionBuilder — "Show only when…" rules.
  *   Props: fields (the edited field's siblings), selfKey?, value (raw
@@ -36,7 +38,8 @@
  *   location: no rows then), readOnly?. Offers only the nine params
  *   LocationMatcher evaluates; an unsupported one in the file is a locked row.
  *
- * GroupSettings — title, position, style, menu order, options autoload.
+ * GroupSettings — position, style, menu order, options autoload (the title is
+ *   edited in the Builder header).
  *   Props: group (raw), dispatch(action) (emits `{type: 'group', patch}`), readOnly?.
  *
  * JsoncPane — the whole file as editable text (no code-editor dependency).

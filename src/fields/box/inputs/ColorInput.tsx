@@ -34,7 +34,7 @@ export function ColorInput( { path }: FieldInputProps ) {
 				value={ swatch( value ) }
 				onChange={ ( e ) => ctl.onChange( e.target.value ) }
 				onBlur={ ctl.onBlur }
-				className="size-9 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-1"
+				className="size-[38px] shrink-0 cursor-pointer rounded-md border border-input bg-background p-1 hover:border-[#b5bfcc]"
 			/>
 			<Input
 				{ ...a11y }
@@ -46,7 +46,7 @@ export function ColorInput( { path }: FieldInputProps ) {
 				placeholder="#rrggbb"
 				spellCheck={ false }
 				autoComplete="off"
-				className="max-w-40 font-mono"
+				className="max-w-40 font-mono text-label"
 			/>
 		</div>
 	);

@@ -43,9 +43,9 @@ export function MessageField( { field }: { field: FieldDef } ) {
 	const message = field.settings?.message;
 	return (
 		<div className="col-span-12 flex flex-col gap-1">
-			{ field.label && <p className="text-sm font-semibold text-[#1d2327]">{ field.label }</p> }
+			{ field.label && <p className="text-label font-medium text-foreground">{ field.label }</p> }
 			{ typeof message === 'string' && message !== '' && (
-				<p className="text-[13px] whitespace-pre-line text-muted-foreground">{ message }</p>
+				<p className="text-caption whitespace-pre-line text-muted-foreground">{ message }</p>
 			) }
 		</div>
 	);
@@ -64,13 +64,16 @@ function Accordions( { fields, renderField }: Pick< FlowProps, 'fields' | 'rende
 					<details
 						key={ section.head.key || i }
 						open={ ! phpEmpty( section.head.settings?.open ) }
-						className="group/acc col-span-12 rounded-md border border-border"
+						className="group/acc col-span-12 rounded-lg border border-border bg-background"
 					>
-						<summary className="flex cursor-pointer items-center gap-2 px-4 py-2.5 text-sm font-semibold text-[#1d2327] select-none">
-							<ChevronRightIcon aria-hidden="true" className="size-4 transition-transform group-open/acc:rotate-90 motion-reduce:transition-none" />
+						<summary className="flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2.5 text-label font-medium text-foreground select-none hover:bg-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+							<ChevronRightIcon
+								aria-hidden="true"
+								className="size-4 text-muted-foreground transition-transform group-open/acc:rotate-90 motion-reduce:transition-none"
+							/>
 							{ section.head.label }
 						</summary>
-						<div className="grid grid-cols-12 gap-5 border-t border-border p-4">{ section.items.map( renderField ) }</div>
+						<div className="grid grid-cols-12 gap-5 border-t border-divider p-4">{ section.items.map( renderField ) }</div>
 					</details>
 				);
 			} ) }
@@ -93,6 +96,19 @@ function TabErrorDot( { names, scope }: { names: string[]; scope: FieldPath } ) 
 	);
 }
 
+/** How many value fields a tab holds, shown faint after its name (the name stays the tab's label). */
+function TabCount( { fields }: { fields: FieldDef[] } ) {
+	const n = fields.filter( ( f ) => f.name !== '' && ! [ 'tab', 'accordion', 'message' ].includes( f.type ) ).length;
+	if ( n === 0 ) {
+		return null;
+	}
+	return (
+		<span aria-hidden="true" className="text-micro font-normal text-faint tabular-nums">
+			{ n }
+		</span>
+	);
+}
+
 /** Lays out one scope's fields: tabs, then accordions inside each tab. */
 export function FieldFlow( { fields, scope, renderField, initialErrors }: FlowProps ) {
 	const [ before, ...tabs ] = split( fields, ( f ) => f.type === 'tab' );
@@ -104,11 +120,16 @@ export function FieldFlow( { fields, scope, renderField, initialErrors }: FlowPr
 	return (
 		<>
 			<Accordions fields={ before.items } renderField={ renderField } />
-			<Tabs defaultValue={ value( Math.max( withError, 0 ) ) } className="col-span-12 gap-4">
-				<TabsList variant="line" className="h-auto w-full justify-start border-b border-border pb-1">
+			<Tabs defaultValue={ value( Math.max( withError, 0 ) ) } className="col-span-12 gap-5">
+				<TabsList variant="line" className="h-auto w-full justify-start gap-0.5 rounded-none border-b border-border p-0">
 					{ tabs.map( ( t, i ) => (
-						<TabsTrigger key={ value( i ) } value={ value( i ) } className="flex-none px-3">
+						<TabsTrigger
+							key={ value( i ) }
+							value={ value( i ) }
+							className="h-auto flex-none rounded-none px-3.5 py-2 text-body group-data-[orientation=horizontal]/tabs:after:bottom-[-1px]"
+						>
 							{ t.head!.label }
+							<TabCount fields={ t.items } />
 							<TabErrorDot names={ t.items.map( ( f ) => f.name ).filter( Boolean ) } scope={ scope } />
 						</TabsTrigger>
 					) ) }

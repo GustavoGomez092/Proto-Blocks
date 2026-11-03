@@ -27,11 +27,11 @@ function ReadOnlyCode( { path }: { path: FieldInputProps[ 'path' ] } ) {
 				aria-multiline="true"
 				aria-labelledby={ a11y.labelId }
 				aria-describedby={ [ noteId, a11y.describedBy ].filter( Boolean ).join( ' ' ) }
-				className="max-h-72 overflow-auto rounded-md border border-border bg-muted px-3 py-2 font-mono text-[13px] whitespace-pre-wrap break-all outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+				className="max-h-72 overflow-auto rounded-md border border-border bg-code px-3 py-2.5 font-mono text-label whitespace-pre-wrap break-all outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 			>
 				{ typeof value === 'string' ? value : '' }
 			</pre>
-			<div id={ noteId } className="flex flex-col gap-1 text-[13px] text-muted-foreground">
+			<div id={ noteId } className="flex flex-col gap-1 text-caption text-muted-foreground">
 				<Badge variant="outline" className="w-fit">
 					<LockIcon aria-hidden="true" />
 					{ __( 'Read-only for you', 'proto-blocks' ) }
@@ -54,9 +54,9 @@ function EditableCode( { path }: { path: FieldInputProps[ 'path' ] } ) {
 				rows={ 8 }
 				spellCheck={ false }
 				autoComplete="off"
-				className={ cn( CONTROL_CLASS, 'font-mono text-[13px]' ) }
+				className={ cn( CONTROL_CLASS, 'font-mono text-label' ) }
 			/>
-			<p className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+			<p className="flex items-center gap-1.5 text-caption text-muted-foreground">
 				<ShieldAlertIcon aria-hidden="true" className="size-4" />
 				{ __( 'Output exactly as written on the site.', 'proto-blocks' ) }
 			</p>

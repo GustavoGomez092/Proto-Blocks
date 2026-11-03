@@ -101,3 +101,8 @@
 .proto-blocks-fields summary::-webkit-details-marker {
   display: none;
 }
+
+/* The add-term form sizes its own fields to 95% of the column; line the box up with them. */
+.form-field > .proto-blocks-fields {
+  max-width: 95%;
+}

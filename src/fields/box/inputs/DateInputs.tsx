@@ -43,7 +43,7 @@ export function DateInput( { field, path }: FieldInputProps ) {
 				value={ toNative( field.type, value ) }
 				onChange={ ( e ) => ctl.onChange( toStored( field.type, e.target.value ) ) }
 				onBlur={ ctl.onBlur }
-				className="w-auto min-w-44 tabular-nums"
+				className="w-auto min-w-44 font-mono text-label tabular-nums"
 			/>
 		</>
 	);

@@ -12,7 +12,7 @@
  */
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { __, _n, sprintf } from '@wordpress/i18n';
-import { CircleAlertIcon } from 'lucide-react';
+import { CircleAlertIcon, EyeOffIcon } from 'lucide-react';
 import { get, useForm, useFormState, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Alert, AlertDescription, AlertTitle } from '@/admin/components/ui/alert';
@@ -184,11 +184,11 @@ function RowBody( { field, scope, visible }: { field: FieldDef; scope: FieldPath
 			data-field={ name }
 			className={ cn( 'col-span-12', spanClass( field ), visible ? 'flex flex-col gap-1.5' : 'hidden' ) }
 		>
-			<Label id={ a11y.labelId } { ...( Label === 'label' ? { htmlFor: id } : {} ) } className="w-fit text-sm font-semibold text-[#1d2327]">
+			<Label id={ a11y.labelId } { ...( Label === 'label' ? { htmlFor: id } : {} ) } className="w-fit text-label font-medium text-foreground">
 				{ field.label || field.name }
 				{ field.required && (
 					<>
-						<span aria-hidden="true" className="ml-0.5 text-destructive">
+						<span aria-hidden="true" className="ml-1 text-destructive">
 							*
 						</span>
 						<span className="sr-only">{ __( '(required)', 'proto-blocks' ) }</span>
@@ -196,12 +196,16 @@ function RowBody( { field, scope, visible }: { field: FieldDef; scope: FieldPath
 				) }
 			</Label>
 			{ field.instructions && (
-				<p id={ helpId } className="text-[13px] text-muted-foreground">
+				<p id={ helpId } className="text-caption text-muted-foreground">
 					{ field.instructions }
 				</p>
 			) }
 			{ over && (
-				<p role="status" data-over-cap="" className="flex items-center gap-1.5 text-[13px] text-[#996800]">
+				<p
+					role="status"
+					data-over-cap=""
+					className="flex items-center gap-2 rounded-md border border-warning-border bg-warning-soft px-3 py-2 text-caption text-warning"
+				>
 					<CircleAlertIcon aria-hidden="true" className="size-4 shrink-0" />
 					{ sprintf(
 						/* translators: 1: number of rows, 2: row limit */
@@ -212,7 +216,11 @@ function RowBody( { field, scope, visible }: { field: FieldDef; scope: FieldPath
 				</p>
 			) }
 			{ hiddenValue ? (
-				<p className="text-[13px] text-muted-foreground">
+				<p
+					data-hidden-value=""
+					className="flex items-center gap-2 rounded-md border border-dashed border-input bg-subtle px-3 py-2.5 text-caption text-muted-foreground"
+				>
+					<EyeOffIcon aria-hidden="true" className="size-4 shrink-0 text-faint" />
 					{ __( 'Hidden; only users with unfiltered HTML may view and edit this field.', 'proto-blocks' ) }
 				</p>
 			) : (
@@ -220,7 +228,7 @@ function RowBody( { field, scope, visible }: { field: FieldDef; scope: FieldPath
 					{ /* If the input fails to load, its present marker goes too, so the stored value is kept. */ }
 					<ChunkBoundary>
 						{ scope.length === 0 && visible && editable && <input type="hidden" name={ PRESENT_NAME( groupKey ) } value={ field.name } /> }
-						<Suspense fallback={ <Skeleton className="h-9 w-full" /> }>
+						<Suspense fallback={ <Skeleton className="h-[38px] w-full rounded-md" /> }>
 							{ capLocked ? (
 								// A disabled fieldset: the rows are visible but neither editable nor submitted.
 								<fieldset disabled className="m-0 min-w-0 border-0 p-0">
@@ -234,7 +242,7 @@ function RowBody( { field, scope, visible }: { field: FieldDef; scope: FieldPath
 				</FieldA11yContext.Provider>
 			) }
 			{ message && (
-				<p id={ errorId } role="alert" className="flex items-center gap-1.5 text-[13px] text-destructive">
+				<p id={ errorId } role="alert" className="flex items-center gap-1.5 text-caption font-medium text-destructive">
 					<CircleAlertIcon aria-hidden="true" className="size-4 shrink-0" />
 					{ message }
 				</p>
@@ -346,13 +354,13 @@ function ServerErrorSummary( { errors, fields, outcome }: { errors: Record< stri
 		return top?.label || path;
 	};
 	return (
-		<div ref={ ref } tabIndex={ -1 } className="mb-5 rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
-		<Alert variant="destructive" className="border-destructive/40 bg-destructive-soft">
+		<div ref={ ref } tabIndex={ -1 } className="mb-5 rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+		<Alert variant="destructive" className="rounded-lg">
 			<CircleAlertIcon aria-hidden="true" />
 			<AlertTitle>{ sprintf( title, count ) }</AlertTitle>
 			<AlertDescription>
 				<p>{ __( 'Their previous values were kept.', 'proto-blocks' ) }</p>
-				<ul className="flex flex-col gap-0.5">
+				<ul className="mt-1 flex flex-col gap-1">
 					{ entries.map( ( [ path, message ] ) => {
 						const id = domId( groupKey, path.split( '.' ) );
 						return (
@@ -363,7 +371,7 @@ function ServerErrorSummary( { errors, fields, outcome }: { errors: Record< stri
 										e.preventDefault();
 										focusField( id );
 									} }
-									className="underline underline-offset-2"
+									className="font-medium text-destructive underline underline-offset-2"
 								>
 									{ labelOf( path ) }
 								</a>

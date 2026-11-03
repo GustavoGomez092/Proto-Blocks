@@ -174,6 +174,7 @@ export function MoveButtons( {
 			type="button"
 			variant="ghost"
 			size="icon-xs"
+			className="size-7 rounded-md text-muted-foreground hover:bg-background hover:text-foreground [&_svg]:size-3.5"
 			data-move={ dir }
 			aria-label={ label( dir ) }
 			disabled={ index + dir < 0 || index + dir >= count }
@@ -252,12 +253,12 @@ function Thumb( { attachment, kind }: { attachment: Attachment | null; kind: Kin
 			<img
 				src={ attachment.url }
 				alt={ attachment.alt || attachment.name }
-				className="size-20 shrink-0 rounded-md border border-border object-cover"
+				className="size-20 shrink-0 rounded-lg border border-border bg-muted object-cover"
 			/>
 		);
 	}
 	return (
-		<span className="grid size-12 shrink-0 place-items-center rounded-md border border-border bg-muted text-muted-foreground">
+		<span className="grid size-12 shrink-0 place-items-center rounded-lg border border-border bg-muted text-muted-foreground">
 			<FileIcon aria-hidden="true" className="size-5" />
 		</span>
 	);
@@ -292,11 +293,23 @@ function SingleMedia( { field, path, kind }: FieldInputProps & { kind: Kind } ) 
 	return (
 		<div className="flex flex-col gap-2">
 			<input type="hidden" name={ inputName( groupKey, path ) } value={ id ? String( id ) : typedUrl } />
-			<div className="flex items-start gap-3">
-				{ id > 0 && <Thumb attachment={ shown } kind={ kind } /> }
+			<div
+				data-media-trigger=""
+				className={ cn(
+					'flex gap-3 rounded-lg border p-3',
+					id > 0 ? 'items-start border-border bg-background' : 'items-center border-dashed border-input bg-subtle'
+				) }
+			>
+				{ id > 0 ? (
+					<Thumb attachment={ shown } kind={ kind } />
+				) : (
+					<span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-md border border-border bg-background text-faint">
+						{ kind === 'image' ? <ImagePlusIcon className="size-[18px]" /> : <FileIcon className="size-[18px]" /> }
+					</span>
+				) }
 				<div className="flex min-w-0 flex-col gap-1.5">
 					{ id > 0 && (
-						<span className="truncate text-sm font-medium">
+						<span className="truncate text-label font-medium text-foreground">
 							{ shown?.name || sprintf( /* translators: %d: attachment ID */ __( 'Attachment #%d', 'proto-blocks' ), id ) }
 						</span>
 					) }
@@ -343,7 +356,7 @@ function SingleMedia( { field, path, kind }: FieldInputProps & { kind: Kind } ) 
 					onBlur={ ctl.onBlur }
 				/>
 			) }
-			{ unavailable && <p className="text-[13px] text-muted-foreground">{ MEDIA_UNAVAILABLE }</p> }
+			{ unavailable && <p className="text-caption text-muted-foreground">{ MEDIA_UNAVAILABLE }</p> }
 		</div>
 	);
 }
@@ -446,19 +459,19 @@ export function GalleryInput( { field, path }: FieldInputProps ) {
 			{ ids.map( ( id ) => (
 				<input key={ id } type="hidden" name={ `${ name }[]` } value={ String( id ) } />
 			) ) }
-			<p className="text-[13px] text-muted-foreground">{ count }</p>
+			<p className="text-caption text-muted-foreground">{ count }</p>
 			<ul ref={ listRef } className="grid grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] gap-2">
 				{ ids.map( ( id, i ) => {
 					const a = known[ id ];
 					const alt = a?.alt || a?.name || sprintf( /* translators: %d: position */ __( 'Image %d', 'proto-blocks' ), i + 1 );
 					return (
-						<li key={ id } data-item={ id } className="group/thumb relative aspect-square overflow-hidden rounded-md border border-border bg-muted">
+						<li key={ id } data-item={ id } className="group/thumb relative aspect-square overflow-hidden rounded-lg border border-border bg-muted">
 							{ a?.url ? (
 								<img src={ a.url } alt={ alt } className="size-full object-cover" />
 							) : (
 								<span className="grid size-full place-items-center p-1 text-center text-xs text-muted-foreground">{ alt }</span>
 							) }
-							<span className="absolute inset-x-1 bottom-1 flex justify-between rounded bg-background/90">
+							<span className="absolute inset-x-1 bottom-1 flex justify-between rounded-md bg-background/90 shadow-sm">
 								<MoveButtons
 									index={ i }
 									count={ ids.length }
@@ -495,13 +508,13 @@ export function GalleryInput( { field, path }: FieldInputProps ) {
 						aria-label={ __( 'Add images', 'proto-blocks' ) }
 						onClick={ openPicker }
 						onFocus={ preloadGallery }
-						className="grid aspect-square w-full place-items-center rounded-md border-2 border-dashed border-border text-muted-foreground outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+						className="grid aspect-square w-full cursor-pointer place-items-center rounded-lg border border-dashed border-input bg-subtle text-faint outline-none hover:border-[#b5bfcc] hover:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
 					>
 						<ImagePlusIcon aria-hidden="true" className="size-6" />
 					</button>
 				</li>
 			</ul>
-			{ unavailable && <p className="text-[13px] text-muted-foreground">{ MEDIA_UNAVAILABLE }</p> }
+			{ unavailable && <p className="text-caption text-muted-foreground">{ MEDIA_UNAVAILABLE }</p> }
 			{ picking > 0 && (
 				// The hidden inputs above stay mounted if the picker chunk fails to load.
 				<ChunkBoundary onRetry={ retryPicker }>

@@ -110,7 +110,7 @@ export function TaxonomyInput( { field, path }: FieldInputProps ) {
 					<input key={ id } type="hidden" name={ `${ name }[]` } value={ String( id ) } />
 				) ) }
 				{ value.length === 0 && <EmptyMarker name={ name } /> }
-				<p id={ isTaxonomyGroup( field ) ? a11y.id : undefined } className="text-[13px] text-muted-foreground">
+				<p id={ isTaxonomyGroup( field ) ? a11y.id : undefined } className="text-caption text-muted-foreground">
 					{ __( 'No terms to choose from yet.', 'proto-blocks' ) }
 				</p>
 			</>
@@ -133,7 +133,7 @@ export function TaxonomyInput( { field, path }: FieldInputProps ) {
 					}
 					onBlur={ ctl.onBlur }
 					size={ multiple ? Math.min( Math.max( terms.length, 3 ), 8 ) : undefined }
-					className={ cn( CONTROL_CLASS, ! multiple && 'h-9 py-1' ) }
+					className={ cn( CONTROL_CLASS, ! multiple && 'h-[38px] py-1' ) }
 				>
 					{ ! multiple && <option value="">{ __( '— Select —', 'proto-blocks' ) }</option> }
 					{ missing.map( ( id ) => (
@@ -159,14 +159,14 @@ export function TaxonomyInput( { field, path }: FieldInputProps ) {
 			aria-labelledby={ a11y.labelId }
 			aria-describedby={ a11y.describedBy }
 			aria-required={ ( radio && a11y.required ) || undefined }
-			className="flex max-h-56 flex-col gap-1.5 overflow-auto rounded-md border border-border p-2"
+			className="flex max-h-56 flex-col gap-0.5 overflow-auto rounded-lg border border-input bg-background p-1.5"
 		>
 			{ ( radio || value.length === 0 ) && <EmptyMarker name={ name } /> }
 			{ ( radio ? missing.slice( 0, 1 ) : missing ).map( ( id ) => (
 				<input key={ `missing-${ id }` } type="hidden" name={ radio ? name : `${ name }[]` } value={ String( id ) } />
 			) ) }
 			{ terms.map( ( t, i ) => (
-				<label key={ t.id } className="flex items-center gap-2 text-sm" style={ { paddingInlineStart: `${ t.depth * 1.25 }rem` } }>
+				<label key={ t.id } className="flex min-h-8 cursor-pointer items-center gap-2 rounded-md pr-1.5 text-label hover:bg-subtle has-[:checked]:font-medium" style={ { paddingInlineStart: `${ 0.375 + t.depth * 1.25 }rem` } }>
 					<input
 						type={ radio ? 'radio' : 'checkbox' }
 						ref={ i === 0 ? ctl.ref : undefined }

@@ -191,7 +191,7 @@ export function RelationshipPicker( {
 						className="pl-8"
 					/>
 				</div>
-				<p role="status" aria-live="polite" className="text-[13px] text-muted-foreground">
+				<p role="status" aria-live="polite" className="text-caption text-muted-foreground">
 					{ announcement }
 				</p>
 				<ul

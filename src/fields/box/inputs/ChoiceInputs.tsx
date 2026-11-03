@@ -58,7 +58,7 @@ function SingleSelect( { field, path }: FieldInputProps ) {
 	const a11y = useA11yProps();
 	const options = useOptions( field );
 	return (
-		<select { ...reg } { ...a11y } className={ cn( CONTROL_CLASS, 'h-9 py-1' ) }>
+		<select { ...reg } { ...a11y } className={ cn( CONTROL_CLASS, 'h-[38px] py-1' ) }>
 			<option value="">{ field.placeholder || __( '— Select —', 'proto-blocks' ) }</option>
 			{ options.map( ( o ) => (
 				<option key={ o.key } value={ o.key }>
@@ -100,7 +100,7 @@ function MultiSelect( { field, path }: FieldInputProps ) {
 				onChange={ ( e ) => ctl.onChange( Array.from( e.target.selectedOptions, ( o ) => o.value ) ) }
 				onBlur={ ctl.onBlur }
 				size={ Math.min( Math.max( options.length, 3 ), 8 ) }
-				className={ CONTROL_CLASS }
+				className={ cn( CONTROL_CLASS, 'px-1.5 py-1.5 [&>option]:rounded-sm [&>option]:px-1.5 [&>option]:py-1' ) }
 			>
 				{ options.map( ( o ) => (
 					<option key={ o.key } value={ o.key }>
@@ -113,6 +113,13 @@ function MultiSelect( { field, path }: FieldInputProps ) {
 }
 
 const CHECK_CLASS = 'size-4 shrink-0 accent-primary';
+
+/** One choice as a chip: bordered, navy with a code-blue wash when checked (Foundations). */
+const CHIP_CLASS = cn(
+	'inline-flex h-[34px] w-fit cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-3 text-label text-foreground transition-colors hover:border-input',
+	'has-[:checked]:border-primary has-[:checked]:bg-code has-[:checked]:font-medium has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring',
+	'has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60'
+);
 
 function CheckboxList( { field, path }: FieldInputProps ) {
 	const { control, groupKey } = useBox();
@@ -129,11 +136,11 @@ function CheckboxList( { field, path }: FieldInputProps ) {
 			role="group"
 			aria-labelledby={ a11y.labelId }
 			aria-describedby={ a11y.describedBy }
-			className="flex flex-col gap-2"
+			className="flex flex-wrap gap-2"
 		>
 			{ value.length === 0 && <EmptyMarker name={ name } /> }
 			{ options.map( ( o, i ) => (
-				<label key={ o.key } className="flex items-center gap-2 text-sm">
+				<label key={ o.key } className={ CHIP_CLASS }>
 					<input
 						type="checkbox"
 						ref={ i === 0 ? ctl.ref : undefined }
@@ -165,12 +172,12 @@ export function RadioInput( { field, path }: FieldInputProps ) {
 			aria-describedby={ a11y.describedBy }
 			aria-invalid={ a11y.invalid || undefined }
 			aria-required={ a11y.required || undefined }
-			className={ cn( 'flex gap-x-5 gap-y-2', vertical ? 'flex-col' : 'flex-wrap' ) }
+			className={ cn( 'flex gap-2', vertical ? 'flex-col' : 'flex-wrap' ) }
 		>
 			{ /* Submits the key when no option is checked; a checked radio (later in the form) wins. */ }
 			<EmptyMarker name={ reg.name } />
 			{ options.map( ( o ) => (
-				<label key={ o.key } className="flex items-center gap-2 text-sm">
+				<label key={ o.key } className={ CHIP_CLASS }>
 					<input type="radio" { ...reg } value={ o.key } className={ CHECK_CLASS } />
 					{ o.label }
 				</label>
