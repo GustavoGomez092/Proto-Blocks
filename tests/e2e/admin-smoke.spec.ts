@@ -11,7 +11,7 @@ test.describe( 'Proto-Blocks admin smoke', () => {
 			expect( response?.status() ).toBe( 200 );
 			await expect( page.locator( '.wrap' ).first() ).toBeVisible();
 			await expect( page.locator( 'body' ) ).not.toContainText(
-				'Fatal error'
+				/Fatal error|There has been a critical error/
 			);
 			if ( slug === 'proto-blocks' ) {
 				await expect( page ).toHaveTitle( /Proto/ );

@@ -9,8 +9,9 @@ process.env.WP_BASE_URL ||= 'http://localhost:8889';
 export default defineConfig( {
 	testDir: 'tests/e2e',
 	outputDir: 'test-results',
-	snapshotPathTemplate: 'tests/e2e/__screenshots__/{testFilePath}/{arg}{ext}',
+	snapshotPathTemplate: 'tests/e2e/__screenshots__/{testFilePath}/{arg}{-projectName}{-snapshotSuffix}{ext}',
 	globalSetup: require.resolve( './tests/e2e/global-setup.ts' ),
+	forbidOnly: !! process.env.CI,
 	retries: 1,
 	workers: 1,
 	reporter: [ [ 'list' ], [ 'html', { open: 'never' } ] ],

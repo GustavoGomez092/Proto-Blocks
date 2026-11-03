@@ -14,4 +14,7 @@ npm run wp-env stop
 
 Global setup logs in as admin (state saved to `tests/e2e/.auth/admin.json`) and enables
 the `proto_blocks_example_blocks` option via `wp-env run tests-cli`.
+Screenshot baselines are platform-specific (file names include the project and OS suffix,
+e.g. `-chromium-darwin`). Baselines generated on macOS will not match on Linux; generate the
+CI baselines on Linux (e.g. in the CI image/Docker) and commit those separately.
 Reports: `playwright-report/`, failures: `test-results/` (both git-ignored).
