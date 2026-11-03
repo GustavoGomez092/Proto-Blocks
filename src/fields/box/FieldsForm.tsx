@@ -10,7 +10,7 @@
  * row subscribes to its own error only, and conditional rows watch only
  * their controlling fields. A keystroke re-renders nothing else.
  */
-import { Suspense, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { __, _n, sprintf } from '@wordpress/i18n';
 import { CircleAlertIcon } from 'lucide-react';
 import { get, useForm, useFormState, useWatch } from 'react-hook-form';
@@ -22,6 +22,7 @@ import type { BoxPayload, FieldDef } from '../model/types';
 import { isVisible } from '../validation/conditions';
 import { buildValueSchema, type ValueSchemaOptions } from '../validation/value-schema';
 import { domId, dottedPath, PRESENT_NAME, type FieldPath } from './names';
+import { registerForm } from './editor-save';
 import {
 	BoxContext,
 	FieldA11yContext,
@@ -145,7 +146,8 @@ function RowBody( { field, scope, visible }: { field: FieldDef; scope: FieldPath
 	const { control, groupKey, payload } = useBox();
 	const path = [ ...scope, field.name ];
 	const name = dottedPath( path );
-	const readOnly = field.type === 'code' && ! payload.canUnfiltered;
+	// Code (or a container holding code) the user may not write: the server sent no value and a readOnly reason.
+	const readOnly = ( field.type === 'code' && ! payload.canUnfiltered ) || ( scope.length === 0 && !! payload.readOnly?.[ field.name ] );
 	const editable = hasInput( field.type ) && ! readOnly;
 	const { errors } = useFormState( { control, name, exact: true } );
 	const message = ( get( errors, name ) as { message?: string } | undefined )?.message;
@@ -318,9 +320,8 @@ function ServerErrorSummary( { errors, fields }: { errors: Record< string, strin
 
 export function FieldsForm( { payload }: { payload: BoxPayload } ) {
 	const { groupKey, fields, canUnfiltered } = payload;
-	const serverErrors = useMemo(
-		() => ( payload.errors && typeof payload.errors === 'object' && ! Array.isArray( payload.errors ) ? payload.errors : {} ),
-		[ payload.errors ]
+	const [ serverErrors, setServerErrors ] = useState< Record< string, string > >( () =>
+		payload.errors && typeof payload.errors === 'object' && ! Array.isArray( payload.errors ) ? payload.errors : {}
 	);
 
 	const resolver = useMemo( () => {
@@ -328,14 +329,14 @@ export function FieldsForm( { payload }: { payload: BoxPayload } ) {
 			maxRows: ( f ) => payload.maxRows?.[ f.name ] ?? null,
 			choices: ( f ) => payload.choices?.[ f.name ]?.map( ( c ) => String( c.key ) ) ?? null,
 			// Never report what the user cannot change here.
-			skip: ( f ) => ! hasInput( f.type ) || ( f.type === 'code' && ! canUnfiltered ),
+			skip: ( f ) => ! hasInput( f.type ) || ( f.type === 'code' && ! canUnfiltered ) || !! payload.readOnly?.[ f.name ],
 		};
 		return zodResolver( buildValueSchema( fields, opts ) as never );
-	}, [ fields, payload.maxRows, payload.choices, canUnfiltered ] );
+	}, [ fields, payload.maxRows, payload.choices, payload.readOnly, canUnfiltered ] );
 
 	const defaultValues = useMemo( () => initialValues( fields, payload.values ), [ fields, payload.values ] );
 
-	const { control, setError, trigger } = useForm< Record< string, unknown > >( {
+	const { control, setError, clearErrors, setValue, trigger } = useForm< Record< string, unknown > >( {
 		defaultValues,
 		resolver,
 		mode: 'onBlur',
@@ -348,6 +349,32 @@ export function FieldsForm( { payload }: { payload: BoxPayload } ) {
 			setError( path, { type: 'server', message } );
 		}
 	}, [ serverErrors, setError ] );
+
+	// Errors read after a block editor meta box save (editor-save.ts).
+	useEffect( () => {
+		const own = new Set( fields.map( ( f ) => f.name ) );
+		return registerForm( {
+			groupKey,
+			object: payload.object,
+			restRoot: payload.restRoot,
+			restNonce: payload.restNonce,
+			applyServer: ( errors, submitted ) => {
+				const mine: Record< string, string > = {};
+				for ( const [ path, message ] of Object.entries( errors ) ) {
+					if ( own.has( path.split( '.' )[ 0 ] ) ) {
+						mine[ path ] = message;
+					}
+				}
+				clearErrors();
+				for ( const [ name, value ] of Object.entries( submitted ) ) {
+					if ( own.has( name ) && Object.prototype.hasOwnProperty.call( mine, name ) ) {
+						setValue( name, value, { shouldDirty: false, shouldValidate: false } );
+					}
+				}
+				setServerErrors( mine );
+			},
+		} );
+	}, [ fields, groupKey, payload.object, payload.restRoot, payload.restNonce, clearErrors, setValue ] );
 
 	// Validate when the surrounding form is submitted, without ever blocking it.
 	const root = useRef< HTMLDivElement >( null );

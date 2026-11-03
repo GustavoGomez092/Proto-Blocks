@@ -1,0 +1,162 @@
+import { createElement } from 'react';
+import { act, render, screen } from '@testing-library/react';
+import { FieldsForm } from '../box/FieldsForm';
+import { errorsUrl, mountedForms, registerForm, subscribeToMetaBoxSave, subscribeToTermAdd, type FormHandle } from '../box/editor-save';
+
+function fakeStore() {
+	let saving = false;
+	const listeners: Array< () => void > = [];
+	return {
+		data: {
+			select: ( store: string ) => ( store === 'core/edit-post' ? { isSavingMetaBoxes: () => saving } : undefined ),
+			subscribe: ( l: () => void ) => {
+				listeners.push( l );
+				return () => listeners.splice( listeners.indexOf( l ), 1 );
+			},
+		},
+		set( value: boolean ) {
+			saving = value;
+			listeners.forEach( ( l ) => l() );
+		},
+	};
+}
+
+const okResponse = ( body: unknown ) => Promise.resolve( { ok: true, json: () => Promise.resolve( body ) } as Response );
+
+function handle( overrides: Partial< FormHandle > = {} ): FormHandle & { calls: unknown[] } {
+	const calls: unknown[] = [];
+	return {
+		groupKey: 'group_x',
+		object: 'post:10',
+		restRoot: 'https://example.test/wp-json/',
+		restNonce: 'n0nce',
+		applyServer: ( errors, submitted ) => calls.push( { errors, submitted } ),
+		calls,
+		...overrides,
+	};
+}
+
+afterEach( () => {
+	for ( const f of mountedForms() ) {
+		// eslint-disable-next-line @typescript-eslint/no-empty-function
+		registerForm( f )();
+	}
+} );
+
+test( 'a completed meta box save reads the errors once and pushes them into every mounted form', async () => {
+	const store = fakeStore();
+	const fetchFn = jest.fn( () => okResponse( { errors: { start_date: 'Enter a valid date.' }, submitted: { start_date: '2026-02-30' } } ) );
+	const a = handle();
+	const b = handle( { groupKey: 'group_y' } );
+	const offA = registerForm( a );
+	const offB = registerForm( b );
+	const onSaved = jest.fn();
+	const off = subscribeToMetaBoxSave( onSaved, { data: store.data, fetch: fetchFn as unknown as typeof fetch } );
+
+	store.set( true );
+	expect( fetchFn ).not.toHaveBeenCalled();
+	store.set( false );
+	await new Promise( ( r ) => setTimeout( r, 0 ) );
+
+	expect( fetchFn ).toHaveBeenCalledTimes( 1 );
+	const [ url, init ] = fetchFn.mock.calls[ 0 ] as unknown as [ string, RequestInit ];
+	expect( url ).toBe( 'https://example.test/wp-json/proto-blocks/v1/fields/errors?object=post%3A10' );
+	expect( ( init.headers as Record< string, string > )[ 'X-WP-Nonce' ] ).toBe( 'n0nce' );
+	const expected = { errors: { start_date: 'Enter a valid date.' }, submitted: { start_date: '2026-02-30' } };
+	expect( a.calls ).toEqual( [ expected ] );
+	expect( b.calls ).toEqual( [ expected ] );
+	expect( onSaved ).toHaveBeenCalledTimes( 1 );
+
+	store.set( false ); // no transition, no request
+	expect( fetchFn ).toHaveBeenCalledTimes( 1 );
+	off();
+	offA();
+	offB();
+} );
+
+test( 'no request when no box is mounted', async () => {
+	const store = fakeStore();
+	const fetchFn = jest.fn( () => okResponse( {} ) );
+	const off = subscribeToMetaBoxSave( jest.fn(), { data: store.data, fetch: fetchFn as unknown as typeof fetch } );
+	store.set( true );
+	store.set( false );
+	await new Promise( ( r ) => setTimeout( r, 0 ) );
+	expect( fetchFn ).not.toHaveBeenCalled();
+	off();
+} );
+
+test( 'a failed request leaves the forms untouched', async () => {
+	const store = fakeStore();
+	const fetchFn = jest.fn( () => Promise.resolve( { ok: false, json: () => Promise.resolve( {} ) } as Response ) );
+	const a = handle();
+	const offA = registerForm( a );
+	const off = subscribeToMetaBoxSave( jest.fn(), { data: store.data, fetch: fetchFn as unknown as typeof fetch } );
+	store.set( true );
+	store.set( false );
+	await new Promise( ( r ) => setTimeout( r, 0 ) );
+	expect( a.calls ).toEqual( [] );
+	off();
+	offA();
+} );
+
+test( 'outside the block editor nothing subscribes', () => {
+	const off = subscribeToMetaBoxSave( jest.fn(), { data: undefined, fetch: jest.fn() as unknown as typeof fetch } );
+	expect( off() ).toBeUndefined();
+} );
+
+test( 'errors URL works with plain permalinks', () => {
+	expect( errorsUrl( 'https://example.test/?rest_route=/', 'post:3' ) ).toBe(
+		'https://example.test/?rest_route=/proto-blocks/v1/fields/errors&object=post%3A3'
+	);
+} );
+
+test( 'term add form remounts only after a successful add-tag', () => {
+	document.body.innerHTML = '<form id="addtag"></form>';
+	let handler: ( ( e: unknown, xhr: { responseText?: string }, s: { data?: unknown } ) => void ) | undefined;
+	const jq = () => ( { on: ( _ev: string, h: typeof handler ) => ( handler = h ) } );
+	const remount = jest.fn();
+	subscribeToTermAdd( remount, jq as never );
+
+	handler?.( {}, { responseText: '<wp_ajax><wp_error>x</wp_error></wp_ajax>' }, { data: 'action=add-tag&tag-name=a' } );
+	handler?.( {}, { responseText: '<wp_ajax/>' }, { data: 'action=heartbeat' } );
+	expect( remount ).not.toHaveBeenCalled();
+	handler?.( {}, { responseText: '<wp_ajax><response/></wp_ajax>' }, { data: 'taxonomy=category&action=add-tag' } );
+	expect( remount ).toHaveBeenCalledTimes( 1 );
+} );
+
+const textField = ( name: string ) => ( {
+	key: `f_${ name }`, name, label: name === 'subtitle' ? 'Subtitle' : name, type: 'text' as const, declaredType: 'text', required: false,
+	default: null, instructions: '', placeholder: '', conditions: [], subFields: [], layouts: [], settings: {},
+} );
+
+test( 'a mounted FieldsForm registers and shows pushed errors with the submitted value', async () => {
+	const payload = {
+		groupKey: 'group_x', fields: [ textField( 'subtitle' ) ], values: { subtitle: 'stored' }, display: {}, choices: {}, errors: {},
+		canUnfiltered: true, maxRows: {}, restRoot: '/wp-json/', restNonce: 'n', object: 'post:10',
+	};
+	const { unmount } = render( createElement( 'form', null, createElement( FieldsForm, { payload } ) ) );
+	const forms = mountedForms().filter( ( f ) => f.groupKey === 'group_x' && f.object === 'post:10' );
+	expect( forms ).toHaveLength( 1 );
+
+	await act( async () => {
+		forms[ 0 ].applyServer( { subtitle: 'Too long.', 'other.0': 'not mine' }, { subtitle: 'typed' } );
+	} );
+	expect( screen.getAllByText( 'Too long.' ).length ).toBeGreaterThan( 0 );
+	expect( screen.queryByText( 'not mine' ) ).toBeNull();
+	expect( ( screen.getByLabelText( 'Subtitle' ) as HTMLInputElement ).value ).toBe( 'typed' );
+
+	unmount();
+	expect( mountedForms().filter( ( f ) => f.groupKey === 'group_x' ) ).toHaveLength( 0 );
+} );
+
+test( 'a readOnly field gets no present marker', () => {
+	const payload = {
+		groupKey: 'group_r', fields: [ textField( 'rows' ) ], values: {}, display: {}, choices: {}, errors: {},
+		readOnly: { rows: 'unfiltered_html' as const },
+		canUnfiltered: false, maxRows: {}, restRoot: '/wp-json/', restNonce: 'n', object: 'post:10',
+	};
+	const { container, unmount } = render( createElement( 'form', null, createElement( FieldsForm, { payload } ) ) );
+	const form = container.querySelector( 'form' ) as HTMLFormElement;
+	expect( new FormData( form ).getAll( 'proto_fields_present[group_r][]' ) ).toEqual( [] );
+	unmount();
+} );
