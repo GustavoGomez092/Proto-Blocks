@@ -77,6 +77,23 @@ test('save posts the comment-preserving text with the hash and toasts', async ()
 	expect(result.current.file?.data).toEqual({ name: 'Product', has_archive: false });
 });
 
+test('save diffs against the text, not the data it was given', async () => {
+	const post = jest.fn(() => ({ path: 'p', hash: 'h2', created: false, warnings: [] }));
+	// data out of step with the text: has_archive is true in the file.
+	mockApi({
+		'GET schema-files/type/product': fileResult({ data: { name: 'Product', has_archive: false } }),
+		'POST schema-files/type/product': post,
+	});
+	const { result } = await loaded();
+
+	await act(async () => {
+		await result.current.save({ ...result.current.file!.data });
+	});
+	const text = (post.mock.calls[0][0] as { text: string }).text;
+	expect(text).toContain('// keep me');
+	expect(text).toContain('"has_archive": false');
+});
+
 test('save passes acknowledged guardrail codes', async () => {
 	const post = jest.fn(() => ({ path: 'p', hash: 'h2', created: false, warnings: [] }));
 	mockApi({ 'GET schema-files/type/product': fileResult(), 'POST schema-files/type/product': post });

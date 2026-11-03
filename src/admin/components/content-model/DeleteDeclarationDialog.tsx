@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { __, _n, sprintf } from '@wordpress/i18n';
 import { Trash2Icon } from 'lucide-react';
 import { ConfirmDialog } from '@/admin/components/shell/ConfirmDialog';
@@ -47,11 +47,17 @@ export function DeleteDeclarationDialog({
 	label?: string;
 }) {
 	const [typed, setTyped] = useState('');
+	useEffect(() => {
+		setTyped('');
+	}, [open]);
 	const inputId = useId();
 	const name = label ?? slug;
 
-	/* translators: %s: name of the post type or taxonomy. */
-	const title = sprintf(__('Delete the %s declaration?', 'proto-blocks'), name);
+	const title = sprintf(
+		/* translators: %s: name of the post type or taxonomy. */
+		__('Delete the %s declaration?', 'proto-blocks'),
+		name
+	);
 	const body = interpolate(
 		/* translators: %s: path of the declaration file or folder. */
 		__('This deletes %s. Content is not deleted: it stays in the database but becomes inaccessible until the declaration is back.', 'proto-blocks'),
@@ -72,12 +78,17 @@ export function DeleteDeclarationDialog({
 		);
 	}
 
-	const items =
-		kind === 'type'
-			? /* translators: %d: number of posts. */
-				sprintf(_n('%d item becomes inaccessible.', '%d items become inaccessible.', content.count, 'proto-blocks'), content.count)
-			: /* translators: %d: number of terms. */
-				sprintf(_n('%d term becomes inaccessible.', '%d terms become inaccessible.', content.count, 'proto-blocks'), content.count);
+	const itemsText = sprintf(
+		/* translators: %d: number of posts. */
+		_n('%d item becomes inaccessible.', '%d items become inaccessible.', content.count, 'proto-blocks'),
+		content.count
+	);
+	const termsText = sprintf(
+		/* translators: %d: number of terms. */
+		_n('%d term becomes inaccessible.', '%d terms become inaccessible.', content.count, 'proto-blocks'),
+		content.count
+	);
+	const items = kind === 'type' ? itemsText : termsText;
 	const terms = Object.entries(content.taxonomies ?? {}).filter(([, count]) => count > 0);
 	const matches = typed === slug;
 

@@ -3,7 +3,7 @@
  * react-hook-form. It mirrors includes/ContentModel/SchemaCheck.php keyword
  * for keyword (type, enum, pattern, minLength, maxLength, minimum, maximum,
  * properties, required, additionalProperties, items, minItems, maxItems,
- * uniqueItems, anyOf, local `#/$defs/<name>` references; unknown keywords
+ * uniqueItems, anyOf, allOf, local `#/$defs/<name>` references; unknown keywords
  * ignored), including which anyOf branch's errors are reported, so the form
  * and the server agree on what is valid and where the problem is.
  */
@@ -28,6 +28,7 @@ export interface JsonSchema {
 	maxItems?: number;
 	uniqueItems?: boolean;
 	anyOf?: JsonSchema[];
+	allOf?: JsonSchema[];
 	$defs?: Record<string, JsonSchema>;
 	[keyword: string]: unknown;
 }
@@ -92,49 +93,41 @@ function check(data: unknown, node: JsonSchema, root: JsonSchema, path: Path): C
 	if (typeof node.$ref === 'string') {
 		const target = resolve(root, node.$ref);
 		if (!target) {
-			/* translators: %s: a JSON Schema reference such as #/$defs/type. */
-			return [{ path, message: sprintf(__('Unresolvable schema reference %s.', 'proto-blocks'), node.$ref) }];
+			return [{ path, message: sprintf(/* translators: %s: a JSON Schema reference such as #/$defs/type. */ __('Unresolvable schema reference %s.', 'proto-blocks'), node.$ref) }];
 		}
 		return check(data, target, root, path);
 	}
 
 	if (node.type !== undefined && !typeMatches(data, node.type)) {
 		const want = (Array.isArray(node.type) ? node.type : [node.type]).join(__(' or ', 'proto-blocks'));
-		/* translators: %s: JSON type names, e.g. "boolean" or "string or array". */
-		return [{ path, message: sprintf(__('Must be of type %s.', 'proto-blocks'), want) }];
+		return [{ path, message: sprintf(/* translators: %s: JSON type names, e.g. "boolean" or "string or array". */ __('Must be of type %s.', 'proto-blocks'), want) }];
 	}
 
 	const errors: CheckError[] = [];
 
 	if (Array.isArray(node.enum) && !node.enum.some((allowed) => same(allowed, data))) {
-		/* translators: %s: the allowed values as JSON. */
-		errors.push({ path, message: sprintf(__('Must be one of: %s.', 'proto-blocks'), JSON.stringify(node.enum)) });
+		errors.push({ path, message: sprintf(/* translators: %s: the allowed values as JSON. */ __('Must be one of: %s.', 'proto-blocks'), JSON.stringify(node.enum)) });
 	}
 
 	if (typeof data === 'string') {
 		const length = [...data].length;
 		if (typeof node.minLength === 'number' && length < node.minLength) {
-			/* translators: %d: minimum number of characters. */
-			errors.push({ path, message: sprintf(__('Must be at least %d characters.', 'proto-blocks'), node.minLength) });
+			errors.push({ path, message: sprintf(/* translators: %d: minimum number of characters. */ __('Must be at least %d characters.', 'proto-blocks'), node.minLength) });
 		}
 		if (typeof node.maxLength === 'number' && length > node.maxLength) {
-			/* translators: %d: maximum number of characters. */
-			errors.push({ path, message: sprintf(__('Must be at most %d characters.', 'proto-blocks'), node.maxLength) });
+			errors.push({ path, message: sprintf(/* translators: %d: maximum number of characters. */ __('Must be at most %d characters.', 'proto-blocks'), node.maxLength) });
 		}
 		if (typeof node.pattern === 'string' && !new RegExp(node.pattern, 'u').test(data)) {
-			/* translators: %s: a regular expression. */
-			errors.push({ path, message: sprintf(__('Must match pattern %s.', 'proto-blocks'), node.pattern) });
+			errors.push({ path, message: sprintf(/* translators: %s: a regular expression. */ __('Must match pattern %s.', 'proto-blocks'), node.pattern) });
 		}
 	}
 
 	if (typeof data === 'number') {
 		if (typeof node.minimum === 'number' && data < node.minimum) {
-			/* translators: %s: the minimum value. */
-			errors.push({ path, message: sprintf(__('Must be at least %s.', 'proto-blocks'), String(node.minimum)) });
+			errors.push({ path, message: sprintf(/* translators: %s: the minimum value. */ __('Must be at least %s.', 'proto-blocks'), String(node.minimum)) });
 		}
 		if (typeof node.maximum === 'number' && data > node.maximum) {
-			/* translators: %s: the maximum value. */
-			errors.push({ path, message: sprintf(__('Must be at most %s.', 'proto-blocks'), String(node.maximum)) });
+			errors.push({ path, message: sprintf(/* translators: %s: the maximum value. */ __('Must be at most %s.', 'proto-blocks'), String(node.maximum)) });
 		}
 	}
 
@@ -164,12 +157,10 @@ function check(data: unknown, node: JsonSchema, root: JsonSchema, path: Path): C
 			data.forEach((value, i) => errors.push(...check(value, node.items as JsonSchema, root, [...path, i])));
 		}
 		if (typeof node.minItems === 'number' && data.length < node.minItems) {
-			/* translators: %d: minimum number of items. */
-			errors.push({ path, message: sprintf(__('Must have at least %d items.', 'proto-blocks'), node.minItems) });
+			errors.push({ path, message: sprintf(/* translators: %d: minimum number of items. */ __('Must have at least %d items.', 'proto-blocks'), node.minItems) });
 		}
 		if (typeof node.maxItems === 'number' && data.length > node.maxItems) {
-			/* translators: %d: maximum number of items. */
-			errors.push({ path, message: sprintf(__('Must have at most %d items.', 'proto-blocks'), node.maxItems) });
+			errors.push({ path, message: sprintf(/* translators: %d: maximum number of items. */ __('Must have at most %d items.', 'proto-blocks'), node.maxItems) });
 		}
 		if (node.uniqueItems) {
 			const seen = new Set<string>();
@@ -185,6 +176,14 @@ function check(data: unknown, node: JsonSchema, root: JsonSchema, path: Path): C
 
 	if (Array.isArray(node.anyOf)) {
 		errors.push(...checkAnyOf(data, node.anyOf, root, path));
+	}
+
+	if (Array.isArray(node.allOf)) {
+		for (const branch of node.allOf) {
+			if (isObject(branch)) {
+				errors.push(...check(data, branch as JsonSchema, root, path));
+			}
+		}
 	}
 
 	return errors;

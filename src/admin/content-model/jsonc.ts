@@ -167,8 +167,14 @@ export function lineAndColumn(text: string, offset: number): { line: number; col
 	return { line: head.length, column: head[head.length - 1].length + 1 };
 }
 
-/** "Line 3: Expected a comma." */
+/** "Line 3, column 5: Expected a comma." */
 export function describeJsoncError(text: string, error: JsoncError): string {
-	/* translators: 1: line number, 2: error message. */
-	return sprintf(__('Line %1$d: %2$s', 'proto-blocks'), lineAndColumn(text, error.offset).line, error.message);
+	const { line, column } = lineAndColumn(text, error.offset);
+	return sprintf(
+		/* translators: 1: line number, 2: column number, 3: error message. */
+		__('Line %1$d, column %2$d: %3$s', 'proto-blocks'),
+		line,
+		column,
+		error.message
+	);
 }

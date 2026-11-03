@@ -1,4 +1,4 @@
-import { applyDeclarationEdits, parseJsonc } from '@/admin/content-model/jsonc';
+import { applyDeclarationEdits, describeJsoncError, parseJsonc } from '@/admin/content-model/jsonc';
 
 const SOURCE = '// header\n{\n  // the name\n  "name": "Product",\n  /* archive */ "has_archive": true,\n}';
 
@@ -81,6 +81,12 @@ test('parseJsonc reports syntax errors with an offset', () => {
 	expect(result.errors.length).toBeGreaterThan(0);
 	expect(typeof result.errors[0].offset).toBe('number');
 	expect(result.data).toEqual({});
+});
+
+test('describeJsoncError names the line and column', () => {
+	expect(describeJsoncError('{\n  "a": 1\n  "b": 2\n}', { offset: 13, message: 'Expected a comma.' })).toBe(
+		'Line 3, column 3: Expected a comma.'
+	);
 });
 
 test('parseJsonc refuses a file that is not an object', () => {

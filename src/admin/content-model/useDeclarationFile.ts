@@ -74,7 +74,9 @@ export function useDeclarationFile(kind: Kind, slug: string, name?: string) {
 			if (!current) {
 				throw new Error(__('The file has not loaded yet.', 'proto-blocks'));
 			}
-			const text = applyDeclarationEdits(current.text, current.data, next);
+			// Diff against what the text really holds, not `data`, so every
+			// change the caller passes reaches the file.
+			const text = applyDeclarationEdits(current.text, parseJsonc(current.text).data, next);
 			try {
 				const result = await adminPost<SaveResponse>(base, { text, hash: current.hash, acknowledge });
 				const saved: FileResult = {
@@ -87,8 +89,13 @@ export function useDeclarationFile(kind: Kind, slug: string, name?: string) {
 				};
 				fileRef.current = saved;
 				setFile(saved);
-				/* translators: %s: path of the declaration file that was written. */
-				toast.success(sprintf(__('Saved to %s.', 'proto-blocks'), result.path));
+				toast.success(
+					sprintf(
+						/* translators: %s: path of the declaration file that was written. */
+						__('Saved to %s.', 'proto-blocks'),
+						result.path
+					)
+				);
 				return { status: 'saved' };
 			} catch (e) {
 				const apiError = asApiError(e);

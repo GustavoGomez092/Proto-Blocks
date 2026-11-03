@@ -1,5 +1,5 @@
 import { mockBootstrap } from '../helpers';
-import { useState } from 'react';
+import { createRef, useState } from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/admin/components/ui/tooltip';
@@ -134,6 +134,19 @@ test('DeleteDeclarationDialog with content keeps Delete disabled until the slug 
 	expect(onConfirm).toHaveBeenCalledWith('product');
 });
 
+test('DeleteDeclarationDialog clears the typed slug when it reopens', async () => {
+	const user = userEvent.setup();
+	const props = { slug: 'product', path: 'proto-types/product/', content: { count: 3 }, onConfirm: () => {}, onCancel: () => {} };
+	const { rerender } = render(<DeleteDeclarationDialog {...props} open />);
+	await user.type(screen.getByRole('textbox'), 'product');
+
+	rerender(<DeleteDeclarationDialog {...props} open={false} />);
+	rerender(<DeleteDeclarationDialog {...props} open />);
+
+	expect(await screen.findByRole('textbox')).toHaveValue('');
+	expect(screen.getByRole('button', { name: /^Delete/ })).toBeDisabled();
+});
+
 test('DeleteDeclarationDialog without content enables Delete', async () => {
 	const user = userEvent.setup();
 	const onConfirm = jest.fn();
@@ -204,6 +217,12 @@ test('LabelsEditor shows generated labels as placeholders and writes only overri
 
 	await user.clear(menu);
 	expect(onValue).toHaveBeenLastCalledWith(undefined);
+});
+
+test('MenuIconField forwards its ref to the input', () => {
+	const ref = createRef<HTMLInputElement>();
+	render(<MenuIconField ref={ref} id="icon" value={undefined} onChange={() => {}} />);
+	expect(ref.current).toBe(screen.getByRole('combobox', { name: /Menu icon/ }));
 });
 
 test('MenuIconField previews a dashicon and warns about a non-https URL', async () => {

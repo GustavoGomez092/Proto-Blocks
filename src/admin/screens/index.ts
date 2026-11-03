@@ -32,6 +32,10 @@ export function screenLabel(screen: string): string {
 			return __('Preview Capture', 'proto-blocks');
 		case 'wizard':
 			return __('Setup Wizard', 'proto-blocks');
+		case 'post-types':
+			return __('Post Types', 'proto-blocks');
+		case 'taxonomies':
+			return __('Taxonomies', 'proto-blocks');
 		default:
 			return screen;
 	}

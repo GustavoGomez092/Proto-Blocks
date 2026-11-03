@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { __ } from '@wordpress/i18n';
 import { ImageIcon, TriangleAlertIcon } from 'lucide-react';
 import { Input } from '@/admin/components/ui/input';
@@ -51,19 +52,19 @@ const DASHICON = /^dashicons-[a-z0-9-]+$/;
 /**
  * `menu_icon`: a dashicon name (picked from suggestions or typed), a file in
  * the theme, or an https URL, with a preview. A plain http URL gets a
- * warning: an https admin would block it. Emptying it gives undefined.
+ * warning: an https admin would block it. Emptying it gives undefined. The
+ * ref reaches the input, so react-hook-form's setFocus works.
  */
-export function MenuIconField({
-	id,
-	value,
-	onChange,
-	disabled = false,
-}: {
-	id: string;
-	value: string | undefined;
-	onChange: (next: string | undefined) => void;
-	disabled?: boolean;
-}) {
+export const MenuIconField = forwardRef<
+	HTMLInputElement,
+	{
+		id: string;
+		value: string | undefined;
+		onChange: (next: string | undefined) => void;
+		onBlur?: () => void;
+		disabled?: boolean;
+	}
+>(function MenuIconField({ id, value, onChange, onBlur, disabled = false }, ref) {
 	const text = value ?? '';
 	const insecure = /^http:\/\//i.test(text);
 	const listId = `${id}-dashicons`;
@@ -92,6 +93,7 @@ export function MenuIconField({
 					{preview}
 				</div>
 				<Input
+					ref={ref}
 					id={id}
 					list={listId}
 					value={text}
@@ -101,6 +103,7 @@ export function MenuIconField({
 					autoComplete="off"
 					spellCheck={false}
 					aria-describedby={insecure ? `${hintId} ${warningId}` : hintId}
+					onBlur={onBlur}
 					onChange={(event) => onChange(event.target.value === '' ? undefined : event.target.value)}
 				/>
 				<datalist id={listId}>
@@ -123,4 +126,4 @@ export function MenuIconField({
 			) : null}
 		</div>
 	);
-}
+});

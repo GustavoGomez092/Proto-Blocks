@@ -36,8 +36,12 @@ export function OriginBadge({
 }) {
 	const Icon = ICONS[origin] ?? BoxIcon;
 	const twice = double
-		? /* translators: 1: path of the declaration file, 2: PHP file that also declares it. */
-			sprintf(__('Declared in %1$s and in %2$s. The file is used.', 'proto-blocks'), double.file, double.php)
+		? sprintf(
+				/* translators: 1: path of the declaration file, 2: PHP file that also declares it. */
+				__('Declared in %1$s and in %2$s. The file is used.', 'proto-blocks'),
+				double.file,
+				double.php
+			)
 		: '';
 
 	return (

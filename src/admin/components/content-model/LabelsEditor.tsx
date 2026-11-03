@@ -28,6 +28,22 @@ export function LabelsEditor({
 	const keys = [...Object.keys(generated), ...Object.keys(overrides).filter((key) => !(key in generated))];
 	const custom = keys.filter((key) => typeof overrides[key] === 'string' && overrides[key] !== '').length;
 	const auto = keys.length - custom;
+	const autoText = sprintf(
+		/* translators: %d: number of labels WordPress generates. */
+		_n('%d auto', '%d auto', auto, 'proto-blocks'),
+		auto
+	);
+	const customText = sprintf(
+		/* translators: %d: number of labels the developer overrides. */
+		_n('%d customised', '%d customised', custom, 'proto-blocks'),
+		custom
+	);
+	const resetLabel = (key: string) =>
+		sprintf(
+			/* translators: %s: label key such as menu_name. */
+			__('Reset %s', 'proto-blocks'),
+			key
+		);
 
 	const set = (key: string, text: string) => {
 		const next = { ...overrides };
@@ -43,12 +59,10 @@ export function LabelsEditor({
 		<div className="grid gap-3">
 			<div className="flex flex-wrap gap-1.5">
 				<Badge variant="outline">
-					{/* translators: %d: number of labels WordPress generates. */}
-					{sprintf(_n('%d auto', '%d auto', auto, 'proto-blocks'), auto)}
+					{autoText}
 				</Badge>
 				<Badge variant="outline" className="border-transparent bg-brand-soft text-[#0b5f5a]">
-					{/* translators: %d: number of labels the developer overrides. */}
-					{sprintf(_n('%d customised', '%d customised', custom, 'proto-blocks'), custom)}
+					{customText}
 				</Badge>
 			</div>
 			<div className="grid gap-2">
@@ -73,8 +87,7 @@ export function LabelsEditor({
 									variant="link"
 									size="sm"
 									className="h-auto justify-self-start px-0"
-									/* translators: %s: label key such as menu_name. */
-									aria-label={sprintf(__('Reset %s', 'proto-blocks'), key)}
+									aria-label={resetLabel(key)}
 									onClick={() => set(key, '')}
 								>
 									{__('Reset', 'proto-blocks')}

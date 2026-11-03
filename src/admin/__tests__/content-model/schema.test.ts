@@ -50,6 +50,9 @@ test.each([
 	[{ name: 'X', slug: 'Product' }, false],
 	[{ name: 'X', slug: 'a'.repeat(21) }, false],
 	[{ name: 'X', slug: 'a'.repeat(20) }, true],
+	[{ template: [['core/paragraph']] }, true],
+	[{ taxonomies: [{ hierarchical: true }] }, false],
+	[{ name: 'X', taxonomies: ['Bad Slug'] }, false],
 ])('parity with SchemaCheck: %j is valid: %s', (data, valid) => {
 	expect(typeSchema.safeParse(data).success).toBe(valid);
 });
@@ -60,7 +63,19 @@ test('parity paths for several errors and for the fitting anyOf branch', () => {
 		['taxonomies', 1, 'hierarchical'],
 	]);
 	expect(paths(typeSchema, { name: 'X', rewrite: 'resources' })).toEqual([['rewrite']]);
-	expect(paths(typeSchema, {})).toEqual([['name']]);
+	expect(paths(typeSchema, {})).toEqual([]);
+	expect(paths(typeSchema, { taxonomies: [{ hierarchical: true }] })).toEqual([['taxonomies', 0, 'name']]);
+	expect(paths(typeSchema, { name: 'X', taxonomies: ['Bad Slug'] })).toEqual([['taxonomies', 0]]);
+	expect(paths(taxonomySchema, { labels: { menu_name: 'Topics' } })).toEqual([]);
+});
+
+test('allOf reports the errors of every branch', () => {
+	const schema = toZod({
+		allOf: [{ type: 'object', properties: { a: { type: 'integer' } } }, { required: ['b'] }],
+	});
+	expect(paths(schema, { a: 1, b: 2 })).toEqual([]);
+	expect(paths(schema, { a: 1 })).toEqual([['b']]);
+	expect(paths(schema, { a: 'x' })).toEqual([['a'], ['b']]);
 });
 
 test('inline schema keywords match SchemaCheck', () => {
