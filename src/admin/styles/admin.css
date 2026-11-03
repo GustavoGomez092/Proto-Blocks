@@ -16,6 +16,14 @@
 @source "../**/*.{ts,tsx}";
 @source not "../**/__tests__/**";
 
+/*
+ * Light theme only. shadcn components carry dark: classes; without this they
+ * follow prefers-color-scheme and, for example, tint inputs on a Mac in dark
+ * mode while the rest of wp-admin stays light. Nothing sets .dark, so the
+ * variant never matches.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 #proto-blocks-admin,
 #proto-blocks-admin-portal {
   /* Design guide tokens (light only; contrast checked on white). */

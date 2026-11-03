@@ -19,6 +19,7 @@ use ProtoBlocks\Blocks\Registrar;
 use ProtoBlocks\Blocks\Discovery;
 use ProtoBlocks\Blocks\Category;
 use ProtoBlocks\API\RestAPI;
+use ProtoBlocks\API\AdminRestController;
 use ProtoBlocks\API\AjaxHandler;
 use ProtoBlocks\Admin\AdminApp;
 use ProtoBlocks\Admin\AdminPage;
@@ -420,6 +421,11 @@ final class Plugin
             $this->getOptionsProviders()
         );
 
+        // REST routes behind the React admin. Built in every context: REST
+        // requests are not is_admin(), so the route groups resolve their own
+        // services rather than relying on the admin-only ones.
+        $this->services['admin_rest'] = new AdminRestController();
+
         // AJAX Handler
         $this->services['ajax_handler'] = new AjaxHandler($this->getEngine());
 
@@ -480,6 +486,7 @@ final class Plugin
 
         // REST API routes
         add_action('rest_api_init', [$this->getRestAPI(), 'registerRoutes']);
+        add_action('rest_api_init', [$this->getAdminRestController(), 'registerRoutes']);
 
         // AJAX handlers
         add_action('wp_ajax_proto_blocks_preview', [$this->getAjaxHandler(), 'handlePreview']);
@@ -871,6 +878,11 @@ final class Plugin
     public function getRestAPI(): RestAPI
     {
         return $this->services['rest_api'];
+    }
+
+    public function getAdminRestController(): AdminRestController
+    {
+        return $this->services['admin_rest'];
     }
 
     public function getAjaxHandler(): AjaxHandler

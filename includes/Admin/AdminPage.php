@@ -74,14 +74,19 @@ class AdminPage
             [$this, 'renderSettingsPage']
         );
 
-        add_submenu_page(
+        $systemHook = add_submenu_page(
             self::SLUG,
             __('System Status', 'proto-blocks'),
             __('System Status', 'proto-blocks'),
             'manage_options',
             self::SLUG . '-system',
-            [$this, 'renderSystemStatusPage']
+            static function (): void {
+                Plugin::getInstance()->getAdminApp()?->renderScreen('system');
+            }
         );
+        if (is_string($systemHook)) {
+            Plugin::getInstance()->getAdminApp()?->addScreenHook($systemHook, 'system');
+        }
     }
 
     /**
@@ -585,162 +590,6 @@ class AdminPage
      * Option key for enabling the bundled example blocks
      */
     public const OPTION_EXAMPLE_BLOCKS = 'proto_blocks_example_blocks';
-
-    /**
-     * Render system status page
-     */
-    public function renderSystemStatusPage(): void
-    {
-        // Handle category name save action
-        if (isset($_POST['proto_blocks_save_category_name']) && check_admin_referer('proto_blocks_save_category_name')) {
-            $category_name = isset($_POST['proto_blocks_category_name']) ? sanitize_text_field($_POST['proto_blocks_category_name']) : '';
-            update_option(self::OPTION_CATEGORY_NAME, $category_name);
-            echo '<div class="notice notice-success is-dismissible"><p>';
-            esc_html_e('Category name saved successfully.', 'proto-blocks');
-            echo '</p></div>';
-        }
-
-        $category_name = get_option(self::OPTION_CATEGORY_NAME, '');
-        ?>
-        <div class="wrap proto-blocks-admin-ui pb-bg-background-light pb-font-display pb-text-text-main-light pb-min-h-screen">
-            <div class="pb-max-w-4xl pb-mx-auto pb-p-6 lg:pb-p-10 pb-space-y-8">
-                <!-- Header -->
-                <div>
-                    <h1 class="pb-text-3xl pb-font-bold pb-text-primary pb-mb-2"><?php esc_html_e('System Status', 'proto-blocks'); ?></h1>
-                    <p class="pb-text-text-muted-light"><?php esc_html_e('View your Proto Blocks configuration and system information.', 'proto-blocks'); ?></p>
-                </div>
-
-                <!-- General Settings Section -->
-                <div class="pb-bg-surface-light pb-rounded-lg pb-shadow-sm pb-border pb-border-border-light pb-overflow-hidden">
-                    <div class="pb-px-6 pb-py-4 pb-border-b pb-border-border-light pb-bg-gray-50">
-                        <h2 class="pb-text-lg pb-font-semibold pb-flex pb-items-center pb-gap-2">
-                            <span class="material-icons-outlined pb-text-primary">tune</span>
-                            <?php esc_html_e('General Settings', 'proto-blocks'); ?>
-                        </h2>
-                    </div>
-                    <div class="pb-p-6">
-                        <form method="post">
-                            <?php wp_nonce_field('proto_blocks_save_category_name'); ?>
-                            <div class="pb-space-y-4">
-                                <div class="pb-flex pb-flex-col sm:pb-flex-row sm:pb-items-start pb-gap-2 sm:pb-gap-4">
-                                    <div class="sm:pb-w-64 pb-flex-shrink-0">
-                                        <label for="proto_blocks_category_name" class="pb-font-medium pb-text-sm"><?php esc_html_e('Block Category Name', 'proto-blocks'); ?></label>
-                                        <p class="pb-text-text-muted-light pb-text-xs pb-mt-1"><?php esc_html_e('Customize the name shown in the block inserter.', 'proto-blocks'); ?></p>
-                                    </div>
-                                    <div class="pb-flex-1">
-                                        <input type="text" name="proto_blocks_category_name" id="proto_blocks_category_name" value="<?php echo esc_attr($category_name); ?>" placeholder="<?php esc_attr_e('Proto Blocks', 'proto-blocks'); ?>" class="pb-w-full sm:pb-max-w-xs pb-px-3 pb-py-2 pb-border pb-border-border-light pb-rounded-lg pb-text-sm focus:pb-outline-none focus:pb-ring-2 focus:pb-ring-primary focus:pb-border-transparent" />
-                                        <p class="pb-text-text-muted-light pb-text-xs pb-mt-2"><?php esc_html_e('Leave empty to use the default name "Proto Blocks".', 'proto-blocks'); ?></p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="pb-mt-6 pb-pt-4 pb-border-t pb-border-border-light">
-                                <button type="submit" name="proto_blocks_save_category_name" class="pb-bg-primary hover:pb-bg-primary-hover pb-text-white pb-px-4 pb-py-2 pb-rounded pb-shadow-sm pb-text-sm pb-font-medium pb-transition-colors">
-                                    <?php esc_html_e('Save Settings', 'proto-blocks'); ?>
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-
-                <!-- Configuration Section -->
-                <div class="pb-bg-surface-light pb-rounded-lg pb-shadow-sm pb-border pb-border-border-light pb-overflow-hidden">
-                    <div class="pb-px-6 pb-py-4 pb-border-b pb-border-border-light pb-bg-gray-50">
-                        <h2 class="pb-text-lg pb-font-semibold pb-flex pb-items-center pb-gap-2">
-                            <span class="material-icons-outlined pb-text-primary">settings</span>
-                            <?php esc_html_e('Configuration', 'proto-blocks'); ?>
-                        </h2>
-                    </div>
-                    <div class="pb-p-6">
-                        <p class="pb-text-text-muted-light pb-text-sm pb-mb-6"><?php esc_html_e('Proto-Blocks can be configured via constants in wp-config.php:', 'proto-blocks'); ?></p>
-                        <div class="pb-space-y-4">
-                            <div class="pb-flex pb-flex-col sm:pb-flex-row sm:pb-items-start pb-gap-2 sm:pb-gap-4 pb-py-3 pb-border-b pb-border-border-light">
-                                <div class="sm:pb-w-64 pb-flex-shrink-0">
-                                    <code class="pb-bg-gray-100 pb-px-2 pb-py-1 pb-rounded pb-text-sm pb-font-mono pb-text-primary">PROTO_BLOCKS_DEBUG</code>
-                                </div>
-                                <div class="pb-flex-1">
-                                    <code class="pb-text-sm <?php echo \PROTO_BLOCKS_DEBUG ? 'pb-text-green-600' : 'pb-text-gray-500'; ?>"><?php echo \PROTO_BLOCKS_DEBUG ? 'true' : 'false'; ?></code>
-                                    <p class="pb-text-text-muted-light pb-text-sm pb-mt-1"><?php esc_html_e('Enable debug mode for detailed error messages.', 'proto-blocks'); ?></p>
-                                </div>
-                            </div>
-                            <div class="pb-flex pb-flex-col sm:pb-flex-row sm:pb-items-start pb-gap-2 sm:pb-gap-4 pb-py-3 pb-border-b pb-border-border-light">
-                                <div class="sm:pb-w-64 pb-flex-shrink-0">
-                                    <code class="pb-bg-gray-100 pb-px-2 pb-py-1 pb-rounded pb-text-sm pb-font-mono pb-text-primary">PROTO_BLOCKS_CACHE_ENABLED</code>
-                                </div>
-                                <div class="pb-flex-1">
-                                    <code class="pb-text-sm <?php echo \PROTO_BLOCKS_CACHE_ENABLED ? 'pb-text-green-600' : 'pb-text-gray-500'; ?>"><?php echo \PROTO_BLOCKS_CACHE_ENABLED ? 'true' : 'false'; ?></code>
-                                    <p class="pb-text-text-muted-light pb-text-sm pb-mt-1"><?php esc_html_e('Enable template caching for improved performance.', 'proto-blocks'); ?></p>
-                                </div>
-                            </div>
-                            <div class="pb-flex pb-flex-col sm:pb-flex-row sm:pb-items-start pb-gap-2 sm:pb-gap-4 pb-py-3">
-                                <div class="sm:pb-w-64 pb-flex-shrink-0">
-                                    <code class="pb-bg-gray-100 pb-px-2 pb-py-1 pb-rounded pb-text-sm pb-font-mono pb-text-primary">PROTO_BLOCKS_EXAMPLE_BLOCKS</code>
-                                </div>
-                                <div class="pb-flex-1">
-                                    <code class="pb-text-sm <?php echo \PROTO_BLOCKS_EXAMPLE_BLOCKS ? 'pb-text-green-600' : 'pb-text-gray-500'; ?>"><?php echo \PROTO_BLOCKS_EXAMPLE_BLOCKS ? 'true' : 'false'; ?></code>
-                                    <p class="pb-text-text-muted-light pb-text-sm pb-mt-1">
-                                        <?php esc_html_e('Register example blocks for testing.', 'proto-blocks'); ?>
-                                        <?php if (!(defined('PROTO_BLOCKS_EXAMPLE_BLOCKS_FROM_CONFIG') && \PROTO_BLOCKS_EXAMPLE_BLOCKS_FROM_CONFIG)): ?>
-                                            <?php
-                                            printf(
-                                                /* translators: %s: link to the Blocks dashboard */
-                                                ' ' . esc_html__('Managed from the %s page (default off).', 'proto-blocks'),
-                                                '<a href="' . esc_url(admin_url('admin.php?page=' . self::SLUG)) . '" class="pb-underline pb-text-primary">' . esc_html__('Blocks', 'proto-blocks') . '</a>'
-                                            );
-                                            ?>
-                                        <?php endif; ?>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- System Information Section -->
-                <div class="pb-bg-surface-light pb-rounded-lg pb-shadow-sm pb-border pb-border-border-light pb-overflow-hidden">
-                    <div class="pb-px-6 pb-py-4 pb-border-b pb-border-border-light pb-bg-gray-50">
-                        <h2 class="pb-text-lg pb-font-semibold pb-flex pb-items-center pb-gap-2">
-                            <span class="material-icons-outlined pb-text-primary">info</span>
-                            <?php esc_html_e('System Information', 'proto-blocks'); ?>
-                        </h2>
-                    </div>
-                    <div class="pb-p-6">
-                        <div class="pb-grid pb-grid-cols-1 sm:pb-grid-cols-2 pb-gap-4">
-                            <div class="pb-p-4 pb-bg-gray-50 pb-rounded-lg">
-                                <div class="pb-text-sm pb-text-text-muted-light pb-mb-1"><?php esc_html_e('Plugin Version', 'proto-blocks'); ?></div>
-                                <div class="pb-font-semibold"><?php echo esc_html(\PROTO_BLOCKS_VERSION); ?></div>
-                            </div>
-                            <div class="pb-p-4 pb-bg-gray-50 pb-rounded-lg">
-                                <div class="pb-text-sm pb-text-text-muted-light pb-mb-1"><?php esc_html_e('WordPress Version', 'proto-blocks'); ?></div>
-                                <div class="pb-font-semibold"><?php echo esc_html(get_bloginfo('version')); ?></div>
-                            </div>
-                            <div class="pb-p-4 pb-bg-gray-50 pb-rounded-lg">
-                                <div class="pb-text-sm pb-text-text-muted-light pb-mb-1"><?php esc_html_e('PHP Version', 'proto-blocks'); ?></div>
-                                <div class="pb-font-semibold"><?php echo esc_html(PHP_VERSION); ?></div>
-                            </div>
-                            <div class="pb-p-4 pb-bg-gray-50 pb-rounded-lg">
-                                <div class="pb-text-sm pb-text-text-muted-light pb-mb-1"><?php esc_html_e('Cache Directory', 'proto-blocks'); ?></div>
-                                <div class="pb-flex pb-items-center pb-gap-2">
-                                    <code class="pb-text-xs pb-break-all"><?php echo esc_html($this->cache->getCacheDir()); ?></code>
-                                    <?php if (is_writable($this->cache->getCacheDir())): ?>
-                                        <span class="material-icons-outlined pb-text-green-600 pb-text-lg">check_circle</span>
-                                    <?php else: ?>
-                                        <span class="material-icons-outlined pb-text-red-600 pb-text-lg">error</span>
-                                        <span class="pb-text-red-600 pb-text-sm"><?php esc_html_e('Not writable', 'proto-blocks'); ?></span>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Footer -->
-                <div class="pb-text-center md:pb-text-left pb-text-xs pb-text-text-muted-light pb-pt-4">
-                    <p><?php printf(esc_html__('Proto Blocks v%s', 'proto-blocks'), \PROTO_BLOCKS_VERSION); ?> &bull; <?php esc_html_e('Built for modern development.', 'proto-blocks'); ?></p>
-                </div>
-            </div>
-        </div>
-        <?php
-    }
 
     /**
      * Get list of demo block names

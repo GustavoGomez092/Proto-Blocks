@@ -1,7 +1,12 @@
 /**
  * REST client for the admin. Paths are relative to the bootstrap restRoot
- * (e.g. 'admin/system'); the root and nonce middleware are installed on
- * first use.
+ * (e.g. 'admin/system').
+ *
+ * Every request carries a full `url` and its own nonce header rather than a
+ * `path` plus global middleware: WordPress core registers a root-URL
+ * middleware on wp.apiFetch that rewrites any `path` against /wp-json/, and
+ * it runs after middleware added here, so a `path` would lose the
+ * proto-blocks/v1 namespace.
  */
 import apiFetch from '@wordpress/api-fetch';
 import { getBootstrap } from './bootstrap';
@@ -18,16 +23,17 @@ export class ApiError extends Error {
 	}
 }
 
-let installed = false;
-
-function ensureMiddleware(): void {
-	if (installed) {
-		return;
+/**
+ * `path` under `root` (default: the bootstrap restRoot). Handles the
+ * plain-permalink root (`?rest_route=/proto-blocks/v1/`), where the path's
+ * own query string must continue with `&`.
+ */
+export function restUrl(path: string, root: string = getBootstrap().restRoot): string {
+	let relative = path.replace(/^\//, '');
+	if (root.includes('?')) {
+		relative = relative.replace('?', '&');
 	}
-	const { restRoot, restNonce } = getBootstrap();
-	apiFetch.use(apiFetch.createRootURLMiddleware(restRoot));
-	apiFetch.use(apiFetch.createNonceMiddleware(restNonce));
-	installed = true;
+	return root + relative;
 }
 
 function toApiError(error: unknown): ApiError {
@@ -41,10 +47,14 @@ function toApiError(error: unknown): ApiError {
 	return new ApiError(code, message, status);
 }
 
-async function request<T>(options: { path: string; method: string; data?: unknown }): Promise<T> {
-	ensureMiddleware();
+async function request<T>({ path, ...options }: { path: string; method: string; data?: unknown }): Promise<T> {
+	const { restRoot, restNonce } = getBootstrap();
 	try {
-		return await apiFetch<T>(options);
+		return await apiFetch<T>({
+			url: restUrl(path, restRoot),
+			...options,
+			headers: { 'X-WP-Nonce': restNonce },
+		});
 	} catch (error) {
 		throw toApiError(error);
 	}
