@@ -23,14 +23,20 @@ use WP_REST_Request;
  *   options page); 403 `proto_blocks_forbidden` otherwise.
  *
  * - GET proto-blocks/v1/fields/relationship?group=<key>&field=<name|key>&search=&page=1
- *   → {items: [{id, title, type, status}], total, pages}, 20 per page.
- *   Filters come from the field's declaration only (its `post_type` list,
- *   each kept only when registered with show_ui; its `taxonomy` filter as
- *   `taxonomy:slug` entries); request parameters other than group, field,
- *   search and page are ignored. Only published posts and private posts the
- *   user may read are queried (`perm => readable`), and each result is
- *   checked again: publicly viewable, or `read_post` for the user. Titles are
- *   escaped. Permission: edit_posts.
+ *   → {items: [{id, title, type, status}], page, hasMore}, 20 per page.
+ *   Filters come from the field's declaration only (its `post_type` list;
+ *   its `taxonomy` filter as `taxonomy:slug` entries); request parameters
+ *   other than group, field, search and page are ignored. A declared type is
+ *   kept when registered with show_ui AND either publicly viewable or
+ *   editable by the user (its `edit_posts` capability); with no type
+ *   declared, the viewable show_ui types are searched. Only published posts
+ *   and private posts the user may read are queried (`perm => readable`),
+ *   and each result is checked again: publicly viewable, or `read_post` for
+ *   the user. There is no total: a count taken before that check could
+ *   reveal posts the user may not read, so `hasMore` says whether another
+ *   page exists. Titles are RAW (get_the_title(), may contain markup or
+ *   entities); the client renders them as text nodes, never as HTML.
+ *   Permission: edit_posts.
  */
 final class EditRoutes
 {
@@ -119,7 +125,7 @@ final class EditRoutes
         return current_user_can('edit_posts') ? true : self::forbidden();
     }
 
-    /** @return array{items: list<array{id: int, title: string, type: string, status: string}>, total: int, pages: int}|WP_Error */
+    /** @return array{items: list<array{id: int, title: string, type: string, status: string}>, page: int, hasMore: bool}|WP_Error */
     public function relationship(WP_REST_Request $request)
     {
         $field = $this->relationshipField($request->get_param('group'), $request->get_param('field'));
@@ -127,15 +133,14 @@ final class EditRoutes
             return new WP_Error('proto_blocks_not_found', __('No relationship field matches this request.', 'proto-blocks'), ['status' => 404]);
         }
 
-        $empty = ['items' => [], 'total' => 0, 'pages' => 0];
+        $page = $request->get_param('page');
+        $page = is_numeric($page) ? max(1, min(self::MAX_PAGE, (int) $page)) : 1;
         $types = self::postTypes($field);
         if ($types === []) {
-            return $empty;
+            return ['items' => [], 'page' => $page, 'hasMore' => false];
         }
         $search = $request->get_param('search');
         $search = is_string($search) ? mb_substr(sanitize_text_field($search), 0, self::MAX_SEARCH) : '';
-        $page = $request->get_param('page');
-        $page = is_numeric($page) ? max(1, min(self::MAX_PAGE, (int) $page)) : 1;
 
         $args = [
             'post_type' => $types,
@@ -169,13 +174,13 @@ final class EditRoutes
             }
             $items[] = [
                 'id' => $id,
-                'title' => esc_html((string) get_the_title($post)),
+                'title' => (string) get_the_title($post), // raw: rendered as text by the client
                 'type' => $type,
                 'status' => (string) ($post->post_status ?? ''),
             ];
         }
 
-        return ['items' => $items, 'total' => (int) ($result['total'] ?? 0), 'pages' => (int) ($result['pages'] ?? 0)];
+        return ['items' => $items, 'page' => $page, 'hasMore' => $page < (int) ($result['pages'] ?? 0)];
     }
 
     /**
@@ -255,8 +260,10 @@ final class EditRoutes
     }
 
     /**
-     * The declared post types that are registered with show_ui; with none
-     * declared, every type registered with show_ui.
+     * The declared post types registered with show_ui that are publicly
+     * viewable or editable by the user; with none declared, the viewable
+     * show_ui types only (a private type such as shop coupons is never
+     * searched by default).
      *
      * @return list<string>
      */
@@ -265,14 +272,21 @@ final class EditRoutes
         $declared = $field->setting('post_type', []);
         $declared = is_string($declared) ? [$declared] : (is_array($declared) ? $declared : []);
         $declared = array_values(array_filter($declared, static fn($t): bool => is_string($t) && $t !== ''));
-        if ($declared === []) {
+        $fallback = $declared === [];
+        if ($fallback) {
             $declared = array_values(array_map('strval', (array) get_post_types(['show_ui' => true])));
         }
 
         $out = [];
         foreach ($declared as $type) {
             $object = get_post_type_object($type);
-            if (is_object($object) && !empty($object->show_ui)) {
+            if (!is_object($object) || empty($object->show_ui)) {
+                continue;
+            }
+            $viewable = is_post_type_viewable($object);
+            $cap = is_object($object->cap ?? null) ? ($object->cap->edit_posts ?? null) : null;
+            $editable = !$fallback && is_string($cap) && $cap !== '' && current_user_can($cap);
+            if ($viewable || $editable) {
                 $out[$type] = true;
             }
         }

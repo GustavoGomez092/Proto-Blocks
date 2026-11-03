@@ -126,6 +126,7 @@ final class SaveHandlerTest extends TestCase
     private function post(array $values, ?array $present = null, string $group = self::EVENT_GROUP, int $postId = 10): void
     {
         $_POST[SaveHandler::NONCE_FIELD] = wp_create_nonce(SaveHandler::NONCE_ACTION);
+        $_POST[SaveHandler::OBJECT_FIELD] = 'post:' . $postId;
         $_POST['post_ID'] = (string) $postId;
         $_POST[SaveHandler::INPUT][$group] = $values;
         $_POST[SaveHandler::PRESENT][$group] = $present ?? array_keys($values);
@@ -299,6 +300,7 @@ final class SaveHandlerTest extends TestCase
         ]]);
         $GLOBALS['pb_test_current_user'] = 0;
         do_action('user_register', 7);
+        $_POST[SaveHandler::OBJECT_FIELD] = 'user:new';
         $_POST[SaveHandler::NONCE_FIELD] = wp_create_nonce(SaveHandler::NONCE_ACTION);
         $_POST[SaveHandler::INPUT] = [
             'group_signup' => ['tagline' => '<script>alert(1)</script>Hi'],
@@ -322,6 +324,7 @@ final class SaveHandlerTest extends TestCase
         ]]);
         $GLOBALS['pb_test_current_user'] = 0;
         do_action('user_register', 7);
+        $_POST[SaveHandler::OBJECT_FIELD] = 'user:new';
         $_POST[SaveHandler::INPUT] = ['group_signup' => ['tagline' => 'Hi']];
         $_POST[SaveHandler::PRESENT] = ['group_signup' => ['tagline']];
 
@@ -336,6 +339,7 @@ final class SaveHandlerTest extends TestCase
         ]]);
         $GLOBALS['pb_test_current_user'] = 0;
         $_POST[SaveHandler::NONCE_FIELD] = wp_create_nonce(SaveHandler::NONCE_ACTION);
+        $_POST[SaveHandler::OBJECT_FIELD] = 'user:new'; // but no user_register is running
         $_POST[SaveHandler::INPUT] = ['group_signup' => ['tagline' => 'Hi']];
         $_POST[SaveHandler::PRESENT] = ['group_signup' => ['tagline']];
 
@@ -541,13 +545,13 @@ final class SaveHandlerTest extends TestCase
         ]]);
         $handler = $this->handler();
 
-        $_POST = [SaveHandler::NONCE_FIELD => wp_create_nonce(SaveHandler::NONCE_ACTION), 'tag_ID' => '5', 'taxonomy' => 'category'];
+        $_POST = [SaveHandler::NONCE_FIELD => wp_create_nonce(SaveHandler::NONCE_ACTION), 'tag_ID' => '5', 'taxonomy' => 'category', SaveHandler::OBJECT_FIELD => 'term:5:category'];
         $_POST[SaveHandler::INPUT] = ['group_cat' => ['cat_note' => 'Hello']];
         $_POST[SaveHandler::PRESENT] = ['group_cat' => ['cat_note']];
         $handler->saveTerm(5, 5, 'category');
         $this->assertSame('Hello', self::stored('cat_note', 5, 'term'));
 
-        $_POST = [SaveHandler::NONCE_FIELD => wp_create_nonce(SaveHandler::NONCE_ACTION), 'user_id' => '2'];
+        $_POST = [SaveHandler::NONCE_FIELD => wp_create_nonce(SaveHandler::NONCE_ACTION), 'user_id' => '2', SaveHandler::OBJECT_FIELD => 'user:2'];
         $_POST[SaveHandler::INPUT] = ['group_profile' => ['twitter' => '@me']];
         $_POST[SaveHandler::PRESENT] = ['group_profile' => ['twitter']];
         $handler->saveUser(self::AUTHOR);
@@ -565,17 +569,23 @@ final class SaveHandlerTest extends TestCase
         $handler = $this->handler();
         $GLOBALS['pb_test_caps'][self::AUTHOR] = ['edit_posts'];
 
-        $_POST = [SaveHandler::NONCE_FIELD => wp_create_nonce(SaveHandler::NONCE_ACTION)];
-        $_POST[SaveHandler::INPUT] = ['group_cat' => ['cat_note' => 'x'], 'group_profile' => ['twitter' => 'x']];
-        $_POST[SaveHandler::PRESENT] = ['group_cat' => ['cat_note'], 'group_profile' => ['twitter']];
+        $termForm = [SaveHandler::NONCE_FIELD => wp_create_nonce(SaveHandler::NONCE_ACTION), SaveHandler::OBJECT_FIELD => 'term:5:category', 'tag_ID' => '5', 'taxonomy' => 'category'];
+        $userForm = [SaveHandler::NONCE_FIELD => wp_create_nonce(SaveHandler::NONCE_ACTION), SaveHandler::OBJECT_FIELD => 'user:7', 'user_id' => '7'];
+        $values = [
+            SaveHandler::INPUT => ['group_cat' => ['cat_note' => 'x'], 'group_profile' => ['twitter' => 'x']],
+            SaveHandler::PRESENT => ['group_cat' => ['cat_note'], 'group_profile' => ['twitter']],
+        ];
+        $_POST = $termForm + $values;
         $handler->saveTerm(5, 5, 'category');
+        $_POST = $userForm + $values;
         $handler->saveUser(7);
         $this->assertNull(self::stored('cat_note', 5, 'term'), 'no edit_term');
         $this->assertNull(self::stored('twitter', 7, 'user'), 'no edit_user');
 
         $GLOBALS['pb_test_caps'][self::AUTHOR] = ['edit_term', 'edit_user'];
-        $_POST[SaveHandler::NONCE_FIELD] = 'forged';
+        $_POST = [SaveHandler::NONCE_FIELD => 'forged'] + $termForm + $values;
         $handler->saveTerm(5, 5, 'category');
+        $_POST = [SaveHandler::NONCE_FIELD => 'forged'] + $userForm + $values;
         $handler->saveUser(7);
         $this->assertNull(self::stored('cat_note', 5, 'term'), 'bad nonce');
         $this->assertNull(self::stored('twitter', 7, 'user'), 'bad nonce');
@@ -600,6 +610,7 @@ final class SaveHandlerTest extends TestCase
     {
         $_POST = [
             SaveHandler::NONCE_FIELD => wp_create_nonce(SaveHandler::NONCE_ACTION),
+            SaveHandler::OBJECT_FIELD => 'post:10',
             'post_ID' => '10',
             SaveHandler::INPUT => 'not an array',
             SaveHandler::PRESENT => [self::EVENT_GROUP => 'subtitle'],
@@ -611,5 +622,171 @@ final class SaveHandlerTest extends TestCase
         $_POST[SaveHandler::PRESENT] = [self::EVENT_GROUP => [['nested']]];
         $this->savePost();
         $this->assertSame([], $this->writes);
+    }
+
+    public function testPostFormWithoutOrWithAnotherMarkerSavesNothing(): void
+    {
+        $this->post(['subtitle' => 'x']);
+        unset($_POST[SaveHandler::OBJECT_FIELD]);
+        $this->savePost();
+        $this->assertSame([], $this->writes, 'no marker');
+
+        $this->post(['subtitle' => 'x']);
+        $_POST[SaveHandler::OBJECT_FIELD] = 'post:11';
+        $this->savePost();
+        $this->assertSame([], $this->writes, 'marker names another post');
+    }
+
+    /** A group shown on events, on post_tag terms and on every user form. */
+    private function addWideGroup(): void
+    {
+        $this->addGroup(['key' => 'group_wide', 'title' => 'Wide', 'location' => [
+            [['param' => 'post_type', 'operator' => '==', 'value' => 'event']],
+            [['param' => 'taxonomy', 'operator' => '==', 'value' => 'post_tag']],
+            [['param' => 'user_form', 'operator' => '==', 'value' => 'all']],
+        ], 'fields' => [['key' => 'f_wide_note', 'name' => 'wide_note', 'type' => 'text']]]);
+    }
+
+    public function testCreatedTermDuringAPostSaveGetsNothing(): void
+    {
+        $this->addWideGroup();
+        $GLOBALS['pb_test_terms'][30] = ['term_id' => 30, 'taxonomy' => 'post_tag', 'name' => 'New tag', 'slug' => 'new-tag'];
+        $handler = $this->handler();
+        $this->post(['wide_note' => 'for the post'], null, 'group_wide');
+        $_POST['tax_input'] = ['post_tag' => 'New tag'];
+
+        $handler->saveTerm(30, 30, 'post_tag'); // created_term while the post form is processed
+        $this->assertNull(self::stored('wide_note', 30, 'term'));
+
+        $_POST['taxonomy'] = 'post_tag'; // even a posted taxonomy does not make it a term form
+        $handler->saveTerm(30, 30, 'post_tag');
+        $this->assertNull(self::stored('wide_note', 30, 'term'));
+
+        $this->savePost($handler);
+        $this->assertSame('for the post', self::stored('wide_note'));
+    }
+
+    public function testUserRegisterDuringAPostSaveGetsNothing(): void
+    {
+        $this->addWideGroup();
+        $GLOBALS['pb_test_current_user'] = self::ADMIN;
+        $GLOBALS['pb_test_users'][8] = ['ID' => 8, 'roles' => ['subscriber']];
+        $handler = $this->handler();
+        $this->post(['wide_note' => 'for the post'], null, 'group_wide');
+        $_POST['user_id'] = '8';
+
+        do_action('user_register', 8); // a plugin creates a user during save_post
+        $handler->saveUser(8);
+        $this->assertNull(self::stored('wide_note', 8, 'user'));
+    }
+
+    public function testAddTermFormSavesTheNewTermOnly(): void
+    {
+        $this->addWideGroup();
+        $GLOBALS['pb_test_terms'][30] = ['term_id' => 30, 'taxonomy' => 'post_tag', 'name' => 'A', 'slug' => 'a'];
+        $GLOBALS['pb_test_terms'][31] = ['term_id' => 31, 'taxonomy' => 'post_tag', 'name' => 'B', 'slug' => 'b'];
+        $handler = $this->handler();
+        $_POST = [
+            SaveHandler::NONCE_FIELD => wp_create_nonce(SaveHandler::NONCE_ACTION),
+            SaveHandler::OBJECT_FIELD => 'term:new:post_tag',
+            'action' => 'add-tag',
+            'taxonomy' => 'post_tag',
+            SaveHandler::INPUT => ['group_wide' => ['wide_note' => 'tag note']],
+            SaveHandler::PRESENT => ['group_wide' => ['wide_note']],
+        ];
+
+        $handler->saveTerm(30, 30, 'post_tag');
+        $handler->saveTerm(31, 31, 'post_tag'); // a second term created in the same request
+        $this->assertSame('tag note', self::stored('wide_note', 30, 'term'));
+        $this->assertNull(self::stored('wide_note', 31, 'term'));
+    }
+
+    public function testTermFormMustPostItsTaxonomyAndId(): void
+    {
+        $this->addWideGroup();
+        $GLOBALS['pb_test_terms'][30] = ['term_id' => 30, 'taxonomy' => 'post_tag', 'name' => 'A', 'slug' => 'a'];
+        $handler = $this->handler();
+        $base = [
+            SaveHandler::NONCE_FIELD => wp_create_nonce(SaveHandler::NONCE_ACTION),
+            SaveHandler::OBJECT_FIELD => 'term:30:post_tag',
+            SaveHandler::INPUT => ['group_wide' => ['wide_note' => 'x']],
+            SaveHandler::PRESENT => ['group_wide' => ['wide_note']],
+        ];
+
+        foreach ([['tag_ID' => '30'], ['taxonomy' => 'post_tag'], ['tag_ID' => '31', 'taxonomy' => 'post_tag'], ['tag_ID' => '30', 'taxonomy' => 'category']] as $extra) {
+            $_POST = $base + $extra;
+            $handler->saveTerm(30, 30, 'post_tag');
+            $this->assertNull(self::stored('wide_note', 30, 'term'), (string) json_encode($extra));
+        }
+
+        $_POST = $base + ['tag_ID' => '30', 'taxonomy' => 'post_tag'];
+        $handler->saveTerm(30, 30, 'post_tag');
+        $this->assertSame('x', self::stored('wide_note', 30, 'term'));
+    }
+
+    public function testAddUserFormSavesTheNewUser(): void
+    {
+        $this->addWideGroup();
+        $GLOBALS['pb_test_current_user'] = self::ADMIN;
+        $GLOBALS['pb_test_users'][8] = ['ID' => 8, 'roles' => ['subscriber']];
+        $handler = $this->handler();
+        $_POST = [
+            SaveHandler::NONCE_FIELD => wp_create_nonce(SaveHandler::NONCE_ACTION),
+            SaveHandler::OBJECT_FIELD => 'user:new',
+            'action' => 'createuser',
+            SaveHandler::INPUT => ['group_wide' => ['wide_note' => 'new user note']],
+            SaveHandler::PRESENT => ['group_wide' => ['wide_note']],
+        ];
+
+        $handler->saveUser(8);
+        $this->assertNull(self::stored('wide_note', 8, 'user'), 'user:new outside user_register');
+
+        do_action('user_register', 8);
+        $handler->saveUser(8);
+        $this->assertSame('new user note', self::stored('wide_note', 8, 'user'));
+    }
+
+    public function testProfileFormMustNameItsUser(): void
+    {
+        $this->addWideGroup();
+        $handler = $this->handler();
+        $base = [
+            SaveHandler::NONCE_FIELD => wp_create_nonce(SaveHandler::NONCE_ACTION),
+            SaveHandler::INPUT => ['group_wide' => ['wide_note' => 'x']],
+            SaveHandler::PRESENT => ['group_wide' => ['wide_note']],
+        ];
+        foreach ([[SaveHandler::OBJECT_FIELD => 'user:2'], ['user_id' => '2'], [SaveHandler::OBJECT_FIELD => 'user:7', 'user_id' => '2'], [SaveHandler::OBJECT_FIELD => 'user:2', 'user_id' => '7']] as $extra) {
+            $_POST = $base + $extra;
+            $handler->saveUser(self::AUTHOR);
+            $this->assertNull(self::stored('wide_note', self::AUTHOR, 'user'), (string) json_encode($extra));
+        }
+
+        $_POST = $base + [SaveHandler::OBJECT_FIELD => 'user:2', 'user_id' => '2'];
+        $handler->saveUser(self::AUTHOR);
+        $this->assertSame('x', self::stored('wide_note', self::AUTHOR, 'user'));
+    }
+
+    public function testZeroRowBudgetMeansNoRows(): void
+    {
+        $GLOBALS['pb_test_filters']['proto_blocks_repeater_max_items'][] = static fn() => 0;
+        $this->post(['agenda' => [['time' => '', 'title' => 'x', 'notes' => '']]]);
+        $this->savePost();
+
+        $this->assertArrayNotHasKey('agenda', $this->writes);
+        $this->assertSame(['agenda' => 'Add no more than 0 rows.'], $this->errors()['errors']);
+    }
+
+    public function testErrorMapIsCapped(): void
+    {
+        $GLOBALS['pb_test_current_user'] = self::ADMIN;
+        $this->addGroup(['key' => 'group_big', 'title' => 'Big', 'location' => [[['param' => 'post_type', 'operator' => '==', 'value' => 'event']]], 'fields' => [
+            ['key' => 'f_rows', 'name' => 'rows', 'type' => 'repeater', 'sub_fields' => [['key' => 'f_rows_t', 'name' => 't', 'type' => 'text', 'required' => 1]]],
+        ]]);
+        $this->post(['rows' => array_fill(0, 499, ['t' => ''])], null, 'group_big');
+        $this->post(['agenda' => array_fill(0, 20, ['title' => ''])]);
+        $result = $this->handler()->save(ObjectRef::post(10), $this->groups, $_POST[SaveHandler::INPUT], $_POST[SaveHandler::PRESENT], ['post_type' => 'event', 'post_status' => 'draft', 'post_id' => 10]);
+
+        $this->assertCount(SaveHandler::MAX_ERRORS, $result['errors']);
+        $this->assertCount(ErrorStore::MAX_ERRORS, $this->errors(self::ADMIN)['errors']);
     }
 }
