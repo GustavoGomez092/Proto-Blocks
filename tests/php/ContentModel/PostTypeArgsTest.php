@@ -287,10 +287,11 @@ final class PostTypeArgsTest extends TestCase
     {
         $built = self::build([
             'name' => 'Product',
-            'my_callback' => 'strlen',
+            'my_callback' => '\\strlen',
             'my_static' => 'ProtoBlocks\ContentModel\PostTypeArgs::build',
             'my_pair' => ['\ProtoBlocks\ContentModel\PostTypeArgs', 'build'],
             'my_flag' => 'not_a_function_pb_test',
+            'my_word' => 'Link',
             'delete_with_user' => false,
         ]);
 
@@ -298,6 +299,7 @@ final class PostTypeArgsTest extends TestCase
             $this->assertArrayNotHasKey($key, $built['args'], $key);
         }
         $this->assertSame('not_a_function_pb_test', $built['args']['my_flag']);
+        $this->assertSame('Link', $built['args']['my_word']);
         $this->assertFalse($built['args']['delete_with_user']);
         $this->assertSame(['unsafe_key', 'unsafe_key', 'unsafe_key'], array_map(static fn (Issue $i): string => $i->code, $built['issues']));
     }

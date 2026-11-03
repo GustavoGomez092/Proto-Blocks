@@ -111,12 +111,18 @@ final class AdminRestControllerTest extends TestCase
 
             // A sub-site Administrator: reads yes, theme file writes no.
             self::assertTrue($controller->permission());
-            self::assertFalse($controller->writePermission());
+            $denied = $controller->writePermission();
+            self::assertInstanceOf(\WP_Error::class, $denied);
+            self::assertSame('proto_blocks_multisite', $denied->get_error_code());
+            self::assertSame(403, $denied->get_error_data()['status']);
+            self::assertSame('Only network administrators can write theme files on a multisite network.', $denied->get_error_message());
+            self::assertSame('multisite', AdminRestController::writeReason());
             self::assertFalse(AdminRestController::canWriteCode());
             self::assertFalse(AdminRestController::fileWritesAllowed());
 
             $GLOBALS['pb_test_super_admins'] = [1];
             self::assertTrue($controller->writePermission());
+            self::assertNull(AdminRestController::writeReason());
             self::assertTrue(AdminRestController::fileWritesAllowed());
 
             // A super admin still needs manage_options on the site (the read gate).

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace ProtoBlocks\Admin;
 
 use InvalidArgumentException;
+use ProtoBlocks\API\AdminRestController;
 use ProtoBlocks\Tailwind\Manager as TailwindManager;
 
 /**
@@ -124,6 +125,8 @@ final class AdminApp
             'adminUrl' => esc_url_raw(admin_url('admin.php')),
             'version' => defined('PROTO_BLOCKS_VERSION') ? (string) \PROTO_BLOCKS_VERSION : '',
             'fileModsAllowed' => AdminPage::fileModsAllowed(),
+            // Why the current user cannot write declaration files: 'file_mods', 'multisite' or null.
+            'writeReason' => AdminRestController::writeReason(),
             // Which constant to name in the read-only banner; null when allowed.
             'fileModsConstant' => self::fileModsConstant(),
             // Same base the Tailwind browser compiler uses to fetch its wasm.

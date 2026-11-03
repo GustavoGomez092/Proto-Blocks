@@ -27,7 +27,7 @@ export interface ListItem {
 	count: number;
 	editable: boolean;
 	/** `inline`: a taxonomy declared inside a type file, edited through that type. */
-	readOnlyReason: 'file_mods' | 'not_writable' | 'not_proto' | 'outside_root' | 'inline' | null;
+	readOnlyReason: 'file_mods' | 'multisite' | 'not_writable' | 'not_proto' | 'outside_root' | 'inline' | null;
 	issues: Issue[];
 	/** Taxonomy items only: translated text for `inline` ("Declared inline in proto-types/<type>/type.jsonc; edit it there."), else null. */
 	readOnlyMessage?: string | null;

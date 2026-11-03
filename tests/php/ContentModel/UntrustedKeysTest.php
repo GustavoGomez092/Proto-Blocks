@@ -44,6 +44,13 @@ final class UntrustedKeysTest extends TestCase
             $this->assertSame([], self::check($kind, $base), $kind);
             foreach (UntrustedKeys::UNSAFE_KEYS as $key) {
                 $errors = self::check($kind, $base + [$key => 'phpinfo']);
+                if ($key === 'meta_box_cb' && $kind !== 'options') {
+                    // Only the literal false is allowed (core hides a taxonomy box with it).
+                    $this->assertSame('/meta_box_cb', $errors[0]['path'], $kind);
+                    $this->assertSame([], self::check($kind, $base + [$key => false]), $kind);
+                    $this->assertNotSame([], self::check($kind, $base + [$key => true]), $kind);
+                    continue;
+                }
                 $this->assertSame([['path' => '/' . $key, 'message' => 'Not allowed in a declaration file.']], $errors, "$kind $key");
             }
         }
@@ -102,8 +109,11 @@ final class UntrustedKeysTest extends TestCase
 
     public function testNamesCallable(): void
     {
-        $this->assertTrue(UntrustedKeys::namesCallable('strlen'));
+        $this->assertFalse(UntrustedKeys::namesCallable('strlen'));
+        $this->assertFalse(UntrustedKeys::namesCallable('Link'));
+        $this->assertFalse(UntrustedKeys::namesCallable('Date'));
         $this->assertTrue(UntrustedKeys::namesCallable('\strlen'));
+        $this->assertTrue(UntrustedKeys::namesCallable('ProtoBlocks\\ContentModel\\UntrustedKeys::filter'));
         $this->assertTrue(UntrustedKeys::namesCallable(UntrustedKeys::class . '::filter'));
         $this->assertTrue(UntrustedKeys::namesCallable([UntrustedKeys::class, 'filter']));
         $this->assertFalse(UntrustedKeys::namesCallable('post'));
@@ -112,5 +122,31 @@ final class UntrustedKeysTest extends TestCase
         $this->assertFalse(UntrustedKeys::namesCallable(['book', 'books']));
         $this->assertFalse(UntrustedKeys::namesCallable(true));
         $this->assertFalse(UntrustedKeys::namesCallable(['title', 'editor', 'thumbnail']));
+    }
+
+    private static function fileType(array $data): Declaration
+    {
+        return new Declaration('type', 'product', $data, Declaration::ORIGIN_FILE, '/theme/proto-types/product/type.jsonc', '/theme');
+    }
+
+    public function testPlainWordsAreKeptButNamedCallablesAreStripped(): void
+    {
+        [$kept, $issues] = UntrustedKeys::filter(self::fileType(['name' => 'Product', 'description' => 'Link', 'foo' => 'Date']), '#/$defs/type');
+        $this->assertSame([], $issues);
+        $this->assertSame('Link', $kept->data['description']);
+
+        [$stripped, $issues] = UntrustedKeys::filter(self::fileType(['name' => 'Product', 'foo' => UntrustedKeys::class . '::filter']), '#/$defs/type');
+        $this->assertArrayNotHasKey('foo', $stripped->data);
+        $this->assertSame(['unsafe_key'], array_map(static fn ($i) => $i->code, $issues));
+    }
+
+    public function testMetaBoxCbFalseIsKeptAndStringIsStripped(): void
+    {
+        [$kept, $issues] = UntrustedKeys::filter(self::fileType(['name' => 'Product', 'meta_box_cb' => false]), '#/$defs/type');
+        $this->assertSame([], $issues);
+        $this->assertFalse($kept->data['meta_box_cb']);
+
+        [$stripped] = UntrustedKeys::filter(self::fileType(['name' => 'Product', 'meta_box_cb' => 'post_categories_meta_box']), '#/$defs/type');
+        $this->assertArrayNotHasKey('meta_box_cb', $stripped->data);
     }
 }

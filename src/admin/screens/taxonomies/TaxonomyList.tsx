@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { __ } from '@wordpress/i18n';
 import { PlusIcon } from 'lucide-react';
 import { adminGet } from '@/admin/api';
-import { getBootstrap } from '@/admin/bootstrap';
+import { getBootstrap, getWriteReason } from '@/admin/bootstrap';
 import { IssueList } from '@/admin/components/content-model/IssueList';
 import { OriginBadge } from '@/admin/components/content-model/OriginBadge';
 import { PageHeader } from '@/admin/components/shell/PageHeader';
@@ -68,7 +68,7 @@ export function TaxonomyList({
 	onOpen: (slug: string) => void;
 	onNew: () => void;
 }) {
-	const { fileModsAllowed } = getBootstrap();
+	const writeReason = getWriteReason();
 	// One request: every list item carries its object types and inline parent.
 	const list = useAsync(() => adminGet<ListResult>('admin/taxonomies'), []);
 
@@ -78,7 +78,7 @@ export function TaxonomyList({
 			description={__('Ways to group content, like categories and tags.', 'proto-blocks')}
 			actions={
 				canAdd ? (
-					<Button disabled={!fileModsAllowed || !list.data?.createTarget.writable} onClick={onNew}>
+					<Button disabled={writeReason !== null || !list.data?.createTarget.writable} onClick={onNew}>
 						<PlusIcon aria-hidden="true" />
 						{__('Add taxonomy', 'proto-blocks')}
 					</Button>
@@ -120,7 +120,7 @@ export function TaxonomyList({
 	return (
 		<div className="grid gap-6">
 			{header(true)}
-			{!fileModsAllowed ? <ReadOnlyBanner reason="file_mods" /> : null}
+			{writeReason !== null ? <ReadOnlyBanner reason={writeReason} /> : null}
 			<IssueList issues={issues} />
 			{items.length === 0 ? (
 				<Card className="px-6 py-8 text-center text-[13px] text-muted-foreground">

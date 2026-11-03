@@ -7,7 +7,7 @@ import type { ListItem } from '@/admin/content-model/types';
 /**
  * Frame of a declaration edit screen: PageHeader with the file path and the
  * actions, the Phase 0 read-only banner when the file can't be written, then
- * the form. `file_mods` and `not_writable` get the banner; other reasons
+ * the form. `file_mods`, `multisite` and `not_writable` get the banner; other reasons
  * (outside the theme, not a Proto-Blocks file) are explained by the screen.
  */
 export function DeclarationShell({
@@ -37,6 +37,7 @@ export function DeclarationShell({
 				actions={actions}
 			/>
 			{readOnlyReason === 'file_mods' ? <ReadOnlyBanner reason="file_mods" description={description} /> : null}
+			{readOnlyReason === 'multisite' ? <ReadOnlyBanner reason="multisite" description={description} /> : null}
 			{readOnlyReason === 'not_writable' ? <ReadOnlyBanner reason="not_writable" path={path} description={description} /> : null}
 			{children}
 		</div>
