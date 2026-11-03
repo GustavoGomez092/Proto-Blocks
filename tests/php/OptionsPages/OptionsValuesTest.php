@@ -516,6 +516,48 @@ final class OptionsValuesTest extends TestCase
         self::assertSame([], $this->values()->readOnly($this->page('theme-settings'), 3));
     }
 
+    public function testReadOnlyListsPasswordFieldsForUntrustedWriters(): void
+    {
+        $this->extra = [self::standalone('group_extra', 'theme-settings', [
+            ['key' => 'field_extra_key', 'name' => 'api_key', 'label' => 'API key', 'type' => 'password'],
+            ['key' => 'field_extra_creds', 'name' => 'creds', 'label' => 'Creds', 'type' => 'group', 'sub_fields' => [
+                ['key' => 'field_extra_creds_pw', 'name' => 'pw', 'label' => 'PW', 'type' => 'password'],
+            ]],
+        ])];
+        $values = $this->values();
+        $page = $this->page('theme-settings');
+
+        $readOnly = $values->readOnly($page, 3);
+        self::assertSame('unfiltered_html', $readOnly['api_key'] ?? null);
+        self::assertSame('unfiltered_html', $readOnly['creds'] ?? null);
+
+        $GLOBALS['pb_test_options']['theme-settings_api_key'] = 'sk-live-1';
+        $group = self::groupKeyOf($values, $page, 'api_key');
+        $values->save($page, [$group => ['api_key' => 'sk-evil']], [$group => ['api_key']], 3);
+        self::assertSame('sk-live-1', $GLOBALS['pb_test_options']['theme-settings_api_key']);
+        self::assertSame('Only users with unfiltered HTML may edit this field.', $values->notices()[0]['message']);
+    }
+
+    public function testRowsAboveTheCapAreRefusedNotTruncated(): void
+    {
+        $this->extra = [self::standalone('group_extra', 'theme-settings', [
+            ['key' => 'field_extra_rows', 'name' => 'rows', 'label' => 'Rows', 'type' => 'repeater', 'sub_fields' => [
+                ['key' => 'field_extra_rows_t', 'name' => 't', 'label' => 'T', 'type' => 'text'],
+            ]],
+        ])];
+        $GLOBALS['pb_test_filters']['proto_blocks_repeater_max_items'][] = static fn () => 3;
+        $values = $this->values();
+        $page = $this->page('theme-settings');
+        $group = self::groupKeyOf($values, $page, 'rows');
+
+        $result = $values->save($page, [$group => ['rows' => array_fill(0, 5, ['t' => 'a'])]], [$group => ['rows']], 1);
+
+        self::assertInstanceOf(\WP_Error::class, $result);
+        self::assertSame(422, $result->get_error_data()['status']);
+        self::assertSame('Add no more than 3 rows.', $result->get_error_data()['errors']['rows']);
+        self::assertArrayNotHasKey('theme-settings_rows', $GLOBALS['pb_test_options']);
+    }
+
     public function testReadSkipsProtectedNames(): void
     {
         $GLOBALS['pb_test_options']['theme-settings_phone'] = '555';

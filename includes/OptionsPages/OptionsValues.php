@@ -9,8 +9,10 @@ use ProtoBlocks\Core\Plugin;
 use ProtoBlocks\Modules\Fields\Definition\Field;
 use ProtoBlocks\Modules\Fields\Definition\FieldGroup;
 use ProtoBlocks\Modules\Fields\Definition\GroupNormalizer;
+use ProtoBlocks\Modules\Fields\Edit\SaveHandler;
 use ProtoBlocks\Modules\Fields\Types\FieldTypeInterface;
 use ProtoBlocks\Modules\Fields\Types\RepeaterType;
+use ProtoBlocks\Modules\Fields\Types\TrustMessage;
 use ProtoBlocks\Modules\Fields\Types\TypeRegistry;
 use ProtoBlocks\Modules\Fields\Validation\ValueValidator;
 use ProtoBlocks\Security\AttributeSanitizer;
@@ -179,7 +181,13 @@ final class OptionsValues
                 }
                 $type = $this->types->for($field);
                 if (self::readOnlyReason($type, $field, $untrusted) !== null) {
-                    $this->notices[] = ['field' => $name, 'message' => self::codeRefusal($type)];
+                    $this->notices[] = ['field' => $name, 'message' => TrustMessage::for($field)];
+                    continue;
+                }
+                // Rows above the cap are refused (422), never dropped by normalize() below.
+                $capError = self::rowCapError($field, $submitted[$name] ?? null);
+                if ($capError !== null) {
+                    $errors[$name] = $capError;
                     continue;
                 }
                 $value = $type->normalize($submitted[$name] ?? null, $field);
@@ -442,17 +450,21 @@ final class OptionsValues
         );
     }
 
+    /** "Add no more than N rows." when $value holds more rows than the field's cap or the shared row budget. */
+    private static function rowCapError(Field $field, mixed $value): ?string
+    {
+        if (in_array($field->type, ['repeater', 'flexible_content'], true) && is_array($value) && count($value) > RepeaterType::maxRows($field)) {
+            /* translators: %d: maximum number of rows */
+            return sprintf(__('Add no more than %d rows.', 'proto-blocks'), RepeaterType::maxRows($field));
+        }
+
+        return SaveHandler::rowBudgetError($field, $value);
+    }
+
     /** The one write-trust check shared by readOnly() and save(). */
     private static function readOnlyReason(FieldTypeInterface $type, Field $field, bool $untrusted): ?string
     {
         return $untrusted && $type->hasUnfilteredHtml($field) ? 'unfiltered_html' : null;
-    }
-
-    private static function codeRefusal(FieldTypeInterface $type): string
-    {
-        return $type->requiresUnfilteredHtml()
-            ? __('Only users with unfiltered HTML may edit this field.', 'proto-blocks')
-            : __('This field contains a code sub-field that only users with unfiltered HTML may edit.', 'proto-blocks');
     }
 
     /** @param array{path: string, code: string, message: string} $entry */

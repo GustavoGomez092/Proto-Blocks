@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Tests\Modules\Fields;
 
-use PHPUnit\Framework\TestCase;
 use ProtoBlocks\Modules\Fields\Definition\FieldGroup;
 use ProtoBlocks\Modules\Fields\Definition\GroupNormalizer;
 use ProtoBlocks\Modules\Fields\Edit\EditRoutes;
@@ -18,7 +17,7 @@ require_once __DIR__ . '/stubs/Edit.php';
 require_once __DIR__ . '/../../ContentModel/stubs/hooks.php';
 require_once __DIR__ . '/../../API/content-model-stubs.php';
 
-final class EditRoutesTest extends TestCase
+final class EditRoutesTest extends FieldsTestCase
 {
     private const EDITOR = 1;
     private const CONTRIBUTOR = 2;
@@ -31,8 +30,13 @@ final class EditRoutesTest extends TestCase
     /** @var list<object> what the fake query returns */
     private array $found = [];
 
+    /** @var array<string, string> options page slug => declared capability */
+    private array $pageCaps = [];
+
     protected function setUp(): void
     {
+        parent::setUp();
+        $this->pageCaps = [];
         foreach (['pb_test_routes', 'pb_test_transients', 'pb_test_post_types', 'pb_test_taxonomies', 'pb_test_terms'] as $g) {
             $GLOBALS[$g] = [];
         }
@@ -64,6 +68,7 @@ final class EditRoutesTest extends TestCase
     {
         $GLOBALS['pb_test_current_user'] = 0;
         $GLOBALS['pb_test_routes'] = [];
+        parent::tearDown();
     }
 
     /** @param list<FieldGroup> $extra */
@@ -75,7 +80,7 @@ final class EditRoutesTest extends TestCase
         return new EditRoutes(new GroupIndex($groups), new ErrorStore(), function (array $args): array {
             $this->queries[] = $args;
             return ['posts' => $this->found, 'total' => count($this->found), 'pages' => $this->found === [] ? 0 : 3];
-        });
+        }, fn(string $slug): ?string => $this->pageCaps[$slug] ?? null);
     }
 
     /** @return array{callback: callable, permission_callback: callable, methods: string} */
@@ -159,6 +164,31 @@ final class EditRoutesTest extends TestCase
         $this->assertSame(['a' => 'x'], self::dispatch('/fields/errors', ['object' => 'term:5'])['errors']);
         $this->assertSame(['b' => 'y'], self::dispatch('/fields/errors', ['object' => 'user:7'])['errors']);
         $this->assertSame(['c' => 'z'], self::dispatch('/fields/errors', ['object' => 'option:site'])['errors']);
+    }
+
+    public function testOptionErrorsUseThePageCapability(): void
+    {
+        $this->routes()->registerRoutes();
+        $this->pageCaps['site'] = 'edit_site_settings';
+        (new ErrorStore())->put(ObjectRef::option('site'), self::EDITOR, ['c' => 'z'], []);
+        $this->assertInstanceOf(\WP_Error::class, self::dispatch('/fields/errors', ['object' => 'option:site']), 'manage_options is not the page capability');
+
+        (new ErrorStore())->put(ObjectRef::option('site'), self::CONTRIBUTOR, ['c' => 'z'], []);
+        $GLOBALS['pb_test_current_user'] = self::CONTRIBUTOR;
+        $GLOBALS['pb_test_caps'][self::CONTRIBUTOR][] = 'edit_site_settings';
+        $this->assertSame(['c' => 'z'], self::dispatch('/fields/errors', ['object' => 'option:site'])['errors']);
+    }
+
+    public function testErrorsCheckEditPostAgainstTheRequestedPost(): void
+    {
+        $this->routes()->registerRoutes();
+        $GLOBALS['pb_test_caps'][self::CONTRIBUTOR] = ['edit_posts', 'edit_post' => [21 => true]];
+        $GLOBALS['pb_test_current_user'] = self::CONTRIBUTOR;
+        (new ErrorStore())->put(ObjectRef::post(10), self::CONTRIBUTOR, ['a' => 'x'], []);
+        (new ErrorStore())->put(ObjectRef::post(21), self::CONTRIBUTOR, ['b' => 'y'], []);
+
+        $this->assertInstanceOf(\WP_Error::class, self::dispatch('/fields/errors', ['object' => 'post:10']), 'an editor of post 21 cannot read post 10');
+        $this->assertSame(['b' => 'y'], self::dispatch('/fields/errors', ['object' => 'post:21'])['errors']);
     }
 
     public function testRelationshipUsesTheDeclarationNotTheClient(): void

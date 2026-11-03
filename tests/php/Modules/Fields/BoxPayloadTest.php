@@ -120,6 +120,52 @@ final class BoxPayloadTest extends FieldsTestCase
         $this->assertSame([], $admin['readOnly']);
     }
 
+    public function testAuthorNeverReceivesStoredPasswords(): void
+    {
+        $g = $this->addGroup(['key' => 'group_pw', 'title' => 'Keys', 'fields' => [
+            ['key' => 'f_key', 'name' => 'stream_key', 'type' => 'password'],
+            ['key' => 'f_creds', 'name' => 'creds', 'type' => 'group', 'sub_fields' => [['key' => 'f_creds_pw', 'name' => 'pw', 'type' => 'password']]],
+            ['key' => 'f_plain', 'name' => 'plain', 'type' => 'text'],
+        ]]);
+        $GLOBALS['pb_test_meta']['post'][10]['stream_key'] = ['sk-live-1'];
+        $GLOBALS['pb_test_meta']['post'][10]['creds'] = [['pw' => 'hunter2']];
+        $GLOBALS['pb_test_meta']['post'][10]['plain'] = ['Hi'];
+
+        $p = $this->payload()->build($g, ObjectRef::post(10), self::AUTHOR);
+        $this->assertSame(['stream_key' => 'unfiltered_html', 'creds' => 'unfiltered_html'], $p['readOnly']);
+        $this->assertSame(['plain' => 'Hi'], $p['values']);
+        $this->assertStringNotContainsString('sk-live-1', BoxPayload::json($p));
+        $this->assertStringNotContainsString('hunter2', BoxPayload::json($p));
+
+        $admin = $this->payload()->build($g, ObjectRef::post(10), self::ADMIN);
+        $this->assertSame('sk-live-1', $admin['values']['stream_key']);
+        $this->assertSame(['pw' => 'hunter2'], $admin['values']['creds']);
+        $this->assertSame([], $admin['readOnly']);
+    }
+
+    public function testRowsAboveALoweredCapAreShownNotTruncated(): void
+    {
+        $g = $this->addGroup(['key' => 'group_rows', 'title' => 'Rows', 'fields' => [
+            ['key' => 'f_rows', 'name' => 'rows', 'type' => 'repeater', 'sub_fields' => [['key' => 'f_rows_t', 'name' => 't', 'type' => 'text']]],
+            ['key' => 'f_few', 'name' => 'few', 'type' => 'repeater', 'sub_fields' => [['key' => 'f_few_t', 'name' => 't', 'type' => 'text']]],
+        ]]);
+        $GLOBALS['pb_test_meta']['post'][10]['rows'] = [array_fill(0, 5, ['t' => 'a'])];
+        $GLOBALS['pb_test_meta']['post'][10]['few'] = [[['t' => 'a']]];
+        $GLOBALS['pb_test_filters']['proto_blocks_repeater_max_items'][] = static fn() => 3;
+
+        foreach ([self::ADMIN, self::AUTHOR] as $user) {
+            $p = $this->payload()->build($g, ObjectRef::post(10), $user);
+            $this->assertCount(5, $p['values']['rows'], 'every stored row is shown');
+            $this->assertSame(['rows' => ['rows' => 5, 'limit' => 3]], $p['overCap']);
+        }
+
+        $GLOBALS['pb_test_filters']['proto_blocks_repeater_max_items'] = [static fn() => 0];
+        $p = $this->payload()->build($g, ObjectRef::post(10), self::ADMIN);
+        $this->assertCount(5, $p['values']['rows'], 'a zero budget wipes nothing from the box');
+        $this->assertSame(['rows' => 5, 'limit' => 0], $p['overCap']['rows']);
+        $this->assertSame(['rows' => 1, 'limit' => 0], $p['overCap']['few']);
+    }
+
     public function testErrorStoreEntryOverridesTheStoredValueOnce(): void
     {
         $GLOBALS['pb_test_meta']['post'][10]['start_date'] = ['2026-03-04'];

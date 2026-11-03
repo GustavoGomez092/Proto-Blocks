@@ -129,6 +129,16 @@ final class RestApiPreviewPostTest extends TestCase
         $this->assertArrayNotHasKey('post', $GLOBALS);
     }
 
+    public function testEditorOfAnotherPostCannotPreviewWithThisOne(): void
+    {
+        $GLOBALS['pb_test_caps'][self::EDITOR] = ['edit_posts', 'edit_post' => [11 => true]];
+
+        $this->preview(10);
+        $this->preview(11);
+
+        $this->assertSame([null, 11], $this->seenIds(), 'edit_post is checked against the requested post');
+    }
+
     public function testMalformedOrMissingPostsAreIgnored(): void
     {
         foreach ([null, 0, -10, '10x', "10\n", 1.5, [10], 999] as $postId) {

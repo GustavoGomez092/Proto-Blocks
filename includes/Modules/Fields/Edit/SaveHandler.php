@@ -14,6 +14,7 @@ use ProtoBlocks\Modules\Fields\Storage\ObjectRef;
 use ProtoBlocks\Modules\Fields\Storage\Store;
 use ProtoBlocks\Modules\Fields\Types\FieldTypeInterface;
 use ProtoBlocks\Modules\Fields\Types\RepeaterType;
+use ProtoBlocks\Modules\Fields\Types\TrustMessage;
 use ProtoBlocks\Modules\Fields\Types\TypeRegistry;
 use ProtoBlocks\Modules\Fields\Validation\ValueValidator;
 use ProtoBlocks\Security\AttributeSanitizer;
@@ -241,21 +242,25 @@ final class SaveHandler
                     continue; // hidden: not validated, not written
                 }
                 if ($untrusted && $type->hasUnfilteredHtml($f)) {
-                    $out['errors'][$name] = self::codeMessage($type);
+                    $out['errors'][$name] = TrustMessage::for($f);
                     continue;
                 }
                 if (isset($errorsByField[$name])) {
                     $out['errors'] += $errorsByField[$name];
-                    $submittedForErrors[$name] = $values[$name];
+                    if (!TrustMessage::holds($f, 'password')) {
+                        $submittedForErrors[$name] = $values[$name]; // a submitted password never reaches the ErrorStore
+                    }
                     continue;
                 }
                 if (!array_key_exists($name, $result['valid'])) {
                     continue;
                 }
-                $budgetError = $this->rowBudgetError($f, $values[$name]);
+                $budgetError = self::rowBudgetError($f, $values[$name]);
                 if ($budgetError !== null) {
                     $out['errors'][$name] = $budgetError;
-                    $submittedForErrors[$name] = $values[$name];
+                    if (!TrustMessage::holds($f, 'password')) {
+                        $submittedForErrors[$name] = $values[$name]; // a submitted password never reaches the ErrorStore
+                    }
                     continue;
                 }
 
@@ -462,7 +467,7 @@ final class SaveHandler
     }
 
     /** The nested row budget: total rows across all levels of one top-level field. */
-    private function rowBudgetError(Field $f, mixed $value): ?string
+    public static function rowBudgetError(Field $f, mixed $value): ?string
     {
         if (!in_array($f->type, self::CONTAINERS, true)) {
             return null;
@@ -477,7 +482,7 @@ final class SaveHandler
     }
 
     /** Rows of repeaters and flexible content in $value, at every depth. */
-    private static function rows(Field $f, mixed $value): int
+    public static function rows(Field $f, mixed $value): int
     {
         if (!is_array($value)) {
             return 0;
@@ -521,13 +526,6 @@ final class SaveHandler
         }
 
         return $n;
-    }
-
-    private static function codeMessage(FieldTypeInterface $type): string
-    {
-        return $type->requiresUnfilteredHtml()
-            ? __('Only users with unfiltered HTML may edit this field.', 'proto-blocks')
-            : __('This field contains a code sub-field that only users with unfiltered HTML may edit.', 'proto-blocks');
     }
 
     /** A refusal the metadata guards recorded for this field during the last write. */

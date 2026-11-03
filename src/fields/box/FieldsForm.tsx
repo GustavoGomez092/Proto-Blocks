@@ -150,7 +150,13 @@ function RowBody( { field, scope, visible }: { field: FieldDef; scope: FieldPath
 	const path = [ ...scope, field.name ];
 	const name = dottedPath( path );
 	// Code (or a container holding code) the user may not write: the server sent no value and a readOnly reason.
-	const readOnly = ( field.type === 'code' && ! payload.canUnfiltered ) || ( scope.length === 0 && !! payload.readOnly?.[ field.name ] );
+	const trustLocked = ( field.type === 'code' && ! payload.canUnfiltered ) || ( scope.length === 0 && !! payload.readOnly?.[ field.name ] );
+	// Stored rows above a lowered cap: shown with a warning, never dropped; at a cap of 0 they are read-only.
+	const over = scope.length === 0 ? payload.overCap?.[ field.name ] : undefined;
+	const capLocked = !! over && over.limit === 0;
+	const readOnly = trustLocked || capLocked;
+	// A password field or a container the user may not read: its value was not sent, so no input is shown.
+	const hiddenValue = trustLocked && field.type !== 'code';
 	const editable = hasInput( field.type ) && ! readOnly;
 	const { errors } = useFormState( { control, name, exact: true } );
 	const message = ( get( errors, name ) as { message?: string } | undefined )?.message;
@@ -194,15 +200,39 @@ function RowBody( { field, scope, visible }: { field: FieldDef; scope: FieldPath
 					{ field.instructions }
 				</p>
 			) }
-			<FieldA11yContext.Provider value={ a11y }>
-				{ /* If the input fails to load, its present marker goes too, so the stored value is kept. */ }
-				<ChunkBoundary>
-					{ scope.length === 0 && visible && editable && <input type="hidden" name={ PRESENT_NAME( groupKey ) } value={ field.name } /> }
-					<Suspense fallback={ <Skeleton className="h-9 w-full" /> }>
-						<Input field={ field } path={ path } groupKey={ groupKey } readOnly={ readOnly } />
-					</Suspense>
-				</ChunkBoundary>
-			</FieldA11yContext.Provider>
+			{ over && (
+				<p role="status" data-over-cap="" className="flex items-center gap-1.5 text-[13px] text-[#996800]">
+					<CircleAlertIcon aria-hidden="true" className="size-4 shrink-0" />
+					{ sprintf(
+						/* translators: 1: number of rows, 2: row limit */
+						__( 'This repeater has %1$d rows; the limit is %2$d. Remove rows to save.', 'proto-blocks' ),
+						over.rows,
+						over.limit
+					) }
+				</p>
+			) }
+			{ hiddenValue ? (
+				<p className="text-[13px] text-muted-foreground">
+					{ __( 'Hidden; only users with unfiltered HTML may view and edit this field.', 'proto-blocks' ) }
+				</p>
+			) : (
+				<FieldA11yContext.Provider value={ a11y }>
+					{ /* If the input fails to load, its present marker goes too, so the stored value is kept. */ }
+					<ChunkBoundary>
+						{ scope.length === 0 && visible && editable && <input type="hidden" name={ PRESENT_NAME( groupKey ) } value={ field.name } /> }
+						<Suspense fallback={ <Skeleton className="h-9 w-full" /> }>
+							{ capLocked ? (
+								// A disabled fieldset: the rows are visible but neither editable nor submitted.
+								<fieldset disabled className="m-0 min-w-0 border-0 p-0">
+									<Input field={ field } path={ path } groupKey={ groupKey } readOnly />
+								</fieldset>
+							) : (
+								<Input field={ field } path={ path } groupKey={ groupKey } readOnly={ readOnly } />
+							) }
+						</Suspense>
+					</ChunkBoundary>
+				</FieldA11yContext.Provider>
+			) }
 			{ message && (
 				<p id={ errorId } role="alert" className="flex items-center gap-1.5 text-[13px] text-destructive">
 					<CircleAlertIcon aria-hidden="true" className="size-4 shrink-0" />
@@ -367,10 +397,11 @@ export function FieldsForm( { payload, outcome }: { payload: BoxPayload; outcome
 			maxRows: ( f ) => byField( payload.maxRows, f ) ?? null,
 			choices: ( f ) => byField( payload.choices, f )?.map( ( c ) => String( c.key ) ) ?? null,
 			// Never report what the user cannot change here.
-			skip: ( f ) => ! hasInput( f.type ) || ( f.type === 'code' && ! canUnfiltered ) || !! payload.readOnly?.[ f.name ],
+			skip: ( f ) =>
+				! hasInput( f.type ) || ( f.type === 'code' && ! canUnfiltered ) || !! payload.readOnly?.[ f.name ] || payload.overCap?.[ f.name ]?.limit === 0,
 		};
 		return zodResolver( buildValueSchema( fields, opts ) as never );
-	}, [ fields, payload.maxRows, payload.choices, payload.readOnly, canUnfiltered ] );
+	}, [ fields, payload.maxRows, payload.choices, payload.readOnly, payload.overCap, canUnfiltered ] );
 
 	const defaultValues = useMemo( () => initialValues( fields, payload.values ), [ fields, payload.values ] );
 

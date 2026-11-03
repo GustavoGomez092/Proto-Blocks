@@ -249,6 +249,13 @@ JSONC);
         self::assertFalse($list['createTarget']['writable']);
     }
 
+    public function testDetailCarriesTheReadOnlyReason(): void
+    {
+        self::assertNull($this->routes()->detail(new \WP_REST_Request(['key' => self::EVENTS_KEY]))['readOnlyReason']);
+        self::assertSame('inline', $this->routes()->detail(new \WP_REST_Request(['key' => 'group_product']))['readOnlyReason']);
+        self::assertSame('file_mods', $this->routes(false)->detail(new \WP_REST_Request(['key' => self::EVENTS_KEY]))['readOnlyReason']);
+    }
+
     public function testDisabledModule(): void
     {
         $list = $this->routes(true, FieldsModule::disabled())->list();

@@ -234,7 +234,7 @@ final class MetaRegistrar
             'type' => $metaType,
             'single' => true,
             'default' => self::defaultFor($field, $type, $metaType),
-            'show_in_rest' => $this->showInRest($field) ? ['schema' => $schema] : false,
+            'show_in_rest' => $this->showInRest($field, $kind) ? ['schema' => $schema] : false,
             'sanitize_callback' => $this->trust->sanitizeCallback($field, $this->stores[$kind]),
             'auth_callback' => $this->trust->authCallback($field, $kind),
         ];
@@ -281,14 +281,19 @@ final class MetaRegistrar
      * Whether the value is exposed through core's REST meta (readable
      * anonymously in the `view` context of published posts, viewable terms
      * and public users). A field's `show_in_rest` setting decides when set;
-     * otherwise every field is exposed except secrets: password and code
-     * fields, and containers holding one at any depth.
+     * otherwise every post and term field is exposed except secrets: password
+     * and code fields, and containers holding one at any depth. User fields
+     * are off unless the field sets `show_in_rest: true` (core serves user
+     * meta to anonymous visitors for every author of a published post).
      */
-    private function showInRest(Field $field): bool
+    private function showInRest(Field $field, string $kind): bool
     {
         $explicit = $field->setting('show_in_rest');
         if ($explicit !== null) {
             return $explicit === true || $explicit === 1 || $explicit === '1';
+        }
+        if ($kind === 'user') {
+            return false;
         }
 
         return !$this->holdsSecret($field);

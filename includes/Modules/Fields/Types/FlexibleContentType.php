@@ -123,7 +123,7 @@ final class FlexibleContentType implements FieldTypeInterface
         $limit = RepeaterType::maxRows($field);
         $out = [];
         foreach ($value as $row) {
-            if (count($out) >= $limit || $budget <= 0) {
+            if (RepeaterType::capped() && (count($out) >= $limit || $budget <= 0)) {
                 break;
             }
             if (!is_array($row) || !is_string($row['layout'] ?? null) || !isset($byName[$row['layout']])) {

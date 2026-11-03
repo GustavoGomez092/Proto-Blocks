@@ -6,7 +6,6 @@ namespace ProtoBlocks\Tests\Modules\Fields;
 
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
-use PHPUnit\Framework\TestCase;
 use ProtoBlocks\Modules\Fields\Definition\FieldGroup;
 use ProtoBlocks\Modules\Fields\Definition\GroupNormalizer;
 use ProtoBlocks\Modules\Fields\Edit\ChoiceResolver;
@@ -37,7 +36,7 @@ require_once __DIR__ . '/../../ContentModel/stubs/hooks.php';
  */
 #[RunTestsInSeparateProcesses]
 #[PreserveGlobalState(false)]
-final class SaveHandlerTest extends TestCase
+final class SaveHandlerTest extends FieldsTestCase
 {
     private const ADMIN = 1;
     private const AUTHOR = 2;
@@ -51,6 +50,7 @@ final class SaveHandlerTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
         require_once __DIR__ . '/../../API/stubs/PreviewPost.php';
         foreach (['pb_test_filters', 'pb_test_hooks', 'pb_test_meta', 'pb_test_meta_reg', 'pb_test_terms', 'pb_test_users', 'pb_test_transients', 'pb_test_set_terms', 'pb_test_object_terms', 'pb_test_actions', 'pb_test_taxonomies'] as $g) {
             $GLOBALS[$g] = [];
@@ -90,6 +90,7 @@ final class SaveHandlerTest extends TestCase
     {
         $_POST = [];
         $GLOBALS['pb_test_current_user'] = 0;
+        parent::tearDown();
     }
 
     /** @param array<string, mixed> $raw */
@@ -401,6 +402,66 @@ final class SaveHandlerTest extends TestCase
             ['embeds' => 'This field contains a code sub-field that only users with unfiltered HTML may edit.'],
             $this->errors()['errors']
         );
+    }
+
+    public function testEditorOfAnotherPostCannotSaveThisOne(): void
+    {
+        $GLOBALS['pb_test_caps'][self::AUTHOR] = ['edit_posts', 'edit_post' => [11 => true]];
+        $this->post(['subtitle' => 'x']);
+        $this->savePost();
+        $this->assertSame([], $this->writes, 'edit_post is checked against post 10, not any post');
+        $this->assertNull(self::stored('subtitle'));
+
+        $GLOBALS['pb_test_caps'][self::AUTHOR] = ['edit_posts', 'edit_post' => [10 => true]];
+        $this->post(['subtitle' => 'x']);
+        $this->savePost();
+        $this->assertSame('x', self::stored('subtitle'), 'the per-object grant for post 10 saves');
+    }
+
+    public function testUntrustedPasswordIsRefusedAndNeverEchoed(): void
+    {
+        $this->addGroup(['key' => 'group_pw', 'title' => 'Keys', 'location' => [[['param' => 'post_type', 'operator' => '==', 'value' => 'event']]], 'fields' => [
+            ['key' => 'f_key', 'name' => 'stream_key', 'type' => 'password'],
+            ['key' => 'f_creds', 'name' => 'creds', 'type' => 'group', 'sub_fields' => [['key' => 'f_creds_pw', 'name' => 'pw', 'type' => 'password']]],
+        ]]);
+        $handler = $this->handler();
+        $GLOBALS['pb_test_current_user'] = self::ADMIN;
+        update_post_meta(10, 'stream_key', 'sk-live-1');
+        $GLOBALS['pb_test_current_user'] = self::AUTHOR;
+
+        $this->post(['stream_key' => 'sk-evil', 'creds' => ['pw' => 'evil']], null, 'group_pw');
+        $this->savePost($handler);
+
+        $this->assertSame('sk-live-1', self::stored('stream_key'));
+        $this->assertNull(self::stored('creds'));
+        $entry = $this->errors();
+        $this->assertSame([
+            'stream_key' => 'Only users with unfiltered HTML may edit this field.',
+            'creds' => 'This field contains a password sub-field that only users with unfiltered HTML may edit.',
+        ], $entry['errors']);
+        $this->assertSame([], $entry['submitted']);
+    }
+
+    public function testTrustedPasswordWithAnErrorIsNotParkedInTheErrorStore(): void
+    {
+        $this->addGroup(['key' => 'group_pw', 'title' => 'Keys', 'location' => [[['param' => 'post_type', 'operator' => '==', 'value' => 'event']]], 'fields' => [
+            ['key' => 'f_key', 'name' => 'stream_key', 'type' => 'password', 'maxlength' => 4],
+            ['key' => 'f_creds', 'name' => 'creds', 'type' => 'group', 'sub_fields' => [
+                ['key' => 'f_creds_pw', 'name' => 'pw', 'type' => 'password'],
+                ['key' => 'f_creds_user', 'name' => 'user', 'type' => 'text', 'maxlength' => 2],
+            ]],
+            ['key' => 'f_note', 'name' => 'note', 'type' => 'text', 'maxlength' => 2],
+        ]]);
+        $GLOBALS['pb_test_current_user'] = self::ADMIN;
+        $this->post(['stream_key' => 'sk-live-secret', 'creds' => ['pw' => 'hunter2', 'user' => 'too long'], 'note' => 'too long'], null, 'group_pw');
+        $this->savePost();
+
+        $entry = $this->errors(self::ADMIN);
+        $this->assertArrayHasKey('stream_key', $entry['errors']);
+        $this->assertArrayHasKey('creds.user', $entry['errors']);
+        $this->assertSame(['note' => 'too long'], $entry['submitted'], 'only non-password values are kept');
+        $this->assertStringNotContainsString('hunter2', (string) json_encode($GLOBALS['pb_test_transients']));
+        $this->assertStringNotContainsString('sk-live-secret', (string) json_encode($GLOBALS['pb_test_transients']));
     }
 
     public function testTrustedSaveWritesCode(): void

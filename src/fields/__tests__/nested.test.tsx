@@ -187,3 +187,29 @@ test( 'a collapsed row (past the 20th) opens when it holds a server error', asyn
 	const input = document.getElementById( 'pbf-group_x-agenda-21-title' )!;
 	expect( input.closest( '[hidden]' ) ).toBeNull();
 } );
+
+test( 'stored rows above a lowered cap are all shown with a warning', () => {
+	const rows = Array.from( { length: 5 }, ( _, i ) => ( { title: `Row ${ i + 1 }` } ) );
+	const { names } = renderBox( payload( { values: { agenda: rows }, maxRows: { agenda: 3 }, overCap: { agenda: { rows: 5, limit: 3 } } } ) );
+	expect( screen.getByText( 'This repeater has 5 rows; the limit is 3. Remove rows to save.' ) ).toBeInTheDocument();
+	expect( titleNames( names() ) ).toHaveLength( 5 );
+	expect( names() ).toContain( 'proto_fields_present[group_x][]' );
+} );
+
+test( 'a cap of 0 renders the stored rows read-only and submits nothing', () => {
+	const { form, names } = renderBox(
+		payload( { values: { agenda: [ { title: 'Keep' } ] }, maxRows: { agenda: 0 }, overCap: { agenda: { rows: 1, limit: 0 } } } )
+	);
+	expect( screen.getByText( 'This repeater has 1 rows; the limit is 0. Remove rows to save.' ) ).toBeInTheDocument();
+	expect( screen.getByDisplayValue( 'Keep' ) ).toBeDisabled();
+	expect( titleNames( names() ) ).toHaveLength( 0 );
+	expect( new FormData( form ).getAll( 'proto_fields_present[group_x][]' ) ).not.toContain( 'agenda' );
+} );
+
+test( 'a password field the user may not read shows no input', () => {
+	const field = { ...pick( 'agenda' )[ 0 ], key: 'f_key', name: 'stream_key', label: 'Stream key', type: 'password', subFields: [], layouts: [] } as FieldDef;
+	const { names } = renderBox( payload( { fields: [ field ], canUnfiltered: false, readOnly: { stream_key: 'unfiltered_html' } } ) );
+	expect( screen.getByText( 'Hidden; only users with unfiltered HTML may view and edit this field.' ) ).toBeInTheDocument();
+	expect( document.querySelector( 'input[type="password"]' ) ).toBeNull();
+	expect( names() ).not.toContain( 'proto_fields_present[group_x][]' );
+} );

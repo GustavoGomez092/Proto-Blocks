@@ -48,15 +48,21 @@ final class EditRoutes
 
     private \Closure $query;
 
+    private \Closure $pageCapability;
+
     /**
      * @param (callable(array<string, mixed>): array{posts: list<object>, total: int, pages: int})|null $query
      *        runs the relationship query (default: WP_Query); injectable for tests
+     * @param (callable(string): ?string)|null $pageCapability options page slug => its declared
+     *        capability, null when unknown (default: the options pages registry)
      */
     public function __construct(
         private readonly GroupIndex $index,
         private readonly ErrorStore $errors,
         ?callable $query = null,
+        ?callable $pageCapability = null,
     ) {
+        $this->pageCapability = $pageCapability !== null ? \Closure::fromCallable($pageCapability) : \Closure::fromCallable([self::class, 'declaredCapability']);
         $this->query = $query !== null ? \Closure::fromCallable($query) : \Closure::fromCallable([self::class, 'wpQuery']);
     }
 
@@ -99,11 +105,26 @@ final class EditRoutes
             ObjectRef::POST => current_user_can('edit_post', $ref->id),
             ObjectRef::TERM => current_user_can('edit_term', $ref->id),
             ObjectRef::USER => current_user_can('edit_user', $ref->id),
-            ObjectRef::OPTION => current_user_can('manage_options'),
+            ObjectRef::OPTION => current_user_can(($this->pageCapability)($ref->page) ?? 'manage_options'),
             default => false,
         };
 
         return $allowed ? true : self::forbidden();
+    }
+
+    /** The options page's declared capability; null when the page or the module is unavailable. */
+    private static function declaredCapability(string $slug): ?string
+    {
+        if (!class_exists(\ProtoBlocks\Core\Plugin::class)) {
+            return null;
+        }
+        try {
+            $page = \ProtoBlocks\Core\Plugin::getInstance()->getModules()->optionsPages()?->registry()->get($slug);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $page !== null && $page->capability !== '' ? $page->capability : null;
     }
 
     /** @return array{errors: array<string, string>, submitted: array<string, mixed>}|WP_Error */

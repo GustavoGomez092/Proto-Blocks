@@ -338,7 +338,13 @@ if (!function_exists('user_can')) {
     function user_can($user, $capability, ...$args): bool
     {
         $id = is_object($user) ? (int) ($user->ID ?? 0) : (int) $user;
-        return in_array($capability, $GLOBALS['pb_test_caps'][$id] ?? [], true);
+        $caps = $GLOBALS['pb_test_caps'][$id] ?? [];
+        // Per-object grant: pb_test_caps[user][cap] = [objectId => true]; the object id is required.
+        if (is_string($capability) && isset($caps[$capability]) && is_array($caps[$capability])) {
+            $object = $args[0] ?? null;
+            return $object !== null && !empty($caps[$capability][(int) $object]);
+        }
+        return in_array($capability, $caps, true);
     }
 }
 if (!function_exists('current_user_can')) {

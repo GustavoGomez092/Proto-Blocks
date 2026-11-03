@@ -115,6 +115,8 @@ export type BoxPayload = {
 	/** Top-level fields this user may not edit, with the reason; their values are not sent. */
 	readOnly?: Record< string, 'unfiltered_html' >;
 	maxRows: Record<string, number>;
+	/** Top-level containers whose stored rows exceed the cap: all rows are sent; the save is refused until rows are removed. */
+	overCap?: Record< string, { rows: number; limit: number } >;
 	restRoot: string;
 	restNonce: string;
 	/** The edited object, e.g. 'post:10'. */

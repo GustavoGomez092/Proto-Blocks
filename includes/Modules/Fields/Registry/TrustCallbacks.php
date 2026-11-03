@@ -7,6 +7,7 @@ namespace ProtoBlocks\Modules\Fields\Registry;
 use ProtoBlocks\Modules\Fields\Definition\Field;
 use ProtoBlocks\Modules\Fields\Storage\ObjectRef;
 use ProtoBlocks\Modules\Fields\Storage\Store;
+use ProtoBlocks\Modules\Fields\Types\TrustMessage;
 use ProtoBlocks\Modules\Fields\Types\TypeRegistry;
 use ProtoBlocks\Security\AttributeSanitizer;
 
@@ -254,9 +255,7 @@ final class TrustCallbacks
         $this->refusals[$object . '|' . $f->name] = [
             'object' => $object,
             'field' => $f->name,
-            'message' => $this->types->for($f)->requiresUnfilteredHtml()
-                ? __('Only users with unfiltered HTML may edit this field.', 'proto-blocks')
-                : __('This field contains a code sub-field that only users with unfiltered HTML may edit.', 'proto-blocks'),
+            'message' => TrustMessage::for($f),
         ];
     }
 }
