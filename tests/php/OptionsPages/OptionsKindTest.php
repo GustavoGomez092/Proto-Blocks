@@ -88,6 +88,11 @@ final class OptionsKindTest extends ContentModelRoutesTestCase
         self::assertSame(['/tabs/0/title'], $check(['title' => 'X', 'tabs' => [['fields' => []]]]));
         self::assertSame(['/menu'], $check(['title' => 'X', 'menu' => 'Top Level']));
         self::assertSame(['/capability'], $check(['title' => 'X', 'capability' => 'Manage_Options']));
+        // Same grammar as PageDefinition: a capability starts with a letter.
+        self::assertSame(['/capability'], $check(['title' => 'X', 'capability' => '9_lives']));
+        self::assertSame(['/capability'], $check(['title' => 'X', 'capability' => '_private']));
+        self::assertSame(['/children/0/capability'], $check(['title' => 'X', 'children' => [['slug' => 'y', 'title' => 'Y', 'capability' => '9_lives']]]));
+        self::assertSame([], $check(['title' => 'X', 'capability' => 'manage_woocommerce']));
         self::assertSame([], $check(['title' => 'X', 'acf_extra' => ['anything' => true]]));
     }
 
@@ -196,6 +201,31 @@ final class OptionsKindTest extends ContentModelRoutesTestCase
         $this->writer()->write('options', 'shop-notices', $text, null, null);
 
         self::assertSame([['options', 'shop-notices', 'Shop Notices']], $seen);
+    }
+
+    public function testReservedCompoundChildSlugIsRefusedByTheWriter(): void
+    {
+        $data = ['title' => 'Proto', 'children' => [['slug' => 'blocks-post-types', 'title' => 'Hijack', 'capability' => 'read']]];
+        $errors = OptionsPagesRegistry::declarationErrors([], 'options', $data, 'proto');
+        self::assertSame(['/children/0/slug'], array_column($errors, 'path'));
+        self::assertStringContainsString('proto-blocks-post-types', $errors[0]['message']);
+        self::assertNotSame([], OptionsPagesRegistry::declarationErrors([], 'options', ['title' => 'O', 'children' => [['slug' => 'general', 'title' => 'G']]], 'options'));
+        self::assertSame([], OptionsPagesRegistry::declarationErrors([], 'options', ['title' => 'Proto', 'children' => [['slug' => 'extras', 'title' => 'E']]], 'proto'));
+
+        $GLOBALS['pb_test_filters']['proto_blocks_declaration_errors'][] = [OptionsPagesRegistry::class, 'declarationErrors'];
+        $text = (string) json_encode($data);
+        $result = $this->routes()->save(new \WP_REST_Request(['kind' => 'options', 'slug' => 'proto'], ['text' => $text, 'hash' => null, 'acknowledge' => []]));
+
+        $error = self::assertWpError('proto_blocks_schema_invalid', 400, $result);
+        self::assertSame('/children/0/slug', $error->get_error_data()['errors'][0]['path']);
+        self::assertDirectoryDoesNotExist($this->root . '/proto-options');
+
+        // A legitimate child is written.
+        $ok = $this->routes()->save(new \WP_REST_Request(['kind' => 'options', 'slug' => 'proto'], [
+            'text' => '{"title": "Proto", "children": [{"slug": "extras", "title": "Extras"}]}', 'hash' => null, 'acknowledge' => [],
+        ]));
+        self::assertIsArray($ok, json_encode($ok) ?: '');
+        self::assertFileExists($this->root . '/proto-options/proto/page.jsonc');
     }
 
     public function testUnknownFindingShapeFailsClosed(): void

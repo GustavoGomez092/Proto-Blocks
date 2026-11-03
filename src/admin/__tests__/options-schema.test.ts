@@ -51,5 +51,11 @@ test('errors land at the same paths as SchemaCheck', () => {
 	expect(paths({ title: 'X', tabs: [{ fields: [] }] })).toEqual([['tabs', 0, 'title']]);
 	expect(paths({ title: 'X', menu: 'Top Level' })).toEqual([['menu']]);
 	expect(paths({ title: 'X', capability: 'Manage_Options' })).toEqual([['capability']]);
+	expect(paths({ title: 'X', capability: '9_lives' })).toEqual([['capability']]);
+	expect(paths({ title: 'X', capability: '_private' })).toEqual([['capability']]);
+	expect(paths({ title: 'X', children: [{ slug: 'y', title: 'Y', capability: '9_lives' }] })).toEqual([
+		['children', 0, 'capability'],
+	]);
+	expect(paths({ title: 'X', capability: 'manage_woocommerce' })).toEqual([]);
 	expect(paths({ title: 'X', acf_extra: { anything: true } })).toEqual([]);
 });

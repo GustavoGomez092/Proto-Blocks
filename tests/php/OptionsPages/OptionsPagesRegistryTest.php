@@ -234,6 +234,63 @@ final class OptionsPagesRegistryTest extends TestCase
         self::assertStringContainsString('theme-settings', $warnings[0]['message']);
     }
 
+    public function testReservedCompoundChildSlugIsSkipped(): void
+    {
+        // proto + blocks-post-types would be the plugin's own Post Types screen.
+        $path = $this->place('proto', json_encode([
+            'title' => 'Proto',
+            'children' => [
+                ['slug' => 'blocks-post-types', 'title' => 'Hijack', 'capability' => 'read'],
+                ['slug' => 'extras', 'title' => 'Extras'],
+            ],
+        ], JSON_THROW_ON_ERROR));
+        proto_options_page('Options', ['slug' => 'options-x', 'children' => [['slug' => 'y', 'title' => 'Y']]]);
+
+        $registry = $this->registry();
+        self::assertNull($registry->get('proto-blocks-post-types'));
+        self::assertNotNull($registry->get('proto'));
+        self::assertSame('proto', $registry->get('proto-extras')?->parentSlug);
+        self::assertNotNull($registry->get('options-x-y'), 'a reserved word inside a longer slug is fine');
+
+        $warnings = self::warningsFor($registry, 'proto-blocks-post-types');
+        self::assertCount(1, $warnings);
+        self::assertSame($path, $warnings[0]['source']);
+        self::assertStringContainsString('reserved', $warnings[0]['message']);
+        $codes = array_map(static fn (Issue $issue): string => $issue->code, $registry->issues());
+        self::assertContains('child_slug_reserved', $codes);
+    }
+
+    public function testSharedStorageIsWarned(): void
+    {
+        // Same array option as the CADCO fixture.
+        $this->place('copy', '{"title": "Copy", "storage": {"mode": "array", "option": "cadco_display_settings"}}');
+        // An array option equal to another page's derived per-field option name (`settings` + `phone`).
+        $this->place('settings', '{"title": "Settings", "fields": [{"name": "phone", "type": "text"}]}');
+        $this->place('phone-page', '{"title": "Phone", "storage": {"mode": "array", "option": "settings_phone"}}');
+        $this->place('apart', '{"title": "Apart", "storage": {"mode": "array", "option": "apart_values"}, "fields": [{"name": "a", "type": "text"}]}');
+
+        $registry = $this->registry();
+        foreach (['copy', 'phone-page', 'apart'] as $slug) {
+            self::assertNotNull($registry->get($slug), 'shared storage warns, it does not skip');
+        }
+
+        $copy = self::warningsFor($registry, 'copy');
+        self::assertCount(1, $copy);
+        self::assertStringContainsString('cadco_display_settings', $copy[0]['message']);
+        self::assertStringContainsString('cadco-display-settings', $copy[0]['message']);
+
+        $sharedPhone = array_filter(
+            $registry->warnings(),
+            static fn (array $w): bool => str_contains($w['message'], '"settings_phone"')
+        );
+        $message = array_values($sharedPhone)[0]['message'];
+        self::assertStringContainsString('"phone-page"', $message);
+        self::assertStringContainsString('"settings"', $message);
+        self::assertCount(1, $sharedPhone);
+        self::assertSame([], self::warningsFor($registry, 'apart'));
+        self::assertSame([], self::warningsFor($registry, 'theme-settings-footer'));
+    }
+
     public function testIssuesForValidate(): void
     {
         proto_options_page('Broken', ['capability' => 'read']);

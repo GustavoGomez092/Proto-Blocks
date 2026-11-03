@@ -7,6 +7,7 @@ namespace ProtoBlocks\OptionsPages;
 use ProtoBlocks\ContentModel\Declaration;
 use ProtoBlocks\ContentModel\Issue;
 use ProtoBlocks\ContentModel\Registry;
+use ProtoBlocks\ContentModel\Slug;
 
 /**
  * The options pages of this request: `proto-options/<slug>/page.jsonc` files
@@ -103,6 +104,17 @@ final class OptionsPagesRegistry
             }
         }
 
+        // Each child's compound slug must be a usable admin page slug too.
+        $children = $data['children'] ?? null;
+        if ($slug !== '' && is_array($children) && array_is_list($children)) {
+            foreach ($children as $i => $child) {
+                $childSlug = is_array($child) ? ($child['slug'] ?? null) : null;
+                if (is_string($childSlug) && Slug::error($slug . '-' . $childSlug, self::KIND) === 'reserved') {
+                    $errors[] = ['path' => '/children/' . $i . '/slug', 'message' => self::childSlugMessage($slug . '-' . $childSlug, $slug)];
+                }
+            }
+        }
+
         return $errors;
     }
 
@@ -175,6 +187,18 @@ final class OptionsPagesRegistry
         }
 
         foreach ($children as $child) {
+            // The compound slug is an admin page slug too: never a core screen or one of this plugin's pages.
+            if (Slug::error($child->slug, self::KIND) !== null) {
+                $issues[] = new Issue(
+                    Issue::ERROR,
+                    'child_slug_reserved',
+                    self::childSlugMessage($child->slug, (string) $child->parentSlug),
+                    (string) $child->source,
+                    $child->slug,
+                    self::KIND
+                );
+                continue;
+            }
             if (isset($pages[$child->slug])) {
                 $issues[] = new Issue(
                     Issue::WARNING,
@@ -194,7 +218,62 @@ final class OptionsPagesRegistry
             $pages[$child->slug] = $child;
         }
 
+        array_push($issues, ...self::sharedStorage($pages));
+
         return ['pages' => $pages, 'issues' => $issues];
+    }
+
+    /**
+     * One `shared_storage` warning per page whose values would land in an
+     * option another page already uses (the same array option, or an array
+     * option equal to another page's `<slug>_<field>`).
+     *
+     * @param array<string, PageDefinition> $pages
+     * @return list<Issue>
+     */
+    private static function sharedStorage(array $pages): array
+    {
+        $owners = [];
+        $issues = [];
+        foreach ($pages as $slug => $page) {
+            $names = $page->storageMode === PageDefinition::MODE_ARRAY && $page->storageOption !== null
+                ? [$page->storageOption]
+                : array_map(static fn (string|int $field): string => $page->optionName((string) $field), array_keys($page->fields()));
+            foreach (array_unique($names) as $name) {
+                $key = strtolower($name); // option names compare case-insensitively in MySQL
+                $owner = $owners[$key] ?? null;
+                if ($owner === null) {
+                    $owners[$key] = (string) $slug;
+                    continue;
+                }
+                $issues[] = new Issue(
+                    Issue::WARNING,
+                    'shared_storage',
+                    sprintf(
+                        /* translators: 1: page slug, 2: option name, 3: other page slug */
+                        __('The page "%1$s" stores values in the option "%2$s", which the page "%3$s" also uses. Saving one page overwrites the other; give each page its own option.', 'proto-blocks'),
+                        (string) $slug,
+                        $name,
+                        $owner
+                    ),
+                    (string) $page->source,
+                    (string) $slug,
+                    self::KIND
+                );
+            }
+        }
+
+        return $issues;
+    }
+
+    private static function childSlugMessage(string $compound, string $parent): string
+    {
+        return sprintf(
+            /* translators: 1: child page slug (parent slug + child slug), 2: parent page slug */
+            __('The child page slug "%1$s" of "%2$s" is reserved by WordPress or Proto-Blocks. Rename the child.', 'proto-blocks'),
+            $compound,
+            $parent
+        );
     }
 
     /** A declaration file path, as opposed to the "<file>:<line>" of a PHP call. */
