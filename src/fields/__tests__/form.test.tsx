@@ -155,10 +155,9 @@ test( 'tabs keep every panel mounted so all values submit', () => {
 	const data = new FormData( form );
 	expect( data.get( 'proto_fields[group_x][subtitle]' ) ).toBe( 'S' );
 	expect( data.get( 'proto_fields[group_x][accent]' ) ).toBe( '#112233' );
-	// Types without a registered input yet (image, gallery) are not marked present, so they keep their values.
-	expect( present() ).toEqual( expect.arrayContaining( [ 'subtitle', 'accent', 'register_link' ] ) );
-	expect( present() ).not.toContain( 'hero' );
-	expect( present() ).not.toContain( 'photos' );
+	// Media inputs in later tabs are mounted and present too (Task 11 registered them).
+	expect( present() ).toEqual( expect.arrayContaining( [ 'subtitle', 'accent', 'register_link', 'hero', 'photos' ] ) );
+	expect( data.getAll( 'proto_fields[group_x][photos]' ) ).toEqual( [ '' ] );
 } );
 
 test( 'required inputs carry aria-required; optional ones do not', () => {
