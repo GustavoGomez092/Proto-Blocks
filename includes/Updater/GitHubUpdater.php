@@ -568,7 +568,8 @@ final class GitHubUpdater
             'package'      => (string) $release['package'],
             'url'          => (string) $release['html_url'],
             'tested'       => '',
-            'requires_php' => '8.0',
+            'requires'     => '6.5',
+            'requires_php' => '8.1',
         ];
     }
 
