@@ -184,8 +184,10 @@ export function TaxonomyList({
 												))}
 											</span>
 										</TableCell>
-										<TableCell className="text-end tabular-nums">{item.count}</TableCell>
-										<TableCell>
+										<TableCell className="text-end tabular-nums" data-testid="count">
+											{item.count}
+										</TableCell>
+										<TableCell className="max-w-[280px] whitespace-normal">
 											{item.source ? <code className="font-mono text-[12.5px] break-all">{item.source}</code> : <span className="text-muted-foreground">—</span>}
 										</TableCell>
 										<TableCell className="text-end">
