@@ -1,5 +1,6 @@
 import { mockBootstrap } from './helpers';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import userEvent from '@testing-library/user-event';
 import { AdminApp } from '@/admin/app';
 import { getBootstrap } from '@/admin/bootstrap';
@@ -109,4 +110,42 @@ test('ConfirmDialog reports Cancel as onCancel', async () => {
 
 	await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
 	expect(onCancel).toHaveBeenCalledTimes(1);
+});
+
+/** Opens ConfirmDialog from state, the way the screens do (no Radix Trigger). */
+function ConfirmHarness() {
+	const [open, setOpen] = useState(false);
+	return (
+		<>
+			<button type="button" onClick={() => setOpen(true)}>
+				Clear cache
+			</button>
+			<ConfirmDialog
+				open={open}
+				title="Clear 3 cached templates?"
+				confirmLabel="Clear 3 templates"
+				onConfirm={() => setOpen(false)}
+				onCancel={() => setOpen(false)}
+			/>
+		</>
+	);
+}
+
+test.each([
+	['Escape', async () => userEvent.keyboard('{Escape}')],
+	['Cancel', async () => userEvent.click(screen.getByRole('button', { name: 'Cancel' }))],
+	['Confirm', async () => userEvent.click(screen.getByRole('button', { name: 'Clear 3 templates' }))],
+])('ConfirmDialog returns focus to the button that opened it after %s', async (_label, close) => {
+	render(<ConfirmHarness />);
+	const opener = screen.getByRole('button', { name: 'Clear cache' });
+
+	opener.focus();
+	await userEvent.keyboard('{Enter}');
+	await screen.findByRole('alertdialog');
+	await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus());
+
+	await close();
+
+	await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+	await waitFor(() => expect(opener).toHaveFocus());
 });
