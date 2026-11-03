@@ -59,11 +59,11 @@ export function ChildPagesEditor({
 					return (
 						<li key={id} className="grid gap-3 rounded-lg border px-3 py-3">
 							<div className="grid gap-3 sm:grid-cols-3">
-								<div className="grid gap-1.5">
+								<div className="grid content-start gap-1.5">
 									<Label htmlFor={`pb-op-child-${index}-title`}>{__('Child page title', 'proto-blocks')}</Label>
 									<Input id={`pb-op-child-${index}-title`} value={child.title} disabled={disabled} onChange={(e) => set(index, { title: e.target.value })} />
 								</div>
-								<div className="grid gap-1.5">
+								<div className="grid content-start gap-1.5">
 									<Label htmlFor={`pb-op-child-${index}-slug`}>{__('Child page slug', 'proto-blocks')}</Label>
 									<Input
 										id={`pb-op-child-${index}-slug`}

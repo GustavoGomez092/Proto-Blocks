@@ -51,7 +51,7 @@ export function CapabilityField({
 	const unknown = value !== '' && !options.includes(value);
 
 	return (
-		<div className="grid gap-1.5">
+		<div className="grid content-start gap-1.5">
 			<Label htmlFor={id}>{label}</Label>
 			<Select value={value === '' ? (optional ? INHERIT : '') : value} disabled={disabled} onValueChange={(next) => onChange(next === INHERIT ? '' : next)}>
 				<SelectTrigger

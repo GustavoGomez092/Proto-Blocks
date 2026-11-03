@@ -76,7 +76,7 @@ export function StorageField({
 				</div>
 			</RadioGroup>
 			{storage.mode === 'array' ? (
-				<div className="grid gap-1.5">
+				<div className="grid content-start gap-1.5">
 					<Label htmlFor="pb-op-option">{__('Setting name', 'proto-blocks')}</Label>
 					<Input
 						id="pb-op-option"

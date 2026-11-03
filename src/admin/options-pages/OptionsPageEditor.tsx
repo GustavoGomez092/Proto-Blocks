@@ -263,7 +263,7 @@ function PageForm({ slug, file, detail, fallbackCapabilities, save, remove, relo
 					<div hidden={view === 'jsonc'} className={view === 'jsonc' ? 'hidden' : 'grid gap-6'}>
 					<FormPanel>
 					<Section title={__('Page', 'proto-blocks')}>
-						<div className="grid gap-1.5">
+						<div className="grid content-start gap-1.5">
 							<Label htmlFor="pb-op-title">{__('Title', 'proto-blocks')}</Label>
 							<Input id="pb-op-title" value={form.title} disabled={readOnly} onChange={(e) => patch({ title: e.target.value })} />
 						</div>
@@ -493,14 +493,14 @@ export function NewOptionsPage({ taken, capabilities = [], onCreated, onBack }: 
 						if (title.trim() !== '' && effective !== '' && !slugError) setChosen({ slug: effective, title: title.trim() });
 					}}
 				>
-					<div className="grid gap-1.5">
+					<div className="grid content-start gap-1.5">
 						<Label htmlFor="pb-op-new-title">{__('Page title', 'proto-blocks')}</Label>
 						<Input id="pb-op-new-title" className="h-10 text-section" value={title} aria-describedby="pb-op-new-title-hint" onChange={(e) => setTitle(e.target.value)} />
 						<p id="pb-op-new-title-hint" className="text-label text-muted-foreground">
 							{__('Shown in the admin menu and at the top of the page.', 'proto-blocks')}
 						</p>
 					</div>
-					<div className="grid gap-1.5">
+					<div className="grid content-start gap-1.5">
 						<Label htmlFor="pb-op-new-slug">
 							{__('Slug', 'proto-blocks')}
 							<span aria-hidden="true" className="font-normal text-muted-foreground">

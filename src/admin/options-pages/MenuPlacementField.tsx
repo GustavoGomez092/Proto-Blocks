@@ -62,7 +62,7 @@ export function MenuPlacementField({
 					</div>
 				</div>
 			) : (
-				<div className="grid gap-1.5">
+				<div className="grid content-start gap-1.5">
 					<Label htmlFor="pb-op-parent">{__('Parent menu', 'proto-blocks')}</Label>
 					<select
 						id="pb-op-parent"
@@ -78,7 +78,7 @@ export function MenuPlacementField({
 					</select>
 				</div>
 			)}
-			<div className="grid gap-1.5">
+			<div className="grid content-start gap-1.5">
 				<Label htmlFor="pb-op-menu-title">{__('Menu title', 'proto-blocks')}</Label>
 				<Input
 					id="pb-op-menu-title"
