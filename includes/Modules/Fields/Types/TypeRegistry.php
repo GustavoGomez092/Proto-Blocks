@@ -28,10 +28,16 @@ final class TypeRegistry
         }
     }
 
-    /** Every core type family. Task 3 appends the structural and media types. */
+    /** Every core type family. */
     public static function withCoreTypes(): self
     {
-        return new self([
+        // Nested types resolve sub-field types through this same registry, lazily.
+        $registry = null;
+        $self = static function () use (&$registry): self {
+            return $registry;
+        };
+
+        return $registry = new self([
             new TextType(),
             new WysiwygType(),
             new ChoiceType(),
@@ -41,6 +47,8 @@ final class TypeRegistry
             new LinkType(),
             new CodeType(),
             new LayoutType(),
+            new ImageType(), new FileType(), new GalleryType(), new VideoType(), new TaxonomyType(), new RelationshipType(),
+            new GroupType($self), new RepeaterType($self), new FlexibleContentType($self),
         ]);
     }
 
