@@ -41,6 +41,9 @@ final class AdminRestController
         DashboardRoutes::class,
         Admin\TailwindRoutes::class,
         PreviewsRoutes::class,
+        Admin\PostTypesRoutes::class,
+        Admin\TaxonomiesRoutes::class,
+        Admin\SchemaFilesRoutes::class,
     ];
 
     /**
