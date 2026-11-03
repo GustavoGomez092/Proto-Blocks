@@ -205,7 +205,7 @@ class AdminPage
     public const OPTION_EXAMPLE_BLOCKS = 'proto_blocks_example_blocks';
 
     /**
-     * Get list of demo block names
+     * Get list of demo block names (not exposed in the UI since 2.15)
      *
      * @return array List of demo block directory names
      */
@@ -221,7 +221,8 @@ class AdminPage
     }
 
     /**
-     * Get list of demo block names filtered by type (vanilla or tailwind)
+     * Get list of demo block names filtered by type (vanilla or tailwind).
+     * Not exposed in the UI since 2.15.
      *
      * @param string $type 'vanilla' or 'tailwind'
      * @return array List of demo block names of the specified type
@@ -453,7 +454,8 @@ class AdminPage
 
     /**
      * Install demo blocks to the active theme
-     * Only installs/overwrites demo blocks, leaves custom blocks untouched
+     * Only installs/overwrites demo blocks, leaves custom blocks untouched.
+     * Not exposed in the UI since 2.15.
      *
      * @param string $type Type of blocks to install: 'vanilla', 'tailwind', or 'all'
      * @return int|\WP_Error Number of blocks installed or error
@@ -570,7 +572,8 @@ class AdminPage
 
     /**
      * Remove demo blocks from the active theme
-     * Only removes demo blocks, leaves custom blocks untouched
+     * Only removes demo blocks, leaves custom blocks untouched.
+     * Not exposed in the UI since 2.15.
      *
      * @return int|\WP_Error Number of blocks removed or error
      */

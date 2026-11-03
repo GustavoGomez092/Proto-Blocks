@@ -90,74 +90,23 @@ test('toggling the example blocks switch posts the new value', async () => {
 	expect(screen.getByRole('switch', { name: 'Example Blocks' })).not.toBeChecked();
 });
 
-test('Tailwind demos are disabled with a link to settings when Tailwind is off', async () => {
-	const base = payload();
-	mockApi({ 'admin/dashboard': payload({ demos: { ...base.demos, tailwindEnabled: false } }) });
-	const boot = renderScreen();
-
-	expect(await screen.findByRole('button', { name: /Install Tailwind blocks/ })).toBeDisabled();
-	expect(screen.getByText('Requires Tailwind')).toBeInTheDocument();
-	expect(screen.getByRole('link', { name: 'Turn on Tailwind' })).toHaveAttribute(
-		'href',
-		`${boot.adminUrl}?page=proto-blocks-settings`
-	);
-	expect(screen.getByRole('button', { name: /Install Vanilla CSS blocks/ })).toBeEnabled();
-});
-
-test('read-only mode shows the banner and disables install and remove', async () => {
+test('read-only mode shows the banner and keeps the screen working', async () => {
 	mockApi({ 'admin/dashboard': payload() });
 	renderScreen({ fileModsAllowed: false, fileModsConstant: 'DISALLOW_FILE_MODS' });
 
 	expect(await screen.findByText('File modifications are disabled on this site')).toBeInTheDocument();
-	expect(await screen.findByRole('button', { name: /Install Vanilla CSS blocks/ })).toBeDisabled();
-	expect(screen.getByRole('button', { name: /Install Tailwind blocks/ })).toBeDisabled();
-	expect(screen.getByRole('button', { name: /Remove demo blocks/ })).toBeDisabled();
-	expect(screen.getByRole('switch', { name: 'Example Blocks' })).toBeEnabled();
+	expect(await screen.findByRole('switch', { name: 'Example Blocks' })).toBeEnabled();
+	expect(screen.getByRole('button', { name: 'Clear cache' })).toBeEnabled();
 });
 
-test('installing the vanilla demos posts the type and toasts the count', async () => {
-	const user = userEvent.setup();
-	const api = mockApi({
-		'GET admin/dashboard': payload(),
-		'POST admin/demos/install': () => ({ installed: 2, skipped: [], data: payload() }),
-	});
+test('demo block installation is not offered in the UI', async () => {
+	mockApi({ 'admin/dashboard': payload() });
 	renderScreen();
 
-	await user.click(await screen.findByRole('button', { name: /Install Vanilla CSS blocks/ }));
-
-	expect(await screen.findByText('2 Vanilla CSS demo blocks installed.')).toBeInTheDocument();
-	expect(api).toHaveBeenCalledWith(expect.objectContaining({ method: 'POST', data: { type: 'vanilla' } }));
-});
-
-test('removing demo blocks confirms with the names, then posts and toasts', async () => {
-	const user = userEvent.setup();
-	const api = mockApi({
-		'GET admin/dashboard': payload({ conflicts: ['card'] }),
-		'POST admin/demos/remove': () => ({
-			removed: 1,
-			skipped: [],
-			data: payload({ installed: [], conflicts: [] }),
-		}),
-	});
-	renderScreen();
-
-	await user.click(await screen.findByRole('button', { name: /Remove demo blocks/ }));
-
-	const dialog = await screen.findByRole('alertdialog');
-	expect(within(dialog).getByText('hero-banner')).toBeInTheDocument();
-	expect(within(dialog).getByText('Kept (modified)')).toBeInTheDocument();
-	expect(within(dialog).getByText('card')).toBeInTheDocument();
-
-	await user.click(within(dialog).getByRole('button', { name: 'Remove 1 block' }));
-
-	expect(await screen.findByText('1 demo block removed.')).toBeInTheDocument();
-	expect(api).toHaveBeenCalledWith(
-		expect.objectContaining({
-			url: 'https://example.test/wp-json/proto-blocks/v1/admin/demos/remove',
-			method: 'POST',
-		})
-	);
-	expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+	expect(await screen.findByRole('switch', { name: 'Example Blocks' })).toBeInTheDocument();
+	expect(screen.queryByRole('button', { name: /Install/ })).not.toBeInTheDocument();
+	expect(screen.queryByRole('button', { name: /Remove demo blocks/ })).not.toBeInTheDocument();
+	expect(screen.queryByText('Demo Blocks')).not.toBeInTheDocument();
 });
 
 test('an empty blocks array shows the empty state', async () => {
@@ -167,6 +116,7 @@ test('an empty blocks array shows the empty state', async () => {
 	renderScreen();
 
 	expect(await screen.findByText('No blocks found')).toBeInTheDocument();
+	expect(screen.queryByRole('link', { name: /Install demo blocks/ })).not.toBeInTheDocument();
 });
 
 test('shows ScreenError when the request fails', async () => {
