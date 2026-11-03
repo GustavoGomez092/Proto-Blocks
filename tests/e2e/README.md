@@ -28,7 +28,9 @@ parity check (`npx wp-env run tests-cli wp eval-file wp-content/pb-e2e-fixtures/
 The committed content-model baselines were generated on macOS (`-chromium-darwin`).
 
 The settings-page spec (`options-page`) uses the `pb-e2e-options` mu-plugin
-(`tests/e2e/fixtures/mu-plugins`, mapped into `wp-content/mu-plugins`). It adds
+(`tests/e2e/fixtures/mu-plugins`; the whole folder is mapped to `wp-content/mu-plugins`,
+because a single-file mapping fails on a fresh environment under Docker Desktop for macOS,
+so add further test mu-plugins to that folder). It adds
 `wp-content/pb-e2e` (the same fixtures folder, mapped a second time) to
 `proto_blocks_schema_paths`, so `tests/e2e/fixtures/proto-options` declares the
 `theme-settings` and `shop-notices` pages, and `wp-content/pb-e2e/blocks` to

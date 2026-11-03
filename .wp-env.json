@@ -4,7 +4,7 @@
   "plugins": ["."],
   "mappings": {
     "wp-content/pb-e2e-fixtures": "./tests/e2e/fixtures",
-    "wp-content/mu-plugins/pb-e2e-options.php": "./tests/e2e/fixtures/mu-plugins/pb-e2e-options.php",
+    "wp-content/mu-plugins": "./tests/e2e/fixtures/mu-plugins",
     "wp-content/pb-e2e": "./tests/e2e/fixtures"
   },
   "port": 8888,
