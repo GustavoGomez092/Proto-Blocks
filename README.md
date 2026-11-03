@@ -1466,6 +1466,10 @@ wp proto-blocks options list
 wp proto-blocks options create "Theme Settings" [--slug=<slug>] [--menu=<menu>] [--capability=<cap>] [--storage-option=<name>]
 ```
 
+### Migrating a hand-written settings page
+
+A page that already stores one array option (the CADCO theme's Products > Display Settings is the reference, `tests/fixtures/options-pages/cadco-display-settings`) is re-declared with `"storage": { "mode": "array", "option": "<existing option>" }`, the same slug, parent menu and capability. Stored values keep working and undeclared keys of the option survive a save. Differences to expect: values of `true_false` fields are stored as `'1'` or `''` (a theme that wrote booleans and reads with `!empty()` is unaffected), a field hidden by conditional logic is not written (a theme that always stored a default heading must keep its own fallback), and the per-field names `<slug>_<field>` are only used in the default `fields` storage mode.
+
 ## Custom fields
 
 Proto-Blocks adds custom fields to posts, custom post types, taxonomy terms, users and settings pages. Groups are plain files (the shape mirrors ACF local JSON, so an ACF export drops in), a visual builder edits them, and `proto_field()` reads the values. Requires WordPress 6.5+ and PHP 8.1. Full guide: [docs/fields.md](docs/fields.md).
