@@ -1,0 +1,27 @@
+{
+    "key": "group_duplicate_name",
+    "title": "Invalid fixture",
+    "location": [
+        [
+            {
+                "param": "post_type",
+                "operator": "==",
+                "value": "post"
+            }
+        ]
+    ],
+    "fields": [
+        {
+            "key": "field_dup_1",
+            "label": "Title",
+            "name": "title",
+            "type": "text"
+        },
+        {
+            "key": "field_dup_2",
+            "label": "Title",
+            "name": "title",
+            "type": "text"
+        }
+    ]
+}

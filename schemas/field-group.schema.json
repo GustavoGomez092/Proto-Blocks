@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proto-blocks.dev/schemas/field-group.schema.json",
+  "title": "Proto-Blocks field group",
+  "description": "One field group, or an ACF Tools export (an array of groups). The shape mirrors ACF local JSON so an export drops in unchanged; every object allows additional properties, so ACF-only keys are preserved and ignored. Unknown location params and unknown field types are warnings reported by the plugin, not schema errors. Proto-Blocks extensions: field `pattern`, `minlength`, `optionsSource`, `bindings`; group `autoload` (options pages). The non-standard keyword `uniqueFieldNames` (no two fields at one level share a name) is enforced by the plugin's validator; generic JSON Schema tools ignore it.",
+  "oneOf": [
+    { "$ref": "#/$defs/group" },
+    { "type": "array", "items": { "$ref": "#/$defs/group" } }
+  ],
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+    },
+    "group": {
+      "type": "object",
+      "required": ["key", "title", "fields"],
+      "additionalProperties": true,
+      "properties": {
+        "key": { "type": "string", "minLength": 1, "description": "Unique group key, conventionally group_<id>." },
+        "title": { "type": "string" },
+        "fields": { "$ref": "#/$defs/fieldList" },
+        "location": { "$ref": "#/$defs/location" },
+        "position": { "enum": ["normal", "side", "acf_after_title"] },
+        "style": { "enum": ["default", "seamless"] },
+        "menu_order": { "type": "integer" },
+        "autoload": { "type": "boolean", "description": "Proto-Blocks: options-page groups only; false stores the page's options with autoload off." }
+      }
+    },
+    "location": {
+      "description": "OR-list of AND-lists of rules. Supported params: post_type, post_status, post_taxonomy, page_template, post, taxonomy, user_role, user_form, options_page; any other param makes the group unrenderable (a warning).",
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": { "$ref": "#/$defs/locationRule" }
+      }
+    },
+    "locationRule": {
+      "type": "object",
+      "required": ["param", "operator"],
+      "additionalProperties": true,
+      "properties": {
+        "param": { "type": "string", "minLength": 1 },
+        "operator": { "enum": ["==", "!="] },
+        "value": { "anyOf": [{ "type": "string" }, { "type": "number" }, { "type": "boolean" }] }
+      }
+    },
+    "fieldList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/field" },
+      "uniqueFieldNames": true
+    },
+    "conditionalLogic": {
+      "description": "ACF writes 0 when a field has no conditions; otherwise an OR-list of AND-lists of rules.",
+      "anyOf": [
+        { "enum": [0, false, "", "0", null] },
+        {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["field", "operator"],
+              "additionalProperties": true,
+              "properties": {
+                "field": { "type": "string", "minLength": 1 },
+                "operator": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "layout": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": true,
+      "properties": {
+        "key": { "type": "string" },
+        "name": { "$ref": "#/$defs/name" },
+        "label": { "type": "string" },
+        "sub_fields": { "$ref": "#/$defs/fieldList" }
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": ["key", "type"],
+      "additionalProperties": true,
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "label": { "type": "string" },
+        "name": { "type": "string" },
+        "required": { "anyOf": [{ "type": "boolean" }, { "type": "integer" }] },
+        "instructions": { "type": "string" },
+        "placeholder": { "type": "string" },
+        "conditional_logic": { "$ref": "#/$defs/conditionalLogic" },
+        "sub_fields": { "$ref": "#/$defs/fieldList" },
+        "layouts": {
+          "anyOf": [
+            { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/layout" } },
+            { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/$defs/layout" } }
+          ]
+        },
+        "pattern": { "type": "string", "description": "Proto-Blocks: PCRE pattern a text value must match." },
+        "minlength": { "anyOf": [{ "type": "integer" }, { "type": "string" }], "description": "Proto-Blocks: minimum length of a text value." },
+        "optionsSource": { "type": "string", "description": "Proto-Blocks: dynamic choices, e.g. wp:posts, wp:terms, wp:users or a theme provider." },
+        "bindings": { "type": "boolean", "description": "Proto-Blocks: false hides the field from the proto-blocks/field Block Bindings source." }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "enum": ["tab", "accordion", "message"] } } },
+          "then": { "properties": { "name": { "anyOf": [{ "const": "" }, { "$ref": "#/$defs/name" }] } } },
+          "else": { "required": ["name"], "properties": { "name": { "$ref": "#/$defs/name" } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "flexible_content" } } },
+          "then": { "required": ["layouts"] },
+          "else": { "not": { "required": ["layouts"] } }
+        },
+        {
+          "if": { "properties": { "type": { "enum": ["repeater", "group"] } } },
+          "then": { "required": ["sub_fields"], "properties": { "sub_fields": { "type": "array", "minItems": 1 } } }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+    "key": "group_bad_name",
+    "title": "Invalid fixture",
+    "location": [
+        [
+            {
+                "param": "post_type",
+                "operator": "==",
+                "value": "post"
+            }
+        ]
+    ],
+    "fields": [
+        {
+            "key": "field_bad_1",
+            "label": "_hidden",
+            "name": "_hidden",
+            "type": "text"
+        },
+        {
+            "key": "field_bad_2",
+            "label": "Has space",
+            "name": "has space",
+            "type": "text"
+        }
+    ]
+}
