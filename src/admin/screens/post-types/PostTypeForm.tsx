@@ -14,7 +14,7 @@ import { DeclarationShell } from '@/admin/components/content-model/DeclarationSh
 import { DeleteDeclarationDialog } from '@/admin/components/content-model/DeleteDeclarationDialog';
 import { GuardrailDialog } from '@/admin/components/content-model/GuardrailDialog';
 import { LabelsEditor } from '@/admin/components/content-model/LabelsEditor';
-import { MenuIconField } from '@/admin/components/content-model/MenuIconField';
+import { MenuIconField, isPrefillableIcon } from '@/admin/components/content-model/MenuIconField';
 import { OriginBadge } from '@/admin/components/content-model/OriginBadge';
 import { Alert, AlertDescription, AlertTitle } from '@/admin/components/ui/alert';
 import { Button } from '@/admin/components/ui/button';
@@ -148,7 +148,9 @@ export function toFormValues(data: Values, effective: Values, origin?: ListItem[
 		withFront = effRewrite.with_front;
 	}
 	let menuIcon: unknown = data.menu_icon;
-	if (typeof menuIcon !== 'string' && typeof effective.menu_icon === 'string' && effective.menu_icon !== '') {
+	// Only short, typeable icons are prefilled. A registered data: URI or theme
+	// path the file did not set is shown as a summary instead (MenuIconField).
+	if (typeof menuIcon !== 'string' && typeof effective.menu_icon === 'string' && isPrefillableIcon(effective.menu_icon)) {
 		menuIcon = effective.menu_icon;
 	}
 
@@ -1149,6 +1151,7 @@ function TypeForm({
 										ref={field.ref}
 										id={`${ids}-icon`}
 										value={typeof field.value === 'string' ? field.value : undefined}
+										registered={typeof effective.menu_icon === 'string' ? effective.menu_icon : undefined}
 										disabled={readOnly}
 										onChange={field.onChange}
 										onBlur={field.onBlur}

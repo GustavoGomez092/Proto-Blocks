@@ -1,6 +1,7 @@
-import { forwardRef } from 'react';
-import { __ } from '@wordpress/i18n';
+import { forwardRef, useState } from 'react';
+import { __, sprintf } from '@wordpress/i18n';
 import { ImageIcon, TriangleAlertIcon } from 'lucide-react';
+import { Button } from '@/admin/components/ui/button';
 import { Input } from '@/admin/components/ui/input';
 import { Label } from '@/admin/components/ui/label';
 
@@ -49,6 +50,23 @@ const DASHICONS = [
 
 const DASHICON = /^dashicons-[a-z0-9-]+$/;
 
+/** Longest value the schema accepts for `menu_icon`. */
+const MAX_ICON = 2048;
+
+/** A registered icon short enough to type or edit: a dashicon name or an http(s) URL. */
+export function isPrefillableIcon(icon: string): boolean {
+	return icon !== '' && icon.length <= MAX_ICON && (DASHICON.test(icon) || /^https?:\/\//i.test(icon));
+}
+
+/** "inline SVG (3.3 KB)" for a data: URI, else the path itself. */
+function describeIcon(icon: string): string {
+	if (/^data:/i.test(icon)) {
+		const kb = Math.max(0.1, Math.round((icon.length / 1024) * 10) / 10);
+		return sprintf(__('inline SVG (%s KB)', 'proto-blocks'), String(kb));
+	}
+	return icon;
+}
+
 /**
  * `menu_icon`: a dashicon name (picked from suggestions or typed), a file in
  * the theme, or an https URL, with a preview. A plain http URL gets a
@@ -60,12 +78,16 @@ export const MenuIconField = forwardRef<
 	{
 		id: string;
 		value: string | undefined;
+		/** The icon WordPress registered, when it is not prefilled into the input. */
+		registered?: string;
 		onChange: (next: string | undefined) => void;
 		onBlur?: () => void;
 		disabled?: boolean;
 	}
->(function MenuIconField({ id, value, onChange, onBlur, disabled = false }, ref) {
+>(function MenuIconField({ id, value, registered, onChange, onBlur, disabled = false }, ref) {
 	const text = value ?? '';
+	const [replacing, setReplacing] = useState(false);
+	const summary = !replacing && text === '' && registered && !isPrefillableIcon(registered) ? describeIcon(registered) : null;
 	const insecure = /^http:\/\//i.test(text);
 	const listId = `${id}-dashicons`;
 	const hintId = `${id}-hint`;
@@ -81,24 +103,41 @@ export const MenuIconField = forwardRef<
 	}
 
 	return (
-		<div className="grid gap-2">
+		<div className="grid min-w-0 gap-2 [overflow-wrap:anywhere]">
 			<Label htmlFor={id} className="text-sm font-medium">
 				{__('Menu icon', 'proto-blocks')}
 			</Label>
-			<div className="flex items-center gap-2">
+			<div className="flex min-w-0 items-center gap-2">
 				<div
 					className="grid size-9 flex-none place-items-center rounded-md bg-[#1d2327] text-[#f0f0f1]"
 					title={__('Menu preview', 'proto-blocks')}
 				>
 					{preview}
 				</div>
+				{summary !== null ? (
+					<div className="flex min-w-0 flex-1 items-center gap-2">
+						<p id={hintId} className="min-w-0 flex-1 break-all text-sm text-muted-foreground">
+							{sprintf(__('Registered icon: %s', 'proto-blocks'), summary)}
+						</p>
+						<Button
+							ref={ref as never}
+							type="button"
+							variant="outline"
+							size="sm"
+							disabled={disabled}
+							onClick={() => setReplacing(true)}
+						>
+							{__('Replace', 'proto-blocks')}
+						</Button>
+					</div>
+				) : (
 				<Input
 					ref={ref}
 					id={id}
 					list={listId}
 					value={text}
 					disabled={disabled}
-					className="font-mono"
+					className="min-w-0 font-mono"
 					placeholder="dashicons-admin-post"
 					autoComplete="off"
 					spellCheck={false}
@@ -106,13 +145,14 @@ export const MenuIconField = forwardRef<
 					onBlur={onBlur}
 					onChange={(event) => onChange(event.target.value === '' ? undefined : event.target.value)}
 				/>
+				)}
 				<datalist id={listId}>
 					{DASHICONS.map((name) => (
 						<option key={name} value={name} />
 					))}
 				</datalist>
 			</div>
-			<p id={hintId} className="text-[13px] text-muted-foreground">
+			<p id={summary !== null ? `${hintId}-help` : hintId} className="text-[13px] text-muted-foreground">
 				{__(
 					'A dashicon name, a file in your theme (assets/icon.svg) or an https URL. SVGs are cleaned of scripts and tinted to match the admin colour scheme.',
 					'proto-blocks'
