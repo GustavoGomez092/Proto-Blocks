@@ -1,0 +1,29 @@
+{
+    "key": "group_layouts_on_text",
+    "title": "Invalid fixture",
+    "location": [
+        [
+            {
+                "param": "post_type",
+                "operator": "==",
+                "value": "post"
+            }
+        ]
+    ],
+    "fields": [
+        {
+            "key": "field_lot_1",
+            "label": "Body",
+            "name": "body",
+            "type": "text",
+            "layouts": [
+                {
+                    "key": "layout_lot_1",
+                    "name": "one",
+                    "label": "One",
+                    "sub_fields": []
+                }
+            ]
+        }
+    ]
+}

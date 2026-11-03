@@ -1,0 +1,12 @@
+{
+  "date_picker": "date",
+  "time_picker": "time",
+  "date_time_picker": "datetime",
+  "color_picker": "color",
+  "checkbox": "select",
+  "button_group": "radio",
+  "post_object": "relationship",
+  "page_link": "relationship",
+  "oembed": "video",
+  "user": "select"
+}

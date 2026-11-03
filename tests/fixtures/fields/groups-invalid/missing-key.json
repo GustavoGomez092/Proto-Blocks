@@ -1,0 +1,20 @@
+{
+    "key": "group_missing_key",
+    "title": "Invalid fixture",
+    "location": [
+        [
+            {
+                "param": "post_type",
+                "operator": "==",
+                "value": "post"
+            }
+        ]
+    ],
+    "fields": [
+        {
+            "label": "No key",
+            "name": "no_key",
+            "type": "text"
+        }
+    ]
+}

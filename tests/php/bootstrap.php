@@ -8,11 +8,24 @@ if (!function_exists('__')) {
     function __($text, $domain = 'default') { return $text; }
 }
 if (!function_exists('esc_html')) {
-    function esc_html($text) { return $text; }
+    // Like WordPress: encode <, >, &, " and ', never double-encoding an existing entity.
+    function esc_html($text) { return htmlspecialchars((string) $text, ENT_QUOTES, 'UTF-8', false); }
 }
 if (!function_exists('sanitize_text_field')) {
-    // Minimal stub — does not strip tags or normalize whitespace like the real WP function.
-    function sanitize_text_field($text) { return is_string($text) ? trim($text) : $text; }
+    /**
+     * Stand-in for WordPress's sanitize_text_field(): arrays and objects become
+     * '', <script>/<style> elements are removed with their content, remaining
+     * tags are stripped, whitespace runs collapse to one space, then trim.
+     */
+    function sanitize_text_field($text) {
+        if (is_array($text) || is_object($text)) {
+            return '';
+        }
+        $text = (string) preg_replace('@<(script|style)[^>]*?>.*?</\\1>@si', '', (string) $text);
+        $text = strip_tags($text);
+        $text = (string) preg_replace('/[\r\n\t ]+/', ' ', $text);
+        return trim($text);
+    }
 }
 if (!function_exists('apply_filters')) {
     // The one apply_filters() stub for every test directory, so load order
@@ -86,7 +99,10 @@ if (!function_exists('set_url_scheme')) {
 }
 if (!class_exists('WP_Block')) {
     /** Minimal stub: the real WP_Block isn't loaded in unit tests. */
-    class WP_Block {}
+    class WP_Block {
+        /** Block context, as core's WP_Block exposes it. */
+        public array $context = [];
+    }
 }
 if (!class_exists('WP_CLI_Command')) {
     /** Minimal stub so ProtoBlocks\CLI\Commands can be loaded without WP-CLI. */

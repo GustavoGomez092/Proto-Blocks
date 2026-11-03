@@ -1,0 +1,21 @@
+{
+    "key": "group_unknown_rule",
+    "title": "Invalid fixture",
+    "location": [
+        [
+            {
+                "param": "post_format",
+                "operator": "==",
+                "value": "video"
+            }
+        ]
+    ],
+    "fields": [
+        {
+            "key": "field_rule_1",
+            "label": "Subtitle",
+            "name": "subtitle",
+            "type": "text"
+        }
+    ]
+}

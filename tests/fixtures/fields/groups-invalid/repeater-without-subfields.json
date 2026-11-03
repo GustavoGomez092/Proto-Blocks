@@ -1,0 +1,22 @@
+{
+    "key": "group_repeater_no_subs",
+    "title": "Invalid fixture",
+    "location": [
+        [
+            {
+                "param": "post_type",
+                "operator": "==",
+                "value": "post"
+            }
+        ]
+    ],
+    "fields": [
+        {
+            "key": "field_rep_1",
+            "label": "Rows",
+            "name": "rows",
+            "type": "repeater",
+            "sub_fields": []
+        }
+    ]
+}

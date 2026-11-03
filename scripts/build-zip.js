@@ -31,6 +31,9 @@ const INCLUDE_PATTERNS = [
     'includes/**/*',
     'assets/**/*',
     'examples/**/*',
+    // Runtime data read by PHP (schemas/field-type-aliases.json) and the JSON
+    // Schemas the validators mirror; without it every ACF alias type is lost.
+    'schemas/**/*',
 ];
 
 // Files to explicitly exclude
@@ -245,8 +248,12 @@ async function buildZip() {
     });
 }
 
-// Run
-buildZip().catch(err => {
-    console.error('Error building zip:', err);
-    process.exit(1);
-});
+module.exports = { INCLUDE_PATTERNS, EXCLUDE_PATTERNS };
+
+// Run only when executed directly (`npm run zip`), not when required by tests.
+if (require.main === module) {
+    buildZip().catch(err => {
+        console.error('Error building zip:', err);
+        process.exit(1);
+    });
+}
