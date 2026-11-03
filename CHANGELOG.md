@@ -105,7 +105,7 @@
 - `options_pages` key in the `proto_blocks_modules` filter; settings pages
   keep working with the Fields module off.
 - `wp proto-blocks validate` reports settings-page findings
-  (`shared_storage`, unknown capabilities, skipped fields).
+  (`shared_storage`, schema errors, skipped fields; menu warnings such as unknown capabilities appear only in the admin).
 
 ### Security hardening
 
