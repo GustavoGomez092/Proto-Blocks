@@ -60,7 +60,11 @@ const loaded = ( which: string ) => mockLoaded.mock.calls.filter( ( c ) => c[ 0 
 type Frame = {
 	on: jest.Mock;
 	open: jest.Mock;
-	state: () => { get: () => { first: () => { toJSON: () => unknown }; toJSON: () => unknown[] } };
+	off: jest.Mock;
+	detach: jest.Mock;
+	remove: jest.Mock;
+	reset: jest.Mock;
+	state: () => { get: () => { first: () => { toJSON: () => unknown }; toJSON: () => unknown[]; reset: jest.Mock } };
 	select: ( attachments: unknown[] ) => void;
 };
 
@@ -75,8 +79,12 @@ function stubMedia() {
 				return frame;
 			} ),
 			open: jest.fn(),
+			off: jest.fn(),
+			detach: jest.fn(),
+			remove: jest.fn(),
+			reset: jest.fn(),
 			state: () => ( {
-				get: () => ( { first: () => ( { toJSON: () => chosen[ 0 ] } ), toJSON: () => chosen } ),
+				get: () => ( { first: () => ( { toJSON: () => chosen[ 0 ] } ), toJSON: () => chosen, reset: frame.reset } ),
 			} ),
 			select: ( attachments ) => {
 				chosen = attachments;
@@ -113,7 +121,7 @@ describe( 'relationship', () => {
 		renderBox( payload() );
 		expect( loaded( 'relationship' ) ).toBe( 0 );
 		expect( fetchMock ).not.toHaveBeenCalled();
-		await user.click( screen.getByRole( 'button', { name: 'Add' } ) );
+		await user.click( screen.getByRole( 'button', { name: 'Add Speakers' } ) );
 		expect( await screen.findByRole( 'dialog' ) ).toBeInTheDocument();
 		expect( loaded( 'relationship' ) ).toBe( 1 );
 	} );
@@ -122,7 +130,7 @@ describe( 'relationship', () => {
 		jest.useFakeTimers();
 		const user = userEvent.setup( { advanceTimers: jest.advanceTimersByTime } );
 		renderBox( payload() );
-		await user.click( screen.getByRole( 'button', { name: 'Add' } ) );
+		await user.click( screen.getByRole( 'button', { name: 'Add Speakers' } ) );
 		const search = await screen.findByRole( 'combobox', { name: 'Search' } );
 		await user.type( search, 'ab' );
 		const withAb = () => fetchMock.mock.calls.filter( ( c ) => String( c[ 0 ].path ).includes( 'search=ab' ) );
@@ -144,7 +152,7 @@ describe( 'relationship', () => {
 		const user = userEvent.setup();
 		const { all } = renderBox( payload() );
 		expect( all( 'proto_fields[group_x][speakers]' ) ).toEqual( [ '' ] );
-		await user.click( screen.getByRole( 'button', { name: 'Add' } ) );
+		await user.click( screen.getByRole( 'button', { name: 'Add Speakers' } ) );
 		const listbox = await screen.findByRole( 'listbox' );
 		const grace = await within( listbox ).findByRole( 'option', { name: /Grace Hopper/ } );
 		await user.click( grace );
@@ -159,7 +167,7 @@ describe( 'relationship', () => {
 	test( 'keyboard: arrows move the active option and Enter selects it', async () => {
 		const user = userEvent.setup();
 		const { all } = renderBox( payload() );
-		await user.click( screen.getByRole( 'button', { name: 'Add' } ) );
+		await user.click( screen.getByRole( 'button', { name: 'Add Speakers' } ) );
 		const search = await screen.findByRole( 'combobox', { name: 'Search' } );
 		await screen.findByRole( 'option', { name: /Grace/ } );
 		expect( search ).toHaveFocus();
@@ -176,19 +184,19 @@ describe( 'relationship', () => {
 		);
 		expect( screen.getByText( 'Old pick' ) ).toBeInTheDocument();
 		expect( all( 'proto_fields[group_x][speakers][]' ) ).toEqual( [ '3' ] );
-		await user.click( screen.getByRole( 'button', { name: 'Replace' } ) );
+		await user.click( screen.getByRole( 'button', { name: 'Replace Speakers' } ) );
 		await user.click( await screen.findByRole( 'option', { name: /Ada/ } ) );
 		await waitFor( () => expect( all( 'proto_fields[group_x][speakers][]' ) ).toEqual( [ '5' ] ) );
 		// Picking the only allowed item closes the dialog and returns focus.
 		await waitFor( () => expect( screen.queryByRole( 'dialog' ) ).toBeNull() );
-		await waitFor( () => expect( screen.getByRole( 'button', { name: 'Replace' } ) ).toHaveFocus() );
+		await waitFor( () => expect( screen.getByRole( 'button', { name: 'Replace Speakers' } ) ).toHaveFocus() );
 	} );
 
 	test( 'a later page loads only when there is more', async () => {
 		const user = userEvent.setup();
 		fetchMock.mockResolvedValueOnce( { items: [ { id: 1, title: 'One', type: 'post', status: 'publish' } ], page: 1, hasMore: true } );
 		renderBox( payload() );
-		await user.click( screen.getByRole( 'button', { name: 'Add' } ) );
+		await user.click( screen.getByRole( 'button', { name: 'Add Speakers' } ) );
 		await user.click( await screen.findByRole( 'button', { name: 'Load more' } ) );
 		await waitFor( () =>
 			expect( fetchMock ).toHaveBeenLastCalledWith( expect.objectContaining( { path: expect.stringContaining( '&page=2' ) } ) )
@@ -312,5 +320,77 @@ describe( 'media', () => {
 		await user.click( screen.getByRole( 'checkbox', { name: 'News' } ) );
 		await waitFor( () => expect( all( 'proto_fields[group_x][topics][]' ) ).toEqual( [ '1', '2' ] ) );
 		expect( fetchMock ).not.toHaveBeenCalled();
+	} );
+
+	test( 'taxonomy: a chosen term missing from the display list still submits', () => {
+		const { all } = renderBox(
+			payload( { fields: pick( 'topics' ), values: { topics: [ 2, 77 ] }, display: { topics: { terms: [ { id: 2, name: 'Local', parent: 0 } ] } } } )
+		);
+		expect( all( 'proto_fields[group_x][topics][]' ) ).toEqual( [ '77', '2' ] );
+	} );
+
+	test( 'gallery: one frame per input across opens, disposed on unmount', async () => {
+		const user = userEvent.setup();
+		const { media, frames } = stubMedia();
+		const { all, unmount } = renderBox( payload( { fields: pick( 'photos' ), values: { photos: [] } } ) );
+		await user.click( screen.getByRole( 'button', { name: 'Add images' } ) );
+		await waitFor( () => expect( frames[ 0 ]?.open ).toHaveBeenCalledTimes( 1 ) );
+		act( () => frames[ 0 ].select( [ { id: 21, url: 'https://example.test/c.jpg' } ] ) );
+		await waitFor( () => expect( all( 'proto_fields[group_x][photos][]' ) ).toEqual( [ '21' ] ) );
+		await user.click( screen.getByRole( 'button', { name: 'Add images' } ) );
+		await waitFor( () => expect( frames[ 0 ].open ).toHaveBeenCalledTimes( 2 ) );
+		expect( media ).toHaveBeenCalledTimes( 1 );
+		expect( frames[ 0 ].reset ).toHaveBeenCalled();
+		act( () => frames[ 0 ].select( [ { id: 22, url: 'https://example.test/d.jpg' } ] ) );
+		await waitFor( () => expect( all( 'proto_fields[group_x][photos][]' ) ).toEqual( [ '21', '22' ] ) );
+		expect( await screen.findByText( '1 image added.' ) ).toBeInTheDocument();
+		unmount();
+		expect( frames[ 0 ].off ).toHaveBeenCalled();
+		expect( frames[ 0 ].remove ).toHaveBeenCalled();
+	} );
+
+	test( 'image: the media frame is disposed on unmount', async () => {
+		const user = userEvent.setup();
+		const { frames } = stubMedia();
+		const { unmount } = renderBox( payload( { fields: pick( 'hero' ), values: { hero: '' } } ) );
+		await user.click( screen.getByRole( 'button', { name: /Select image/ } ) );
+		expect( frames ).toHaveLength( 1 );
+		unmount();
+		expect( frames[ 0 ].off ).toHaveBeenCalled();
+		expect( frames[ 0 ].detach ).toHaveBeenCalled();
+		expect( frames[ 0 ].remove ).toHaveBeenCalled();
+	} );
+} );
+
+describe( 'announcements and paging', () => {
+	test( 'moving a selected item is announced in the box live region', async () => {
+		const user = userEvent.setup();
+		renderBox(
+			payload( {
+				values: { speakers: [ 3, 4 ] },
+				display: { speakers: [ { id: 3, title: 'First', type: 'post' }, { id: 4, title: 'Second', type: 'post' } ] },
+			} )
+		);
+		const status = screen.getAllByRole( 'status' ).find( ( s ) => s.getAttribute( 'aria-live' ) === 'polite' )!;
+		await user.click( screen.getByRole( 'button', { name: 'Move Second up' } ) );
+		await waitFor( () => expect( status ).toHaveTextContent( 'Second moved to position 1 of 2.' ) );
+	} );
+
+	test( '"Load more" is disabled while a typed search is pending and pages the searched term', async () => {
+		jest.useFakeTimers();
+		const user = userEvent.setup( { advanceTimers: jest.advanceTimersByTime } );
+		fetchMock.mockResolvedValue( { items: [ { id: 1, title: 'One', type: 'post', status: 'publish' } ], page: 1, hasMore: true } );
+		renderBox( payload() );
+		await user.click( screen.getByRole( 'button', { name: 'Add Speakers' } ) );
+		const more = await screen.findByRole( 'button', { name: 'Load more' } );
+		await waitFor( () => expect( more ).toBeEnabled() );
+		await user.type( screen.getByRole( 'combobox', { name: 'Search' } ), 'zz' );
+		expect( more ).toBeDisabled();
+		await act( async () => {
+			jest.advanceTimersByTime( 250 );
+		} );
+		await waitFor( () => expect( screen.getByRole( 'button', { name: 'Load more' } ) ).toBeEnabled() );
+		await user.click( screen.getByRole( 'button', { name: 'Load more' } ) );
+		expect( fetchMock ).toHaveBeenLastCalledWith( expect.objectContaining( { path: expect.stringContaining( 'search=zz&page=2' ) } ) );
 	} );
 } );

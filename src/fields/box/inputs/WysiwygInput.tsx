@@ -6,16 +6,16 @@
  * submits. The client never sanitises: the server's wp_kses_post on save
  * and read is the boundary.
  */
-import { lazy, Suspense, useState } from 'react';
+import { Suspense, useId, useState } from 'react';
 import { __, sprintf } from '@wordpress/i18n';
 import { PencilIcon } from 'lucide-react';
 import { useController } from 'react-hook-form';
 import { Button } from '@/admin/components/ui/button';
 import { Skeleton } from '@/admin/components/ui/skeleton';
 import { dottedPath, inputName } from '../names';
-import { useBox, useFieldA11y, type FieldInputProps } from '../registry';
+import { ChunkBoundary, useBox, useFieldA11y, useRetryableLazy, type FieldInputProps } from '../registry';
 
-const WysiwygEditor = lazy( () => import( /* webpackChunkName: "fields-wysiwyg" */ '../pickers/WysiwygEditor' ) );
+const loadEditor = () => import( /* webpackChunkName: "fields-wysiwyg" */ '../pickers/WysiwygEditor' );
 
 const PREVIEW_STYLE =
 	'body{margin:0;padding:12px;font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#1d2327;word-wrap:break-word}' +
@@ -43,33 +43,37 @@ export function WysiwygInput( { field, path }: FieldInputProps ) {
 	const value = typeof ctl.value === 'string' ? ctl.value : '';
 	const name = inputName( groupKey, path );
 	const [ editing, setEditing ] = useState( false );
-	// Fixed at mount: the editor instance is tied to its textarea id even if the row moves.
-	const [ editorId ] = useState( () => `${ a11y.id }-editor` );
+	// Unique per mounted input and fixed for its life: a path-based id would repeat after a
+	// row is removed and another added, and the editor instance is tied to its textarea id.
+	const editorId = `pbf-wysiwyg-${ useId().replace( /[^A-Za-z0-9_-]/g, '' ) }`;
+	const [ WysiwygEditor, retry ] = useRetryableLazy( loadEditor );
 
 	const hidden = <input type="hidden" name={ name } value={ value } />;
 
 	if ( editing ) {
 		return (
-			<Suspense
-				fallback={
-					<>
-						{ hidden }
-						<Skeleton className="h-40 w-full" />
-					</>
-				}
-			>
-				<WysiwygEditor
-					id={ editorId }
-					name={ name }
-					initialValue={ value }
-					labelId={ a11y.labelId }
-					describedBy={ a11y.describedBy }
-					invalid={ a11y.invalid }
-					required={ a11y.required }
-					onChange={ ( v ) => ctl.onChange( v ) }
-					onBlur={ ctl.onBlur }
-				/>
-			</Suspense>
+			<ChunkBoundary onRetry={ retry } keep={ hidden }>
+				<Suspense
+					fallback={
+						<>
+							{ hidden }
+							<Skeleton className="h-40 w-full" />
+						</>
+					}
+				>
+					<WysiwygEditor
+						id={ editorId }
+						name={ name }
+						initialValue={ value }
+						labelId={ a11y.labelId }
+						describedBy={ a11y.describedBy }
+						invalid={ a11y.invalid }
+						required={ a11y.required }
+						onChange={ ( v ) => ctl.onChange( v ) }
+						onBlur={ ctl.onBlur }
+					/>
+				</Suspense>
+			</ChunkBoundary>
 		);
 	}
 
@@ -111,5 +115,5 @@ export function WysiwygInput( { field, path }: FieldInputProps ) {
 
 /** Warms the editor chunk when Edit takes focus; nothing loads before then. */
 function preloadEditor(): void {
-	void import( /* webpackChunkName: "fields-wysiwyg" */ '../pickers/WysiwygEditor' );
+	loadEditor().catch( () => {} );
 }

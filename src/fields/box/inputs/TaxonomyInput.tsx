@@ -5,7 +5,7 @@
  * single select, `multi_select` a multiple select. Term names render as
  * text.
  */
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import { useController } from 'react-hook-form';
 import { cn } from '@/admin/lib/utils';
 import type { FieldDef } from '../../model/types';
@@ -81,6 +81,9 @@ export function TaxonomyInput( { field, path }: FieldInputProps ) {
 	const name = inputName( groupKey, path );
 	const type = fieldType( field );
 	const set = ( next: number[] ) => ctl.onChange( next );
+	// Chosen terms the display list does not hold (deleted since, or past a cap): keep submitting them.
+	const missing = value.filter( ( id ) => ! terms.some( ( t ) => t.id === id ) );
+	const missingLabel = ( id: number ) => sprintf( /* translators: %d: term ID */ __( 'Term #%d', 'proto-blocks' ), id );
 
 	if ( terms.length === 0 ) {
 		return (
@@ -115,6 +118,11 @@ export function TaxonomyInput( { field, path }: FieldInputProps ) {
 					className={ cn( CONTROL_CLASS, ! multiple && 'h-9 py-1' ) }
 				>
 					{ ! multiple && <option value="">{ __( '— Select —', 'proto-blocks' ) }</option> }
+					{ missing.map( ( id ) => (
+						<option key={ `missing-${ id }` } value={ String( id ) }>
+							{ missingLabel( id ) }
+						</option>
+					) ) }
 					{ terms.map( ( t ) => (
 						<option key={ t.id } value={ String( t.id ) }>
 							{ '— '.repeat( t.depth ) + t.name }
@@ -136,6 +144,9 @@ export function TaxonomyInput( { field, path }: FieldInputProps ) {
 			className="flex max-h-56 flex-col gap-1.5 overflow-auto rounded-md border border-border p-2"
 		>
 			{ ( radio || value.length === 0 ) && <EmptyMarker name={ name } /> }
+			{ ( radio ? missing.slice( 0, 1 ) : missing ).map( ( id ) => (
+				<input key={ `missing-${ id }` } type="hidden" name={ radio ? name : `${ name }[]` } value={ String( id ) } />
+			) ) }
 			{ terms.map( ( t, i ) => (
 				<label key={ t.id } className="flex items-center gap-2 text-sm" style={ { paddingInlineStart: `${ t.depth * 1.25 }rem` } }>
 					<input

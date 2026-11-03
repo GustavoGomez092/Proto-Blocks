@@ -145,3 +145,45 @@ test( 'a group renders its sub-fields inline with nested names', () => {
 	expect( input.name ).toBe( 'proto_fields[group_x][author][name]' );
 	expect( input.value ).toBe( 'Dana' );
 } );
+
+test( 'a row move is announced in the box live region', async () => {
+	const user = userEvent.setup();
+	renderBox( payload( { values: { agenda: [ { title: 'A' }, { title: 'B' }, { title: 'C' } ] } } ) );
+	const status = screen.getByRole( 'status' );
+	await user.click( screen.getByRole( 'button', { name: 'Move row 2 up' } ) );
+	await waitFor( () => expect( status ).toHaveTextContent( 'Row moved to position 1 of 3.' ) );
+	await user.click( screen.getByRole( 'button', { name: 'Remove row 3' } ) );
+	await waitFor( () => expect( status ).toHaveTextContent( 'Row 3 removed.' ) );
+	await user.click( screen.getByRole( 'button', { name: 'Add session' } ) );
+	await waitFor( () => expect( status ).toHaveTextContent( 'Row 3 added.' ) );
+} );
+
+test( 'wysiwyg editors in rows keep distinct ids after remove and add', async () => {
+	const user = userEvent.setup();
+	const editor = { initialize: jest.fn(), remove: jest.fn() };
+	( window as unknown as { wp?: unknown } ).wp = { editor };
+	try {
+		renderBox( payload( { values: { agenda: [ { title: 'A' }, { title: 'B' } ] } } ) );
+		await user.click( screen.getByRole( 'button', { name: 'Remove row 1' } ) );
+		await user.click( screen.getByRole( 'button', { name: 'Add session' } ) );
+		const edits = await screen.findAllByRole( 'button', { name: /Notes Edit/ } );
+		expect( edits ).toHaveLength( 2 );
+		await user.click( edits[ 0 ] );
+		await user.click( edits[ 1 ] );
+		await waitFor( () => expect( editor.initialize ).toHaveBeenCalledTimes( 2 ) );
+		const [ first, second ] = editor.initialize.mock.calls.map( ( c ) => c[ 0 ] as string );
+		expect( first ).not.toBe( second );
+		expect( first ).toMatch( /^[A-Za-z0-9_-]+$/ );
+	} finally {
+		delete ( window as unknown as { wp?: unknown } ).wp;
+	}
+} );
+
+test( 'a collapsed row (past the 20th) opens when it holds a server error', async () => {
+	const rows = Array.from( { length: 22 }, ( _, i ) => ( { title: `T${ i }` } ) );
+	renderBox( payload( { values: { agenda: rows }, errors: { 'agenda.21.title': 'This field is required.' } } ) );
+	expect( screen.getByRole( 'button', { name: 'Expand row 21' } ) ).toBeInTheDocument();
+	await waitFor( () => expect( screen.getByRole( 'button', { name: 'Collapse row 22' } ) ).toBeInTheDocument() );
+	const input = document.getElementById( 'pbf-group_x-agenda-21-title' )!;
+	expect( input.closest( '[hidden]' ) ).toBeNull();
+} );

@@ -53,6 +53,8 @@ export function RelationshipPicker( {
 	onReturnFocus,
 }: RelationshipPickerProps ) {
 	const [ query, setQuery ] = useState( '' );
+	/** The term the shown results are for; "Load more" pages through it, never a term still being typed. */
+	const [ searched, setSearched ] = useState( '' );
 	const [ items, setItems ] = useState< PostItem[] >( [] );
 	const [ page, setPage ] = useState( 1 );
 	const [ hasMore, setHasMore ] = useState( false );
@@ -60,7 +62,7 @@ export function RelationshipPicker( {
 	const [ active, setActive ] = useState( -1 );
 	const request = useRef( 0 );
 	const first = useRef( true );
-	const attempted = useRef( 1 );
+	const attempted = useRef( { search: '', page: 1 } );
 	const searchRef = useRef< HTMLInputElement >( null );
 	const listId = useId();
 	const optionId = ( i: number ) => `${ listId }-option-${ i }`;
@@ -68,7 +70,7 @@ export function RelationshipPicker( {
 	const load = useCallback(
 		( search: string, nextPage: number ) => {
 			const seq = ++request.current;
-			attempted.current = nextPage;
+			attempted.current = { search, page: nextPage };
 			setStatus( 'loading' );
 			apiFetch< Response >( { path: routePath( groupKey, fieldName, search, nextPage ) } )
 				.then( ( res ) => {
@@ -82,6 +84,7 @@ export function RelationshipPicker( {
 							: typeof res?.pages === 'number' && nextPage < res.pages;
 					setItems( ( prev ) => ( nextPage === 1 ? found : [ ...prev, ...found.filter( ( f ) => ! prev.some( ( p ) => p.id === f.id ) ) ] ) );
 					setPage( nextPage );
+					setSearched( search );
 					setHasMore( more );
 					setStatus( 'idle' );
 					if ( nextPage === 1 ) {
@@ -229,12 +232,19 @@ export function RelationshipPicker( {
 				<DialogFooter className="items-center sm:justify-between">
 					<span>
 						{ hasMore && (
-							<Button type="button" variant="outline" size="sm" disabled={ status === 'loading' } onClick={ () => load( query.trim(), page + 1 ) }>
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								// Disabled while a typed search is still pending, so it never pages a stale term.
+								disabled={ status === 'loading' || query.trim() !== searched }
+								onClick={ () => load( searched, page + 1 ) }
+							>
 								{ __( 'Load more', 'proto-blocks' ) }
 							</Button>
 						) }
 						{ status === 'error' && (
-							<Button type="button" variant="outline" size="sm" onClick={ () => load( query.trim(), attempted.current ) }>
+							<Button type="button" variant="outline" size="sm" onClick={ () => load( attempted.current.search, attempted.current.page ) }>
 								{ __( 'Try again', 'proto-blocks' ) }
 							</Button>
 						) }

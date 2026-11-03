@@ -4,22 +4,29 @@
  * from the lazy `fields-picker-relationship` chunk (searched server-side,
  * page by page). One hidden input per ID, in order. Titles render as text.
  */
-import { lazy, Suspense, useRef, useState } from 'react';
+import { Suspense, useRef, useState } from 'react';
 import { __, _n, sprintf } from '@wordpress/i18n';
 import { PlusIcon, XIcon } from 'lucide-react';
 import { useController } from 'react-hook-form';
 import { Badge } from '@/admin/components/ui/badge';
 import { Button } from '@/admin/components/ui/button';
 import { dottedPath, inputName } from '../names';
-import { EmptyMarker, useBox, useDisplay, useFieldA11y, type FieldInputProps } from '../registry';
+import {
+	ChunkBoundary,
+	EmptyMarker,
+	useAnnounce,
+	useBox,
+	useDisplay,
+	useFieldA11y,
+	useRetryableLazy,
+	type FieldInputProps,
+} from '../registry';
 import { MoveButtons, refocusMoved, toId, toIds } from './MediaInputs';
 
 /** A post as the box shows it. */
 export type PostItem = { id: number; title: string; type: string; status?: string };
 
-const RelationshipPicker = lazy(
-	() => import( /* webpackChunkName: "fields-picker-relationship" */ '../pickers/RelationshipPicker' )
-);
+const loadPicker = () => import( /* webpackChunkName: "fields-picker-relationship" */ '../pickers/RelationshipPicker' );
 
 /** Display entries (a list, or one entry for max 1) as PostItems. */
 export function toPostItems( v: unknown ): PostItem[] {
@@ -53,6 +60,8 @@ export function RelationshipInput( { field, path }: FieldInputProps ) {
 		Object.fromEntries( toPostItems( display ).map( ( p ) => [ p.id, p ] ) )
 	);
 	const [ open, setOpen ] = useState( false );
+	const [ RelationshipPicker, retryPicker ] = useRetryableLazy( loadPicker );
+	const announce = useAnnounce();
 	const listRef = useRef< HTMLOListElement >( null );
 	const addRef = useRef< HTMLButtonElement >( null );
 	const groupRef = useRef< HTMLDivElement >( null );
@@ -73,8 +82,11 @@ export function RelationshipInput( { field, path }: FieldInputProps ) {
 	/** Returns whether the picker should stay open. */
 	const pick = ( item: PostItem ): boolean => {
 		setKnown( ( k ) => ( { ...k, [ item.id ]: item } ) );
+		const itemTitle = item.title || titleOf( item.id );
 		if ( single ) {
 			update( [ item.id ] );
+			/* translators: %s: post title */
+			announce( sprintf( __( '%s selected.', 'proto-blocks' ), itemTitle ) );
 			return false;
 		}
 		if ( ids.includes( item.id ) || full ) {
@@ -82,6 +94,8 @@ export function RelationshipInput( { field, path }: FieldInputProps ) {
 		}
 		const next = [ ...ids, item.id ];
 		update( next );
+		/* translators: %s: post title */
+		announce( sprintf( __( '%s added.', 'proto-blocks' ), itemTitle ) );
 		return max === 0 || next.length < max;
 	};
 
@@ -89,12 +103,16 @@ export function RelationshipInput( { field, path }: FieldInputProps ) {
 		const next = [ ...ids ];
 		const [ id ] = next.splice( from, 1 );
 		next.splice( to, 0, id );
+		/* translators: 1: post title, 2: new position, 3: number of items */
+		announce( sprintf( __( '%1$s moved to position %2$d of %3$d.', 'proto-blocks' ), titleOf( id ), to + 1, next.length ) );
 		update( next );
 		refocusMoved( listRef.current, `[data-item="${ id }"]`, to - from );
 	};
 
 	const remove = ( index: number ) => {
 		update( ids.filter( ( _, i ) => i !== index ) );
+		/* translators: %s: post title */
+		announce( sprintf( __( '%s removed.', 'proto-blocks' ), titleOf( ids[ index ] ) ) );
 		window.setTimeout( () => {
 			const removes = listRef.current?.querySelectorAll< HTMLButtonElement >( '[data-remove]' );
 			( removes?.[ Math.min( index, removes.length - 1 ) ] ?? addRef.current )?.focus();
@@ -179,11 +197,14 @@ export function RelationshipInput( { field, path }: FieldInputProps ) {
 					size="sm"
 					disabled={ full }
 					aria-haspopup="dialog"
+					aria-labelledby={ `${ a11y.id }-add ${ a11y.labelId }` }
 					onFocus={ preloadPicker }
 					onClick={ () => setOpen( true ) }
 				>
 					<PlusIcon aria-hidden="true" />
-					{ single && ids.length > 0 ? __( 'Replace', 'proto-blocks' ) : __( 'Add', 'proto-blocks' ) }
+					<span id={ `${ a11y.id }-add` }>
+						{ single && ids.length > 0 ? __( 'Replace', 'proto-blocks' ) : __( 'Add', 'proto-blocks' ) }
+					</span>
 				</Button>
 				{ full && (
 					<span className="text-[13px] text-muted-foreground">
@@ -192,22 +213,25 @@ export function RelationshipInput( { field, path }: FieldInputProps ) {
 				) }
 			</div>
 			{ open && (
-				<Suspense fallback={ null }>
-					<RelationshipPicker
-						groupKey={ groupKey }
-						fieldName={ field.name }
-						title={ fieldLabel }
-						max={ max }
-						selected={ ids }
-						onPick={ ( item ) => {
-							if ( ! pick( item ) ) {
-								setOpen( false );
-							}
-						} }
-						onClose={ () => setOpen( false ) }
-						onReturnFocus={ returnFocus }
-					/>
-				</Suspense>
+				// The hidden inputs above stay mounted if the picker chunk fails to load.
+				<ChunkBoundary onRetry={ retryPicker }>
+					<Suspense fallback={ null }>
+						<RelationshipPicker
+							groupKey={ groupKey }
+							fieldName={ field.name }
+							title={ fieldLabel }
+							max={ max }
+							selected={ ids }
+							onPick={ ( item ) => {
+								if ( ! pick( item ) ) {
+									setOpen( false );
+								}
+							} }
+							onClose={ () => setOpen( false ) }
+							onReturnFocus={ returnFocus }
+						/>
+					</Suspense>
+				</ChunkBoundary>
 			) }
 		</div>
 	);
@@ -215,5 +239,5 @@ export function RelationshipInput( { field, path }: FieldInputProps ) {
 
 /** Warms the picker chunk when the Add button takes focus; nothing loads before then. */
 function preloadPicker(): void {
-	void import( /* webpackChunkName: "fields-picker-relationship" */ '../pickers/RelationshipPicker' );
+	loadPicker().catch( () => {} );
 }

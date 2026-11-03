@@ -12,14 +12,14 @@
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { __, _n, sprintf } from '@wordpress/i18n';
 import { ChevronDownIcon, PlusIcon, Trash2Icon } from 'lucide-react';
-import { useFieldArray, useWatch } from 'react-hook-form';
+import { get, useFieldArray, useFormState, useWatch } from 'react-hook-form';
 import { Badge } from '@/admin/components/ui/badge';
 import { Button } from '@/admin/components/ui/button';
 import { cn } from '@/admin/lib/utils';
 import type { FieldDef } from '../../model/types';
 import { FieldList } from '../FieldsForm';
 import { dottedPath, inputName, type FieldPath } from '../names';
-import { EmptyMarker, useBox, useFieldA11y, type FieldInputProps } from '../registry';
+import { EmptyMarker, useAnnounce, useBox, useFieldA11y, type FieldInputProps } from '../registry';
 import { MoveButtons, refocusMoved, toId } from './MediaInputs';
 
 /** Rows past this many start collapsed. */
@@ -61,6 +61,8 @@ function RowTitle( { path, field }: { path: FieldPath; field: FieldDef } ) {
 
 export type RowCardProps = {
 	rowKey: string;
+	/** The row's dotted path; a row holding an invalid field opens itself. */
+	errorPath: string;
 	index: number;
 	count: number;
 	/** The row's name for its buttons, e.g. "row 2" or "section 2". */
@@ -74,8 +76,18 @@ export type RowCardProps = {
 };
 
 /** One row card: header (number or layout badge, title, move, remove, collapse) and its fields. */
-export function RowCard( { rowKey, index, count, noun, badge, summary, defaultCollapsed, onMove, onRemove, children }: RowCardProps ) {
+export function RowCard( { rowKey, errorPath, index, count, noun, badge, summary, defaultCollapsed, onMove, onRemove, children }: RowCardProps ) {
 	const [ collapsed, setCollapsed ] = useState( defaultCollapsed );
+	const { control } = useBox();
+	const { errors } = useFormState( { control, name: errorPath } );
+	const invalid = !! get( errors, errorPath );
+	useEffect( () => {
+		// Open a collapsed row when it holds an error (server errors on load, a submit attempt), so
+		// the error summary link and the user can reach the field.
+		if ( invalid ) {
+			setCollapsed( false );
+		}
+	}, [ invalid ] );
 	const uid = useId();
 	const headId = `${ uid }-head`;
 	const bodyId = `${ uid }-body`;
@@ -136,25 +148,60 @@ export function RowCard( { rowKey, index, count, noun, badge, summary, defaultCo
 	);
 }
 
-/** Row list behaviour shared by repeater and flexible content: move and remove with focus kept in place. */
-export function useRowActions( listRef: RefObject< HTMLOListElement | null >, addRef: RefObject< HTMLButtonElement | null >, ops: {
-	move: ( from: number, to: number ) => void;
-	remove: ( index: number ) => void;
-	keyAt: ( index: number ) => string;
-} ) {
+/** What the live region says after a row action; `kind` is "row" (repeater) or "section" (flexible content). */
+export function rowMessages( kind: 'row' | 'section' ) {
+	return kind === 'row'
+		? {
+				/* translators: 1: new position, 2: number of rows */
+				moved: ( to: number, total: number ) => sprintf( __( 'Row moved to position %1$d of %2$d.', 'proto-blocks' ), to, total ),
+				/* translators: %d: row number */
+				removed: ( n: number ) => sprintf( __( 'Row %d removed.', 'proto-blocks' ), n ),
+				/* translators: %d: row number */
+				added: ( n: number ) => sprintf( __( 'Row %d added.', 'proto-blocks' ), n ),
+		  }
+		: {
+				/* translators: 1: new position, 2: number of sections */
+				moved: ( to: number, total: number ) => sprintf( __( 'Section moved to position %1$d of %2$d.', 'proto-blocks' ), to, total ),
+				/* translators: %d: section number */
+				removed: ( n: number ) => sprintf( __( 'Section %d removed.', 'proto-blocks' ), n ),
+				/* translators: %d: section number */
+				added: ( n: number ) => sprintf( __( 'Section %d added.', 'proto-blocks' ), n ),
+		  };
+}
+
+/**
+ * Row list behaviour shared by repeater and flexible content: move and
+ * remove with focus kept in place, each announced in the box's live region.
+ */
+export function useRowActions(
+	listRef: RefObject< HTMLOListElement | null >,
+	addRef: RefObject< HTMLButtonElement | null >,
+	ops: {
+		kind: 'row' | 'section';
+		count: number;
+		move: ( from: number, to: number ) => void;
+		remove: ( index: number ) => void;
+		keyAt: ( index: number ) => string;
+	}
+) {
+	const announce = useAnnounce();
+	const messages = rowMessages( ops.kind );
 	const onMove = ( from: number, to: number ) => {
 		const key = ops.keyAt( from );
 		ops.move( from, to );
+		announce( messages.moved( to + 1, ops.count ) );
 		refocusMoved( listRef.current, `[data-row="${ key }"]`, to - from );
 	};
 	const onRemove = ( index: number ) => {
 		ops.remove( index );
+		announce( messages.removed( index + 1 ) );
 		window.setTimeout( () => {
 			const removes = listRef.current?.querySelectorAll< HTMLButtonElement >( ':scope > li [data-remove]' );
 			( removes?.[ Math.min( index, removes.length - 1 ) ] ?? addRef.current )?.focus();
 		}, 0 );
 	};
-	return { onMove, onRemove };
+	const announceAdded = ( n: number ) => announce( messages.added( n ) );
+	return { onMove, onRemove, announceAdded };
 }
 
 export function RepeaterInput( { field, path }: FieldInputProps ) {
@@ -168,7 +215,13 @@ export function RepeaterInput( { field, path }: FieldInputProps ) {
 	const full = max > 0 && rows.length >= max;
 	const titleKey = field.settings?.collapsed;
 	const titleField = typeof titleKey === 'string' && titleKey !== '' ? field.subFields.find( ( f ) => f.key === titleKey ) : undefined;
-	const { onMove, onRemove } = useRowActions( listRef, addRef, { move, remove, keyAt: ( i ) => rows[ i ]?.id ?? '' } );
+	const { onMove, onRemove, announceAdded } = useRowActions( listRef, addRef, {
+		kind: 'row',
+		count: rows.length,
+		move,
+		remove,
+		keyAt: ( i ) => rows[ i ]?.id ?? '',
+	} );
 
 	useEffect( () => {
 		if ( rows.length < min ) {
@@ -193,6 +246,7 @@ export function RepeaterInput( { field, path }: FieldInputProps ) {
 						<RowCard
 							key={ row.id }
 							rowKey={ row.id }
+							errorPath={ dottedPath( [ ...path, i ] ) }
 							index={ i }
 							count={ rows.length }
 							noun={ noun }
@@ -214,7 +268,10 @@ export function RepeaterInput( { field, path }: FieldInputProps ) {
 					variant="outline"
 					size="sm"
 					disabled={ full }
-					onClick={ () => append( emptyRow( field.subFields ) ) }
+					onClick={ () => {
+						append( emptyRow( field.subFields ) );
+						announceAdded( rows.length + 1 );
+					} }
 				>
 					<PlusIcon aria-hidden="true" />
 					{ buttonLabel }

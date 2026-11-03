@@ -37,7 +37,13 @@ export function FlexibleInput( { field, path }: FieldInputProps ) {
 	const menuId = useId();
 	const max = rowCap( field, payload.maxRows );
 	const full = max > 0 && rows.length >= max;
-	const { onMove, onRemove } = useRowActions( listRef, addRef, { move, remove, keyAt: ( i ) => rows[ i ]?.id ?? '' } );
+	const { onMove, onRemove, announceAdded } = useRowActions( listRef, addRef, {
+		kind: 'section',
+		count: rows.length,
+		move,
+		remove,
+		keyAt: ( i ) => rows[ i ]?.id ?? '',
+	} );
 
 	const layouts = field.layouts;
 	const used = ( l: LayoutDef ) => rows.filter( ( r ) => layoutOf( r ) === l.name ).length;
@@ -76,6 +82,7 @@ export function FlexibleInput( { field, path }: FieldInputProps ) {
 	const addLayout = ( l: LayoutDef ) => {
 		closeMenu( false );
 		append( { layout: l.name, ...emptyRow( l.subFields ) } );
+		announceAdded( rows.length + 1 );
 	};
 
 	const buttonLabel =
@@ -96,6 +103,7 @@ export function FlexibleInput( { field, path }: FieldInputProps ) {
 							<RowCard
 								key={ row.id }
 								rowKey={ row.id }
+								errorPath={ dottedPath( [ ...path, i ] ) }
 								index={ i }
 								count={ rows.length }
 								noun={ noun }

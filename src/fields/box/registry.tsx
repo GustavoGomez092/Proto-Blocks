@@ -9,10 +9,17 @@
  * present, so its stored value is kept on save.
  */
 import {
+	Component,
 	createContext,
+	forwardRef,
+	lazy,
+	useCallback,
 	useContext,
+	useImperativeHandle,
 	useMemo,
+	useState,
 	type ChangeEvent,
+	type ReactNode,
 	type ComponentType,
 	type FocusEvent,
 	type LazyExoticComponent,
@@ -177,6 +184,91 @@ export function useDisplay( path: FieldPath ): unknown {
 export function EmptyMarker( { name }: { name: string } ) {
 	return <input type="hidden" name={ name } value="" />;
 }
+
+/* ---------- lazy chunks ---------- */
+
+type Loader< P > = () => Promise< { default: ComponentType< P > } >;
+
+/**
+ * A React.lazy component that can be re-created: lazy() caches a failed
+ * import forever, so "Try again" needs a fresh one (webpack forgets a chunk
+ * that failed to load and requests it again).
+ */
+export function useRetryableLazy< P >( loader: Loader< P > ): [ LazyExoticComponent< ComponentType< P > >, () => void ] {
+	const [ state, setState ] = useState( () => ( { Component: lazy( loader ) } ) );
+	const retry = useCallback( () => setState( { Component: lazy( loader ) } ), [ loader ] );
+	return [ state.Component, retry ];
+}
+
+type ChunkBoundaryProps = {
+	children: ReactNode;
+	/** Re-creates the lazy component before the boundary renders its children again. */
+	onRetry?: () => void;
+	/** Rendered alongside the error message (the field's hidden inputs), so values still submit. */
+	keep?: ReactNode;
+};
+
+/** Catches a lazy chunk (or input) that failed to load and offers to try again. */
+export class ChunkBoundary extends Component< ChunkBoundaryProps, { failed: boolean } > {
+	state = { failed: false };
+
+	static getDerivedStateFromError() {
+		return { failed: true };
+	}
+
+	retry = () => {
+		this.props.onRetry?.();
+		this.setState( { failed: false } );
+	};
+
+	render() {
+		if ( ! this.state.failed ) {
+			return this.props.children;
+		}
+		return (
+			<>
+				{ this.props.keep }
+				<p role="alert" className="flex flex-wrap items-center gap-2 text-[13px] text-destructive">
+					{ __( 'Couldn’t load this control.', 'proto-blocks' ) }
+					<button type="button" onClick={ this.retry } className="font-medium underline underline-offset-2">
+						{ __( 'Try again', 'proto-blocks' ) }
+					</button>
+				</p>
+			</>
+		);
+	}
+}
+
+/* ---------- announcements ---------- */
+
+/** Writes a message to the box's shared polite live region (row moved, removed, added). */
+export const AnnounceContext = createContext< ( message: string ) => void >( () => {} );
+
+export function useAnnounce(): ( message: string ) => void {
+	return useContext( AnnounceContext );
+}
+
+/**
+ * The box's one `role="status"` region. It owns its text, so an
+ * announcement re-renders only this node; the same text twice is announced
+ * twice (cleared first).
+ */
+export const Announcer = forwardRef< ( message: string ) => void >( function Announcer( _props, ref ) {
+	const [ text, setText ] = useState( '' );
+	useImperativeHandle(
+		ref,
+		() => ( message: string ) => {
+			setText( '' );
+			window.setTimeout( () => setText( message ), 50 );
+		},
+		[]
+	);
+	return (
+		<p role="status" aria-live="polite" className="sr-only">
+			{ text }
+		</p>
+	);
+} );
 
 /* ---------- media, relational and nested inputs ---------- */
 

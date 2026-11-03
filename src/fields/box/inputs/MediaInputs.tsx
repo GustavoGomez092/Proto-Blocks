@@ -11,7 +11,7 @@
  * on the first click only. The gallery's multi-select frame lives in the
  * lazy `fields-picker-gallery` chunk.
  */
-import { lazy, Suspense, useCallback, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { __, _n, sprintf } from '@wordpress/i18n';
 import { ArrowDownIcon, ArrowUpIcon, FileIcon, ImagePlusIcon, XIcon } from 'lucide-react';
 import { useController } from 'react-hook-form';
@@ -20,7 +20,17 @@ import { Input } from '@/admin/components/ui/input';
 import { cn } from '@/admin/lib/utils';
 import type { FieldDef } from '../../model/types';
 import { dottedPath, inputName, type FieldPath } from '../names';
-import { DETACHED_FORM, EmptyMarker, useBox, useDisplay, useFieldA11y, type FieldInputProps } from '../registry';
+import {
+	ChunkBoundary,
+	DETACHED_FORM,
+	EmptyMarker,
+	useAnnounce,
+	useBox,
+	useDisplay,
+	useFieldA11y,
+	useRetryableLazy,
+	type FieldInputProps,
+} from '../registry';
 
 /* ---------- shared helpers ---------- */
 
@@ -90,11 +100,35 @@ function attachmentsOf( display: unknown ): Attachment[] {
 	return list.map( toAttachment ).filter( ( a ): a is Attachment => a !== null );
 }
 
-type MediaSelection = { first: () => { toJSON: () => unknown }; toJSON: () => unknown };
-type MediaFrame = {
+type MediaSelection = { first: () => { toJSON: () => unknown }; toJSON: () => unknown; reset?: () => unknown };
+export type MediaFrame = {
 	on: ( event: string, cb: () => void ) => unknown;
 	open: () => unknown;
 	state: () => { get: ( key: string ) => MediaSelection };
+	off?: () => unknown;
+	detach?: () => unknown;
+	remove?: () => unknown;
+};
+
+/** Unbinds and removes a media frame (its modal markup and listeners). */
+export function disposeFrame( frame: MediaFrame | null ): void {
+	if ( ! frame ) {
+		return;
+	}
+	frame.off?.();
+	frame.detach?.();
+	frame.remove?.();
+}
+
+/**
+ * The one gallery frame of a gallery input. The lazy picker creates it on
+ * the first "Add images" and reuses it; the input disposes it on unmount.
+ */
+export type GalleryFrameHolder = {
+	frame: MediaFrame | null;
+	picked: boolean;
+	onSelect: ( attachments: Attachment[] ) => void;
+	onClose: () => void;
 };
 export type MediaFrameOptions = {
 	title: string;
@@ -208,6 +242,7 @@ function useMediaFrame( kind: Kind, onPick: ( a: Attachment ) => void ) {
 		}
 		frame.current.open();
 	}, [ kind ] );
+	useEffect( () => () => disposeFrame( frame.current ), [] );
 	return { open, unavailable };
 }
 
@@ -301,7 +336,7 @@ function SingleMedia( { field, path, kind }: FieldInputProps & { kind: Kind } ) 
 					autoComplete="off"
 					spellCheck={ false }
 					placeholder="https://"
-					aria-label={ sprintf( /* translators: %s: field label */ __( '%s: or a video URL', 'proto-blocks' ), label ) }
+					aria-label={ sprintf( /* translators: %s: field label */ __( '%s video URL', 'proto-blocks' ), label ) }
 					aria-describedby={ a11y.describedBy }
 					value={ typedUrl }
 					onChange={ ( e ) => ctl.onChange( e.target.value ) }
@@ -327,7 +362,7 @@ export function VideoInput( props: FieldInputProps ) {
 
 /* ---------- gallery ---------- */
 
-const GalleryPicker = lazy( () => import( /* webpackChunkName: "fields-picker-gallery" */ '../pickers/GalleryPicker' ) );
+const loadGalleryPicker = () => import( /* webpackChunkName: "fields-picker-gallery" */ '../pickers/GalleryPicker' );
 
 function maxOf( field: FieldDef ): number {
 	const max = toId( field.settings?.max );
@@ -344,6 +379,10 @@ export function GalleryInput( { field, path }: FieldInputProps ) {
 		Object.fromEntries( attachmentsOf( display ).map( ( a ) => [ a.id, a ] ) )
 	);
 	const [ picking, setPicking ] = useState( 0 );
+	const [ GalleryPicker, retryPicker ] = useRetryableLazy( loadGalleryPicker );
+	const holder = useRef< GalleryFrameHolder >( { frame: null, picked: false, onSelect: () => {}, onClose: () => {} } );
+	useEffect( () => () => disposeFrame( holder.current.frame ), [] );
+	const announce = useAnnounce();
 	const [ unavailable, setUnavailable ] = useState( false );
 	const listRef = useRef< HTMLUListElement >( null );
 	const addRef = useRef< HTMLButtonElement >( null );
@@ -365,6 +404,11 @@ export function GalleryInput( { field, path }: FieldInputProps ) {
 			}
 		}
 		update( next );
+		const added = next.length - ids.length;
+		if ( added > 0 ) {
+			/* translators: %d: number of images added */
+			announce( sprintf( _n( '%d image added.', '%d images added.', added, 'proto-blocks' ), added ) );
+		}
 	};
 	const move = ( from: number, to: number ) => {
 		const next = [ ...ids ];
@@ -372,9 +416,13 @@ export function GalleryInput( { field, path }: FieldInputProps ) {
 		next.splice( to, 0, id );
 		update( next );
 		refocusMoved( listRef.current, `[data-item="${ id }"]`, to - from );
+		/* translators: 1: new position, 2: number of images */
+		announce( sprintf( __( 'Image moved to position %1$d of %2$d.', 'proto-blocks' ), to + 1, next.length ) );
 	};
 	const remove = ( index: number ) => {
 		update( ids.filter( ( _, i ) => i !== index ) );
+		/* translators: %d: image position */
+		announce( sprintf( __( 'Image %d removed.', 'proto-blocks' ), index + 1 ) );
 		window.setTimeout( () => {
 			const removes = listRef.current?.querySelectorAll< HTMLButtonElement >( '[data-remove]' );
 			( removes?.[ Math.min( index, removes.length - 1 ) ] ?? addRef.current )?.focus();
@@ -455,17 +503,21 @@ export function GalleryInput( { field, path }: FieldInputProps ) {
 			</ul>
 			{ unavailable && <p className="text-[13px] text-muted-foreground">{ MEDIA_UNAVAILABLE }</p> }
 			{ picking > 0 && (
-				<Suspense fallback={ null }>
-					<GalleryPicker
-						key={ picking }
-						title={ field.label || field.name }
-						onSelect={ add }
-						onClose={ () => {
-							setPicking( 0 );
-							window.setTimeout( () => addRef.current?.focus(), 0 );
-						} }
-					/>
-				</Suspense>
+				// The hidden inputs above stay mounted if the picker chunk fails to load.
+				<ChunkBoundary onRetry={ retryPicker }>
+					<Suspense fallback={ null }>
+						<GalleryPicker
+							key={ picking }
+							holder={ holder.current }
+							title={ field.label || field.name }
+							onSelect={ add }
+							onClose={ () => {
+								setPicking( 0 );
+								window.setTimeout( () => addRef.current?.focus(), 0 );
+							} }
+						/>
+					</Suspense>
+				</ChunkBoundary>
 			) }
 		</div>
 	);
@@ -473,5 +525,5 @@ export function GalleryInput( { field, path }: FieldInputProps ) {
 
 /** Warms the gallery chunk when its button takes focus; nothing loads before then. */
 function preloadGallery(): void {
-	void import( /* webpackChunkName: "fields-picker-gallery" */ '../pickers/GalleryPicker' );
+	loadGalleryPicker().catch( () => {} );
 }
