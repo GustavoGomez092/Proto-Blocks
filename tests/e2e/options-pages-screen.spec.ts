@@ -135,6 +135,7 @@ test.describe( 'Options Pages screen', () => {
 		const external = page.getByRole( 'region', {
 			name: 'Other settings pages',
 		} );
+		await external.getByRole( 'heading', { name: 'Other settings pages' } ).click();
 		const general = external
 			.getByRole( 'row' )
 			.filter( { hasText: 'General' } )
@@ -188,7 +189,7 @@ test.describe( 'Options Pages screen', () => {
 
 	test( 'create, edit, use and delete a page', async ( { page } ) => {
 		await openScreen( page, '&new=1' );
-		await page.getByRole( 'textbox', { name: 'Title', exact: true } ).fill( 'E2E Notices' );
+		await page.getByRole( 'textbox', { name: 'Page title', exact: true } ).fill( 'E2E Notices' );
 		await expect( page.getByRole( 'textbox', { name: 'Slug' } ) ).toHaveValue(
 			NEW_SLUG
 		);

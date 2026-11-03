@@ -27,7 +27,7 @@ function trackErrors( page: Page ): string[] {
 
 const SCREENS = [
 	{ slug: 'proto-blocks', heading: 'Blocks' },
-	{ slug: 'proto-blocks-settings', heading: 'Tailwind Settings' },
+	{ slug: 'proto-blocks-settings', heading: 'Tailwind' },
 	{ slug: 'proto-blocks-system', heading: 'System Status' },
 	{ slug: 'proto-blocks-previews', heading: 'Preview Capture' },
 ];
@@ -73,7 +73,7 @@ test.describe( 'Proto-Blocks admin smoke', () => {
 			await expect(
 				app.getByRole( 'heading', {
 					level: 1,
-					name: 'Welcome to Proto Blocks',
+					name: 'Gutenberg blocks from PHP templates.',
 				} )
 			).toBeVisible();
 			const progress = app.getByRole( 'list', {

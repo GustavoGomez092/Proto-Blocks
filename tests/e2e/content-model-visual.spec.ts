@@ -52,7 +52,7 @@ test.describe( 'Content model screens (visual)', () => {
 	test( 'post types list', async ( { page } ) => {
 		await visit( page, TYPES );
 		await expect(
-			page.getByRole( 'cell', { name: 'Books', exact: true } )
+			page.getByRole( 'cell', { name: /^Books( |$)/ } )
 		).toBeVisible();
 		await expect( page ).toHaveScreenshot(
 			'post-types-list.png',
@@ -99,7 +99,7 @@ test.describe( 'Content model screens (visual)', () => {
 		await expect( async () => {
 			await visit( page, TAXONOMIES );
 			await expect(
-				page.getByRole( 'cell', { name: 'Topics', exact: true } )
+				page.getByRole( 'cell', { name: /^Topics( |$)/ } )
 			).toBeVisible( { timeout: 1000 } );
 			await expect(
 				page.getByText( 'File modifications are disabled on this site' )

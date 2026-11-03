@@ -25,7 +25,7 @@ interface ParityReport {
  */
 function row( page: Page, name: string ) {
 	return page.getByRole( 'row' ).filter( {
-		has: page.getByRole( 'cell', { name, exact: true } ),
+		has: page.getByRole( 'cell', { name: new RegExp( `^${ name }( |$)` ) } ),
 	} );
 }
 
@@ -198,7 +198,7 @@ test.describe( 'Post types', () => {
 		await dialog.getByLabel( 'Singular name' ).fill( 'Case Study' );
 		await expect( dialog.getByLabel( 'Slug' ) ).toHaveValue( 'case-study' );
 		await dialog
-			.getByRole( 'button', { name: 'Create post type' } )
+			.getByRole( 'button', { name: 'Create & open' } )
 			.click();
 		await expect(
 			page.getByRole( 'button', { name: 'All post types' } )
