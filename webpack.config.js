@@ -69,7 +69,19 @@ module.exports = {
             {
                 test: /\.css$/,
                 exclude: /[\\/]node_modules[\\/]tailwindcss[\\/]/,
-                use: [MiniCssExtractPlugin.loader, 'css-loader', 'postcss-loader'],
+                use: [
+                    MiniCssExtractPlugin.loader,
+                    {
+                        loader: 'css-loader',
+                        options: {
+                            // Self-hosted fonts in assets/fonts are referenced
+                            // relative to the built assets/css/*.css; leave
+                            // those URLs as written instead of bundling them.
+                            url: { filter: (url) => !url.startsWith('../fonts/') },
+                        },
+                    },
+                    'postcss-loader',
+                ],
             },
         ],
     },

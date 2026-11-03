@@ -53,7 +53,7 @@ test('renders the three stats', async () => {
 	mockApi({ 'admin/dashboard': payload() });
 	renderScreen();
 
-	expect(await screen.findByText('Cache Size')).toBeInTheDocument();
+	expect(await screen.findByText('Cache on disk')).toBeInTheDocument();
 	expect(screen.getByText('12')).toBeInTheDocument();
 	expect(screen.getByText('4')).toBeInTheDocument();
 	expect(screen.getByText('1 MB')).toBeInTheDocument();
@@ -65,7 +65,7 @@ test('a locked example blocks switch is disabled and says why', async () => {
 	mockApi({ 'admin/dashboard': payload({ exampleBlocks: { enabled: true, locked: true } }) });
 	renderScreen();
 
-	expect(await screen.findByRole('switch', { name: 'Example Blocks' })).toBeDisabled();
+	expect(await screen.findByRole('switch', { name: 'Example blocks' })).toBeDisabled();
 	expect(screen.getByText('Managed from configuration')).toBeInTheDocument();
 });
 
@@ -77,7 +77,7 @@ test('toggling the example blocks switch posts the new value', async () => {
 	});
 	renderScreen();
 
-	await user.click(await screen.findByRole('switch', { name: 'Example Blocks' }));
+	await user.click(await screen.findByRole('switch', { name: 'Example blocks' }));
 
 	expect(await screen.findByText('Example blocks disabled.')).toBeInTheDocument();
 	expect(api).toHaveBeenCalledWith(
@@ -87,7 +87,7 @@ test('toggling the example blocks switch posts the new value', async () => {
 			data: { enabled: false },
 		})
 	);
-	expect(screen.getByRole('switch', { name: 'Example Blocks' })).not.toBeChecked();
+	expect(screen.getByRole('switch', { name: 'Example blocks' })).not.toBeChecked();
 });
 
 test('read-only mode shows the banner and keeps the screen working', async () => {
@@ -95,7 +95,7 @@ test('read-only mode shows the banner and keeps the screen working', async () =>
 	renderScreen({ fileModsAllowed: false, fileModsConstant: 'DISALLOW_FILE_MODS' });
 
 	expect(await screen.findByText('File modifications are disabled on this site')).toBeInTheDocument();
-	expect(await screen.findByRole('switch', { name: 'Example Blocks' })).toBeEnabled();
+	expect(await screen.findByRole('switch', { name: 'Example blocks' })).toBeEnabled();
 	expect(screen.getByRole('button', { name: 'Clear cache' })).toBeEnabled();
 });
 
@@ -103,7 +103,7 @@ test('demo block installation is not offered in the UI', async () => {
 	mockApi({ 'admin/dashboard': payload() });
 	renderScreen();
 
-	expect(await screen.findByRole('switch', { name: 'Example Blocks' })).toBeInTheDocument();
+	expect(await screen.findByRole('switch', { name: 'Example blocks' })).toBeInTheDocument();
 	expect(screen.queryByRole('button', { name: /Install/ })).not.toBeInTheDocument();
 	expect(screen.queryByRole('button', { name: /Remove demo blocks/ })).not.toBeInTheDocument();
 	expect(screen.queryByText('Demo Blocks')).not.toBeInTheDocument();
@@ -115,7 +115,7 @@ test('an empty blocks array shows the empty state', async () => {
 	});
 	renderScreen();
 
-	expect(await screen.findByText('No blocks found')).toBeInTheDocument();
+	expect(await screen.findByText('Your first block is a folder and two files.')).toBeInTheDocument();
 	expect(screen.queryByRole('link', { name: /Install demo blocks/ })).not.toBeInTheDocument();
 });
 
@@ -169,4 +169,18 @@ test('the Category column shows the label the server sends, not the slug', async
 	renderScreen();
 
 	expect(await screen.findByText('QA Shop blocks')).toBeInTheDocument();
+});
+
+test('the empty state turns on the example blocks', async () => {
+	const user = userEvent.setup();
+	const api = mockApi({
+		'GET admin/dashboard': payload({ exampleBlocks: { enabled: false, locked: false }, blocks: [] }),
+		'POST admin/example-blocks': () => payload({ exampleBlocks: { enabled: true, locked: false } }),
+	});
+	renderScreen();
+
+	await user.click(await screen.findByRole('button', { name: 'Turn on examples' }));
+
+	expect(await screen.findByText('Example blocks enabled. Reload the editor to see them.')).toBeInTheDocument();
+	expect(api).toHaveBeenCalledWith(expect.objectContaining({ method: 'POST', data: { enabled: true } }));
 });

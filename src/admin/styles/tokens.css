@@ -7,7 +7,7 @@
 #proto-blocks-admin,
 #proto-blocks-admin-portal,
 .proto-blocks-fields {
-  --radius: 0.5rem;
+  --radius: 10px;
   --background: #ffffff;
   --foreground: #0f1d2e;
   --card: #ffffff;
@@ -25,7 +25,8 @@
   --destructive: #c4262e;
   --border: #dde3ea;
   --input: #c9d1db;
-  --ring: #002a5c;
+  /* Focus outline: 2px teal, offset 2px (design foundations). */
+  --ring: #4ecdc4;
   /* Proto-Blocks additions. Teal is decorative only (1.9:1 on white). */
   --brand: #4ecdc4;
   --brand-soft: #e6f8f7;
@@ -35,13 +36,29 @@
   --warning-soft: #fff8e6;
   --warning-border: #f2d48a;
   --destructive-soft: #fdf0f0;
+  /* Redesign (2026-11) additions. */
+  --primary-soft: #e4ecf5;
+  --link: #1a4b85;
+  --link-hover: #002a5c;
+  --brand-ink: #0b5f5a;
+  --subtle: #fafbfc;
+  --code: #f1f5fa;
+  --divider: #eef1f5;
+  --faint: #8a93a3;
+  --panel: #0f1d2e;
+  --panel-foreground: #e6edf5;
+  --panel-line: #3b4a5e;
 }
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* Chips and code 4px, controls 6px, tiles 8px, cards 10px, dialogs 12px, wizard 14px. */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: var(--radius);
+  --radius-2xl: 12px;
+  --radius-3xl: 14px;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -68,5 +85,40 @@
   --color-warning-soft: var(--warning-soft);
   --color-warning-border: var(--warning-border);
   --color-destructive-soft: var(--destructive-soft);
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --color-primary-soft: var(--primary-soft);
+  --color-link: var(--link);
+  --color-link-hover: var(--link-hover);
+  --color-brand-ink: var(--brand-ink);
+  --color-subtle: var(--subtle);
+  --color-code: var(--code);
+  --color-divider: var(--divider);
+  --color-faint: var(--faint);
+  --color-panel: var(--panel);
+  --color-panel-foreground: var(--panel-foreground);
+  --color-panel-line: var(--panel-line);
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Type scale (design foundations). */
+  --text-title: 24px;
+  --text-title--line-height: 1.2;
+  --text-title--letter-spacing: -0.015em;
+  --text-stat: 30px;
+  --text-stat--line-height: 1;
+  --text-stat--letter-spacing: -0.02em;
+  --text-dialog: 18px;
+  --text-dialog--line-height: 1.3;
+  --text-dialog--letter-spacing: -0.01em;
+  --text-section: 15px;
+  --text-section--line-height: 1.35;
+  --text-body: 14px;
+  --text-body--line-height: 1.5;
+  --text-label: 13px;
+  --text-label--line-height: 1.45;
+  --text-caption: 12.5px;
+  --text-caption--line-height: 1.45;
+  --text-micro: 12px;
+  --text-micro--line-height: 1.4;
+  --text-eyebrow: 11px;
+  --text-eyebrow--line-height: 1;
+  --text-eyebrow--letter-spacing: 0.08em;
 }

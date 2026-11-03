@@ -17,7 +17,7 @@ afterEach(() => {
 test('AdminApp renders the System Status screen', async () => {
 	render(<AdminApp bootstrap={mockBootstrap({ screen: 'system' })} />);
 
-	expect(await screen.findByRole('heading', { level: 1, name: 'System Status' })).toBeInTheDocument();
+	expect(await screen.findByRole('heading', { level: 1, name: 'System status' })).toBeInTheDocument();
 });
 
 test('AdminApp shows ScreenError for a screen with no component', async () => {

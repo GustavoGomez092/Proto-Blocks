@@ -12,7 +12,7 @@ afterEach(() => {
 
 test('AdminApp root carries the 20px right margin that matches .wrap', async () => {
 	const { container } = render(<AdminApp bootstrap={mockBootstrap({ screen: 'system' })} />);
-	await screen.findByRole('heading', { level: 1, name: 'System Status' });
+	await screen.findByRole('heading', { level: 1, name: 'System status' });
 
 	expect(container.querySelector('.max-w-\\[1200px\\]')).toHaveClass('mr-5');
 });

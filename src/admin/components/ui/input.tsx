@@ -13,9 +13,9 @@ const Input = React.forwardRef<
       type={type}
       data-slot="input"
       className={cn(
-        "h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none selection:bg-primary selection:text-primary-foreground file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30",
-        "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
-        "aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40",
+        "h-[38px] w-full min-w-0 rounded-md border border-input bg-background px-3 py-1 text-body text-foreground shadow-none transition-[color,box-shadow,border-color] outline-none selection:bg-primary selection:text-primary-foreground file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-faint hover:border-[#b5bfcc] disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60 dark:bg-input/30",
+        "focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-brand-soft focus-visible:outline-none",
+        "aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive-soft dark:aria-invalid:ring-destructive/40",
         className
       )}
       {...props}

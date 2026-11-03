@@ -46,11 +46,12 @@ test('shows system information and a cache folder that is not writable', async (
 	mockApi({ 'admin/system': payload() });
 	renderScreen();
 
-	expect(await screen.findByText('Plugin Version')).toBeInTheDocument();
-	expect(screen.getByText('PHP Version')).toBeInTheDocument();
+	expect(await screen.findByText('Plugin')).toBeInTheDocument();
+	expect(screen.getByText('PHP')).toBeInTheDocument();
 	expect(screen.getByText('8.2.27')).toBeInTheDocument();
 	expect(screen.getByText('Not writable')).toBeInTheDocument();
 	expect(screen.getByText('wp-content/uploads/proto-blocks/cache')).toBeInTheDocument();
+	expect(screen.getByText('Allowed')).toBeInTheDocument();
 	expect(screen.getByLabelText('Block category name')).toHaveValue('Proto Blocks');
 });
 
@@ -120,10 +121,10 @@ test('shows the wp-config.php values of the constants', async () => {
 	mockApi({ 'admin/system': payload({ config: { debug: true, exampleBlocks: true, exampleBlocksFromConfig: true } }) });
 	renderScreen();
 
-	const row = (await screen.findByText('PROTO_BLOCKS_EXAMPLE_BLOCKS')).closest('tr') as HTMLElement;
+	const row = (await screen.findByText('PROTO_BLOCKS_EXAMPLE_BLOCKS')).closest('[data-constant]') as HTMLElement;
 	expect(within(row).getByText('true')).toBeInTheDocument();
 	expect(screen.queryByRole('link', { name: 'Managed from the Blocks page' })).not.toBeInTheDocument();
-	expect(within(screen.getByText('PROTO_BLOCKS_DEBUG').closest('tr') as HTMLElement).getByText('true')).toBeInTheDocument();
+	expect(within(screen.getByText('PROTO_BLOCKS_DEBUG').closest('[data-constant]') as HTMLElement).getByText('true')).toBeInTheDocument();
 });
 
 test('shows ScreenError when the request fails', async () => {
@@ -145,4 +146,5 @@ test('shows the read-only banner without disabling the form', async () => {
 
 	expect(await screen.findByText('File modifications are disabled on this site')).toBeInTheDocument();
 	expect(await screen.findByRole('button', { name: 'Save' })).toBeEnabled();
+	expect(screen.getByText('Disallowed')).toBeInTheDocument();
 });

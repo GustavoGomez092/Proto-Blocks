@@ -27,18 +27,18 @@ export function ScreenError({
 	}
 
 	return (
-		<Card role="alert" className="flex flex-col items-center gap-3 px-6 py-10 text-center shadow-xs">
+		<Card role="alert" className="flex flex-col items-center gap-3 px-6 py-10 text-center">
 			<div
 				aria-hidden="true"
 				className="grid size-11 place-items-center rounded-lg bg-destructive-soft text-destructive [&_svg]:size-[18px]"
 			>
 				<CircleAlertIcon />
 			</div>
-			<h2 className="text-[15px] font-semibold text-balance">
+			<h2 className="text-section font-semibold text-balance">
 				{/* translators: %s: screen name, e.g. System Status. */}
 				{sprintf(__("Couldn't load %s", 'proto-blocks'), screen)}
 			</h2>
-			<p className="max-w-[48ch] text-[13px] text-muted-foreground">{detail}</p>
+			<p className="max-w-[48ch] text-label text-muted-foreground">{detail}</p>
 			{onRetry ? (
 				<Button variant="outline" size="sm" onClick={onRetry}>
 					<RotateCwIcon aria-hidden="true" />

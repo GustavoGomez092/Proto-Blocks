@@ -98,19 +98,19 @@ test('lists every block with a Present or Missing badge', async () => {
 	mockApi(routes());
 	renderScreen();
 
-	const hero = await screen.findByRole('row', { name: /Hero Banner/ });
-	const cta = screen.getByRole('row', { name: /Call To Action/ });
+	const hero = await screen.findByRole('article', { name: /Hero Banner/ });
+	const cta = screen.getByRole('article', { name: /Call To Action/ });
 
 	expect(within(hero).getByText('Present')).toBeInTheDocument();
 	expect(within(hero).getByText('hero')).toBeInTheDocument();
 	expect(within(cta).getByText('Missing')).toBeInTheDocument();
-	expect(within(cta).getByText('No preview')).toBeInTheDocument();
+	expect(within(cta).getByText('No preview yet')).toBeInTheDocument();
 });
 
 test('the capture frame is sandboxed and sends no referrer', async () => {
 	mockApi(routes());
 	renderScreen();
-	await screen.findByRole('row', { name: /Hero Banner/ });
+	await screen.findByRole('article', { name: /Hero Banner/ });
 
 	const frame = document.querySelector('iframe');
 	expect(frame).not.toBeNull();
@@ -124,7 +124,7 @@ test('Capture missing captures only the missing row', async () => {
 	const api = mockApi(routes());
 	renderScreen();
 
-	await user.click(await screen.findByRole('button', { name: /Capture missing/ }));
+	await user.click(await screen.findByRole('button', { name: /Capture \d+ missing/ }));
 
 	expect(await screen.findByText('Done. 1 captured, 0 failed.')).toBeInTheDocument();
 
@@ -141,14 +141,14 @@ test('Capture missing captures only the missing row', async () => {
 		})
 	);
 
-	const cta = screen.getByRole('row', { name: /Call To Action/ });
+	const cta = screen.getByRole('article', { name: /Call To Action/ });
 	expect(within(cta).getByText('Present')).toBeInTheDocument();
 	expect(within(cta).getByText('Captured just now')).toBeInTheDocument();
 	expect(within(cta).getByRole('img')).toHaveAttribute(
 		'src',
 		'https://example.test/wp-content/themes/t/blocks/cta/preview.png?v=200'
 	);
-	expect(screen.getByRole('button', { name: /Capture missing/ })).toBeDisabled();
+	expect(screen.getByRole('button', { name: /Capture \d+ missing/ })).toBeDisabled();
 });
 
 test('a rejected upload shows the server message on the row', async () => {
@@ -161,10 +161,10 @@ test('a rejected upload shows the server message on the row', async () => {
 	});
 	renderScreen();
 
-	await user.click(await screen.findByRole('button', { name: /Capture missing/ }));
+	await user.click(await screen.findByRole('button', { name: /Capture \d+ missing/ }));
 
 	expect(await screen.findByText('Done. 0 captured, 1 failed.')).toBeInTheDocument();
-	const cta = screen.getByRole('row', { name: /Call To Action/ });
+	const cta = screen.getByRole('article', { name: /Call To Action/ });
 	expect(within(cta).getByText('Image too large.')).toBeInTheDocument();
 	expect(within(cta).getByText('Missing')).toBeInTheDocument();
 	expect(within(cta).getByRole('button', { name: 'Retry' })).toBeEnabled();
@@ -174,7 +174,7 @@ test('with file modifications off every capture button is disabled and the banne
 	mockApi(routes());
 	renderScreen({ fileModsAllowed: false, fileModsConstant: 'DISALLOW_FILE_MODS' });
 
-	await screen.findByRole('row', { name: /Hero Banner/ });
+	await screen.findByRole('article', { name: /Hero Banner/ });
 
 	expect(screen.getByText('File modifications are disabled on this site')).toBeInTheDocument();
 	const buttons = screen.getAllByRole('button', { name: /Capture|Recapture/ });
@@ -219,5 +219,5 @@ test('no blocks shows the empty state', async () => {
 		'href',
 		'https://example.test/wp-admin/admin.php?page=proto-blocks'
 	);
-	await waitFor(() => expect(screen.queryByRole('row')).toBeNull());
+	await waitFor(() => expect(screen.queryByRole('article')).toBeNull());
 });
