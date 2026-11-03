@@ -30,7 +30,7 @@ A next-generation WordPress plugin that enables developers to create Gutenberg b
 ## Requirements
 
 - WordPress 6.5+
-- PHP 8.0+
+- PHP 8.1+
 
 ## Installation
 
@@ -1606,11 +1606,7 @@ Proto-Blocks includes a guided setup wizard that appears on first activation to 
 
 ### Re-running the Wizard
 
-To re-run the setup wizard:
-1. Go to **Proto-Blocks > System Status** in WordPress admin
-2. Click **"Run Setup Wizard Again"**
-
-Or delete the option programmatically:
+To re-run the setup wizard, delete the completion flag and open any Proto-Blocks admin page:
 ```php
 delete_option('proto_blocks_wizard_completed');
 ```
