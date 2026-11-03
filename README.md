@@ -1287,6 +1287,31 @@ wp proto-blocks tailwind compile
 wp proto-blocks tailwind status --format=json
 ```
 
+## Admin
+
+The **Proto-Blocks** admin is a React app (Tailwind 4 + shadcn/ui, built from `src/admin/` to `assets/js/admin.js` and `assets/css/admin.css`). It has five screens: **Blocks** (dashboard, demo blocks, cache), **Tailwind Settings**, **System Status**, **Block Previews** and the **Setup Wizard**. Nothing in the admin is rendered by PHP; each screen reads and writes through REST routes under `proto-blocks/v1/admin/*`, all requiring `manage_options` and the REST nonce:
+
+| Route | Methods | Purpose |
+|-------|---------|---------|
+| `/admin/dashboard` | GET | Stats, blocks list, demo-block state |
+| `/admin/cache` | DELETE | Clear the template cache |
+| `/admin/example-blocks` | POST | Toggle the bundled example blocks |
+| `/admin/demos/install`, `/admin/demos/remove` | POST | Install or remove demo blocks in the theme |
+| `/admin/tailwind` | GET | Tailwind settings and status |
+| `/admin/tailwind/settings` | POST | Save Tailwind settings |
+| `/admin/tailwind/compile` | POST | Compile Tailwind CSS |
+| `/admin/tailwind/cache` | DELETE | Clear the Tailwind cache |
+| `/admin/tailwind/cli` | POST | Manage the Tailwind CLI binary |
+| `/admin/tailwind/theme-file` | POST | Write the theme Tailwind file |
+| `/admin/system` | GET, POST | System status; save the category name |
+| `/admin/previews` | GET | Block preview status |
+| `/admin/wizard` | GET | Setup wizard state |
+| `/admin/wizard/style`, `/admin/wizard/demos`, `/admin/wizard/complete` | POST | Wizard steps |
+
+The preview capture upload keeps its own route, `POST /preview-capture`. The only `admin-ajax.php` actions left are the two the in-browser Tailwind compiler uses: `proto_blocks_tailwind_get_compile_inputs` and `proto_blocks_tailwind_store_css`.
+
+Admin development: `npm run build` compiles the app, `npm run test:js` runs the Jest suite, and `npm run test:e2e` runs the Playwright suite against a wp-env site (see `tests/e2e/README.md`). PHP 8.1 or newer is required.
+
 ## Setup Wizard
 
 Proto-Blocks includes a guided setup wizard that appears on first activation to help you configure the plugin quickly.

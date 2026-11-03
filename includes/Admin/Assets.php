@@ -337,44 +337,12 @@ JS;
             return;
         }
 
-        // Screens rendered by AdminApp::renderScreen() load the React app
-        // only; every other Proto-Blocks page is a legacy PHP screen.
+        // Every Proto-Blocks admin screen is the React app.
         $adminApp = Plugin::getInstance()->getAdminApp();
         if ($adminApp !== null && $adminApp->isScreenHook($hook)) {
             $this->enqueueAdminApp();
             $this->enqueueTailwindCompiler();
-            return;
         }
-
-        // Legacy PHP screens below: their stylesheet and its two Google font
-        // handles stay until those screens are replaced (admin cleanup task).
-
-        // Enqueue Google Fonts (Inter)
-        wp_enqueue_style(
-            'proto-blocks-admin-fonts',
-            'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
-            [],
-            null
-        );
-
-        // Enqueue Material Icons
-        wp_enqueue_style(
-            'proto-blocks-admin-icons',
-            'https://fonts.googleapis.com/icon?family=Material+Icons+Outlined',
-            [],
-            null
-        );
-
-        // Enqueue admin Tailwind CSS
-        // legacy PHP screens; removed in the admin cleanup task
-        wp_enqueue_style(
-            'proto-blocks-admin',
-            PROTO_BLOCKS_URL . 'assets/css/admin-legacy.css',
-            ['proto-blocks-admin-fonts', 'proto-blocks-admin-icons'],
-            PROTO_BLOCKS_VERSION
-        );
-
-        $this->enqueueTailwindCompiler();
     }
 
     /**
