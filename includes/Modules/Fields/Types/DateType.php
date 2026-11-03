@@ -51,12 +51,26 @@ final class DateType implements FieldTypeInterface
 
     public function normalize(mixed $value, Field $field): mixed
     {
-        return TextType::string($value);
+        return self::fromAcf(TextType::string($value), $field);
     }
 
     public function escape(mixed $stored, Field $field): mixed
     {
-        return esc_html(TextType::string($stored));
+        return esc_html(self::fromAcf(TextType::string($stored), $field));
+    }
+
+    /**
+     * ACF's date picker stores `Ymd` (20261102); a `date` field reads it as
+     * Y-m-d. Only a real calendar date converts; anything else is unchanged.
+     */
+    private static function fromAcf(string $value, Field $field): string
+    {
+        if ($field->type !== 'date' || preg_match('/\A[0-9]{8}\z/D', $value) !== 1) {
+            return $value;
+        }
+        $date = \DateTimeImmutable::createFromFormat('!Ymd', $value);
+
+        return $date !== false && $date->format('Ymd') === $value ? $date->format('Y-m-d') : $value;
     }
 
     public function emptyValue(Field $field): mixed

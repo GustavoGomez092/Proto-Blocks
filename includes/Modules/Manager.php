@@ -11,6 +11,7 @@ use ProtoBlocks\ContentModel\OriginTracker;
 use ProtoBlocks\ContentModel\PhpDeclarations;
 use ProtoBlocks\ContentModel\Registry;
 use ProtoBlocks\ContentModel\RewriteHash;
+use ProtoBlocks\Modules\Fields\FieldsModule;
 
 /**
  * Boots the content-model modules the `proto_blocks_modules` filter leaves
@@ -25,14 +26,15 @@ final class Manager
 {
     public const FILTER = 'proto_blocks_modules';
 
-    /** Phase 2/3 add 'fields', 'options_pages'. */
-    public const DEFAULTS = ['post_types' => true, 'taxonomies' => true];
+    /** Phase 3 adds 'options_pages'. */
+    public const DEFAULTS = ['post_types' => true, 'taxonomies' => true, 'fields' => true];
 
     /** @var array<string, bool> */
     private array $states = self::DEFAULTS;
 
     private ?PostTypes $postTypes = null;
     private ?Taxonomies $taxonomies = null;
+    private ?FieldsModule $fields = null;
     private ?OriginTracker $originTracker = null;
     private bool $booted = false;
 
@@ -60,6 +62,14 @@ final class Manager
         if ($this->states['taxonomies']) {
             $this->taxonomies = new Taxonomies($this->registry);
             $this->taxonomies->boot();
+        }
+        if ($this->states['fields']) {
+            $this->fields = FieldsModule::wired($this->registry);
+            FieldsModule::setInstance($this->fields);
+            $this->fields->boot();
+        } else {
+            // FieldsModule::instance() must not hand out a live module.
+            FieldsModule::setInstance(FieldsModule::disabled());
         }
         if ($this->postTypes !== null || $this->taxonomies !== null) {
             // After the modules' own wp_loaded work (pending overrides resolve at 10).
@@ -98,6 +108,12 @@ final class Manager
         return $this->taxonomies;
     }
 
+    /** Null when the module is disabled. */
+    public function fields(): ?FieldsModule
+    {
+        return $this->fields;
+    }
+
     /** Null on requests that do not show origins (see OriginTracker::wanted()). */
     public function originTracker(): ?OriginTracker
     {
@@ -117,15 +133,15 @@ final class Manager
     }
 
     /**
-     * Declaration issues from the registry and both modules, each reported
-     * once.
+     * Declaration issues from the registry and the modules (field group
+     * sources included), each reported once.
      *
      * @return list<Issue>
      */
     public function issues(): array
     {
         $out = [];
-        $all = [...$this->registry->issues(), ...($this->postTypes?->issues() ?? []), ...($this->taxonomies?->issues() ?? [])];
+        $all = [...$this->registry->issues(), ...($this->postTypes?->issues() ?? []), ...($this->taxonomies?->issues() ?? []), ...($this->fields?->issues() ?? [])];
         foreach ($all as $issue) {
             $out[self::issueKey($issue)] ??= $issue;
         }
