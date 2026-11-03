@@ -155,7 +155,7 @@ const LIST_LAYOUT: SettingSpec = {
 
 const BUTTON_LABEL: SettingSpec = { key: 'button_label', label: __('Button label', 'proto-blocks'), control: 'text' };
 
-export const TYPE_SETTINGS: Record<string, SettingSpec[]> = {
+export const TYPE_SETTINGS: Partial<Record<FieldType, SettingSpec[]>> = {
 	text: TEXT_LIKE,
 	textarea: TEXT_LIKE,
 	email: TEXT_LIKE,
@@ -229,11 +229,12 @@ const NO_VALUE = new Set(['repeater', 'group', 'flexible_content', ...LAYOUT_ONL
 /** The settings the panel shows for a field of `declared` type, in order. */
 export function settingsFor(declared: unknown): SettingSpec[] {
 	const type = canonicalType(declared) ?? '';
+	const layoutOnly = LAYOUT_ONLY_TYPES.includes(type);
 	const common = COMMON_SETTINGS.filter((s) => {
-		if (LAYOUT_ONLY_TYPES.includes(type)) {
+		if (layoutOnly) {
 			return ['label', 'name', 'type', 'instructions'].includes(s.key);
 		}
 		return !(NO_VALUE.has(type) && (s.key === 'default_value' || s.key === 'placeholder'));
 	});
-	return [...common, ...(TYPE_SETTINGS[type] ?? [])];
+	return [...common, ...((type !== '' && TYPE_SETTINGS[type]) || [])];
 }
