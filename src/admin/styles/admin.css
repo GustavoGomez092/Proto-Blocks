@@ -174,3 +174,18 @@
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+
+/* Toasts: subtle 200ms slide/fade (sonner), none when reduced motion is requested. */
+#proto-blocks-admin-portal [data-sonner-toast] {
+  transition-duration: 200ms;
+}
+#proto-blocks-admin-portal [data-sonner-toast] [data-close-button] svg {
+  width: 12px;
+  height: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  #proto-blocks-admin-portal [data-sonner-toast] {
+    transition: none !important;
+    animation: none !important;
+  }
+}
