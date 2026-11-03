@@ -13,7 +13,9 @@
  *      to a REST endpoint.
  *   3. The REST endpoint writes the PNG to `{block-folder}/preview.png`
  *      so it survives across themes and gets picked up automatically
- *      by SchemaReader::detectPreviewImage().
+ *      by SchemaReader::detectPreviewImage(). Blocks bundled in the plugin's
+ *      own `examples/` folder are the exception: their capture goes to
+ *      `uploads/proto-blocks/previews/<block>.png`, never into the plugin.
  *
  * The capture iframe is fed by this same class via a "render" mode --
  * hitting the page with `?proto_blocks_render=<block>&_wpnonce=<n>`
@@ -387,6 +389,12 @@ wp_print_footer_scripts();
 
     private function findPreview(string $blockDir): ?string
     {
+        // A capture of a bundled example lives in uploads and wins over the
+        // image shipped with the plugin.
+        $target = self::captureTarget($blockDir, self::examplesDir(), self::uploadsPreviewDir());
+        if ($target['redirected'] && is_file($target['path'])) {
+            return $target['path'];
+        }
         foreach (['png', 'jpg', 'jpeg', 'webp'] as $ext) {
             $candidate = $blockDir . '/preview.' . $ext;
             if (file_exists($candidate)) {
@@ -396,12 +404,64 @@ wp_print_footer_scripts();
         return null;
     }
 
+    /** The plugin's bundled `examples/` folder. */
+    private static function examplesDir(): string
+    {
+        return defined('PROTO_BLOCKS_DIR') ? rtrim((string) PROTO_BLOCKS_DIR, '/\\') . '/examples' : '';
+    }
+
+    /** `uploads/proto-blocks/previews` (not created here). */
+    private static function uploadsPreviewDir(): string
+    {
+        $uploads = wp_upload_dir();
+        return rtrim((string) ($uploads['basedir'] ?? ''), '/\\') . '/proto-blocks/previews';
+    }
+
+    /**
+     * Where a capture for the block in `$blockDir` is written.
+     *
+     * A block inside the plugin's own `examples/` folder is redirected to
+     * `<uploadsPreviewDir>/<block folder name>.png`: the plugin directory is
+     * never written to (an update would revert it, and it may be read-only).
+     * Both paths are compared by realpath, so `..` segments and symlinks
+     * cannot slip a block out of or into the examples tree.
+     *
+     * @return array{dir:string,path:string,redirected:bool}
+     */
+    public static function captureTarget(string $blockDir, string $examplesDir, string $uploadsPreviewDir): array
+    {
+        $realBlock    = $blockDir !== '' ? realpath($blockDir) : false;
+        $realExamples = $examplesDir !== '' ? realpath($examplesDir) : false;
+
+        if (
+            $realBlock !== false && $realExamples !== false
+            && str_starts_with($realBlock . DIRECTORY_SEPARATOR, $realExamples . DIRECTORY_SEPARATOR)
+            && $realBlock !== $realExamples
+        ) {
+            $slug = preg_replace('/[^A-Za-z0-9_-]/', '', basename($realBlock));
+            if ($slug !== '' && $uploadsPreviewDir !== '') {
+                return [
+                    'dir'        => $uploadsPreviewDir,
+                    'path'       => rtrim($uploadsPreviewDir, '/\\') . '/' . $slug . '.png',
+                    'redirected' => true,
+                ];
+            }
+        }
+
+        return ['dir' => $blockDir, 'path' => $blockDir . '/preview.png', 'redirected' => false];
+    }
+
     private function pathToUrl(string $path): string
     {
         $themeDir = get_stylesheet_directory();
         $themeUri = get_stylesheet_directory_uri();
         if (str_starts_with($path, $themeDir)) {
             return $themeUri . substr($path, strlen($themeDir));
+        }
+        $uploads = wp_upload_dir();
+        $basedir = (string) ($uploads['basedir'] ?? '');
+        if ($basedir !== '' && str_starts_with($path, $basedir . '/')) {
+            return rtrim((string) ($uploads['baseurl'] ?? ''), '/') . substr($path, strlen($basedir));
         }
         $pluginsDir = WP_PLUGIN_DIR;
         $pluginsUri = plugins_url();
@@ -486,15 +546,20 @@ wp_print_footer_scripts();
         // Always write to preview.png (the inserter convention). If a
         // preview.jpg was sitting in the folder we leave it alone --
         // SchemaReader checks PNG first so the new file wins.
-        $blockDir   = $registered[$blockName]['path'];
-        $targetPath = $blockDir . '/preview.png';
-        if (!is_dir($blockDir) || !is_writable($blockDir)) {
+        $blockDir = $registered[$blockName]['path'];
+        $target   = self::captureTarget($blockDir, self::examplesDir(), self::uploadsPreviewDir());
+        $writeDir = $target['dir'];
+        if ($target['redirected'] && !is_dir($writeDir)) {
+            wp_mkdir_p($writeDir);
+        }
+        $targetPath = $target['path'];
+        if (!is_dir($writeDir) || !is_writable($writeDir)) {
             return new \WP_Error('proto_blocks_capture_write', __('Could not write file. Check folder permissions.', 'proto-blocks'), ['status' => 500]);
         }
 
         // Atomic replace: write to a temp file in the same directory, then
         // rename over the target so a reader never sees a half-written PNG.
-        $tmpPath = $blockDir . '/.preview-' . wp_generate_password(12, false) . '.tmp';
+        $tmpPath = $writeDir . '/.preview-' . wp_generate_password(12, false) . '.tmp';
         $written = file_put_contents($tmpPath, $bytes, LOCK_EX);
         if ($written === false || $written !== strlen($bytes) || !rename($tmpPath, $targetPath)) {
             @unlink($tmpPath);
