@@ -43,4 +43,30 @@ const RadioGroupItem = React.forwardRef<
   )
 })
 
-export { RadioGroup, RadioGroupItem }
+/**
+ * Proto-Blocks addition: one segment of a segmented control (Foundations
+ * "Cached | On reload"). Put inside a RadioGroup with
+ * `segmentedGroupClassName`; keeps radio semantics and arrow-key movement.
+ */
+const SegmentedRadioItem = React.forwardRef<
+  React.ElementRef<typeof RadioGroupPrimitive.Item>,
+  React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Item>
+>(function SegmentedRadioItem({ className, ...props }, ref) {
+  return (
+    <RadioGroupPrimitive.Item
+      ref={ref}
+      data-slot="segmented-item"
+      className={cn(
+        "cursor-pointer rounded-sm px-3.5 py-1.5 text-label leading-tight font-medium text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",
+        className
+      )}
+      {...props}
+    />
+  )
+})
+
+/** Track classes for a RadioGroup of SegmentedRadioItems. */
+const segmentedGroupClassName =
+  "inline-flex w-fit gap-0 rounded-md border border-input bg-background p-[3px]"
+
+export { RadioGroup, RadioGroupItem, SegmentedRadioItem, segmentedGroupClassName }

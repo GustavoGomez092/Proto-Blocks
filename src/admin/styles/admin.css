@@ -93,8 +93,8 @@
   border-color: var(--border);
 }
 
-#proto-blocks-admin :is(p, h1, h2, h3, h4, h5, h6, ul, ol, li),
-#proto-blocks-admin-portal :is(p, h1, h2, h3, h4, h5, h6, ul, ol, li) {
+#proto-blocks-admin :is(p, h1, h2, h3, h4, h5, h6, ul, ol, li, dl, dt, dd, figure, pre),
+#proto-blocks-admin-portal :is(p, h1, h2, h3, h4, h5, h6, ul, ol, li, dl, dt, dd, figure, pre) {
   margin: 0;
   padding: 0;
 }
@@ -105,6 +105,11 @@
   font-weight: inherit;
   line-height: inherit;
   color: inherit;
+}
+
+#proto-blocks-admin dt,
+#proto-blocks-admin-portal dt {
+  font-weight: inherit;
 }
 
 #proto-blocks-admin :is(ul, ol),
