@@ -22,6 +22,11 @@ final class TaxonomyType implements FieldTypeInterface
         return false;
     }
 
+    public function hasUnfilteredHtml(Field $field): bool
+    {
+        return $this->requiresUnfilteredHtml();
+    }
+
     public function stores(): bool
     {
         return true;
@@ -29,7 +34,9 @@ final class TaxonomyType implements FieldTypeInterface
 
     public function restSchema(Field $field): array
     {
-        return ['type' => 'array', 'items' => ['type' => 'integer']];
+        $max = (int) $field->setting('max', 0);
+
+        return ['type' => 'array', 'items' => ['type' => 'integer'], 'maxItems' => $max > 0 ? min($max, ImageType::MAX_IDS) : ImageType::MAX_IDS];
     }
 
     public function sanitize(mixed $value, Field $field): mixed

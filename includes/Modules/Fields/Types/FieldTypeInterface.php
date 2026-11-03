@@ -29,6 +29,20 @@ interface FieldTypeInterface
      */
     public function requiresUnfilteredHtml(): bool;
 
+    /**
+     * True when this field, or any sub-field below it, may only be written by
+     * users with unfiltered_html. Leaf types return requiresUnfilteredHtml();
+     * group, repeater and flexible_content recurse into their sub-fields.
+     *
+     * Task 5 contract for an UNTRUSTED writer: when this is true, keep the
+     * stored value as it is and report the error
+     * __('This field contains a code sub-field that only users with unfiltered HTML may edit.', 'proto-blocks').
+     * Never attempt a partial or positional merge of the submitted value.
+     * As a safety net, sanitize() of such a field returns null (= keep the
+     * previous whole value) rather than a stripped copy.
+     */
+    public function hasUnfilteredHtml(Field $field): bool;
+
     /** False for presentation-only types (tab, accordion, message). */
     public function stores(): bool;
 

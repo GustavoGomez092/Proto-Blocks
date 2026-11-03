@@ -52,10 +52,19 @@ final class RepeaterType implements FieldTypeInterface
     {
         $max = $field->setting('max');
         $own = is_numeric($max) && (int) $max > 0 ? (int) $max : PHP_INT_MAX;
-        $filtered = apply_filters('proto_blocks_repeater_max_items', RepeaterField::DEFAULT_MAX_ITEMS, $field->name, $field->settings);
-        $site = is_numeric($filtered) ? max(0, (int) $filtered) : RepeaterField::DEFAULT_MAX_ITEMS;
 
-        return min($own, $site);
+        return min($own, self::rowBudget($field));
+    }
+
+    /**
+     * Total rows one top-level field may hold across ALL nesting levels: the
+     * proto_blocks_repeater_max_items value (default 500).
+     */
+    public static function rowBudget(Field $field): int
+    {
+        $filtered = apply_filters('proto_blocks_repeater_max_items', RepeaterField::DEFAULT_MAX_ITEMS, $field->name, $field->settings);
+
+        return is_numeric($filtered) ? max(0, (int) $filtered) : RepeaterField::DEFAULT_MAX_ITEMS;
     }
 
     public function restSchema(Field $field): array
@@ -69,17 +78,37 @@ final class RepeaterType implements FieldTypeInterface
 
     public function sanitize(mixed $value, Field $field): mixed
     {
-        return $this->rows($value, $field, 'sanitize');
+        if ($this->hasUnfilteredHtml($field)) {
+            return null;
+        }
+        $budget = self::rowBudget($field);
+
+        return $this->rows($value, $field, 'sanitize', $budget);
     }
 
     public function normalize(mixed $value, Field $field): mixed
     {
-        return $this->rows($value, $field, 'normalize');
+        $budget = self::rowBudget($field);
+
+        return $this->rows($value, $field, 'normalize', $budget);
     }
 
     public function escape(mixed $stored, Field $field): mixed
     {
-        return $this->rows($stored, $field, 'escape');
+        $budget = self::rowBudget($field);
+
+        return $this->rows($stored, $field, 'escape', $budget);
+    }
+
+    /**
+     * Nested processing that spends from the caller's shared row budget.
+     *
+     * @param 'sanitize'|'normalize'|'escape' $mode
+     * @return list<array<string, mixed>>
+     */
+    public function processWithBudget(mixed $value, Field $field, string $mode, int &$budget): array
+    {
+        return $this->rows($value, $field, $mode, $budget);
     }
 
     public function emptyValue(Field $field): mixed
@@ -91,7 +120,7 @@ final class RepeaterType implements FieldTypeInterface
      * @param 'sanitize'|'normalize'|'escape' $mode
      * @return list<array<string, mixed>>
      */
-    private function rows(mixed $value, Field $field, string $mode): array
+    private function rows(mixed $value, Field $field, string $mode, int &$budget): array
     {
         if (!is_array($value)) {
             return [];
@@ -100,11 +129,12 @@ final class RepeaterType implements FieldTypeInterface
         $limit = self::maxRows($field);
         $out = [];
         foreach ($value as $row) {
-            if (count($out) >= $limit) {
+            if (count($out) >= $limit || $budget <= 0) {
                 break;
             }
             if (is_array($row)) {
-                $out[] = GroupType::process($registry, $field->subFields, $row, $mode);
+                $budget--;
+                $out[] = GroupType::process($registry, $field->subFields, $row, $mode, $budget);
             }
         }
 

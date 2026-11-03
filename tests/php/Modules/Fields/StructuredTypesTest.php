@@ -117,17 +117,64 @@ final class StructuredTypesTest extends TestCase
         $this->assertSame(['body' => '<p>a</p>b', 'link' => ''], $out);
     }
 
-    public function testGroupCodeSubFieldDroppedForUntrustedKeptForTrusted(): void
+    public function testUntrustedSanitizeOfNestedCodeReturnsNullTrustedKeepsValue(): void
     {
-        $f = self::field('group', [], [self::field('text', [], [], [], 't'), self::field('code', [], [], [], 'snippet')]);
+        $inner = [self::field('text', [], [], [], 't'), self::field('code', [], [], [], 'snippet')];
+        $group = self::field('group', [], $inner);
         $in = ['t' => 'a', 'snippet' => '<script>evil()</script>'];
-        $this->assertSame(['t' => 'a'], $this->sanitize($f, $in));
-        $this->assertSame($in, $this->normalize($f, $in));
-        $this->assertTrue($this->registry->for($f)->hasUnfilteredHtml($f));
+        $this->assertNull($this->sanitize($group, $in));
+        $this->assertSame($in, $this->normalize($group, $in));
+        $this->assertTrue($this->registry->for($group)->hasUnfilteredHtml($group));
 
-        $nested = self::field('repeater', [], [$f], [], 'rows');
-        $this->assertSame([['x' => ['t' => 'a']]], $this->sanitize(self::field('repeater', [], [self::field('group', [], $f->subFields, [], 'x')]), [['x' => $in]]));
+        $nested = self::field('repeater', [], [self::field('group', [], $inner, [], 'x')], [], 'rows');
+        $rows = [['x' => $in]];
+        $this->assertNull($this->sanitize($nested, $rows));
+        $this->assertSame($rows, $this->normalize($nested, $rows));
         $this->assertTrue($this->registry->for($nested)->hasUnfilteredHtml($nested));
+
+        $flex = self::field('flexible_content', [], [], [['key' => 'l', 'name' => 'c', 'label' => 'C', 'subFields' => $inner]]);
+        $this->assertNull($this->sanitize($flex, [['layout' => 'c'] + $in]));
+        $this->assertSame([['layout' => 'c'] + $in], $this->normalize($flex, [['layout' => 'c'] + $in]));
+
+        $clean = self::field('repeater', [], [self::field('text', [], [], [], 't')]);
+        $this->assertFalse($this->registry->for($clean)->hasUnfilteredHtml($clean));
+        $this->assertSame([['t' => 'a']], $this->sanitize($clean, [['t' => 'a']]));
+    }
+
+    public function testLeafHasUnfilteredHtmlFollowsRequiresUnfilteredHtml(): void
+    {
+        foreach (['text', 'image', 'link', 'code'] as $t) {
+            $f = self::field($t);
+            $type = $this->registry->for($f);
+            $this->assertSame($type->requiresUnfilteredHtml(), $type->hasUnfilteredHtml($f), $t);
+        }
+    }
+
+    public function testNestedRowsShareOneBudget(): void
+    {
+        $inner = self::field('repeater', [], [self::field('text', [], [], [], 'v')], [], 'inner');
+        $outer = self::field('repeater', [], [$inner], [], 'outer');
+        $rows = array_fill(0, 50, ['inner' => array_fill(0, 50, ['v' => 'a'])]);
+        foreach (['sanitize', 'normalize', 'escape'] as $mode) {
+            $out = $this->registry->for($outer)->$mode($rows, $outer);
+            $total = count($out);
+            foreach ($out as $row) {
+                $total += count($row['inner']);
+            }
+            $this->assertSame(500, $total, $mode);
+        }
+        $GLOBALS['pb_test_filters']['proto_blocks_repeater_max_items'][] = static fn() => 10;
+        $out = $this->sanitize($outer, $rows);
+        $this->assertSame(10, count($out) + array_sum(array_map(static fn($r) => count($r['inner']), $out)));
+    }
+
+    public function testNestedTenThousandRowPayloadIsBounded(): void
+    {
+        $inner = self::field('repeater', [], [self::field('text', [], [], [], 'v')], [], 'inner');
+        $outer = self::field('repeater', [], [$inner], [], 'outer');
+        $rows = array_fill(0, 100, ['inner' => array_fill(0, 100, ['v' => 'a'])]);
+        $out = $this->sanitize($outer, $rows);
+        $this->assertLessThanOrEqual(500, count($out) + array_sum(array_map(static fn($r) => count($r['inner']), $out)));
     }
 
     public function testImageEscapeShape(): void
@@ -168,7 +215,9 @@ final class StructuredTypesTest extends TestCase
         $this->assertSame('', $this->sanitize($f, 'javascript:alert(1)'));
         $this->assertSame(['url' => 'https://v.test/a.mp4'], $this->escape($f, 'https://v.test/a.mp4'));
         $this->assertNull($this->escape($f, 'javascript:alert(1)'));
-        $GLOBALS['pb_test_attachments'][12] = ['url' => 'https://x.test/v.mp4'];
+        $GLOBALS['pb_test_attachments'][12] = ['url' => 'https://x.test/v.mp4', 'mime' => 'video/mp4'];
+        $GLOBALS['pb_test_attachments'][13] = ['url' => 'https://x.test/i.jpg', 'mime' => 'image/jpeg'];
+        $this->assertNull($this->escape($f, 13), 'non-video attachment is not exposed');
         $this->assertSame(['id' => 12, 'url' => 'https://x.test/v.mp4'], $this->escape($f, 12));
         $this->assertSame(['type' => ['integer', 'string']], $this->registry->for($f)->restSchema($f));
     }
@@ -186,6 +235,9 @@ final class StructuredTypesTest extends TestCase
             $this->escape($f, [3, 4])
         );
         $this->assertSame([], $this->escape(self::field('taxonomy'), [3]));
+        $this->assertSame(500, $this->registry->for($f)->restSchema($f)['maxItems']);
+        $capped = self::field('taxonomy', ['taxonomy' => 'topic', 'max' => 2]);
+        $this->assertSame(2, $this->registry->for($capped)->restSchema($capped)['maxItems']);
     }
 
     public function testRelationshipHidesUnreadablePosts(): void
@@ -224,6 +276,7 @@ final class StructuredTypesTest extends TestCase
         $this->assertSame([5, 6], $this->sanitize($all, [5, '5', -1, 'x', 6]));
         $this->assertSame([5, 6], $this->normalize($all, [5, '5', -1, 'x', 6]));
         $this->assertSame([], $this->sanitize($all, 'junk'));
+        $this->assertSame([5], $this->sanitize(self::field('gallery', ['max' => 1]), array_merge([5], range(100, 5000))));
     }
 
     public function testRestSchemaRepeater(): void

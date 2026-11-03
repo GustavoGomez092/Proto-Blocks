@@ -11,9 +11,10 @@ use ProtoBlocks\Modules\Fields\Definition\Field;
  * type through the registry; keys that are not sub-field names are dropped.
  *
  * The trust flag is the choice of method: sanitize() is the untrusted path and
- * leaves out any sub-field that requiresUnfilteredHtml() (a code field); normalize()
- * keeps every sub-value (shape only). The static helpers below are shared by
- * RepeaterType and FlexibleContentType.
+ * returns null (keep the previous whole value) when any sub-field is a code
+ * field; normalize() keeps every sub-value (shape only). The static helpers
+ * below are shared by RepeaterType and FlexibleContentType. Rows of nested
+ * repeaters draw on one budget shared by all nesting levels.
  */
 final class GroupType implements FieldTypeInterface
 {
@@ -42,7 +43,6 @@ final class GroupType implements FieldTypeInterface
         return true;
     }
 
-    /** True when a code field sits anywhere below this field; the save path must then keep the previous code values for untrusted users. */
     public function hasUnfilteredHtml(Field $field): bool
     {
         return self::anyUnfiltered(self::registry($this->registry), $field->subFields);
@@ -55,17 +55,26 @@ final class GroupType implements FieldTypeInterface
 
     public function sanitize(mixed $value, Field $field): mixed
     {
-        return self::process(self::registry($this->registry), $field->subFields, $value, 'sanitize');
+        if ($this->hasUnfilteredHtml($field)) {
+            return null;
+        }
+        $budget = RepeaterType::rowBudget($field);
+
+        return self::process(self::registry($this->registry), $field->subFields, $value, 'sanitize', $budget);
     }
 
     public function normalize(mixed $value, Field $field): mixed
     {
-        return self::process(self::registry($this->registry), $field->subFields, $value, 'normalize');
+        $budget = RepeaterType::rowBudget($field);
+
+        return self::process(self::registry($this->registry), $field->subFields, $value, 'normalize', $budget);
     }
 
     public function escape(mixed $stored, Field $field): mixed
     {
-        return self::process(self::registry($this->registry), $field->subFields, $stored, 'escape');
+        $budget = RepeaterType::rowBudget($field);
+
+        return self::process(self::registry($this->registry), $field->subFields, $stored, 'escape', $budget);
     }
 
     public function emptyValue(Field $field): mixed
@@ -82,6 +91,16 @@ final class GroupType implements FieldTypeInterface
         return $out;
     }
 
+    /**
+     * Nested processing that spends from the caller's shared row budget.
+     *
+     * @param 'sanitize'|'normalize'|'escape' $mode
+     */
+    public function processWithBudget(mixed $value, Field $field, string $mode, int &$budget): mixed
+    {
+        return self::process(self::registry($this->registry), $field->subFields, $value, $mode, $budget);
+    }
+
     public static function registry(TypeRegistry|\Closure $registry): TypeRegistry
     {
         return $registry instanceof \Closure ? $registry() : $registry;
@@ -96,6 +115,10 @@ final class GroupType implements FieldTypeInterface
         try {
             $type = $registry->for($sub);
         } catch (\InvalidArgumentException) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log(sprintf('Proto-Blocks: sub-field "%s" has unregistered type "%s" and is ignored.', $sub->name, $sub->type));
+            }
+
             return null;
         }
 
@@ -107,9 +130,10 @@ final class GroupType implements FieldTypeInterface
      *
      * @param list<Field> $subFields
      * @param 'sanitize'|'normalize'|'escape' $mode
+     * @param int $budget rows still allowed across all nesting levels; nested repeaters spend from it
      * @return array<string, mixed>
      */
-    public static function process(TypeRegistry $registry, array $subFields, mixed $input, string $mode): array
+    public static function process(TypeRegistry $registry, array $subFields, mixed $input, string $mode, int &$budget): array
     {
         $input = is_array($input) ? $input : [];
         $out = [];
@@ -119,11 +143,13 @@ final class GroupType implements FieldTypeInterface
                 continue;
             }
             $has = array_key_exists($sub->name, $input);
-            if ($mode === 'escape') {
+            if ($type instanceof GroupType || $type instanceof RepeaterType || $type instanceof FlexibleContentType) {
+                $out[$sub->name] = $type->processWithBudget($has ? $input[$sub->name] : null, $sub, $mode, $budget);
+            } elseif ($mode === 'escape') {
                 $out[$sub->name] = $type->escape($has ? $input[$sub->name] : $type->emptyValue($sub), $sub);
             } elseif ($mode === 'normalize') {
                 $out[$sub->name] = $type->normalize($has ? $input[$sub->name] : null, $sub);
-            } elseif (!$type->requiresUnfilteredHtml()) {
+            } else {
                 $out[$sub->name] = $type->sanitize($has ? $input[$sub->name] : null, $sub);
             }
         }
@@ -139,13 +165,8 @@ final class GroupType implements FieldTypeInterface
             if ($type === null) {
                 continue;
             }
-            if ($type->requiresUnfilteredHtml()) {
+            if ($type->hasUnfilteredHtml($sub)) {
                 return true;
-            }
-            if ($type instanceof GroupType || $type instanceof RepeaterType || $type instanceof FlexibleContentType) {
-                if ($type->hasUnfilteredHtml($sub)) {
-                    return true;
-                }
             }
         }
 

@@ -68,17 +68,37 @@ final class FlexibleContentType implements FieldTypeInterface
 
     public function sanitize(mixed $value, Field $field): mixed
     {
-        return $this->rows($value, $field, 'sanitize');
+        if ($this->hasUnfilteredHtml($field)) {
+            return null;
+        }
+        $budget = RepeaterType::rowBudget($field);
+
+        return $this->rows($value, $field, 'sanitize', $budget);
     }
 
     public function normalize(mixed $value, Field $field): mixed
     {
-        return $this->rows($value, $field, 'normalize');
+        $budget = RepeaterType::rowBudget($field);
+
+        return $this->rows($value, $field, 'normalize', $budget);
     }
 
     public function escape(mixed $stored, Field $field): mixed
     {
-        return $this->rows($stored, $field, 'escape');
+        $budget = RepeaterType::rowBudget($field);
+
+        return $this->rows($stored, $field, 'escape', $budget);
+    }
+
+    /**
+     * Nested processing that spends from the caller's shared row budget.
+     *
+     * @param 'sanitize'|'normalize'|'escape' $mode
+     * @return list<array<string, mixed>>
+     */
+    public function processWithBudget(mixed $value, Field $field, string $mode, int &$budget): array
+    {
+        return $this->rows($value, $field, $mode, $budget);
     }
 
     public function emptyValue(Field $field): mixed
@@ -90,7 +110,7 @@ final class FlexibleContentType implements FieldTypeInterface
      * @param 'sanitize'|'normalize'|'escape' $mode
      * @return list<array<string, mixed>>
      */
-    private function rows(mixed $value, Field $field, string $mode): array
+    private function rows(mixed $value, Field $field, string $mode, int &$budget): array
     {
         if (!is_array($value)) {
             return [];
@@ -103,14 +123,15 @@ final class FlexibleContentType implements FieldTypeInterface
         $limit = RepeaterType::maxRows($field);
         $out = [];
         foreach ($value as $row) {
-            if (count($out) >= $limit) {
+            if (count($out) >= $limit || $budget <= 0) {
                 break;
             }
             if (!is_array($row) || !is_string($row['layout'] ?? null) || !isset($byName[$row['layout']])) {
                 continue;
             }
             $name = $row['layout'];
-            $out[] = ['layout' => $name] + GroupType::process($registry, $byName[$name], $row, $mode);
+            $budget--;
+            $out[] = ['layout' => $name] + GroupType::process($registry, $byName[$name], $row, $mode, $budget);
         }
 
         return $out;

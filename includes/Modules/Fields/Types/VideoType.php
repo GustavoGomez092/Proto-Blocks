@@ -20,6 +20,11 @@ final class VideoType implements FieldTypeInterface
         return false;
     }
 
+    public function hasUnfilteredHtml(Field $field): bool
+    {
+        return $this->requiresUnfilteredHtml();
+    }
+
     public function stores(): bool
     {
         return true;
@@ -46,6 +51,10 @@ final class VideoType implements FieldTypeInterface
         $shaped = $this->shape($stored, false);
         if (is_int($shaped)) {
             $url = wp_get_attachment_url($shaped);
+            // An ID that is not a video attachment (an image, a private post's file) is never exposed.
+            if (!str_starts_with((string) get_post_mime_type($shaped), 'video/')) {
+                return null;
+            }
 
             return is_string($url) && $url !== '' ? ['id' => $shaped, 'url' => esc_url($url)] : null;
         }

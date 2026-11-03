@@ -22,6 +22,11 @@ final class RelationshipType implements FieldTypeInterface
         return false;
     }
 
+    public function hasUnfilteredHtml(Field $field): bool
+    {
+        return $this->requiresUnfilteredHtml();
+    }
+
     public function stores(): bool
     {
         return true;

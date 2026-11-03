@@ -25,6 +25,11 @@ final class ImageType implements FieldTypeInterface
         return false;
     }
 
+    public function hasUnfilteredHtml(Field $field): bool
+    {
+        return $this->requiresUnfilteredHtml();
+    }
+
     public function stores(): bool
     {
         return true;
@@ -86,7 +91,7 @@ final class ImageType implements FieldTypeInterface
     public static function ids(mixed $value, int $limit): array
     {
         $limit = $limit > 0 ? min($limit, self::MAX_IDS) : self::MAX_IDS;
-        $items = is_array($value) ? $value : [$value];
+        $items = is_array($value) ? array_slice($value, 0, $limit * 10, true) : [$value];
         $out = [];
         foreach ($items as $item) {
             $id = self::id($item);
