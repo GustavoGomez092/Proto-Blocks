@@ -20,9 +20,10 @@ final class TextType implements FieldTypeInterface
         return false;
     }
 
+    /** password follows the code-field trust rule: only unfiltered_html users read or write it. */
     public function hasUnfilteredHtml(Field $field): bool
     {
-        return $this->requiresUnfilteredHtml();
+        return $field->type === 'password';
     }
 
     public function stores(): bool

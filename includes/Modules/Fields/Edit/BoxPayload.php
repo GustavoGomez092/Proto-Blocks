@@ -43,6 +43,8 @@ use ProtoBlocks\Security\AttributeSanitizer;
  *   choices   field key => ChoiceResolver::options(), for EVERY optionsSource field
  *             at any depth (the first field of a name is also listed by name)
  *   maxRows   field key => row cap, for every repeater and flexible content field (same name fallback)
+ *   overCap   name => {rows, limit} for a container whose stored rows exceed its cap (shown, never
+ *             truncated; the box warns, is read-only at limit 0, and the save refuses while over)
  *   errors    path => message from the ErrorStore (taken once per object per request);
  *             the submitted values of those fields replace the stored ones
  *   canUnfiltered, restRoot, restNonce (empty for a logged-out visitor)
@@ -108,6 +110,10 @@ final class BoxPayload
             }
             $value = $ref->id > 0 ? $this->reader->value($ref, $f, true) : ($f->default === null ? $type->emptyValue($f) : $f->default);
             $payload['values'][$f->name] = $this->forDisplay($type, $f, $value, $untrusted);
+            $over = self::overCap($f, $payload['values'][$f->name]);
+            if ($over !== null) {
+                $payload['overCap'][$f->name] = $over;
+            }
         }
         $this->collect($g->fields, $payload);
 
@@ -267,12 +273,34 @@ final class BoxPayload
 
     private function forDisplay(FieldTypeInterface $type, Field $f, mixed $value, bool $untrusted): mixed
     {
-        $value = $type->normalize($value, $f);
-        if ($untrusted) {
-            $value = $type->sanitize($value, $f);
-        }
+        // Uncapped: rows stored above a lowered cap are shown (with overCap), never
+        // dropped here, so the next save cannot silently truncate them.
+        return RepeaterType::uncapped(static function () use ($type, $f, $value, $untrusted): mixed {
+            $value = $type->normalize($value, $f);
 
-        return $value;
+            return $untrusted ? $type->sanitize($value, $f) : $value;
+        });
+    }
+
+    /**
+     * {rows, limit} when a container holds more rows than its cap allows
+     * (the field's own rows against maxRows, else all nested rows against the
+     * shared row budget); null when it fits.
+     *
+     * @return array{rows: int, limit: int}|null
+     */
+    private static function overCap(Field $f, mixed $value): ?array
+    {
+        if (!in_array($f->type, ['repeater', 'flexible_content', 'group'], true) || !is_array($value)) {
+            return null;
+        }
+        if ($f->type !== 'group' && count($value) > RepeaterType::maxRows($f)) {
+            return ['rows' => count($value), 'limit' => RepeaterType::maxRows($f)];
+        }
+        $total = SaveHandler::rows($f, $value);
+        $budget = RepeaterType::rowBudget($f);
+
+        return $total > $budget ? ['rows' => $total, 'limit' => $budget] : null;
     }
 
     /**

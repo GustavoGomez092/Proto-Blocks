@@ -395,14 +395,14 @@ final class FieldsRoutes extends ContentModelRoutes
         if ($found === null) {
             foreach ($module->acf()->acfGroups() as $acf) {
                 if ($acf['key'] === $key) {
-                    return ['group' => ['key' => $acf['key'], 'title' => $acf['title']], 'issues' => [], 'file' => null] + $choices;
+                    return ['group' => ['key' => $acf['key'], 'title' => $acf['title']], 'issues' => [], 'file' => null, 'readOnlyReason' => 'acf'] + $choices;
                 }
             }
 
             return self::groupNotFound();
         }
 
-        [, $file] = $this->origin($found);
+        [, $file, $reason] = $this->origin($found);
         $claimed = [];
         $issues = $found->path !== null ? $this->issuesAt($module->issues(), $found->path, $claimed) : [];
 
@@ -417,7 +417,7 @@ final class FieldsRoutes extends ContentModelRoutes
             }
         }
 
-        return ['group' => self::map($found->raw), 'issues' => $issues, 'file' => $fileResult] + $choices;
+        return ['group' => self::map($found->raw), 'issues' => $issues, 'file' => $fileResult, 'readOnlyReason' => $reason] + $choices;
     }
 
     private static function groupNotFound(): WP_Error

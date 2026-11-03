@@ -106,6 +106,9 @@ final class GroupType implements FieldTypeInterface
         return $registry instanceof \Closure ? $registry() : $registry;
     }
 
+    /** @var array<string, true> unregistered sub-field types already logged this request */
+    private static array $loggedUnknown = [];
+
     /** The type for a storing, named sub-field; null for layout-only, unnamed or unregistered ones. */
     public static function typeFor(TypeRegistry $registry, Field $sub): ?FieldTypeInterface
     {
@@ -115,7 +118,8 @@ final class GroupType implements FieldTypeInterface
         try {
             $type = $registry->for($sub);
         } catch (\InvalidArgumentException) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
+            if (defined('WP_DEBUG') && WP_DEBUG && !isset(self::$loggedUnknown[$sub->type])) {
+                self::$loggedUnknown[$sub->type] = true; // once per request per type, not on every read
                 error_log(sprintf('Proto-Blocks: sub-field "%s" has unregistered type "%s" and is ignored.', $sub->name, $sub->type));
             }
 

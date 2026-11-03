@@ -44,6 +44,32 @@ final class RepeaterType implements FieldTypeInterface
         return GroupType::anyUnfiltered(GroupType::registry($this->registry), $field->subFields);
     }
 
+    /** >0 while uncapped() runs. */
+    private static int $uncapped = 0;
+
+    /**
+     * Runs $fn with the row caps off, so stored rows above a lowered cap are
+     * shown, not dropped. Display only (the box payload); never a write path.
+     *
+     * @template T
+     * @param callable(): T $fn
+     * @return T
+     */
+    public static function uncapped(callable $fn): mixed
+    {
+        self::$uncapped++;
+        try {
+            return $fn();
+        } finally {
+            self::$uncapped--;
+        }
+    }
+
+    public static function capped(): bool
+    {
+        return self::$uncapped === 0;
+    }
+
     /**
      * The row cap: the field's `max` when positive, never above the
      * proto_blocks_repeater_max_items filter (default 500).
@@ -129,7 +155,7 @@ final class RepeaterType implements FieldTypeInterface
         $limit = self::maxRows($field);
         $out = [];
         foreach ($value as $row) {
-            if (count($out) >= $limit || $budget <= 0) {
+            if (self::capped() && (count($out) >= $limit || $budget <= 0)) {
                 break;
             }
             if (is_array($row)) {

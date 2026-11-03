@@ -321,4 +321,18 @@ final class MetaRegistrarTest extends FieldsTestCase
         }
         $this->assertSame(['type' => 'string'], $reg['public_snippet']['show_in_rest']['schema'], 'an explicit opt-in wins');
     }
+
+    public function testUserFieldsAreNotInRestUnlessOptedIn(): void
+    {
+        $loc = [[['param' => 'user_role', 'operator' => '==', 'value' => 'all']]];
+        self::registrar([self::group('group_user_rest', $loc, [
+            self::text('f_phone', 'phone'),
+            ['key' => 'f_bio', 'name' => 'public_bio', 'label' => 'b', 'type' => 'text', 'show_in_rest' => true],
+        ])]);
+
+        $reg = $GLOBALS['pb_test_meta_reg']['user'][''];
+        $this->assertFalse($reg['phone']['show_in_rest'], 'user fields default to off');
+        $this->assertSame(['type' => 'string'], $reg['public_bio']['show_in_rest']['schema'], 'an explicit opt-in wins');
+        $this->assertIsCallable($reg['phone']['auth_callback']);
+    }
 }
