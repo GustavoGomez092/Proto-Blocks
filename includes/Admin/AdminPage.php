@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace ProtoBlocks\Admin;
 
 use ProtoBlocks\API\AdminRestController;
+use ProtoBlocks\Blocks\Category;
 use ProtoBlocks\Blocks\Discovery;
 use ProtoBlocks\Template\Cache;
 use ProtoBlocks\Core\Plugin;
@@ -150,7 +151,7 @@ class AdminPage
                 'name' => (string) $name,
                 'title' => (string) $block['title'],
                 'description' => (string) $block['description'],
-                'category' => (string) $block['category'],
+                'category' => self::categoryLabel((string) $block['category']),
                 'location' => AdminRestController::relativePath((string) $block['path'], $root),
                 'usesTailwind' => !empty($block['usesTailwind']),
                 'hasJson' => (bool) $block['hasJson'],
@@ -292,6 +293,28 @@ class AdminPage
             return false;
         }
         return true;
+    }
+
+    /**
+     * The editor's label for a block category slug (the saved category name
+     * for Proto Blocks' own category); the slug itself when none is known.
+     */
+    public static function categoryLabel(string $slug): string
+    {
+        if ($slug === '') {
+            return $slug;
+        }
+        if ($slug === Category::getSlug()) {
+            return (string) apply_filters('proto_blocks_category_title', __('Proto Blocks', 'proto-blocks'));
+        }
+        if (function_exists('get_default_block_categories')) {
+            foreach (get_default_block_categories() as $category) {
+                if (($category['slug'] ?? '') === $slug && !empty($category['title'])) {
+                    return (string) $category['title'];
+                }
+            }
+        }
+        return $slug;
     }
 
     /**

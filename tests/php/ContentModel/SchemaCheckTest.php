@@ -119,4 +119,22 @@ final class SchemaCheckTest extends TestCase
         $this->assertSame([], $this->paths(['name' => 'X', 'slug' => str_repeat('a', 20)]));
         $this->assertSame([], $this->paths(['name' => 'X', 'slug' => str_repeat('a', 32)], '#/$defs/taxonomy'));
     }
+
+    /** Same inputs and paths as the "keys naming PHP code" case in src/admin/__tests__/content-model/schema.test.ts. */
+    public function testFalsePropertySchemaAndLabelMarkupParity(): void
+    {
+        $keys = ['register_meta_box_cb', 'meta_box_cb', 'meta_box_sanitize_cb', 'update_count_callback', 'rest_controller_class',
+            'autosave_rest_controller_class', 'revisions_rest_controller_class', '_builtin', '_edit_link'];
+        foreach ($keys as $key) {
+            $this->assertSame(['/' . $key], $this->paths(['name' => 'X', $key => 'phpinfo']), $key);
+            $this->assertSame(['/' . $key], $this->paths(['name' => 'X', $key => 'phpinfo'], '#/$defs/taxonomy'), $key);
+            $this->assertSame(['/' . $key], $this->paths(['title' => 'X', $key => 'phpinfo'], '#/$defs/options'), $key);
+        }
+        $this->assertSame(['/taxonomies/0/meta_box_cb'], $this->paths(['name' => 'X', 'taxonomies' => [['name' => 'Kind', 'meta_box_cb' => 'x']]]));
+        $this->assertSame(['/labels/menu_name'], $this->paths(['name' => 'X', 'labels' => ['menu_name' => '<b>X</b>']]));
+        $this->assertSame(['/name'], $this->paths(['name' => 'X>'], '#/$defs/taxonomy'));
+        $this->assertSame(['/tabs/0/title'], $this->paths(['title' => 'X', 'tabs' => [['title' => '<x']]], '#/$defs/options'));
+        $this->assertSame([], $this->paths(['name' => 'Q&A', 'labels' => ['menu_name' => 'Shop "new" & more!']]));
+        $this->assertSame([], $this->paths(['name' => 'X', 'my_cb' => 'phpinfo']), 'unknown keys still pass the schema');
+    }
 }

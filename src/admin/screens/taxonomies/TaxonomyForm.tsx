@@ -25,7 +25,7 @@ import { taxonomySchema } from '@/admin/content-model/schema';
 import type { FileResult, Guardrail, ListItem } from '@/admin/content-model/types';
 import { useDeclarationFile } from '@/admin/content-model/useDeclarationFile';
 import { interpolate } from '@/admin/lib/interpolate';
-import { EditInPostTypeLink, inlineParent, useAsync, type TaxonomyDetail } from '@/admin/screens/taxonomies/TaxonomyList';
+import { EditInPostTypeLink, useAsync, type TaxonomyDetail } from '@/admin/screens/taxonomies/TaxonomyList';
 
 type Values = Record<string, unknown>;
 type Reason = ListItem['readOnlyReason'];
@@ -145,6 +145,7 @@ function Fields({
 	mode,
 	slug,
 	onSlug,
+	onNameSlug,
 	slugHint,
 	effective,
 	fallbackTypes,
@@ -154,7 +155,10 @@ function Fields({
 	form: ReturnType<typeof useForm<Values>>;
 	mode: 'create' | 'edit';
 	slug: string;
+	/** The slug input changed by hand. */
 	onSlug?: (slug: string) => void;
+	/** The slug derived from a name keystroke; ignored once the slug was edited by hand. */
+	onNameSlug?: (slug: string) => void;
 	slugHint: ReactNode;
 	effective: Record<string, unknown>;
 	/** Types the taxonomy is attached to when the file does not say. */
@@ -207,7 +211,7 @@ function Fields({
 							{...register('name', {
 								onChange: (event) => {
 									if (mode === 'create') {
-										onSlug?.(slugify(event.target.value));
+										onNameSlug?.(slugify(event.target.value));
 									}
 								},
 							})}
@@ -363,7 +367,7 @@ function CreateTaxonomy({ types, onBack, onOpen }: { types: ListItem[]; onBack: 
 		setSaving(true);
 		setFailure(null);
 		try {
-			const base = `schema-files/taxonomy/${slug}`;
+			const base = `admin/schema-files/taxonomy/${slug}`;
 			const template = await adminGet<FileResult>(`${base}?name=${encodeURIComponent(name)}`);
 			if (template.exists) {
 				throw new Error(sprintf(/* translators: %s: path of the existing declaration file. */ __('A file already exists at %s. Open it from the list instead.', 'proto-blocks'), template.path));
@@ -424,6 +428,11 @@ function CreateTaxonomy({ types, onBack, onOpen }: { types: ListItem[]; onBack: 
 					onSlug={(next) => {
 						setSlug(next);
 						setSlugTouched(true);
+					}}
+					onNameSlug={(next) => {
+						if (!slugTouched) {
+							setSlug(next);
+						}
 					}}
 					slugHint={slugTouched ? __('The folder name of the declaration.', 'proto-blocks') : __('Filled in from the name.', 'proto-blocks')}
 					effective={{}}
@@ -651,7 +660,7 @@ function EditTaxonomy({ slug, types, onBack }: { slug: string; types: ListItem[]
 		return <Skeleton className="h-64 w-full" />;
 	}
 
-	const parent = inlineParent(detail.data.item.source);
+	const parent = detail.data.item.parentType ?? null;
 	if (parent) {
 		return (
 			<DeclarationShell

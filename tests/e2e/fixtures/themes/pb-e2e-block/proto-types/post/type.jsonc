@@ -1,0 +1,12 @@
+// Override of the core `post` type: only these keys are applied on top of
+// what WordPress registers (an OptimizedIT-style starter template).
+{
+  "template": [
+    ["core/heading", { "level": 2, "placeholder": "Eyebrow title" }],
+    ["core/spacer", { "height": "48px" }],
+    ["core/paragraph", { "placeholder": "Intro" }],
+    ["core/spacer", { "height": "48px" }],
+    ["core/image", {}]
+  ],
+  "template_lock": false
+}

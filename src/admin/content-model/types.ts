@@ -26,8 +26,15 @@ export interface ListItem {
 	double: { file: string; php: string } | null;
 	count: number;
 	editable: boolean;
-	readOnlyReason: 'file_mods' | 'not_writable' | 'not_proto' | 'outside_root' | null;
+	/** `inline`: a taxonomy declared inside a type file, edited through that type. */
+	readOnlyReason: 'file_mods' | 'not_writable' | 'not_proto' | 'outside_root' | 'inline' | null;
 	issues: Issue[];
+	/** Taxonomy items only: translated text for `inline` ("Declared inline in proto-types/<type>/type.jsonc; edit it there."), else null. */
+	readOnlyMessage?: string | null;
+	/** Taxonomy items only: the post types it is attached to. */
+	objectTypes?: string[];
+	/** Taxonomy items only: the type whose file declares it inline, else null. */
+	parentType?: string | null;
 }
 
 export interface ListResult {
@@ -37,7 +44,7 @@ export interface ListResult {
 	issues: Issue[];
 }
 
-/** GET schema-files/<kind>/<slug>. */
+/** GET admin/schema-files/<kind>/<slug>. */
 export interface FileResult {
 	exists: boolean;
 	path: string;

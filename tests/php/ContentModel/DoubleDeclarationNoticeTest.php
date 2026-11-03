@@ -36,6 +36,33 @@ final class DoubleDeclarationNoticeTest extends TestCase
         $this->assertStringContainsString('notice-warning', $output);
     }
 
+    public function testPathsAreThemeRelativeNeverAbsolute(): void
+    {
+        $tmp = sys_get_temp_dir() . '/pb-notice-' . bin2hex(random_bytes(6));
+        mkdir($tmp . '/themes/acme', 0777, true);
+        $theme = (string) realpath($tmp . '/themes/acme');
+        $previous = $GLOBALS['pb_test_theme'] ?? null;
+        $GLOBALS['pb_test_theme'] = ['template' => $theme, 'stylesheet' => $theme];
+
+        try {
+            $output = $this->render($this->registryWith([[
+                'kind' => 'type',
+                'slug' => 'product',
+                'file' => $theme . '/proto-types/product/type.jsonc',
+                'php' => $theme . '/functions.php:12',
+            ]]));
+        } finally {
+            $GLOBALS['pb_test_theme'] = $previous;
+            rmdir($theme);
+            rmdir($tmp . '/themes');
+            rmdir($tmp);
+        }
+
+        $this->assertStringContainsString('<code>acme/proto-types/product/type.jsonc</code>', $output);
+        $this->assertStringContainsString('<code>acme/functions.php:12</code>', $output);
+        $this->assertStringNotContainsString($tmp, $output);
+    }
+
     public function testOtherScreensShowNothing(): void
     {
         $GLOBALS['pb_test_screen'] = (object) ['id' => 'edit-post'];

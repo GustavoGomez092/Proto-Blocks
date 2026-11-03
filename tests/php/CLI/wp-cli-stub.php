@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 // A recording stand-in for WP_CLI, loaded by the content-model command tests.
 // error() throws like the real one exits, so a test sees the non-zero exit.
+namespace {
+
 if (!class_exists('WP_CLI')) {
     final class WP_CLI
     {
@@ -29,6 +31,19 @@ if (!class_exists('WP_CLI')) {
         {
             self::$out[] = ['error', (string) $m];
             throw new \RuntimeException('WP_CLI::error: ' . $m);
+        }
+    }
+}
+
+}
+
+namespace WP_CLI\Utils {
+
+    if (!function_exists('WP_CLI\\Utils\\format_items')) {
+        /** Records the call as a `format` entry: "<format>:<json rows>". */
+        function format_items($format, $items, $fields): void
+        {
+            \WP_CLI::$out[] = ['format', $format . ':' . json_encode(array_values((array) $items))];
         }
     }
 }

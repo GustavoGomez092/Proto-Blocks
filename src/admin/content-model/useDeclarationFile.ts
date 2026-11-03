@@ -22,7 +22,7 @@ function asApiError(error: unknown): ApiError {
 }
 
 /**
- * Loads one declaration file (GET schema-files/<kind>/<slug>) and saves or
+ * Loads one declaration file (GET admin/schema-files/<kind>/<slug>) and saves or
  * deletes it. `name` seeds the template when the file does not exist yet.
  *
  * `save(next)` takes the file's data with only the user's changes merged
@@ -41,7 +41,7 @@ export function useDeclarationFile(kind: Kind, slug: string, name?: string) {
 	const fileRef = useRef<FileResult | null>(null);
 	fileRef.current = file;
 
-	const base = `schema-files/${kind}/${slug}`;
+	const base = `admin/schema-files/${kind}/${slug}`;
 
 	const load = useCallback(async () => {
 		const id = ++request.current;

@@ -15,7 +15,7 @@ test('a REST error keeps its data, without status', async () => {
 		data: { status: 409, guardrails: [{ code: 'supports_removed' }] },
 	});
 
-	const error = await adminPost('schema-files/type/product', {}).catch((e) => e);
+	const error = await adminPost('admin/schema-files/type/product', {}).catch((e) => e);
 
 	expect(error).toBeInstanceOf(ApiError);
 	expect(error.status).toBe(409);
@@ -27,7 +27,7 @@ test('a REST error keeps its data, without status', async () => {
 test('a REST error without data has empty data', async () => {
 	fetchMock.mockRejectedValueOnce({ code: 'x', message: 'm' });
 
-	const error = await adminPost('schema-files/type/product', {}).catch((e) => e);
+	const error = await adminPost('admin/schema-files/type/product', {}).catch((e) => e);
 
 	expect(error).toBeInstanceOf(ApiError);
 	expect(error.data).toEqual({});

@@ -10,7 +10,8 @@ namespace ProtoBlocks\ContentModel;
  * Supports exactly: type, enum, pattern, minLength, maxLength, minimum,
  * maximum, properties, required, additionalProperties, items, minItems,
  * maxItems, uniqueItems,
- * anyOf, allOf and local `#/$defs/<name>` references. Unknown keywords are ignored.
+ * anyOf, allOf, local `#/$defs/<name>` references and `false` as a property's
+ * schema (the key is refused). Unknown keywords are ignored.
  * The browser-side checker implements the same subset.
  */
 final class SchemaCheck
@@ -131,7 +132,9 @@ final class SchemaCheck
             $additional = $node['additionalProperties'] ?? true;
             foreach ($data as $key => $value) {
                 $childPath = $path . '/' . self::escape((string) $key);
-                if (array_key_exists($key, $properties) && is_array($properties[$key])) {
+                if (array_key_exists($key, $properties) && $properties[$key] === false) {
+                    $errors[] = ['path' => $childPath, 'message' => 'Not allowed in a declaration file.'];
+                } elseif (array_key_exists($key, $properties) && is_array($properties[$key])) {
                     array_push($errors, ...self::check($value, $properties[$key], $root, $childPath));
                 } elseif ($additional === false) {
                     $errors[] = ['path' => $childPath, 'message' => 'Unknown property.'];

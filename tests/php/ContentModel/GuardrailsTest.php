@@ -143,4 +143,50 @@ final class GuardrailsTest extends TestCase
         $this->assertSame(['count' => 7, 'taxonomies' => []], $g->contentFor('type', 'book', null));
         $this->assertSame(['count' => 3, 'taxonomies' => []], $g->contentFor('taxonomy', 'genre', ['name' => 'Genre']));
     }
+
+    /**
+     * @param array<string, int>          $posts
+     * @param array<string, list<string>> $registered post type => registered supports
+     */
+    private static function withRegistered(array $posts, array $registered): Guardrails
+    {
+        return new Guardrails(
+            static fn (string $type): int => $posts[$type] ?? 0,
+            static fn (string $taxonomy): int => 0,
+            static fn (string $type): ?array => $registered[$type] ?? null
+        );
+    }
+
+    public function testNewOverrideOfRegisteredTypeStartsFromRegisteredSupports(): void
+    {
+        $guardrails = self::withRegistered(['post' => 40], ['post' => ['title', 'editor', 'thumbnail', 'excerpt', 'comments']]);
+
+        $issues = $guardrails->checkSave('type', 'post', null, ['supports' => ['title', 'excerpt']]);
+        $this->assertCount(1, $issues);
+        $this->assertSame('supports_removed', $issues[0]['code']);
+        $this->assertSame(['editor', 'thumbnail'], $issues[0]['detail']);
+        $this->assertSame(40, $issues[0]['count']);
+
+        // An override file that leaves supports alone removes nothing.
+        $this->assertSame([], $guardrails->checkSave('type', 'post', null, ['labels' => ['menu_name' => 'News']]));
+    }
+
+    public function testNewDeclarationOfUnregisteredTypeHasNoGuardrails(): void
+    {
+        $guardrails = self::withRegistered(['book' => 3], []);
+        $this->assertSame([], $guardrails->checkSave('type', 'book', null, ['name' => 'Book', 'supports' => ['title']]));
+        $this->assertSame([], $guardrails->checkSave('taxonomy', 'genre', null, ['name' => 'Genre']));
+    }
+
+    public function testOverrideWithoutSupportsUsesRegisteredNotPluginDefaults(): void
+    {
+        // A plugin type registered with title only: dropping nothing it has is not a removal.
+        $guardrails = self::withRegistered(['event' => 9], ['event' => ['title']]);
+        $this->assertSame([], $guardrails->checkSave('type', 'event', ['labels' => ['menu_name' => 'Events']], ['supports' => ['title']]));
+
+        // A plugin type with editor and thumbnail: unticking thumbnail is caught though the file never listed supports.
+        $guardrails = self::withRegistered(['event' => 9], ['event' => ['title', 'editor', 'thumbnail']]);
+        $issues = $guardrails->checkSave('type', 'event', ['labels' => ['menu_name' => 'Events']], ['supports' => ['title', 'editor']]);
+        $this->assertSame(['thumbnail'], $issues[0]['detail']);
+    }
 }

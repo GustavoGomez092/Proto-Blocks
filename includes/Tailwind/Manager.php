@@ -316,6 +316,8 @@ final class Manager
     public function clearCache(bool $recompile = false): array
     {
         $this->getCache()->clear();
+        // The compiled CSS is gone, so "last compiled" and its content hash no longer describe anything.
+        $this->updateSettings(['last_compiled' => null, 'content_hash' => '']);
 
         if ($recompile && $this->isEnabled()) {
             return $this->compile();

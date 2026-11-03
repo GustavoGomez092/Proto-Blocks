@@ -21,6 +21,14 @@ use ProtoBlocks\Modules\Fields\Definition\Report;
  * `invalid_jsonc`. Roots are searched in order and a later root (the child
  * theme) replaces an earlier one's slug.
  *
+ * A later root's file that is refused or broken never lets an earlier root's
+ * file of the same slug back in: the earlier file is dropped too, with a
+ * `broken_override` error (fail closed: a child that re-typed a parent's
+ * `code` field must not fall back to the parent's definition). A refused
+ * `proto-fields` folder in a later root drops every earlier file. Slugs whose
+ * own file is broken are listed by broken() so the module can warn that a
+ * lower-ranked group with the same key may be in effect.
+ *
  * Results are computed once per instance (one request).
  */
 final class GroupFiles
@@ -39,6 +47,9 @@ final class GroupFiles
     private ?array $files = null;
 
     private Report $errors;
+
+    /** @var array<string, string> slug => path of the broken file (latest root) */
+    private array $broken = [];
 
     /**
      * @param callable(): iterable<string> $roots   theme roots, parent first
@@ -84,9 +95,26 @@ final class GroupFiles
             if ($real === false || !is_dir($real)) {
                 continue;
             }
-            foreach ($this->scan($real) as $slug => $file) {
+            [$ok, $broken] = $this->scan($real);
+            if ($broken === true) {
+                // The whole proto-fields folder of this root was refused.
+                foreach ($this->files as $slug => $earlier) {
+                    $this->brokenOverride($real . DIRECTORY_SEPARATOR . self::FOLDER, $earlier['path']);
+                    $this->broken[$slug] = $real . DIRECTORY_SEPARATOR . self::FOLDER;
+                }
+                $this->files = [];
+                continue;
+            }
+            foreach ($broken as $slug => $path) {
+                if (isset($this->files[$slug])) {
+                    $this->brokenOverride($path, $this->files[$slug]['path']);
+                    unset($this->files[$slug]);
+                }
+                $this->broken[$slug] = $path;
+            }
+            foreach ($ok as $slug => $file) {
                 // The later root (child theme) wins; keep slug order stable.
-                unset($this->files[$slug]);
+                unset($this->files[$slug], $this->broken[$slug]);
                 $this->files[$slug] = $file;
             }
         }
@@ -96,8 +124,31 @@ final class GroupFiles
     }
 
     /**
+     * Slugs whose file in the last root that has one is refused or broken.
+     *
+     * @return array<string, string> slug => broken file or folder path
+     */
+    public function broken(): array
+    {
+        $this->files();
+
+        return $this->broken;
+    }
+
+    private function brokenOverride(string $broken, string $earlier): void
+    {
+        $this->errors->addError($broken, 'broken_override', sprintf(
+            /* translators: 1: broken file or folder, 2: the earlier file that was not loaded */
+            __('%1$s is broken; the parent theme\'s group with the same slug (%2$s) was NOT loaded.', 'proto-blocks'),
+            $broken,
+            $earlier
+        ));
+    }
+
+    /**
      * Discovery errors (path = the folder or file concerned): invalid_slug,
-     * path_outside_root, file_too_large, unreadable, invalid_jsonc.
+     * path_outside_root, file_too_large, unreadable, invalid_jsonc,
+     * broken_override; warning both_extensions.
      */
     public function errors(): Report
     {
@@ -106,24 +157,28 @@ final class GroupFiles
         return $this->errors;
     }
 
-    /** @return array<string, array{slug: string, path: string, root: string, data: array<string|int, mixed>}> */
+    /**
+     * @return array{0: array<string, array{slug: string, path: string, root: string, data: array<string|int, mixed>}>, 1: array<string, string>|true}
+     *         the readable files, and the broken slugs (true: the whole folder was refused)
+     */
     private function scan(string $root): array
     {
         $dir = $root . DIRECTORY_SEPARATOR . self::FOLDER;
         if (!is_dir($dir)) {
-            return [];
+            return [[], []];
         }
         if (!self::inside(realpath($dir), $root)) {
             $this->outside($dir);
-            return [];
+            return [[], true];
         }
         $entries = scandir($dir);
         if ($entries === false) {
-            return [];
+            return [[], true];
         }
         sort($entries, SORT_STRING);
 
         $out = [];
+        $broken = [];
         foreach ($entries as $slug) {
             if ($slug === '' || $slug[0] === '.') {
                 continue;
@@ -142,19 +197,30 @@ final class GroupFiles
             }
             if (!self::inside(realpath($folder), $root)) {
                 $this->outside($folder);
+                $broken[$slug] = $folder;
                 continue;
             }
             $file = $this->fileIn($folder);
             if ($file === null) {
                 continue;
             }
+            if (str_ends_with($file, '.jsonc') && is_file(substr($file, 0, -1))) {
+                $this->errors->addWarning($file, 'both_extensions', sprintf(
+                    /* translators: 1: used file, 2: ignored file */
+                    __('Both %1$s and %2$s exist; %1$s is used and %2$s is ignored.', 'proto-blocks'),
+                    basename($file),
+                    basename(substr($file, 0, -1))
+                ));
+            }
             $data = $this->read($file, $root);
             if ($data !== null) {
                 $out[$slug] = ['slug' => $slug, 'path' => $file, 'root' => $root, 'data' => $data];
+            } else {
+                $broken[$slug] = $file;
             }
         }
 
-        return $out;
+        return [$out, $broken];
     }
 
     private function fileIn(string $folder): ?string

@@ -1,0 +1,6 @@
+// Standalone taxonomy shared by a Proto-Blocks type and a core type.
+{
+  "name": "Topic",
+  "post_types": ["book", "post"],
+  "show_admin_column": true
+}

@@ -36,14 +36,14 @@ async function loaded(kind: 'type' | 'taxonomy' = 'type', slug = 'product', name
 }
 
 test('loads the file, passing the name for a new declaration', async () => {
-	const api = mockApi({ 'schema-files/type/case-study?name=Case%20Study': fileResult({ exists: false, hash: null }) });
+	const api = mockApi({ 'admin/schema-files/type/case-study?name=Case%20Study': fileResult({ exists: false, hash: null }) });
 	const { result } = await loaded('type', 'case-study', 'Case Study');
 
 	expect(result.current.loading).toBe(false);
 	expect(result.current.error).toBeNull();
 	expect(result.current.file?.exists).toBe(false);
 	expect(api).toHaveBeenCalledWith(
-		expect.objectContaining({ url: 'https://example.test/wp-json/proto-blocks/v1/schema-files/type/case-study?name=Case%20Study' })
+		expect.objectContaining({ url: 'https://example.test/wp-json/proto-blocks/v1/admin/schema-files/type/case-study?name=Case%20Study' })
 	);
 });
 
@@ -58,7 +58,7 @@ test('a load error is exposed', async () => {
 test('save posts the comment-preserving text with the hash and toasts', async () => {
 	const success = jest.spyOn(toast, 'success');
 	const post = jest.fn(() => ({ path: 'wp-content/themes/x/proto-types/product/type.jsonc', hash: 'h2', created: false, warnings: [] }));
-	mockApi({ 'GET schema-files/type/product': fileResult(), 'POST schema-files/type/product': post });
+	mockApi({ 'GET admin/schema-files/type/product': fileResult(), 'POST admin/schema-files/type/product': post });
 	const { result } = await loaded();
 
 	let outcome: unknown;
@@ -81,8 +81,8 @@ test('save diffs against the text, not the data it was given', async () => {
 	const post = jest.fn(() => ({ path: 'p', hash: 'h2', created: false, warnings: [] }));
 	// data out of step with the text: has_archive is true in the file.
 	mockApi({
-		'GET schema-files/type/product': fileResult({ data: { name: 'Product', has_archive: false } }),
-		'POST schema-files/type/product': post,
+		'GET admin/schema-files/type/product': fileResult({ data: { name: 'Product', has_archive: false } }),
+		'POST admin/schema-files/type/product': post,
 	});
 	const { result } = await loaded();
 
@@ -96,7 +96,7 @@ test('save diffs against the text, not the data it was given', async () => {
 
 test('save passes acknowledged guardrail codes', async () => {
 	const post = jest.fn(() => ({ path: 'p', hash: 'h2', created: false, warnings: [] }));
-	mockApi({ 'GET schema-files/type/product': fileResult(), 'POST schema-files/type/product': post });
+	mockApi({ 'GET admin/schema-files/type/product': fileResult(), 'POST admin/schema-files/type/product': post });
 	const { result } = await loaded();
 
 	await act(async () => {
@@ -107,8 +107,8 @@ test('save passes acknowledged guardrail codes', async () => {
 
 test('a conflict resolves conflict', async () => {
 	mockApi({
-		'GET schema-files/type/product': fileResult(),
-		'POST schema-files/type/product': () => {
+		'GET admin/schema-files/type/product': fileResult(),
+		'POST admin/schema-files/type/product': () => {
 			throw { code: 'proto_blocks_conflict', message: 'Changed on disk.', data: { status: 409 } };
 		},
 	});
@@ -120,8 +120,8 @@ test('a conflict resolves conflict', async () => {
 test('a guardrail resolves confirm with the guardrails', async () => {
 	const guardrails = [{ code: 'supports_removed', message: 'm', count: 2, detail: ['thumbnail'] }];
 	mockApi({
-		'GET schema-files/type/product': fileResult(),
-		'POST schema-files/type/product': () => {
+		'GET admin/schema-files/type/product': fileResult(),
+		'POST admin/schema-files/type/product': () => {
 			throw { code: 'proto_blocks_needs_confirmation', message: 'Confirm.', data: { status: 409, guardrails } };
 		},
 	});
@@ -132,8 +132,8 @@ test('a guardrail resolves confirm with the guardrails', async () => {
 
 test('other save errors reject', async () => {
 	mockApi({
-		'GET schema-files/type/product': fileResult(),
-		'POST schema-files/type/product': () => {
+		'GET admin/schema-files/type/product': fileResult(),
+		'POST admin/schema-files/type/product': () => {
 			throw { code: 'proto_blocks_schema_invalid', message: 'Bad.', data: { status: 400 } };
 		},
 	});
@@ -145,11 +145,11 @@ test('other save errors reject', async () => {
 test('remove deletes, passing confirm, and maps confirm_required', async () => {
 	const content = { count: 4, taxonomies: { genre: 2 } };
 	mockApi({
-		'GET schema-files/type/product': fileResult(),
-		'DELETE schema-files/type/product': () => {
+		'GET admin/schema-files/type/product': fileResult(),
+		'DELETE admin/schema-files/type/product': () => {
 			throw { code: 'proto_blocks_confirm_required', message: 'Type the slug.', data: { status: 409, content } };
 		},
-		'DELETE schema-files/type/product?confirm=product': { deleted: true, kept: ['wp-content/themes/x/proto-types/product/fields.php'] },
+		'DELETE admin/schema-files/type/product?confirm=product': { deleted: true, kept: ['wp-content/themes/x/proto-types/product/fields.php'] },
 	});
 	const { result } = await loaded();
 
@@ -162,7 +162,7 @@ test('remove deletes, passing confirm, and maps confirm_required', async () => {
 
 test('reload fetches the file again', async () => {
 	let hash = 'h1';
-	mockApi({ 'GET schema-files/taxonomy/genre': () => fileResult({ hash }) });
+	mockApi({ 'GET admin/schema-files/taxonomy/genre': () => fileResult({ hash }) });
 	const { result } = await loaded('taxonomy', 'genre');
 	hash = 'h9';
 
