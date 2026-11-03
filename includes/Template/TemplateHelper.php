@@ -38,6 +38,11 @@ final class TemplateHelper
      * block's postId context (Query Loop), else the current post, else the
      * queried object. null when the Fields module is off or the name is not
      * declared for that post.
+     *
+     * No read-permission check is made (the block's post is rendered anyway).
+     * Values are escaped for their type except `code` fields, which come back
+     * exactly as stored whoever wrote them; with $raw = true escaping is the
+     * template's job.
      */
     public function field(string $name, bool $raw = false): mixed
     {

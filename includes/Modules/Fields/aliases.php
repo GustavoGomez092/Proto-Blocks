@@ -2,11 +2,18 @@
 /**
  * ACF-named aliases of the field getters. Loaded only through
  * ProtoBlocks\Modules\Fields\Read\Aliases::load(), i.e. when ACF is not
- * active; each function is still guarded so another definition always wins.
+ * active. Each function is guarded, so a definition loaded EARLIER wins. A
+ * definition loaded LATER and unguarded (an ACF copy a theme bundles and
+ * includes from its functions.php) would be a redeclare fatal, so
+ * Aliases::load() must run after the theme's functions.php has loaded
+ * (after_setup_theme late / init early), never on plugins_loaded.
  *
- * Unlike ACF, values come back escaped for their type by default
- * ($format_value = false returns the stored value). WordPress escapers do not
- * double-encode entities, so a template that escapes again is harmless.
+ * Unlike ACF, values come back escaped for their type by default. Exceptions:
+ * $format_value = false returns the stored value (escaping is the caller's
+ * job), `code` fields are returned as stored, and the_field() echoes a code
+ * field raw. There is no read-permission check: never build $post_id from
+ * visitor input. See functions.php for the full trust model. WordPress
+ * escapers do not double-encode entities, so escaping again is harmless.
  *
  * @package ProtoBlocks
  */

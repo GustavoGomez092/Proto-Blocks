@@ -70,22 +70,58 @@ final class ContextResolver
         return is_object($queried) ? self::fromObject($queried) : null;
     }
 
+    /**
+     * The real classes are tested first; only a plain stdClass is
+     * duck-typed. WP_User::__isset() falls through to user meta, so a user
+     * with a `post_type` meta key would otherwise look like a post.
+     */
     private static function fromObject(object $o): ?ObjectRef
     {
-        if (self::is($o, 'WP_Term') || (isset($o->term_id, $o->taxonomy) && !isset($o->post_type))) {
-            $id = self::id($o->term_id ?? null);
-            return $id > 0 && is_string($o->taxonomy ?? null) && $o->taxonomy !== '' ? ObjectRef::term($id, $o->taxonomy) : null;
+        if (self::is($o, 'WP_Post')) {
+            return self::postRef($o);
         }
-        if (self::is($o, 'WP_Post') || isset($o->post_type)) {
-            $id = self::id($o->ID ?? null);
-            return $id > 0 ? ObjectRef::post($id) : null;
+        if (self::is($o, 'WP_Term')) {
+            return self::termRef($o);
         }
-        if (self::is($o, 'WP_User') || isset($o->user_login)) {
-            $id = self::id($o->ID ?? null);
-            return $id > 0 ? ObjectRef::user($id) : null;
+        if (self::is($o, 'WP_User')) {
+            return self::userRef($o);
+        }
+        if (get_class($o) !== \stdClass::class) {
+            return null;
+        }
+        if (isset($o->term_id, $o->taxonomy) && !isset($o->post_type)) {
+            return self::termRef($o);
+        }
+        if (isset($o->post_type)) {
+            return self::postRef($o);
+        }
+        if (isset($o->user_login)) {
+            return self::userRef($o);
         }
 
         return null;
+    }
+
+    private static function postRef(object $o): ?ObjectRef
+    {
+        $id = self::id($o->ID ?? null);
+
+        return $id > 0 ? ObjectRef::post($id) : null;
+    }
+
+    private static function termRef(object $o): ?ObjectRef
+    {
+        $id = self::id($o->term_id ?? null);
+        $taxonomy = $o->taxonomy ?? null;
+
+        return $id > 0 && is_string($taxonomy) && $taxonomy !== '' ? ObjectRef::term($id, $taxonomy) : null;
+    }
+
+    private static function userRef(object $o): ?ObjectRef
+    {
+        $id = self::id($o->ID ?? null);
+
+        return $id > 0 ? ObjectRef::user($id) : null;
     }
 
     private static function term(int $id): ?ObjectRef

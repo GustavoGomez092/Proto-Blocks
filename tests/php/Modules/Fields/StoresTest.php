@@ -20,7 +20,7 @@ final class StoresTest extends TestCase
 {
     protected function setUp(): void
     {
-        foreach (['pb_test_meta', 'pb_test_meta_reg', 'pb_test_options', 'pb_test_autoload', 'pb_test_posts', 'pb_test_terms'] as $g) {
+        foreach (['pb_test_meta', 'pb_test_meta_reg', 'pb_test_options', 'pb_test_autoload', 'pb_test_posts', 'pb_test_terms', 'pb_test_hooks', 'pb_test_filters'] as $g) {
             $GLOBALS[$g] = [];
         }
         $GLOBALS['pb_test_posts'][10] = ['ID' => 10, 'post_type' => 'event', 'post_status' => 'draft'];

@@ -10,7 +10,12 @@ namespace ProtoBlocks\Modules\Fields\Read;
  */
 final class Aliases
 {
-    /** Requires aliases.php once when !$acfActive() and get_field is undefined; returns whether it loaded. */
+    /**
+     * Requires aliases.php once when !$acfActive() and get_field is undefined;
+     * returns whether it loaded. Call it after the theme's functions.php has
+     * loaded (after_setup_theme late / init early): a theme-bundled ACF
+     * included later would otherwise redeclare get_field() and fatal.
+     */
     public static function load(callable $acfActive): bool
     {
         if ($acfActive() || function_exists('get_field')) {
