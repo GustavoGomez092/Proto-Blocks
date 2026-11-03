@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "proto-blocks/content-model.schema.json",
+  "title": "Proto-Blocks content model declaration",
+  "$defs": {
+    "labels": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "type": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "$schema": { "type": "string" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "plural": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "slug": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,19}$" },
+        "labels": { "$ref": "#/$defs/labels" },
+        "public": { "type": "boolean" },
+        "show_in_rest": { "type": "boolean" },
+        "hierarchical": { "type": "boolean" },
+        "exclude_from_search": { "type": "boolean" },
+        "publicly_queryable": { "type": "boolean" },
+        "show_ui": { "type": "boolean" },
+        "show_in_menu": { "type": "boolean" },
+        "show_in_nav_menus": { "type": "boolean" },
+        "show_in_admin_bar": { "type": "boolean" },
+        "map_meta_cap": { "type": "boolean" },
+        "has_archive": {
+          "anyOf": [
+            { "type": "boolean" },
+            { "type": "string", "pattern": "^[a-z0-9][a-z0-9/_-]*$" }
+          ]
+        },
+        "rewrite": {
+          "anyOf": [
+            { "type": "boolean", "enum": [false] },
+            {
+              "type": "object",
+              "properties": {
+                "slug": { "type": "string" },
+                "with_front": { "type": "boolean" },
+                "feeds": { "type": "boolean" },
+                "pages": { "type": "boolean" }
+              }
+            }
+          ]
+        },
+        "supports": {
+          "anyOf": [
+            { "type": "boolean", "enum": [false] },
+            { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+          ]
+        },
+        "menu_position": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "menu_icon": { "type": "string", "maxLength": 2048 },
+        "template": { "type": "array", "items": { "type": "array" } },
+        "template_lock": { "enum": [false, "all", "insert", "contentOnly"] },
+        "capability_type": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" }, "minItems": 2, "maxItems": 2 }
+          ]
+        },
+        "taxonomies": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,31}$" },
+              { "$ref": "#/$defs/taxonomy" }
+            ]
+          }
+        },
+        "fields": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "taxonomy": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "$schema": { "type": "string" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "plural": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "slug": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,31}$" },
+        "labels": { "$ref": "#/$defs/labels" },
+        "post_types": { "type": "array", "items": { "type": "string" } },
+        "public": { "type": "boolean" },
+        "show_in_rest": { "type": "boolean" },
+        "show_admin_column": { "type": "boolean" },
+        "hierarchical": { "type": "boolean" },
+        "show_ui": { "type": "boolean" },
+        "show_tagcloud": { "type": "boolean" },
+        "show_in_quick_edit": { "type": "boolean" },
+        "rewrite": {
+          "anyOf": [
+            { "type": "boolean", "enum": [false] },
+            {
+              "type": "object",
+              "properties": {
+                "slug": { "type": "string" },
+                "with_front": { "type": "boolean" },
+                "hierarchical": { "type": "boolean" }
+              }
+            }
+          ]
+        },
+        "fields": { "type": "array", "items": { "type": "object" } }
+      }
+    }
+  }
+}

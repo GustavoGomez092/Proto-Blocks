@@ -5,7 +5,7 @@
  * Description: Create Gutenberg blocks using PHP/HTML templates instead of React. A modern, performant alternative to complex JavaScript block development.
  * Version: 2.14.5
  * Requires at least: 6.3
- * Requires PHP: 8.0
+ * Requires PHP: 8.1
  * Author: Gustavo Gomez
  * Author URI: https://github.com/GustavoGomez092
  * License: GPL v2 or later
@@ -67,10 +67,10 @@ Core\Autoloader::register();
 function init(): void
 {
     // Check PHP version
-    if (version_compare(PHP_VERSION, '8.0', '<')) {
+    if (version_compare(PHP_VERSION, '8.1', '<')) {
         add_action('admin_notices', function (): void {
             echo '<div class="error"><p>';
-            echo esc_html__('Proto-Blocks requires PHP 8.0 or higher. Please upgrade your PHP version.', 'proto-blocks');
+            echo esc_html__('Proto-Blocks requires PHP 8.1 or higher. Please upgrade your PHP version.', 'proto-blocks');
             echo '</p></div>';
         });
         return;
