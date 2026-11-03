@@ -380,7 +380,11 @@ test.describe( 'Field boxes', () => {
 				animations: 'disabled',
 				caret: 'hide',
 				clip: ( await page.locator( '#col-left' ).boundingBox() ) ?? undefined,
-				mask: [ page.locator( '#adminmenuwrap' ) ],
+				mask: [
+					page.locator( '#adminmenuwrap' ),
+					page.locator( '#tag-name' ),
+					page.locator( '#tag-slug' ),
+				],
 			} );
 			await page.locator( '#submit' ).click();
 			await expect( page.locator( '#the-list' ) ).toContainText( name );
