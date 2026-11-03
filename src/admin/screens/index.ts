@@ -19,6 +19,7 @@ export const SCREENS: Partial<Record<Screen, ScreenComponent>> = {
 	taxonomies: lazy(() => import('./TaxonomiesScreen')),
 	fields: lazy(() => import('./FieldsScreen')),
 	'options-page': lazy(() => import('./OptionsPageScreen')),
+	'options-pages': lazy(() => import('./OptionsPagesScreen')),
 };
 
 /** Screen name as shown in the WordPress menu, for headings and errors. */
