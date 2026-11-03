@@ -1466,6 +1466,65 @@ wp proto-blocks options list
 wp proto-blocks options create "Theme Settings" [--slug=<slug>] [--menu=<menu>] [--capability=<cap>] [--storage-option=<name>]
 ```
 
+## Custom fields
+
+Proto-Blocks adds custom fields to posts, custom post types, taxonomy terms, users and settings pages. Groups are plain files (the shape mirrors ACF local JSON, so an ACF export drops in), a visual builder edits them, and `proto_field()` reads the values. Requires WordPress 6.5+ and PHP 8.1. Full guide: [docs/fields.md](docs/fields.md).
+
+### Declaring groups
+
+Three ways, all producing the same groups. A child theme's file beats the parent's; a broken child file does not fall back to the parent's.
+
+```jsonc
+// your-theme/proto-fields/speaker/group.jsonc
+{
+  "key": "group_speaker",
+  "title": "Speaker",
+  "location": [[{ "param": "post_type", "operator": "==", "value": "speaker" }]],
+  "fields": [
+    { "key": "field_company", "name": "company", "label": "Company", "type": "text" },
+    { "key": "field_photo", "name": "photo", "label": "Photo", "type": "image" }
+  ]
+}
+```
+
+```php
+// functions.php
+proto_field_group('speaker', ['key' => 'group_speaker', 'title' => 'Speaker', 'fields' => [
+    ['key' => 'field_company', 'name' => 'company', 'label' => 'Company', 'type' => 'text'],
+]]);
+```
+
+Or put a `fields` list inline in a `proto-types/<slug>/type.jsonc`, `proto-taxonomies/<slug>/taxonomy.jsonc` or settings page file, where the location is implied.
+
+### Types and stored values
+
+`text`, `textarea`, `email`, `url`, `number`, `password`, `wysiwyg`, `code`, `color`, `true_false` (scalars); `select`, `radio` (string or list); `date` (`Y-m-d`), `time`, `datetime`; `image`, `file` (attachment ID), `gallery`, `taxonomy`, `relationship` (lists of IDs); `video` (ID or URL); `link` (`{url, title, target}`); `group`, `repeater`, `flexible_content` (one JSON value). `tab`, `accordion` and `message` are layout only. The table of stored shapes is in [docs/fields.md](docs/fields.md#field-types-and-stored-values).
+
+### Reading values
+
+```php
+$company = proto_field('company');                     // current post, escaped for its type
+$phone   = proto_field('phone', 'option:theme-settings');
+foreach (proto_rows('sessions', $post_id) as $row) { echo $row['title']; }
+```
+
+`$template->field('company')` does the same inside a Proto-Blocks template. Pass `true` as the last argument of `proto_field()` for the stored value; escaping is then yours. The getter has **no read-permission check**: never build `$context` from visitor input. `get_field()`, `the_field()` and `get_fields()` exist only when ACF is inactive.
+
+The Block Bindings source `proto-blocks/field` (`args: {"name": "company"}`) feeds core paragraph, heading, image and button blocks. `code` and `password` fields are never bound; options-page fields are bindable by any author unless the field sets `"bindings": false`; a full-page cache serving logged-in users must vary by user.
+
+### Trust rules
+
+`code` and `password` fields are written only by users with `unfiltered_html`; others see them hidden. Everyone else's values are sanitised per type. Only values written through the plugin are vouched for, so re-typing a field to `code` renders earlier values raw. Rows per repeater are capped (`max`, and the `proto_blocks_repeater_max_items` filter, default 500). `show_in_rest` is per field; `password` and `code` default to off.
+
+### Builder and ACF
+
+**Proto Blocks > Fields** is a visual builder: one row per field, drag or keyboard reorder, group settings, a location builder, a JSONC pane that keeps comments (except inside an edited array) and **Save to file**. It is read-only with `DISALLOW_FILE_MODS`, for multisite non-network-admins, for groups ACF registers and for inline or PHP groups. A group whose `key` ACF already registers is skipped with a notice; unknown ACF field types are errors.
+
+```bash
+wp proto-blocks fields list [--format=table|json|csv]
+wp proto-blocks fields validate [<path>...]      # exits 1 on errors; warns on wide_location
+```
+
 ## WP-CLI Commands
 
 ```bash
@@ -1481,6 +1540,10 @@ wp proto-blocks validate
 # Post types and taxonomies (see "Post types and taxonomies")
 wp proto-blocks type list
 wp proto-blocks taxonomy list
+
+# Custom fields (see "Custom fields")
+wp proto-blocks fields list
+wp proto-blocks fields validate
 
 # Clear template cache
 wp proto-blocks cache clear

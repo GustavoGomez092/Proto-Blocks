@@ -88,6 +88,46 @@
 - On multisite only network administrators can write declaration files
   (`403 proto_blocks_multisite`).
 
+### Phase 2: custom fields
+
+#### Added
+- **Custom fields** for posts, custom post types, taxonomy terms, users and
+  settings pages. Groups are ACF-shaped, declared as
+  `proto-fields/<slug>/group.jsonc` files, inline `fields` in type, taxonomy
+  and page files, or `proto_field_group()` in PHP. Guide: `docs/fields.md`.
+- Field types (text variants, wysiwyg, image, file, gallery, video,
+  link, select, radio, true/false, color, date/time/datetime, taxonomy,
+  relationship, group, repeater, flexible content, code, password) plus
+  `tab`, `accordion` and `message` layout fields; one registered meta row
+  per field with a REST schema (`show_in_rest` per field).
+- Meta boxes in the block editor, classic editor and Elementor, and on term
+  and user forms, with client and server validation and conditional logic.
+- Getter `proto_field()`, `proto_fields()`, `proto_rows()` and
+  `$template->field()`, escaped per type (`$raw = true` to opt out);
+  `get_field()`, `the_field()` and `get_fields()` aliases when ACF is
+  inactive.
+- Block Bindings source `proto-blocks/field` (`"bindings": false` opts a
+  field out).
+- Fields builder at Proto Blocks > Fields: field rows with drag and keyboard
+  reorder, group settings, location and condition builders, a JSONC pane,
+  new-group dialog and Save to file.
+- ACF import: local JSON and Tools exports work unchanged; ACF-registered
+  groups with the same key are skipped with a notice.
+- `wp proto-blocks fields list|validate`; filter
+  `proto_blocks_repeater_max_items` (default 500).
+
+#### Changed
+- **WordPress 6.5 is now the minimum** (Block Bindings).
+- Post types that receive fields gain `custom-fields` support; field keys
+  are protected meta.
+
+#### Security
+- `code` and `password` fields are written only by users with
+  `unfiltered_html`; other values are sanitised per type at write time.
+- The getter does no read-permission check; never pass visitor input as
+  `$context`. Bindings exclude `code` and `password`, and options-page
+  fields are bindable by any author unless `"bindings": false`.
+
 ### Phase 3: settings pages
 
 #### Added
