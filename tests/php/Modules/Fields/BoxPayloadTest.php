@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Tests\Modules\Fields;
 
-use PHPUnit\Framework\TestCase;
 use ProtoBlocks\Modules\Fields\Definition\FieldGroup;
 use ProtoBlocks\Modules\Fields\Definition\GroupNormalizer;
 use ProtoBlocks\Modules\Fields\Edit\BoxPayload;
@@ -23,7 +22,7 @@ require_once __DIR__ . '/wp-stubs.php';
 require_once __DIR__ . '/stubs/Structured.php';
 require_once __DIR__ . '/../../ContentModel/stubs/hooks.php';
 
-final class BoxPayloadTest extends TestCase
+final class BoxPayloadTest extends FieldsTestCase
 {
     private const ADMIN = 1;
     private const AUTHOR = 2;
@@ -34,6 +33,7 @@ final class BoxPayloadTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
         foreach (['pb_test_filters', 'pb_test_hooks', 'pb_test_meta', 'pb_test_meta_reg', 'pb_test_transients', 'pb_test_attachments', 'pb_test_actions'] as $g) {
             $GLOBALS[$g] = [];
         }
@@ -48,14 +48,6 @@ final class BoxPayloadTest extends TestCase
         $this->groups = GroupNormalizer::normalizeMany($raw, 'file:acf-export')['groups'];
     }
 
-    protected function tearDown(): void
-    {
-        unset($GLOBALS['pb_test_caps'][self::ADMIN], $GLOBALS['pb_test_caps'][self::AUTHOR]);
-        foreach (['pb_test_meta', 'pb_test_posts', 'pb_test_transients', 'pb_test_attachments'] as $g) {
-            $GLOBALS[$g] = [];
-        }
-        $GLOBALS['pb_test_current_user'] = 0;
-    }
 
     /** @param array<string, mixed> $raw */
     private function addGroup(array $raw): FieldGroup
@@ -184,8 +176,9 @@ final class BoxPayloadTest extends TestCase
         });
 
         $p = $this->payload($choices)->build($g, ObjectRef::post(10), self::AUTHOR);
-        $this->assertSame([['key' => '7', 'label' => 'Seven']], $p['choices']['pick']);
-        $this->assertSame([['key' => '7', 'label' => 'Seven']], $p['choices']['inner'], 'nested optionsSource fields too');
+        $this->assertSame([['key' => '7', 'label' => 'Seven']], $p['choices']['f_pick']);
+        $this->assertSame([['key' => '7', 'label' => 'Seven']], $p['choices']['f_inner'], 'nested optionsSource fields too');
+        $this->assertSame($p['choices']['f_pick'], $p['choices']['pick'], 'first field of a name also listed by name');
         $this->assertSame(['wp:posts', 'wp:terms'], $calls);
     }
 
@@ -203,11 +196,56 @@ final class BoxPayloadTest extends TestCase
     {
         $html = BoxPayload::markup(['title' => 'T <b>', 'fields' => [], 'values' => ['x' => '</script><script>alert(1)</script>', 'y' => "it's \"q\" & <!--"]]);
         $this->assertSame(1, substr_count($html, '</script>'));
-        $this->assertStringContainsString('</script>', $html);
+        $this->assertStringContainsString('\\u003C/script\\u003E', $html);
         $this->assertStringNotContainsString('<!--', $html);
         $this->assertStringContainsString('T &lt;b&gt;', $html);
         $this->assertStringContainsString('data-proto-fields-box', $html);
         $this->assertSame(1, preg_match('/<script type="application\/json">(.*)<\/script>/sD', $html, $m));
         $this->assertSame('</script><script>alert(1)</script>', json_decode($m[1], true)['values']['x']);
+    }
+
+    public function testDisplayIsWalkedOnceFromTheTop(): void
+    {
+        $g = $this->addGroup(['key' => 'group_clash', 'title' => 'Clash', 'fields' => [
+            ['key' => 'f_photo_text', 'name' => 'photo', 'type' => 'text'],
+            ['key' => 'f_rows', 'name' => 'rows', 'type' => 'repeater', 'sub_fields' => [['key' => 'f_photo_img', 'name' => 'photo', 'type' => 'image']]],
+        ]]);
+        $GLOBALS['pb_test_attachments'][30] = ['url' => 'https://example.test/hero.jpg', 'mime' => 'image/jpeg'];
+        $GLOBALS['pb_test_attachments'][31] = ['url' => 'https://example.test/row.jpg', 'mime' => 'image/jpeg'];
+        $GLOBALS['pb_test_meta']['post'][10]['photo'] = ['30'];
+        $GLOBALS['pb_test_meta']['post'][10]['rows'] = [[['photo' => 31]]];
+
+        $p = $this->payload()->build($g, ObjectRef::post(10), self::AUTHOR);
+        $this->assertArrayNotHasKey('photo', $p['display'], 'a top-level text value is never resolved as an attachment');
+        $this->assertSame('https://example.test/row.jpg', $p['display']['rows.0.photo']['url']);
+    }
+
+    public function testDisplayFollowsTheSubmittedValueAfterAnError(): void
+    {
+        $GLOBALS['pb_test_attachments'][30] = ['url' => 'https://example.test/hero.jpg', 'mime' => 'image/jpeg'];
+        $GLOBALS['pb_test_attachments'][31] = ['url' => 'https://example.test/other.jpg', 'mime' => 'image/jpeg'];
+        $GLOBALS['pb_test_meta']['post'][10]['hero'] = [30];
+        $store = new ErrorStore();
+        $store->put(ObjectRef::post(10), self::AUTHOR, ['hero' => 'Choose an image.'], ['hero' => 31]);
+
+        $p = $this->payload(null, $store)->build($this->event(), ObjectRef::post(10), self::AUTHOR);
+        $this->assertSame(31, $p['values']['hero']);
+        $this->assertSame('https://example.test/other.jpg', $p['display']['hero']['url']);
+    }
+
+    public function testTaxonomyTermsAreKeyedByTheFieldsPath(): void
+    {
+        $p = $this->payload()->build($this->event(), ObjectRef::post(10), self::AUTHOR);
+        $this->assertArrayHasKey('topics', $p['display']);
+        $this->assertSame(['terms' => []], $p['display']['topics'], 'no get_terms() in the stubs: an empty list, at the path TaxonomyInput reads');
+    }
+
+    public function testMaxRowsAreKeyedByFieldKey(): void
+    {
+        $p = $this->payload()->build($this->event(), ObjectRef::post(10), self::AUTHOR);
+        $agenda = $this->event()->field('agenda');
+        $this->assertNotNull($agenda);
+        $this->assertArrayHasKey($agenda->key, $p['maxRows']);
+        $this->assertSame($p['maxRows'][$agenda->key], $p['maxRows']['agenda']);
     }
 }

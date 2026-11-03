@@ -251,11 +251,13 @@ final class FieldsModule implements ModuleInterface
         add_action('edit_user_profile_update', [$this->saveHandler(), 'saveUser'], 10, 1);
         add_action('rest_api_init', [$this->editRoutes(), 'registerRoutes']);
         // Field boxes: post meta boxes, term forms (hooked per taxonomy on
-        // admin_init, once groups can load), user forms.
+        // the term screens only: load-edit-tags.php / load-term.php, so the
+        // group index never loads for heartbeat or admin-ajax), user forms.
         add_action('add_meta_boxes', [$this->metaBoxes(), 'addMetaBoxes'], 10, 2);
         add_action('admin_enqueue_scripts', [$this->metaBoxes(), 'enqueue']);
         add_action('admin_footer', [MetaBoxes::class, 'printPortal']);
-        add_action('admin_init', [$this->termForms(), 'register']);
+        add_action('load-edit-tags.php', [$this->termForms(), 'register']);
+        add_action('load-term.php', [$this->termForms(), 'register']);
         $this->userForms()->register();
     }
 

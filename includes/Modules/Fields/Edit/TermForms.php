@@ -28,7 +28,7 @@ final class TermForms
     ) {
     }
 
-    /** admin_init: hooks the add and edit forms of every taxonomy a group targets. */
+    /** load-edit-tags.php / load-term.php: hooks the add and edit forms of every taxonomy a group targets. */
     public function register(): void
     {
         foreach ($this->taxonomies() as $taxonomy) {

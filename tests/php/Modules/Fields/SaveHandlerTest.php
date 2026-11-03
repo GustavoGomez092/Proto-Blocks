@@ -789,4 +789,24 @@ final class SaveHandlerTest extends TestCase
         $this->assertCount(SaveHandler::MAX_ERRORS, $result['errors']);
         $this->assertCount(ErrorStore::MAX_ERRORS, $this->errors(self::ADMIN)['errors']);
     }
+
+    public function testClientLayoutKeyIsStoredAsLayoutAtEveryDepth(): void
+    {
+        $GLOBALS['pb_test_current_user'] = self::ADMIN;
+        $this->addGroup(['key' => 'group_flex', 'title' => 'Flex', 'location' => [[['param' => 'post_type', 'operator' => '==', 'value' => 'event']]], 'fields' => [
+            ['key' => 'f_pages', 'name' => 'pages', 'type' => 'repeater', 'sub_fields' => [
+                ['key' => 'f_blocks', 'name' => 'blocks', 'type' => 'flexible_content', 'layouts' => [
+                    ['key' => 'l_quote', 'name' => 'quote', 'label' => 'Quote', 'sub_fields' => [['key' => 'f_q', 'name' => 'q', 'type' => 'text']]],
+                ]],
+            ]],
+        ]]);
+        $this->post(['pages' => ['0' => ['blocks' => ['0' => ['_layout' => 'quote', 'q' => 'Hi']]]]], null, 'group_flex');
+        $this->savePost();
+
+        $this->assertNull($this->errors(self::ADMIN));
+        $stored = self::stored('pages');
+        $this->assertSame('quote', $stored[0]['blocks'][0]['layout']);
+        $this->assertSame('Hi', $stored[0]['blocks'][0]['q']);
+        $this->assertArrayNotHasKey('_layout', $stored[0]['blocks'][0]);
+    }
 }

@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { act, render, screen } from '@testing-library/react';
-import { FieldsForm } from '../box/FieldsForm';
+import { byField, FieldsForm } from '../box/FieldsForm';
 import { errorsUrl, mountedForms, registerForm, subscribeToMetaBoxSave, subscribeToTermAdd, type FormHandle } from '../box/editor-save';
 
 function fakeStore() {
@@ -159,4 +159,31 @@ test( 'a readOnly field gets no present marker', () => {
 	const form = container.querySelector( 'form' ) as HTMLFormElement;
 	expect( new FormData( form ).getAll( 'proto_fields_present[group_r][]' ) ).toEqual( [] );
 	unmount();
+} );
+
+test( 'an options page summary says nothing was saved; a post summary says it was', () => {
+	const base = {
+		groupKey: 'group_o', fields: [ textField( 'subtitle' ) ], values: {}, display: {}, choices: {},
+		errors: { subtitle: 'Too long.' }, canUnfiltered: true, maxRows: {}, restRoot: '/wp-json/', restNonce: 'n',
+	};
+	const option = render( createElement( FieldsForm, { payload: { ...base, object: 'option:site' } } ) );
+	expect( screen.getByText( 'Nothing was saved. 1 field needs attention.' ) ).toBeTruthy();
+	expect( screen.queryByText( /Saved, but/ ) ).toBeNull();
+	option.unmount();
+
+	const forced = render( createElement( FieldsForm, { payload: { ...base, object: 'post:10' }, outcome: 'not-saved' } ) );
+	expect( screen.getByText( 'Nothing was saved. 1 field needs attention.' ) ).toBeTruthy();
+	forced.unmount();
+
+	const post = render( createElement( FieldsForm, { payload: { ...base, object: 'post:10' } } ) );
+	expect( screen.getByText( 'The post was saved, but 1 field needs attention' ) ).toBeTruthy();
+	post.unmount();
+} );
+
+test( 'payload maps are read by field key, then by name', () => {
+	const f = textField( 'agenda' );
+	expect( byField( { f_agenda: 3, agenda: 9 }, f ) ).toBe( 3 );
+	expect( byField( { agenda: 9 }, f ) ).toBe( 9 );
+	expect( byField( {}, f ) ).toBeUndefined();
+	expect( byField( undefined, f ) ).toBeUndefined();
 } );

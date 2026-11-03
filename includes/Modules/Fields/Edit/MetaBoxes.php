@@ -70,7 +70,8 @@ final class MetaBoxes
             $this->registered[$group->key] = $group;
             add_meta_box(
                 'proto-fields-' . $group->key,
-                $group->title !== '' ? $group->title : __('Fields', 'proto-blocks'),
+                // Core prints the box title unescaped.
+                $group->title !== '' ? esc_html($group->title) : esc_html__('Fields', 'proto-blocks'),
                 [$this, 'render'],
                 $postType,
                 $context,
@@ -158,17 +159,9 @@ final class MetaBoxes
         echo '<div id="' . esc_attr(self::PORTAL_ID) . '" class="proto-blocks-fields"></div>';
     }
 
+    /** Only a group register() accepted for this screen. */
     private function group(string $key): ?FieldGroup
     {
-        if (isset($this->registered[$key])) {
-            return $this->registered[$key];
-        }
-        foreach ($this->index->all() as $group) {
-            if ($group->key === $key && BoxPayload::renderable($group)) {
-                return $group;
-            }
-        }
-
-        return null;
+        return $this->registered[$key] ?? null;
     }
 }

@@ -123,7 +123,9 @@ export function subscribeToMetaBoxSave( onSaved: () => void, deps: Deps = {} ): 
 		const now = saving();
 		if ( was && ! now ) {
 			if ( forms.size > 0 ) {
-				void refresh( fetchFn ).then( onSaved );
+				refresh( fetchFn )
+					.then( onSaved )
+					.catch( () => undefined ); // a failing form or callback must not surface as an unhandled rejection
 			}
 		}
 		was = now;

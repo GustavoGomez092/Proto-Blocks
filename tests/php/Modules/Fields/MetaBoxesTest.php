@@ -6,7 +6,6 @@ namespace ProtoBlocks\Tests\Modules\Fields;
 
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
-use PHPUnit\Framework\TestCase;
 use ProtoBlocks\Modules\Fields\Definition\FieldGroup;
 use ProtoBlocks\Modules\Fields\Definition\GroupNormalizer;
 use ProtoBlocks\Modules\Fields\Edit\BoxPayload;
@@ -36,7 +35,7 @@ require_once __DIR__ . '/../../ContentModel/stubs/hooks.php';
  */
 #[RunTestsInSeparateProcesses]
 #[PreserveGlobalState(false)]
-final class MetaBoxesTest extends TestCase
+final class MetaBoxesTest extends FieldsTestCase
 {
     private const AUTHOR = 2;
     private const EVENT_GROUP = 'group_6543a1b2c3d4e';
@@ -46,6 +45,7 @@ final class MetaBoxesTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
         require_once __DIR__ . '/../../API/stubs/PreviewPost.php';
         foreach (['pb_test_filters', 'pb_test_hooks', 'pb_test_meta', 'pb_test_meta_reg', 'pb_test_meta_boxes', 'pb_test_transients', 'pb_test_actions'] as $g) {
             $GLOBALS[$g] = [];
@@ -234,7 +234,7 @@ final class MetaBoxesTest extends TestCase
         $this->assertSame(1, substr_count($html, 'name="' . SaveHandler::NONCE_FIELD . '"'));
         $this->assertSame(1, substr_count($html, '_proto_fields_nonce'));
         $this->assertStringContainsString('name="' . BoxPayload::objectField() . '" value="post:10"', $html);
-        $this->assertStringContainsString('</script>', $html);
+        $this->assertStringContainsString('\\u003C/script\\u003E', $html);
         $this->assertSame(1, preg_match('/<script type="application\/json">(.*?)<\/script>/sD', $html, $m));
         $this->assertStringNotContainsString('</script>', $m[1]);
         $this->assertSame(1, substr_count($html, '</script>'), 'no literal </script> before the payload closes');
@@ -353,5 +353,15 @@ final class MetaBoxesTest extends TestCase
     {
         $this->userGroups();
         $this->assertSame('', self::capture(fn() => $this->userForms()->renderRegister()));
+    }
+
+    public function testBoxTitleIsEscaped(): void
+    {
+        $this->addGroup(['key' => 'group_xss', 'title' => '<img src=x onerror=alert(1)>', 'location' => [[['param' => 'post_type', 'operator' => '==', 'value' => 'event']]], 'fields' => [
+            ['key' => 'f_x', 'name' => 'x', 'type' => 'text'],
+        ]]);
+        $this->boxes()->register('event', self::post());
+
+        $this->assertSame('&lt;img src=x onerror=alert(1)&gt;', self::registered()['proto-fields-group_xss']['title']);
     }
 }

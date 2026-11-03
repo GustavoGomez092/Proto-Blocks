@@ -32,10 +32,13 @@ use ProtoBlocks\Security\AttributeSanitizer;
  *   display   pre-resolved data, keyed by dotted value path ('hero',
  *             'agenda.0.photo'): image {id,url,alt}; file {id,url,title,filename};
  *             video {id,url}; gallery [{id,url,alt}]; relationship
- *             [{id,title,type,status}] (only posts the user may read); and
- *             per taxonomy field `terms:<field key>` => [{id,name,parent}]
- *   choices   name => ChoiceResolver::options(), for EVERY optionsSource field at any depth
- *   maxRows   name => row cap, for every repeater and flexible content field
+ *             [{id,title,type,status}] (only posts the user may read);
+ *             taxonomy {terms: [{id,name,parent}]} (every choosable term;
+ *             the selection is in values). Strings are raw (React escapes).
+ *             Built after the ErrorStore override, from the final values.
+ *   choices   field key => ChoiceResolver::options(), for EVERY optionsSource field
+ *             at any depth (the first field of a name is also listed by name)
+ *   maxRows   field key => row cap, for every repeater and flexible content field (same name fallback)
  *   errors    path => message from the ErrorStore (taken once per object per request);
  *             the submitted values of those fields replace the stored ones
  *   canUnfiltered, restRoot, restNonce (empty for a logged-out visitor)
@@ -49,6 +52,9 @@ final class BoxPayload
 
     /** @var array<string, array{errors: array<string, string>, submitted: array<string, mixed>}|null> */
     private array $taken = [];
+
+    /** @var array<string, list<array{id: int, name: string, parent: int}>> taxonomy => terms */
+    private array $terms = [];
 
     public function __construct(
         private readonly TypeRegistry $types,
@@ -96,8 +102,9 @@ final class BoxPayload
 
         $entry = $this->take($ref, $userId);
         if ($entry !== null) {
-            $payload = $this->withErrors($payload, $g, $entry['errors'], $entry['submitted']);
+            return $this->withErrors($payload, $g, $entry['errors'], $entry['submitted']); // display built there, from the final values
         }
+        $payload['display'] = $this->displayFor($g, $payload['values']);
 
         return $payload;
     }
@@ -130,6 +137,7 @@ final class BoxPayload
                 $payload['values'][$top] = $submitted[$top];
             }
         }
+        $payload['display'] = $this->displayFor($g, $payload['values']);
 
         return $payload;
     }
@@ -255,7 +263,9 @@ final class BoxPayload
     }
 
     /**
-     * choices, maxRows and display for every field at any depth.
+     * choices and maxRows for every field at any depth, keyed by field key.
+     * The first field of a name is also listed under its name, for readers
+     * that still look entries up by name.
      *
      * @param list<Field> $fields
      * @param array<string, mixed> $payload
@@ -267,27 +277,50 @@ final class BoxPayload
                 continue;
             }
             $options = $this->choices->options($f);
-            if ($options !== null && !isset($payload['choices'][$f->name])) {
-                $payload['choices'][$f->name] = $options;
+            if ($options !== null) {
+                self::put($payload['choices'], $f, $options);
             }
-            if (($f->type === 'repeater' || $f->type === 'flexible_content') && !isset($payload['maxRows'][$f->name])) {
+            if ($f->type === 'repeater' || $f->type === 'flexible_content') {
                 $max = RepeaterType::maxRows($f);
                 $budget = RepeaterType::rowBudget($f);
-                $payload['maxRows'][$f->name] = $budget > 0 ? min($max, $budget) : $max;
-            }
-            if ($f->type === 'taxonomy' && !isset($payload['display']['terms:' . $f->key])) {
-                $payload['display']['terms:' . $f->key] = self::terms($f);
+                self::put($payload['maxRows'], $f, $budget > 0 ? min($max, $budget) : $max);
             }
             $this->collect($f->subFields, $payload);
             foreach ($f->layouts as $layout) {
                 $this->collect($layout['subFields'] ?? [], $payload);
             }
         }
-        foreach ($fields as $f) {
-            if ($f instanceof Field && array_key_exists($f->name, $payload['values'])) {
-                $this->display($f, $payload['values'][$f->name], $f->name, $payload['display']);
+    }
+
+    /** @param array<string, mixed> $map */
+    private static function put(array &$map, Field $f, mixed $entry): void
+    {
+        if ($f->key !== '') {
+            $map[$f->key] = $entry;
+        }
+        if (!array_key_exists($f->name, $map)) {
+            $map[$f->name] = $entry;
+        }
+    }
+
+    /**
+     * Display data for the final values of the group's top-level fields,
+     * walked once from the top so a path always names the field it came
+     * from (a nested `photo` image never reads a top-level `photo`).
+     *
+     * @param array<string, mixed> $values
+     * @return array<string, mixed>
+     */
+    private function displayFor(FieldGroup $g, array $values): array
+    {
+        $out = [];
+        foreach ($g->fields as $f) {
+            if ($f->name !== '' && array_key_exists($f->name, $values)) {
+                $this->display($f, $values[$f->name], $f->name, $out);
             }
         }
+
+        return $out;
     }
 
     /** @param array<string, mixed> $out */
@@ -327,12 +360,14 @@ final class BoxPayload
             case 'relationship':
                 $out[$path] = self::posts($f, $value);
                 return;
+            case 'taxonomy':
+                $out[$path] = ['terms' => $this->terms($f)];
+                return;
             case 'group':
-                if (is_array($value)) {
-                    foreach ($f->subFields as $sub) {
-                        if ($sub->name !== '' && array_key_exists($sub->name, $value)) {
-                            $this->display($sub, $value[$sub->name], $path . '.' . $sub->name, $out);
-                        }
+                $value = is_array($value) ? $value : [];
+                foreach ($f->subFields as $sub) {
+                    if ($sub->name !== '') {
+                        $this->display($sub, $value[$sub->name] ?? null, $path . '.' . $sub->name, $out);
                     }
                 }
                 return;
@@ -351,8 +386,8 @@ final class BoxPayload
                     }
                     $subs = $f->type === 'repeater' ? $f->subFields : ($layouts[(string) ($row['layout'] ?? $row['_layout'] ?? '')] ?? []);
                     foreach ($subs as $sub) {
-                        if ($sub instanceof Field && $sub->name !== '' && array_key_exists($sub->name, $row)) {
-                            $this->display($sub, $row[$sub->name], $path . '.' . $i . '.' . $sub->name, $out);
+                        if ($sub instanceof Field && $sub->name !== '') {
+                            $this->display($sub, $row[$sub->name] ?? null, $path . '.' . $i . '.' . $sub->name, $out);
                         }
                     }
                 }
@@ -397,12 +432,15 @@ final class BoxPayload
         return $out;
     }
 
-    /** @return list<array{id: int, name: string, parent: int}> */
-    private static function terms(Field $f): array
+    /** @return list<array{id: int, name: string, parent: int}> every choosable term (raw names), once per taxonomy per request */
+    private function terms(Field $f): array
     {
         $taxonomy = $f->setting('taxonomy');
         if (!is_string($taxonomy) || $taxonomy === '' || !function_exists('get_terms')) {
             return [];
+        }
+        if (isset($this->terms[$taxonomy])) {
+            return $this->terms[$taxonomy];
         }
         $terms = get_terms(['taxonomy' => $taxonomy, 'hide_empty' => false, 'number' => self::MAX_TERMS, 'orderby' => 'name']);
         $out = [];
@@ -412,7 +450,7 @@ final class BoxPayload
             }
         }
 
-        return $out;
+        return $this->terms[$taxonomy] = $out;
     }
 
     private function typeOf(Field $f): ?FieldTypeInterface
