@@ -1,0 +1,3264 @@
+{
+  "notes": [
+    "Shared by tests/php/Modules/Fields/ValidationCorpusTest.php and the client Jest tests. Each case: fields (raw ACF), input, optional maxRows {name:int} and choices {name:[allowed]} feeding the two callables, expected valid (top-level names, field order), errors {path:message}, hidden [paths].",
+    "maxlength/minlength count Unicode code points (PHP mb_strlen). In JS use [...s].length, not s.length: an astral emoji is 1 here and 2 UTF-16 units.",
+    "Pattern policy (fail closed): a field pattern that cannot compile (invalid regex or longer than 200 chars) yields the error 'Invalid pattern rule.' and the value is rejected. A compilable pattern that does not match, or whose engine run fails (backtracking exhaustion, invalid UTF-8 subject, subject over 10000 chars), yields 'The value does not match the required format.'. In JS: wrap RegExp construction and test() in try/catch; construction failure -> 'Invalid pattern rule.'; test failure or subject over 10000 chars -> the format error; JS cannot exhaust PCRE limits, so treat only pattern-engine-failure-rejected as server-only if a JS regex engine completes it quickly.",
+    "Pattern syntax: built as '/' + pattern with unescaped '/' escaped + '/Du' (JS: new RegExp(pattern, 'u') and reject a match that only succeeds before a trailing newline, i.e. $ must not match before a final \\n). Condition pattern rules that cannot compile or fail are simply false.",
+    "No chaining: conditions read the raw submitted values of siblings in the same scope, even when the controlling sibling is itself hidden (see no-chaining-hidden-controller-keeps-raw-value). Rows cannot see outer-scope fields.",
+    "optionsSource selects need a resolver: without one (or when it returns null) every non-empty value is rejected with 'Invalid choice.'. Static choices without optionsSource use 'Choose one of the listed options.'.",
+    "Invalid UTF-8 subjects cannot be expressed in JSON; they are covered by PHP-only tests (an invalid subject yields the format error)."
+  ],
+  "cases": [
+    {
+      "id": "required-empty-string",
+      "fields": [
+        {
+          "key": "field_title",
+          "name": "title",
+          "label": "Title",
+          "type": "text",
+          "required": 1
+        }
+      ],
+      "input": {
+        "title": ""
+      },
+      "valid": [],
+      "errors": {
+        "title": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "required-null-missing",
+      "fields": [
+        {
+          "key": "field_title",
+          "name": "title",
+          "label": "Title",
+          "type": "text",
+          "required": 1
+        }
+      ],
+      "input": {},
+      "valid": [],
+      "errors": {
+        "title": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "required-whitespace-ok",
+      "fields": [
+        {
+          "key": "field_title",
+          "name": "title",
+          "label": "Title",
+          "type": "text",
+          "required": 1
+        }
+      ],
+      "input": {
+        "title": " "
+      },
+      "valid": [
+        "title"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "required-zero-string-ok",
+      "fields": [
+        {
+          "key": "field_qty",
+          "name": "qty",
+          "label": "Qty",
+          "type": "text",
+          "required": 1
+        }
+      ],
+      "input": {
+        "qty": "0"
+      },
+      "valid": [
+        "qty"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "required-false-truefalse",
+      "fields": [
+        {
+          "key": "field_agree",
+          "name": "agree",
+          "label": "Agree",
+          "type": "true_false",
+          "required": 1
+        }
+      ],
+      "input": {
+        "agree": false
+      },
+      "valid": [],
+      "errors": {
+        "agree": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "required-true-truefalse",
+      "fields": [
+        {
+          "key": "field_agree",
+          "name": "agree",
+          "label": "Agree",
+          "type": "true_false",
+          "required": 1
+        }
+      ],
+      "input": {
+        "agree": true
+      },
+      "valid": [
+        "agree"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "optional-empty-passes",
+      "fields": [
+        {
+          "key": "field_title",
+          "name": "title",
+          "label": "Title",
+          "type": "text"
+        }
+      ],
+      "input": {
+        "title": ""
+      },
+      "valid": [
+        "title"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "required-empty-array-gallery",
+      "fields": [
+        {
+          "key": "field_pics",
+          "name": "pics",
+          "label": "Pics",
+          "type": "gallery",
+          "required": 1
+        }
+      ],
+      "input": {
+        "pics": []
+      },
+      "valid": [],
+      "errors": {
+        "pics": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "maxlength-120",
+      "fields": [
+        {
+          "key": "field_title",
+          "name": "title",
+          "label": "Title",
+          "type": "text",
+          "maxlength": 120
+        }
+      ],
+      "input": {
+        "title": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "valid": [],
+      "errors": {
+        "title": "Enter at most 120 characters."
+      },
+      "hidden": []
+    },
+    {
+      "id": "maxlength-boundary",
+      "fields": [
+        {
+          "key": "field_title",
+          "name": "title",
+          "label": "Title",
+          "type": "text",
+          "maxlength": 120
+        }
+      ],
+      "input": {
+        "title": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "valid": [
+        "title"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "maxlength-multibyte",
+      "fields": [
+        {
+          "key": "field_title",
+          "name": "title",
+          "label": "Title",
+          "type": "text",
+          "maxlength": 3
+        }
+      ],
+      "input": {
+        "title": "ééé"
+      },
+      "valid": [
+        "title"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "minlength-short",
+      "fields": [
+        {
+          "key": "field_title",
+          "name": "title",
+          "label": "Title",
+          "type": "text",
+          "minlength": 5
+        }
+      ],
+      "input": {
+        "title": "abcd"
+      },
+      "valid": [],
+      "errors": {
+        "title": "Enter at least 5 characters."
+      },
+      "hidden": []
+    },
+    {
+      "id": "minlength-empty-optional-ok",
+      "fields": [
+        {
+          "key": "field_title",
+          "name": "title",
+          "label": "Title",
+          "type": "text",
+          "minlength": 5
+        }
+      ],
+      "input": {
+        "title": ""
+      },
+      "valid": [
+        "title"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "pattern-sku",
+      "fields": [
+        {
+          "key": "field_sku",
+          "name": "sku",
+          "label": "Sku",
+          "type": "text",
+          "pattern": "^[A-Z]{3}-\\d{4}$"
+        }
+      ],
+      "input": {
+        "sku": "abc-12"
+      },
+      "valid": [],
+      "errors": {
+        "sku": "The value does not match the required format."
+      },
+      "hidden": []
+    },
+    {
+      "id": "pattern-sku-ok",
+      "fields": [
+        {
+          "key": "field_sku",
+          "name": "sku",
+          "label": "Sku",
+          "type": "text",
+          "pattern": "^[A-Z]{3}-\\d{4}$"
+        }
+      ],
+      "input": {
+        "sku": "ABC-1234"
+      },
+      "valid": [
+        "sku"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "pattern-trailing-newline",
+      "fields": [
+        {
+          "key": "field_sku",
+          "name": "sku",
+          "label": "Sku",
+          "type": "text",
+          "pattern": "^[A-Z]{3}$"
+        }
+      ],
+      "input": {
+        "sku": "ABC\n"
+      },
+      "valid": [],
+      "errors": {
+        "sku": "The value does not match the required format."
+      },
+      "hidden": []
+    },
+    {
+      "id": "pattern-with-slash",
+      "fields": [
+        {
+          "key": "field_path",
+          "name": "path",
+          "label": "Path",
+          "type": "text",
+          "pattern": "^a/b$"
+        }
+      ],
+      "input": {
+        "path": "a/b"
+      },
+      "valid": [
+        "path"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "invalid-regex-field-pattern-rejected",
+      "fields": [
+        {
+          "key": "field_sku",
+          "name": "sku",
+          "label": "Sku",
+          "type": "text",
+          "pattern": "([A-Z"
+        }
+      ],
+      "input": {
+        "sku": "whatever"
+      },
+      "valid": [],
+      "errors": {
+        "sku": "Invalid pattern rule."
+      },
+      "hidden": []
+    },
+    {
+      "id": "overlong-field-pattern-rejected",
+      "fields": [
+        {
+          "key": "field_sku",
+          "name": "sku",
+          "label": "Sku",
+          "type": "text",
+          "pattern": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "input": {
+        "sku": "a"
+      },
+      "valid": [],
+      "errors": {
+        "sku": "Invalid pattern rule."
+      },
+      "hidden": []
+    },
+    {
+      "id": "pattern-escaped-slash",
+      "fields": [
+        {
+          "key": "field_path",
+          "name": "path",
+          "label": "Path",
+          "type": "text",
+          "pattern": "^a\\/b$"
+        }
+      ],
+      "input": {
+        "path": "a/b"
+      },
+      "valid": [
+        "path"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "pattern-escaped-slash-mismatch",
+      "fields": [
+        {
+          "key": "field_path",
+          "name": "path",
+          "label": "Path",
+          "type": "text",
+          "pattern": "^a\\/b$"
+        }
+      ],
+      "input": {
+        "path": "a-b"
+      },
+      "valid": [],
+      "errors": {
+        "path": "The value does not match the required format."
+      },
+      "hidden": []
+    },
+    {
+      "id": "pattern-engine-failure-rejected",
+      "fields": [
+        {
+          "key": "field_code",
+          "name": "code",
+          "label": "Code",
+          "type": "text",
+          "pattern": "^(a+)+$"
+        }
+      ],
+      "input": {
+        "code": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"
+      },
+      "valid": [],
+      "errors": {
+        "code": "The value does not match the required format."
+      },
+      "hidden": []
+    },
+    {
+      "id": "maxlength-astral-emoji-ok",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text",
+          "maxlength": 2
+        }
+      ],
+      "input": {
+        "t": "😀😀"
+      },
+      "valid": [
+        "t"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "maxlength-astral-emoji-over",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text",
+          "maxlength": 2
+        }
+      ],
+      "input": {
+        "t": "😀😀😀"
+      },
+      "valid": [],
+      "errors": {
+        "t": "Enter at most 2 characters."
+      },
+      "hidden": []
+    },
+    {
+      "id": "number-min-max",
+      "fields": [
+        {
+          "key": "field_qty",
+          "name": "qty",
+          "label": "Qty",
+          "type": "number",
+          "min": 1,
+          "max": 10
+        },
+        {
+          "key": "field_low",
+          "name": "low",
+          "label": "Low",
+          "type": "number",
+          "min": 1,
+          "max": 10
+        },
+        {
+          "key": "field_ok",
+          "name": "ok",
+          "label": "Ok",
+          "type": "number",
+          "min": 1,
+          "max": 10
+        }
+      ],
+      "input": {
+        "qty": 11,
+        "low": 0,
+        "ok": "5"
+      },
+      "valid": [
+        "ok"
+      ],
+      "errors": {
+        "qty": "Enter a number no greater than 10.",
+        "low": "Enter a number no less than 1."
+      },
+      "hidden": []
+    },
+    {
+      "id": "number-not-numeric",
+      "fields": [
+        {
+          "key": "field_qty",
+          "name": "qty",
+          "label": "Qty",
+          "type": "number"
+        }
+      ],
+      "input": {
+        "qty": "abc"
+      },
+      "valid": [],
+      "errors": {
+        "qty": "The value does not match the required format."
+      },
+      "hidden": []
+    },
+    {
+      "id": "number-zero-not-empty",
+      "fields": [
+        {
+          "key": "field_qty",
+          "name": "qty",
+          "label": "Qty",
+          "type": "number",
+          "required": 1,
+          "min": 0
+        }
+      ],
+      "input": {
+        "qty": 0
+      },
+      "valid": [
+        "qty"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "number-decimal-bound",
+      "fields": [
+        {
+          "key": "field_p",
+          "name": "p",
+          "label": "P",
+          "type": "number",
+          "min": 0.5
+        }
+      ],
+      "input": {
+        "p": 0.25
+      },
+      "valid": [],
+      "errors": {
+        "p": "Enter a number no less than 0.5."
+      },
+      "hidden": []
+    },
+    {
+      "id": "select-unknown-choice",
+      "fields": [
+        {
+          "key": "field_size",
+          "name": "size",
+          "label": "Size",
+          "type": "select",
+          "choices": {
+            "s": "Small",
+            "m": "Medium"
+          }
+        }
+      ],
+      "input": {
+        "size": "xl"
+      },
+      "valid": [],
+      "errors": {
+        "size": "Choose one of the listed options."
+      },
+      "hidden": []
+    },
+    {
+      "id": "select-known-choice",
+      "fields": [
+        {
+          "key": "field_size",
+          "name": "size",
+          "label": "Size",
+          "type": "select",
+          "choices": {
+            "s": "Small",
+            "m": "Medium"
+          }
+        }
+      ],
+      "input": {
+        "size": "m"
+      },
+      "valid": [
+        "size"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "select-array-when-single",
+      "fields": [
+        {
+          "key": "field_size",
+          "name": "size",
+          "label": "Size",
+          "type": "select",
+          "choices": {
+            "s": "Small"
+          }
+        }
+      ],
+      "input": {
+        "size": [
+          "s"
+        ]
+      },
+      "valid": [],
+      "errors": {
+        "size": "Choose one of the listed options."
+      },
+      "hidden": []
+    },
+    {
+      "id": "select-multiple-partial",
+      "fields": [
+        {
+          "key": "field_tags",
+          "name": "tags",
+          "label": "Tags",
+          "type": "select",
+          "multiple": 1,
+          "choices": {
+            "a": "A",
+            "b": "B",
+            "c": "C"
+          }
+        }
+      ],
+      "input": {
+        "tags": [
+          "a",
+          "z"
+        ]
+      },
+      "valid": [],
+      "errors": {
+        "tags": "Choose one of the listed options."
+      },
+      "hidden": []
+    },
+    {
+      "id": "select-multiple-ok",
+      "fields": [
+        {
+          "key": "field_tags",
+          "name": "tags",
+          "label": "Tags",
+          "type": "select",
+          "multiple": 1,
+          "choices": {
+            "a": "A",
+            "b": "B",
+            "c": "C"
+          }
+        }
+      ],
+      "input": {
+        "tags": [
+          "a",
+          "c"
+        ]
+      },
+      "valid": [
+        "tags"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "radio-numeric-keys",
+      "fields": [
+        {
+          "key": "field_level",
+          "name": "level",
+          "label": "Level",
+          "type": "radio",
+          "choices": {
+            "1": "One",
+            "2": "Two"
+          }
+        }
+      ],
+      "input": {
+        "level": 2
+      },
+      "valid": [
+        "level"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "select-options-source-resolver",
+      "fields": [
+        {
+          "key": "field_post",
+          "name": "post",
+          "label": "Post",
+          "type": "select",
+          "optionsSource": "wp:posts"
+        }
+      ],
+      "input": {
+        "post": "9"
+      },
+      "choices": {
+        "post": [
+          "1",
+          "2",
+          "3"
+        ]
+      },
+      "valid": [],
+      "errors": {
+        "post": "Choose one of the listed options."
+      },
+      "hidden": []
+    },
+    {
+      "id": "select-options-source-resolver-ok",
+      "fields": [
+        {
+          "key": "field_post",
+          "name": "post",
+          "label": "Post",
+          "type": "select",
+          "optionsSource": "wp:posts"
+        }
+      ],
+      "input": {
+        "post": "2"
+      },
+      "choices": {
+        "post": [
+          "1",
+          "2",
+          "3"
+        ]
+      },
+      "valid": [
+        "post"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "select-options-source-unresolved-rejected",
+      "fields": [
+        {
+          "key": "field_post",
+          "name": "post",
+          "label": "Post",
+          "type": "select",
+          "optionsSource": "wp:posts"
+        }
+      ],
+      "input": {
+        "post": "anything"
+      },
+      "valid": [],
+      "errors": {
+        "post": "Invalid choice."
+      },
+      "hidden": []
+    },
+    {
+      "id": "select-options-source-resolver-null-rejected",
+      "fields": [
+        {
+          "key": "field_post",
+          "name": "post",
+          "label": "Post",
+          "type": "select",
+          "optionsSource": "wp:posts"
+        }
+      ],
+      "input": {
+        "post": "1"
+      },
+      "choices": {
+        "other": [
+          "1"
+        ]
+      },
+      "valid": [],
+      "errors": {
+        "post": "Invalid choice."
+      },
+      "hidden": []
+    },
+    {
+      "id": "email-bad",
+      "fields": [
+        {
+          "key": "field_mail",
+          "name": "mail",
+          "label": "Mail",
+          "type": "email"
+        }
+      ],
+      "input": {
+        "mail": "not-an-email"
+      },
+      "valid": [],
+      "errors": {
+        "mail": "Enter a valid email address."
+      },
+      "hidden": []
+    },
+    {
+      "id": "email-ok",
+      "fields": [
+        {
+          "key": "field_mail",
+          "name": "mail",
+          "label": "Mail",
+          "type": "email"
+        }
+      ],
+      "input": {
+        "mail": "a@example.com"
+      },
+      "valid": [
+        "mail"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "url-javascript",
+      "fields": [
+        {
+          "key": "field_site",
+          "name": "site",
+          "label": "Site",
+          "type": "url"
+        }
+      ],
+      "input": {
+        "site": "javascript:alert(1)"
+      },
+      "valid": [],
+      "errors": {
+        "site": "Enter a valid URL."
+      },
+      "hidden": []
+    },
+    {
+      "id": "url-ok",
+      "fields": [
+        {
+          "key": "field_site",
+          "name": "site",
+          "label": "Site",
+          "type": "url"
+        }
+      ],
+      "input": {
+        "site": "https://example.com/a?b=1"
+      },
+      "valid": [
+        "site"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "url-bare-host-changed",
+      "fields": [
+        {
+          "key": "field_site",
+          "name": "site",
+          "label": "Site",
+          "type": "url"
+        }
+      ],
+      "input": {
+        "site": "example.com"
+      },
+      "valid": [],
+      "errors": {
+        "site": "Enter a valid URL."
+      },
+      "hidden": []
+    },
+    {
+      "id": "date-ok",
+      "fields": [
+        {
+          "key": "field_d",
+          "name": "d",
+          "label": "D",
+          "type": "date"
+        }
+      ],
+      "input": {
+        "d": "2028-02-29"
+      },
+      "valid": [
+        "d"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "date-feb-30",
+      "fields": [
+        {
+          "key": "field_d",
+          "name": "d",
+          "label": "D",
+          "type": "date"
+        }
+      ],
+      "input": {
+        "d": "2027-02-30"
+      },
+      "valid": [],
+      "errors": {
+        "d": "Enter a valid date."
+      },
+      "hidden": []
+    },
+    {
+      "id": "date-wrong-format",
+      "fields": [
+        {
+          "key": "field_d",
+          "name": "d",
+          "label": "D",
+          "type": "date"
+        }
+      ],
+      "input": {
+        "d": "02/03/2027"
+      },
+      "valid": [],
+      "errors": {
+        "d": "Enter a valid date."
+      },
+      "hidden": []
+    },
+    {
+      "id": "time-ok",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "time"
+        }
+      ],
+      "input": {
+        "t": "23:59"
+      },
+      "valid": [
+        "t"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "time-bad-hour",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "time"
+        }
+      ],
+      "input": {
+        "t": "24:00"
+      },
+      "valid": [],
+      "errors": {
+        "t": "Enter a valid date."
+      },
+      "hidden": []
+    },
+    {
+      "id": "datetime-ok",
+      "fields": [
+        {
+          "key": "field_dt",
+          "name": "dt",
+          "label": "Dt",
+          "type": "datetime"
+        }
+      ],
+      "input": {
+        "dt": "2027-03-04 10:30:00"
+      },
+      "valid": [
+        "dt"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "datetime-bad",
+      "fields": [
+        {
+          "key": "field_dt",
+          "name": "dt",
+          "label": "Dt",
+          "type": "datetime"
+        }
+      ],
+      "input": {
+        "dt": "2027-03-04 10:75"
+      },
+      "valid": [],
+      "errors": {
+        "dt": "Enter a valid date."
+      },
+      "hidden": []
+    },
+    {
+      "id": "gallery-min-max",
+      "fields": [
+        {
+          "key": "field_pics",
+          "name": "pics",
+          "label": "Pics",
+          "type": "gallery",
+          "min": 2,
+          "max": 3
+        },
+        {
+          "key": "field_many",
+          "name": "many",
+          "label": "Many",
+          "type": "gallery",
+          "min": 2,
+          "max": 3
+        }
+      ],
+      "input": {
+        "pics": [
+          1
+        ],
+        "many": [
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "valid": [],
+      "errors": {
+        "pics": "Add at least 2 rows.",
+        "many": "Add no more than 3 rows."
+      },
+      "hidden": []
+    },
+    {
+      "id": "relationship-max",
+      "fields": [
+        {
+          "key": "field_rel",
+          "name": "rel",
+          "label": "Rel",
+          "type": "relationship",
+          "max": 2
+        }
+      ],
+      "input": {
+        "rel": [
+          1,
+          2,
+          3
+        ]
+      },
+      "valid": [],
+      "errors": {
+        "rel": "Add no more than 2 rows."
+      },
+      "hidden": []
+    },
+    {
+      "id": "repeater-min-rows",
+      "fields": [
+        {
+          "key": "field_agenda",
+          "name": "agenda",
+          "label": "Agenda",
+          "type": "repeater",
+          "min": 2,
+          "sub_fields": [
+            {
+              "key": "field_title",
+              "name": "title",
+              "label": "Title",
+              "type": "text",
+              "required": 1
+            },
+            {
+              "key": "field_note",
+              "name": "note",
+              "label": "Note",
+              "type": "text",
+              "maxlength": 5
+            }
+          ]
+        }
+      ],
+      "input": {
+        "agenda": [
+          {
+            "title": "a"
+          }
+        ]
+      },
+      "valid": [],
+      "errors": {
+        "agenda": "Add at least 2 rows."
+      },
+      "hidden": []
+    },
+    {
+      "id": "repeater-min-rows-none-submitted",
+      "fields": [
+        {
+          "key": "field_agenda",
+          "name": "agenda",
+          "label": "Agenda",
+          "type": "repeater",
+          "min": 1,
+          "sub_fields": [
+            {
+              "key": "field_title",
+              "name": "title",
+              "label": "Title",
+              "type": "text",
+              "required": 1
+            },
+            {
+              "key": "field_note",
+              "name": "note",
+              "label": "Note",
+              "type": "text",
+              "maxlength": 5
+            }
+          ]
+        }
+      ],
+      "input": {},
+      "valid": [],
+      "errors": {
+        "agenda": "Add at least 1 rows."
+      },
+      "hidden": []
+    },
+    {
+      "id": "repeater-over-max-rows",
+      "fields": [
+        {
+          "key": "field_agenda",
+          "name": "agenda",
+          "label": "Agenda",
+          "type": "repeater",
+          "max": 2,
+          "sub_fields": [
+            {
+              "key": "field_title",
+              "name": "title",
+              "label": "Title",
+              "type": "text",
+              "required": 1
+            },
+            {
+              "key": "field_note",
+              "name": "note",
+              "label": "Note",
+              "type": "text",
+              "maxlength": 5
+            }
+          ]
+        }
+      ],
+      "input": {
+        "agenda": [
+          {
+            "title": "a"
+          },
+          {
+            "title": "b"
+          },
+          {
+            "title": "c"
+          }
+        ]
+      },
+      "valid": [],
+      "errors": {
+        "agenda": "Add no more than 2 rows."
+      },
+      "hidden": []
+    },
+    {
+      "id": "repeater-max-rows-callable",
+      "fields": [
+        {
+          "key": "field_agenda",
+          "name": "agenda",
+          "label": "Agenda",
+          "type": "repeater",
+          "sub_fields": [
+            {
+              "key": "field_title",
+              "name": "title",
+              "label": "Title",
+              "type": "text",
+              "required": 1
+            },
+            {
+              "key": "field_note",
+              "name": "note",
+              "label": "Note",
+              "type": "text",
+              "maxlength": 5
+            }
+          ]
+        }
+      ],
+      "input": {
+        "agenda": [
+          {
+            "title": "a"
+          },
+          {
+            "title": "b"
+          },
+          {
+            "title": "c"
+          }
+        ]
+      },
+      "maxRows": {
+        "agenda": 2
+      },
+      "valid": [],
+      "errors": {
+        "agenda": "Add no more than 2 rows."
+      },
+      "hidden": []
+    },
+    {
+      "id": "repeater-max-rows-callable-tighter-than-field",
+      "fields": [
+        {
+          "key": "field_agenda",
+          "name": "agenda",
+          "label": "Agenda",
+          "type": "repeater",
+          "max": 10,
+          "sub_fields": [
+            {
+              "key": "field_title",
+              "name": "title",
+              "label": "Title",
+              "type": "text",
+              "required": 1
+            },
+            {
+              "key": "field_note",
+              "name": "note",
+              "label": "Note",
+              "type": "text",
+              "maxlength": 5
+            }
+          ]
+        }
+      ],
+      "input": {
+        "agenda": [
+          {
+            "title": "a"
+          },
+          {
+            "title": "b"
+          },
+          {
+            "title": "c"
+          }
+        ]
+      },
+      "maxRows": {
+        "agenda": 2
+      },
+      "valid": [],
+      "errors": {
+        "agenda": "Add no more than 2 rows."
+      },
+      "hidden": []
+    },
+    {
+      "id": "repeater-within-max-rows",
+      "fields": [
+        {
+          "key": "field_agenda",
+          "name": "agenda",
+          "label": "Agenda",
+          "type": "repeater",
+          "max": 3,
+          "sub_fields": [
+            {
+              "key": "field_title",
+              "name": "title",
+              "label": "Title",
+              "type": "text",
+              "required": 1
+            },
+            {
+              "key": "field_note",
+              "name": "note",
+              "label": "Note",
+              "type": "text",
+              "maxlength": 5
+            }
+          ]
+        }
+      ],
+      "input": {
+        "agenda": [
+          {
+            "title": "a"
+          },
+          {
+            "title": "b"
+          }
+        ]
+      },
+      "maxRows": {
+        "agenda": 5
+      },
+      "valid": [
+        "agenda"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "repeater-nested-required",
+      "fields": [
+        {
+          "key": "field_agenda",
+          "name": "agenda",
+          "label": "Agenda",
+          "type": "repeater",
+          "sub_fields": [
+            {
+              "key": "field_title",
+              "name": "title",
+              "label": "Title",
+              "type": "text",
+              "required": 1
+            },
+            {
+              "key": "field_note",
+              "name": "note",
+              "label": "Note",
+              "type": "text",
+              "maxlength": 5
+            }
+          ]
+        }
+      ],
+      "input": {
+        "agenda": [
+          {
+            "title": "ok"
+          },
+          {
+            "title": ""
+          },
+          {
+            "title": "x",
+            "note": "toolong"
+          }
+        ]
+      },
+      "valid": [],
+      "errors": {
+        "agenda.1.title": "This field is required.",
+        "agenda.2.note": "Enter at most 5 characters."
+      },
+      "hidden": []
+    },
+    {
+      "id": "repeater-all-rows-valid",
+      "fields": [
+        {
+          "key": "field_agenda",
+          "name": "agenda",
+          "label": "Agenda",
+          "type": "repeater",
+          "sub_fields": [
+            {
+              "key": "field_title",
+              "name": "title",
+              "label": "Title",
+              "type": "text",
+              "required": 1
+            },
+            {
+              "key": "field_note",
+              "name": "note",
+              "label": "Note",
+              "type": "text",
+              "maxlength": 5
+            }
+          ]
+        }
+      ],
+      "input": {
+        "agenda": [
+          {
+            "title": "ok"
+          },
+          {
+            "title": "two"
+          }
+        ]
+      },
+      "valid": [
+        "agenda"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "repeater-not-a-list",
+      "fields": [
+        {
+          "key": "field_agenda",
+          "name": "agenda",
+          "label": "Agenda",
+          "type": "repeater",
+          "sub_fields": [
+            {
+              "key": "field_title",
+              "name": "title",
+              "label": "Title",
+              "type": "text",
+              "required": 1
+            },
+            {
+              "key": "field_note",
+              "name": "note",
+              "label": "Note",
+              "type": "text",
+              "maxlength": 5
+            }
+          ]
+        }
+      ],
+      "input": {
+        "agenda": {
+          "title": "x"
+        }
+      },
+      "valid": [],
+      "errors": {
+        "agenda": "The value does not match the required format."
+      },
+      "hidden": []
+    },
+    {
+      "id": "repeater-required-empty",
+      "fields": [
+        {
+          "key": "field_agenda",
+          "name": "agenda",
+          "label": "Agenda",
+          "type": "repeater",
+          "required": 1,
+          "sub_fields": [
+            {
+              "key": "field_title",
+              "name": "title",
+              "label": "Title",
+              "type": "text",
+              "required": 1
+            },
+            {
+              "key": "field_note",
+              "name": "note",
+              "label": "Note",
+              "type": "text",
+              "maxlength": 5
+            }
+          ]
+        }
+      ],
+      "input": {
+        "agenda": []
+      },
+      "valid": [],
+      "errors": {
+        "agenda": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "group-nested-required",
+      "fields": [
+        {
+          "key": "field_hero",
+          "name": "hero",
+          "label": "Hero",
+          "type": "group",
+          "sub_fields": [
+            {
+              "key": "field_headline",
+              "name": "headline",
+              "label": "Headline",
+              "type": "text",
+              "required": 1
+            }
+          ]
+        }
+      ],
+      "input": {
+        "hero": {}
+      },
+      "valid": [],
+      "errors": {
+        "hero.headline": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "group-nested-ok",
+      "fields": [
+        {
+          "key": "field_hero",
+          "name": "hero",
+          "label": "Hero",
+          "type": "group",
+          "sub_fields": [
+            {
+              "key": "field_headline",
+              "name": "headline",
+              "label": "Headline",
+              "type": "text",
+              "required": 1
+            }
+          ]
+        }
+      ],
+      "input": {
+        "hero": {
+          "headline": "Hi"
+        }
+      },
+      "valid": [
+        "hero"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "flexible-unknown-layout",
+      "fields": [
+        {
+          "key": "field_blocks",
+          "name": "blocks",
+          "label": "Blocks",
+          "type": "flexible_content",
+          "layouts": [
+            {
+              "key": "layout_text",
+              "name": "text",
+              "label": "Text",
+              "sub_fields": [
+                {
+                  "key": "field_body",
+                  "name": "body",
+                  "label": "Body",
+                  "type": "text",
+                  "required": 1
+                }
+              ]
+            },
+            {
+              "key": "layout_img",
+              "name": "image",
+              "label": "Image",
+              "sub_fields": [
+                {
+                  "key": "field_caption",
+                  "name": "caption",
+                  "label": "Caption",
+                  "type": "text",
+                  "maxlength": 4
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "input": {
+        "blocks": [
+          {
+            "layout": "video"
+          }
+        ]
+      },
+      "valid": [],
+      "errors": {
+        "blocks.0.layout": "Choose one of the listed options."
+      },
+      "hidden": []
+    },
+    {
+      "id": "flexible-missing-layout",
+      "fields": [
+        {
+          "key": "field_blocks",
+          "name": "blocks",
+          "label": "Blocks",
+          "type": "flexible_content",
+          "layouts": [
+            {
+              "key": "layout_text",
+              "name": "text",
+              "label": "Text",
+              "sub_fields": [
+                {
+                  "key": "field_body",
+                  "name": "body",
+                  "label": "Body",
+                  "type": "text",
+                  "required": 1
+                }
+              ]
+            },
+            {
+              "key": "layout_img",
+              "name": "image",
+              "label": "Image",
+              "sub_fields": [
+                {
+                  "key": "field_caption",
+                  "name": "caption",
+                  "label": "Caption",
+                  "type": "text",
+                  "maxlength": 4
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "input": {
+        "blocks": [
+          {
+            "body": "x"
+          }
+        ]
+      },
+      "valid": [],
+      "errors": {
+        "blocks.0.layout": "Choose one of the listed options."
+      },
+      "hidden": []
+    },
+    {
+      "id": "flexible-row-errors",
+      "fields": [
+        {
+          "key": "field_blocks",
+          "name": "blocks",
+          "label": "Blocks",
+          "type": "flexible_content",
+          "layouts": [
+            {
+              "key": "layout_text",
+              "name": "text",
+              "label": "Text",
+              "sub_fields": [
+                {
+                  "key": "field_body",
+                  "name": "body",
+                  "label": "Body",
+                  "type": "text",
+                  "required": 1
+                }
+              ]
+            },
+            {
+              "key": "layout_img",
+              "name": "image",
+              "label": "Image",
+              "sub_fields": [
+                {
+                  "key": "field_caption",
+                  "name": "caption",
+                  "label": "Caption",
+                  "type": "text",
+                  "maxlength": 4
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "input": {
+        "blocks": [
+          {
+            "layout": "text",
+            "body": "ok"
+          },
+          {
+            "layout": "text",
+            "body": ""
+          },
+          {
+            "layout": "image",
+            "caption": "too long"
+          }
+        ]
+      },
+      "valid": [],
+      "errors": {
+        "blocks.1.body": "This field is required.",
+        "blocks.2.caption": "Enter at most 4 characters."
+      },
+      "hidden": []
+    },
+    {
+      "id": "flexible-ok",
+      "fields": [
+        {
+          "key": "field_blocks",
+          "name": "blocks",
+          "label": "Blocks",
+          "type": "flexible_content",
+          "layouts": [
+            {
+              "key": "layout_text",
+              "name": "text",
+              "label": "Text",
+              "sub_fields": [
+                {
+                  "key": "field_body",
+                  "name": "body",
+                  "label": "Body",
+                  "type": "text",
+                  "required": 1
+                }
+              ]
+            },
+            {
+              "key": "layout_img",
+              "name": "image",
+              "label": "Image",
+              "sub_fields": [
+                {
+                  "key": "field_caption",
+                  "name": "caption",
+                  "label": "Caption",
+                  "type": "text",
+                  "maxlength": 4
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "input": {
+        "blocks": [
+          {
+            "layout": "text",
+            "body": "ok"
+          },
+          {
+            "layout": "image"
+          }
+        ]
+      },
+      "valid": [
+        "blocks"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "hidden-required-skipped",
+      "fields": [
+        {
+          "key": "field_kind",
+          "name": "kind",
+          "label": "Kind",
+          "type": "select",
+          "choices": {
+            "a": "A",
+            "b": "B"
+          }
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_kind",
+                "operator": "==",
+                "value": "b"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "kind": "a",
+        "extra": ""
+      },
+      "valid": [
+        "kind"
+      ],
+      "errors": {},
+      "hidden": [
+        "extra"
+      ]
+    },
+    {
+      "id": "shown-required-enforced",
+      "fields": [
+        {
+          "key": "field_kind",
+          "name": "kind",
+          "label": "Kind",
+          "type": "select",
+          "choices": {
+            "a": "A",
+            "b": "B"
+          }
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_kind",
+                "operator": "==",
+                "value": "b"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "kind": "b",
+        "extra": ""
+      },
+      "valid": [
+        "kind"
+      ],
+      "errors": {
+        "extra": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "hidden-invalid-value-not-reported",
+      "fields": [
+        {
+          "key": "field_kind",
+          "name": "kind",
+          "label": "Kind",
+          "type": "select",
+          "choices": {
+            "a": "A",
+            "b": "B"
+          }
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "email",
+          "conditional_logic": [
+            [
+              {
+                "field": "field_kind",
+                "operator": "==",
+                "value": "b"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "kind": "a",
+        "extra": "nope"
+      },
+      "valid": [
+        "kind"
+      ],
+      "errors": {},
+      "hidden": [
+        "extra"
+      ]
+    },
+    {
+      "id": "not-equals-operator",
+      "fields": [
+        {
+          "key": "field_kind",
+          "name": "kind",
+          "label": "Kind",
+          "type": "select",
+          "choices": {
+            "a": "A",
+            "b": "B"
+          }
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_kind",
+                "operator": "!=",
+                "value": "a"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "kind": "a"
+      },
+      "valid": [
+        "kind"
+      ],
+      "errors": {},
+      "hidden": [
+        "extra"
+      ]
+    },
+    {
+      "id": "not-equals-operator-shown",
+      "fields": [
+        {
+          "key": "field_kind",
+          "name": "kind",
+          "label": "Kind",
+          "type": "select",
+          "choices": {
+            "a": "A",
+            "b": "B"
+          }
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_kind",
+                "operator": "!=",
+                "value": "a"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "kind": "b"
+      },
+      "valid": [
+        "kind"
+      ],
+      "errors": {
+        "extra": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "contains-operator",
+      "fields": [
+        {
+          "key": "field_tags",
+          "name": "tags",
+          "label": "Tags",
+          "type": "select",
+          "multiple": 1,
+          "choices": {
+            "x": "X",
+            "y": "Y"
+          }
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_tags",
+                "operator": "==contains",
+                "value": "y"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "tags": [
+          "x"
+        ]
+      },
+      "valid": [
+        "tags"
+      ],
+      "errors": {},
+      "hidden": [
+        "extra"
+      ]
+    },
+    {
+      "id": "contains-operator-shown",
+      "fields": [
+        {
+          "key": "field_tags",
+          "name": "tags",
+          "label": "Tags",
+          "type": "select",
+          "multiple": 1,
+          "choices": {
+            "x": "X",
+            "y": "Y"
+          }
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_tags",
+                "operator": "==contains",
+                "value": "y"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "tags": [
+          "x",
+          "y"
+        ]
+      },
+      "valid": [
+        "tags"
+      ],
+      "errors": {
+        "extra": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "contains-operator-substring",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_t",
+                "operator": "==contains",
+                "value": "ell"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "t": "hello"
+      },
+      "valid": [
+        "t"
+      ],
+      "errors": {
+        "extra": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "contains-operator-empty-needle-false",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_t",
+                "operator": "==contains",
+                "value": ""
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "t": "hello"
+      },
+      "valid": [
+        "t"
+      ],
+      "errors": {},
+      "hidden": [
+        "extra"
+      ]
+    },
+    {
+      "id": "equals-array-membership",
+      "fields": [
+        {
+          "key": "field_tags",
+          "name": "tags",
+          "label": "Tags",
+          "type": "select",
+          "multiple": 1,
+          "choices": {
+            "x": "X",
+            "y": "Y"
+          }
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_tags",
+                "operator": "==",
+                "value": "x"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "tags": [
+          "x",
+          "y"
+        ]
+      },
+      "valid": [
+        "tags"
+      ],
+      "errors": {
+        "extra": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "equals-truefalse",
+      "fields": [
+        {
+          "key": "field_on",
+          "name": "on",
+          "label": "On",
+          "type": "true_false"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_on",
+                "operator": "==",
+                "value": "1"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "on": true
+      },
+      "valid": [
+        "on"
+      ],
+      "errors": {
+        "extra": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "equals-truefalse-off",
+      "fields": [
+        {
+          "key": "field_on",
+          "name": "on",
+          "label": "On",
+          "type": "true_false"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_on",
+                "operator": "==",
+                "value": "1"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "on": false
+      },
+      "valid": [
+        "on"
+      ],
+      "errors": {},
+      "hidden": [
+        "extra"
+      ]
+    },
+    {
+      "id": "empty-operator",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_t",
+                "operator": "==empty"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "t": ""
+      },
+      "valid": [
+        "t"
+      ],
+      "errors": {
+        "extra": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "empty-operator-hidden",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_t",
+                "operator": "==empty"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "t": "x"
+      },
+      "valid": [
+        "t"
+      ],
+      "errors": {},
+      "hidden": [
+        "extra"
+      ]
+    },
+    {
+      "id": "not-empty-operator",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_t",
+                "operator": "!=empty"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "t": "x"
+      },
+      "valid": [
+        "t"
+      ],
+      "errors": {
+        "extra": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "not-empty-operator-hidden",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_t",
+                "operator": "!=empty"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "t": ""
+      },
+      "valid": [
+        "t"
+      ],
+      "errors": {},
+      "hidden": [
+        "extra"
+      ]
+    },
+    {
+      "id": "empty-operator-false-value",
+      "fields": [
+        {
+          "key": "field_on",
+          "name": "on",
+          "label": "On",
+          "type": "true_false"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_on",
+                "operator": "==empty"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "on": false
+      },
+      "valid": [
+        "on"
+      ],
+      "errors": {
+        "extra": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "pattern-operator",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_t",
+                "operator": "==pattern",
+                "value": "^US-\\d+$"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "t": "US-42"
+      },
+      "valid": [
+        "t"
+      ],
+      "errors": {
+        "extra": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "pattern-operator-nomatch",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_t",
+                "operator": "==pattern",
+                "value": "^US-\\d+$"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "t": "EU-42"
+      },
+      "valid": [
+        "t"
+      ],
+      "errors": {},
+      "hidden": [
+        "extra"
+      ]
+    },
+    {
+      "id": "pattern-operator-slash",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_t",
+                "operator": "==pattern",
+                "value": "^a/b$"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "t": "a/b"
+      },
+      "valid": [
+        "t"
+      ],
+      "errors": {
+        "extra": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "invalid-regex-rule",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_t",
+                "operator": "==pattern",
+                "value": "([a-"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "t": "abc"
+      },
+      "valid": [
+        "t"
+      ],
+      "errors": {},
+      "hidden": [
+        "extra"
+      ]
+    },
+    {
+      "id": "overlong-regex-rule",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_t",
+                "operator": "==pattern",
+                "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "t": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "valid": [
+        "t"
+      ],
+      "errors": {},
+      "hidden": [
+        "extra"
+      ]
+    },
+    {
+      "id": "missing-field-ref",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_ghost",
+                "operator": "==empty"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "t": "x",
+        "extra": ""
+      },
+      "valid": [
+        "t"
+      ],
+      "errors": {},
+      "hidden": [
+        "extra"
+      ]
+    },
+    {
+      "id": "unknown-operator-false",
+      "fields": [
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_t",
+                "operator": ">",
+                "value": "1"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "t": "5"
+      },
+      "valid": [
+        "t"
+      ],
+      "errors": {},
+      "hidden": [
+        "extra"
+      ]
+    },
+    {
+      "id": "or-groups",
+      "fields": [
+        {
+          "key": "field_kind",
+          "name": "kind",
+          "label": "Kind",
+          "type": "select",
+          "choices": {
+            "a": "A",
+            "b": "B"
+          }
+        },
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_kind",
+                "operator": "==",
+                "value": "b"
+              }
+            ],
+            [
+              {
+                "field": "field_t",
+                "operator": "!=empty"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "kind": "a",
+        "t": "x"
+      },
+      "valid": [
+        "kind",
+        "t"
+      ],
+      "errors": {
+        "extra": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "or-groups-none-match",
+      "fields": [
+        {
+          "key": "field_kind",
+          "name": "kind",
+          "label": "Kind",
+          "type": "select",
+          "choices": {
+            "a": "A",
+            "b": "B"
+          }
+        },
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_kind",
+                "operator": "==",
+                "value": "b"
+              }
+            ],
+            [
+              {
+                "field": "field_t",
+                "operator": "!=empty"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "kind": "a",
+        "t": ""
+      },
+      "valid": [
+        "kind",
+        "t"
+      ],
+      "errors": {},
+      "hidden": [
+        "extra"
+      ]
+    },
+    {
+      "id": "and-group",
+      "fields": [
+        {
+          "key": "field_kind",
+          "name": "kind",
+          "label": "Kind",
+          "type": "select",
+          "choices": {
+            "a": "A",
+            "b": "B"
+          }
+        },
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_kind",
+                "operator": "==",
+                "value": "b"
+              },
+              {
+                "field": "field_t",
+                "operator": "!=empty"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "kind": "b",
+        "t": "x"
+      },
+      "valid": [
+        "kind",
+        "t"
+      ],
+      "errors": {
+        "extra": "This field is required."
+      },
+      "hidden": []
+    },
+    {
+      "id": "and-group-one-fails",
+      "fields": [
+        {
+          "key": "field_kind",
+          "name": "kind",
+          "label": "Kind",
+          "type": "select",
+          "choices": {
+            "a": "A",
+            "b": "B"
+          }
+        },
+        {
+          "key": "field_t",
+          "name": "t",
+          "label": "T",
+          "type": "text"
+        },
+        {
+          "key": "field_extra",
+          "name": "extra",
+          "label": "Extra",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_kind",
+                "operator": "==",
+                "value": "b"
+              },
+              {
+                "field": "field_t",
+                "operator": "!=empty"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "kind": "b",
+        "t": ""
+      },
+      "valid": [
+        "kind",
+        "t"
+      ],
+      "errors": {},
+      "hidden": [
+        "extra"
+      ]
+    },
+    {
+      "id": "nested-condition-in-repeater-row",
+      "fields": [
+        {
+          "key": "field_items",
+          "name": "items",
+          "label": "Items",
+          "type": "repeater",
+          "sub_fields": [
+            {
+              "key": "field_mode",
+              "name": "mode",
+              "label": "Mode",
+              "type": "select",
+              "choices": {
+                "link": "Link",
+                "none": "None"
+              }
+            },
+            {
+              "key": "field_url_text",
+              "name": "url_text",
+              "label": "Url_Text",
+              "type": "text",
+              "required": 1,
+              "conditional_logic": [
+                [
+                  {
+                    "field": "field_mode",
+                    "operator": "==",
+                    "value": "link"
+                  }
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "input": {
+        "items": [
+          {
+            "mode": "link",
+            "url_text": ""
+          },
+          {
+            "mode": "none",
+            "url_text": ""
+          }
+        ]
+      },
+      "valid": [],
+      "errors": {
+        "items.0.url_text": "This field is required."
+      },
+      "hidden": [
+        "items.1.url_text"
+      ]
+    },
+    {
+      "id": "repeater-row-cannot-see-outer-fields",
+      "fields": [
+        {
+          "key": "field_mode",
+          "name": "mode",
+          "label": "Mode",
+          "type": "select",
+          "choices": {
+            "link": "Link"
+          }
+        },
+        {
+          "key": "field_items",
+          "name": "items",
+          "label": "Items",
+          "type": "repeater",
+          "sub_fields": [
+            {
+              "key": "field_url_text",
+              "name": "url_text",
+              "label": "Url_Text",
+              "type": "text",
+              "required": 1,
+              "conditional_logic": [
+                [
+                  {
+                    "field": "field_mode",
+                    "operator": "==",
+                    "value": "link"
+                  }
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "input": {
+        "mode": "link",
+        "items": [
+          {
+            "url_text": ""
+          }
+        ]
+      },
+      "valid": [
+        "mode",
+        "items"
+      ],
+      "errors": {},
+      "hidden": [
+        "items.0.url_text"
+      ]
+    },
+    {
+      "id": "hidden-container-skips-children",
+      "fields": [
+        {
+          "key": "field_kind",
+          "name": "kind",
+          "label": "Kind",
+          "type": "select",
+          "choices": {
+            "a": "A",
+            "b": "B"
+          }
+        },
+        {
+          "key": "field_items",
+          "name": "items",
+          "label": "Items",
+          "type": "repeater",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_kind",
+                "operator": "==",
+                "value": "b"
+              }
+            ]
+          ],
+          "sub_fields": [
+            {
+              "key": "field_title",
+              "name": "title",
+              "label": "Title",
+              "type": "text",
+              "required": 1
+            },
+            {
+              "key": "field_note",
+              "name": "note",
+              "label": "Note",
+              "type": "text",
+              "maxlength": 5
+            }
+          ]
+        }
+      ],
+      "input": {
+        "kind": "a",
+        "items": [
+          {
+            "title": ""
+          }
+        ]
+      },
+      "valid": [
+        "kind"
+      ],
+      "errors": {},
+      "hidden": [
+        "items"
+      ]
+    },
+    {
+      "id": "no-chaining-hidden-controller-keeps-raw-value",
+      "fields": [
+        {
+          "key": "field_c",
+          "name": "c",
+          "label": "C",
+          "type": "text"
+        },
+        {
+          "key": "field_a",
+          "name": "a",
+          "label": "A",
+          "type": "text",
+          "conditional_logic": [
+            [
+              {
+                "field": "field_c",
+                "operator": "==",
+                "value": "x"
+              }
+            ]
+          ]
+        },
+        {
+          "key": "field_b",
+          "name": "b",
+          "label": "B",
+          "type": "text",
+          "required": 1,
+          "conditional_logic": [
+            [
+              {
+                "field": "field_a",
+                "operator": "==",
+                "value": "1"
+              }
+            ]
+          ]
+        }
+      ],
+      "input": {
+        "c": "y",
+        "a": "1",
+        "b": ""
+      },
+      "valid": [
+        "c"
+      ],
+      "errors": {
+        "b": "This field is required."
+      },
+      "hidden": [
+        "a"
+      ]
+    },
+    {
+      "id": "layout-only-fields-ignored",
+      "fields": [
+        {
+          "key": "field_tab1",
+          "name": "tab1",
+          "label": "Tab1",
+          "type": "tab"
+        },
+        {
+          "key": "field_title",
+          "name": "title",
+          "label": "Title",
+          "type": "text"
+        },
+        {
+          "key": "field_msg",
+          "name": "msg",
+          "label": "Msg",
+          "type": "message"
+        }
+      ],
+      "input": {
+        "title": "x"
+      },
+      "valid": [
+        "title"
+      ],
+      "errors": {},
+      "hidden": []
+    },
+    {
+      "id": "unvalidated-extra-input-ignored",
+      "fields": [
+        {
+          "key": "field_title",
+          "name": "title",
+          "label": "Title",
+          "type": "text"
+        }
+      ],
+      "input": {
+        "title": "x",
+        "rogue": "y"
+      },
+      "valid": [
+        "title"
+      ],
+      "errors": {},
+      "hidden": []
+    }
+  ]
+}
