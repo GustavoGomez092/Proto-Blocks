@@ -13,7 +13,7 @@ export function GroupInput( { field, path }: FieldInputProps ) {
 			role="group"
 			aria-labelledby={ a11y.labelId }
 			aria-describedby={ a11y.describedBy }
-			className="rounded-md border border-border p-4"
+			className="rounded-lg border border-border bg-background p-4"
 		>
 			<FieldList fields={ field.subFields } scope={ path } />
 		</div>

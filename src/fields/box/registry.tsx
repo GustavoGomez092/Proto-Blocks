@@ -85,7 +85,7 @@ export function hasInput( type: string ): boolean {
 }
 
 function UnsupportedInput() {
-	return <p className="text-[13px] text-muted-foreground">{ __( 'This field can’t be edited here yet.', 'proto-blocks' ) }</p>;
+	return <p className="text-caption text-muted-foreground">{ __( 'This field can’t be edited here yet.', 'proto-blocks' ) }</p>;
 }
 
 export function inputFor( type: string ): FieldInput | LazyExoticComponent< FieldInput > {
@@ -228,7 +228,7 @@ export class ChunkBoundary extends Component< ChunkBoundaryProps, { failed: bool
 		return (
 			<>
 				{ this.props.keep }
-				<p role="alert" className="flex flex-wrap items-center gap-2 text-[13px] text-destructive">
+				<p role="alert" className="flex flex-wrap items-center gap-2 text-caption text-destructive">
 					{ __( 'Couldn’t load this control.', 'proto-blocks' ) }
 					<button type="button" onClick={ this.retry } className="font-medium underline underline-offset-2">
 						{ __( 'Try again', 'proto-blocks' ) }

@@ -115,7 +115,11 @@ export function FlexibleInput( { field, path }: FieldInputProps ) {
 								index={ i }
 								count={ rows.length }
 								noun={ noun }
-								badge={ <Badge variant="secondary">{ layout?.label || name || __( 'Unknown layout', 'proto-blocks' ) }</Badge> }
+								badge={
+									<Badge variant="brand" className="font-medium">
+										{ layout?.label || name || __( 'Unknown layout', 'proto-blocks' ) }
+									</Badge>
+								}
 								summary={ <span className="sr-only">{ noun( i + 1 ) }</span> }
 								defaultCollapsed={ false }
 								onMove={ onMove }
@@ -125,7 +129,7 @@ export function FlexibleInput( { field, path }: FieldInputProps ) {
 								{ layout ? (
 									<FieldList fields={ layout.subFields } scope={ [ ...path, i ] } />
 								) : (
-									<p className="text-[13px] text-muted-foreground">
+									<p className="text-caption text-muted-foreground">
 										{ __( 'This section’s layout no longer exists. Remove it, or restore the layout.', 'proto-blocks' ) }
 									</p>
 								) }
@@ -160,7 +164,7 @@ export function FlexibleInput( { field, path }: FieldInputProps ) {
 								setMenuOpen( false );
 							}
 						} }
-						className={ menuOpen ? 'absolute top-full left-0 z-10 mt-1 flex w-56 flex-col rounded-md border border-border bg-background p-1 shadow-md' : 'hidden' }
+						className={ menuOpen ? 'absolute top-full left-0 z-10 mt-1 flex w-56 flex-col gap-0.5 rounded-lg border border-border bg-background p-1 shadow-[0_8px_24px_rgba(15,29,46,0.12)]' : 'hidden' }
 					>
 						{ layouts.map( ( l ) => (
 							<button
@@ -168,14 +172,14 @@ export function FlexibleInput( { field, path }: FieldInputProps ) {
 								type="button"
 								disabled={ layoutFull( l ) }
 								onClick={ () => addLayout( l ) }
-								className="rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent disabled:opacity-50"
+								className="rounded-md px-2.5 py-1.5 text-left text-label text-foreground outline-none hover:bg-muted focus-visible:bg-primary-soft disabled:cursor-not-allowed disabled:opacity-50"
 							>
 								{ l.label || l.name }
 							</button>
 						) ) }
 					</div>
 				</div>
-				<span className="pt-1.5 text-[13px] text-muted-foreground">{ rowCount( rows.length, max ) }</span>
+				<span className="pt-1.5 text-caption text-muted-foreground tabular-nums">{ rowCount( rows.length, max ) }</span>
 			</div>
 		</div>
 	);

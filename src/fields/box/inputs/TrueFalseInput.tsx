@@ -29,7 +29,7 @@ export function TrueFalseInput( { field, path }: FieldInputProps ) {
 	const messageId = `${ a11y.id }-message`;
 	const describedBy = [ message ? messageId : '', a11y.describedBy ?? '' ].filter( Boolean ).join( ' ' ) || undefined;
 	return (
-		<div className="flex items-center gap-3">
+		<div className="flex min-h-[38px] w-full items-center gap-2.5 rounded-md border border-border bg-subtle px-3 py-1.5">
 			<input type="hidden" name={ name } value="0" />
 			{ on && <input type="hidden" name={ name } value="1" /> }
 			<Switch
@@ -43,7 +43,7 @@ export function TrueFalseInput( { field, path }: FieldInputProps ) {
 				aria-describedby={ describedBy }
 			/>
 			{ message && (
-				<span id={ messageId } className="text-sm text-foreground">
+				<span id={ messageId } className="text-label text-foreground">
 					{ message }
 				</span>
 			) }

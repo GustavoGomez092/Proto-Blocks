@@ -30,7 +30,7 @@ export function LinkInput( { path }: FieldInputProps ) {
 				placeholder={ __( 'Link text', 'proto-blocks' ) }
 				className="min-w-40 flex-1"
 			/>
-			<label className="flex items-center gap-2 text-sm whitespace-nowrap">
+			<label className="flex items-center gap-2 text-label whitespace-nowrap">
 				{ /* Submits an empty target when unchecked; the checkbox (later in the form) wins. */ }
 				<input type="hidden" name={ target.name } value="" />
 				<input type="checkbox" { ...target } value="_blank" className="size-4 accent-primary" />
