@@ -11,12 +11,12 @@ use ProtoBlocks\Modules\Fields\Storage\ObjectRef;
 use ProtoBlocks\Modules\Fields\Storage\OptionStore;
 use ProtoBlocks\Modules\Fields\Storage\PostMetaStore;
 use ProtoBlocks\Modules\Fields\Storage\TermMetaStore;
+use ProtoBlocks\Modules\Fields\Storage\UserMetaStore;
 use ProtoBlocks\Modules\Fields\Types\TypeRegistry;
 
 require_once __DIR__ . '/wp-stubs.php';
 require_once __DIR__ . '/../../Fields/wp-stubs.php';
 require_once __DIR__ . '/stubs/Structured.php';
-require_once __DIR__ . '/stubs/Storage.php';
 
 if (!defined('ABSPATH')) {
     define('ABSPATH', __DIR__ . '/');
@@ -25,6 +25,11 @@ if (!function_exists('proto_blocks_sanitize_color')) {
     require_once __DIR__ . '/../../../../includes/helpers.php';
 }
 
+/**
+ * Writes go through the stores and the Fields meta stubs, which follow core's
+ * update_metadata() order (subtype, unslash, sanitize_callback, then the
+ * update_{type}_metadata short-circuit), so assertions are on what is STORED.
+ */
 final class TrustCallbacksTest extends TestCase
 {
     private const ADMIN = 1;
@@ -36,7 +41,7 @@ final class TrustCallbacksTest extends TestCase
 
     protected function setUp(): void
     {
-        foreach (['pb_test_filters', 'pb_test_hooks', 'pb_test_meta', 'pb_test_meta_reg', 'pb_test_terms', 'pb_test_options', 'pb_test_slashed'] as $g) {
+        foreach (['pb_test_filters', 'pb_test_hooks', 'pb_test_meta', 'pb_test_meta_reg', 'pb_test_terms', 'pb_test_options', 'pb_test_users'] as $g) {
             $GLOBALS[$g] = [];
         }
         $GLOBALS['pb_test_caps'] = [
@@ -47,6 +52,8 @@ final class TrustCallbacksTest extends TestCase
         $GLOBALS['pb_test_posts'] = [
             10 => ['ID' => 10, 'post_type' => 'event', 'post_status' => 'draft', 'post_author' => self::CONTRIBUTOR],
             11 => ['ID' => 11, 'post_type' => 'event', 'post_status' => 'publish', 'post_author' => self::AUTHOR],
+            12 => ['ID' => 12, 'post_type' => 'event', 'post_status' => 'publish', 'post_author' => self::AUTHOR],
+            20 => ['ID' => 20, 'post_type' => 'venue', 'post_status' => 'publish', 'post_author' => self::AUTHOR],
         ];
         $GLOBALS['pb_test_current_user'] = self::AUTHOR;
         $this->trust = new TrustCallbacks(TypeRegistry::withCoreTypes());
@@ -68,15 +75,21 @@ final class TrustCallbacksTest extends TestCase
         $GLOBALS['pb_test_current_user'] = $user;
     }
 
-    /** Runs the sanitize callback the way update_metadata() does: get_object_subtype first, then sanitize_meta. */
+    /** What MetaRegistrar does for one post field. */
+    private function register(Field $f, string $subtype = 'event'): void
+    {
+        $GLOBALS['pb_test_meta_reg']['post'][$subtype][$f->name] = ['sanitize_callback' => $this->trust->sanitizeCallback($f, $this->store)];
+        $this->trust->guard('post', $subtype, $f);
+        $this->trust->hook();
+    }
+
+    /** Registers, writes through PostMetaStore, returns the stored value (null when no row). */
     private function write(Field $f, mixed $value, int $postId = 11): mixed
     {
-        $this->trust->hook();
-        foreach ($GLOBALS['pb_test_hooks']['get_object_subtype_post'] ?? [] as $h) {
-            ($h['callback'])('event', $postId);
-        }
+        $this->register($f);
+        $this->store->set(ObjectRef::post($postId), $f, $value);
 
-        return ($this->trust->sanitizeCallback($f, $this->store))($value, $f->name, 'post', 'event');
+        return $GLOBALS['pb_test_meta']['post'][$postId][$f->name][0] ?? null;
     }
 
     private const WYSIWYG = '<p>a</p><img src="x" onerror="alert(1)">';
@@ -112,6 +125,14 @@ final class TrustCallbacksTest extends TestCase
         $this->assertSame(self::LINK, $this->write(self::field('link', 'cta'), self::LINK));
     }
 
+    public function testTrustedCodeWithBackslashesSurvivesTheRoundTrip(): void
+    {
+        $this->as(self::ADMIN);
+        $code = "<script>/\\d+\\/x/.test('a\\'b');</script>";
+        $this->assertSame($code, $this->write(self::field('code', 'snippet'), $code));
+        $this->assertSame($code, $this->store->get(ObjectRef::post(11), self::field('code', 'snippet')));
+    }
+
     public function testCodeSanitizeKeepsPrevious(): void
     {
         $code = self::field('code', 'snippet');
@@ -129,53 +150,54 @@ final class TrustCallbacksTest extends TestCase
         $this->assertSame([], $this->trust->takeRefusals());
     }
 
-    public function testCodeWithNothingStoredStaysEmpty(): void
+    public function testCodeSanitizeCallbackNeverReturnsUntrustedOrForeignValues(): void
     {
-        $this->assertSame('', $this->write(self::field('code', 'snippet'), '<script>evil()</script>'));
-    }
-
-    public function testCodeObjectUnknownStaysEmpty(): void
-    {
-        // sanitize_meta() called outside update_metadata(): no object, nothing to keep, nothing injected.
+        // A direct sanitize_meta() caller gets the empty value: not the input, not any stored value.
         $GLOBALS['pb_test_meta']['post'][11]['snippet'] = ['<script>ok()</script>'];
         $code = self::field('code', 'snippet');
         $out = ($this->trust->sanitizeCallback($code, $this->store))('<script>evil()</script>', 'snippet', 'post', 'event');
         $this->assertSame('', $out);
     }
 
-    public function testNoticedObjectIsConsumedOnce(): void
+    public function testDirectUntrustedMetaWritesOnCodeAreRefused(): void
+    {
+        $GLOBALS['pb_test_meta']['post'][11]['snippet'] = ['<script>ok()</script>'];
+        $this->register(self::field('code', 'snippet'));
+
+        $this->assertFalse(update_post_meta(11, 'snippet', '<script>evil()</script>'));
+        $this->assertSame(['<script>ok()</script>'], $GLOBALS['pb_test_meta']['post'][11]['snippet']);
+        $this->assertFalse(update_post_meta(12, 'snippet', 'x'), 'no row yet: still refused, nothing blanked or created');
+        $this->assertArrayNotHasKey(12, $GLOBALS['pb_test_meta']['post']);
+
+        $this->assertFalse(pb_test_apply_hooks('add_post_metadata', null, 11, 'snippet', 'x', false));
+        $this->assertFalse(pb_test_apply_hooks('delete_post_metadata', null, 11, 'snippet', '', false));
+        $this->assertFalse(pb_test_apply_hooks('update_post_metadata_by_mid', null, 99, 'x', 'snippet'), 'unknown object: fail closed');
+        $this->assertNull(pb_test_apply_hooks('update_post_metadata', null, 11, 'unrelated', 'x', ''));
+        $this->assertSame('handled', pb_test_apply_hooks('update_post_metadata', 'handled', 11, 'snippet', 'x', ''), 'an earlier decision passes through');
+        $this->assertSame(['post:11:event', 'post:12:event', 'post:0:'], array_column($this->trust->takeRefusals(), 'object'), 'one refusal per object and field');
+
+        $this->as(self::ADMIN);
+        $this->assertNull(pb_test_apply_hooks('update_post_metadata', null, 11, 'snippet', 'x', ''));
+    }
+
+    public function testNoValueFromAnotherObjectLeaks(): void
     {
         $GLOBALS['pb_test_meta']['post'][11]['snippet'] = ['<script>ok()</script>'];
         $code = self::field('code', 'snippet');
-        $this->assertSame('<script>ok()</script>', $this->write($code, 'x'));
-        // A second sanitize without a new get_object_subtype must not reuse post 11.
+        // Core notes post 11 (e.g. a capability check), then a write for post 12 happens.
+        pb_test_apply_hooks('get_object_subtype_post', 'event', 11);
+        $this->assertNull($this->write($code, '<script>evil()</script>', 12));
         $this->assertSame('', ($this->trust->sanitizeCallback($code, $this->store))('x', 'snippet', 'post', 'event'));
     }
 
-    public function testStaleNoteForAnotherSubtypeIsIgnored(): void
+    public function testGuardIsPerSubtype(): void
     {
-        $GLOBALS['pb_test_meta']['post'][11]['snippet'] = ['<script>ok()</script>'];
-        $this->trust->hook();
-        ($GLOBALS['pb_test_hooks']['get_object_subtype_post'][0]['callback'])('event', 11);
-        $code = self::field('code', 'snippet');
-        $out = ($this->trust->sanitizeCallback($code, $this->store))('x', 'snippet', 'post', 'page');
-        $this->assertSame('', $out, 'post 11 is an event; a write for a page must not copy its code');
-    }
-
-    public function testRevisionCopyKeepsTheParentsCode(): void
-    {
-        $GLOBALS['pb_test_posts'][12] = ['ID' => 12, 'post_type' => 'revision', 'post_parent' => 11];
-        $GLOBALS['pb_test_meta']['post'][11]['snippet'] = ['<script>ok()</script>'];
-        $code = self::field('code', 'snippet');
-        $this->trust->hook();
-        ($GLOBALS['pb_test_hooks']['get_object_subtype_post'][0]['callback'])('revision', 12);
-        $out = ($this->trust->sanitizeCallback($code, $this->store))('<script>evil()</script>', 'snippet', 'post', 'revision');
-        $this->assertSame('<script>ok()</script>', $out);
-
-        $GLOBALS['pb_test_meta']['post'][12]['snippet'] = ['<b>own</b>'];
-        ($GLOBALS['pb_test_hooks']['get_object_subtype_post'][0]['callback'])('revision', 12);
-        $out = ($this->trust->sanitizeCallback($code, $this->store))('<script>evil()</script>', 'snippet', 'post', 'revision');
-        $this->assertSame('<b>own</b>', $out, 'a revision that holds a value keeps its own');
+        // `snippet` is code on venues and text on events: events stay writable (sanitised).
+        $this->register(self::field('code', 'snippet'), 'venue');
+        $this->assertSame('Hi', $this->write(self::field('text', 'snippet'), '<b>Hi</b>', 12));
+        $GLOBALS['pb_test_meta']['post'][20]['snippet'] = ['<script>ok()</script>'];
+        $this->assertFalse(update_post_meta(20, 'snippet', 'x'));
+        $this->assertSame('<script>ok()</script>', $GLOBALS['pb_test_meta']['post'][20]['snippet'][0]);
     }
 
     public function testNestedCodeSubFieldKeepsPreviousAndReports(): void
@@ -192,7 +214,7 @@ final class TrustCallbacksTest extends TestCase
         );
 
         $group = self::field('group', 'box', [self::field('code', 'embed')]);
-        $this->assertSame(['embed' => ''], $this->write($group, ['embed' => '<script>evil()</script>']), 'nothing stored: the empty value');
+        $this->assertNull($this->write($group, ['embed' => '<script>evil()</script>']), 'nothing stored, nothing written');
     }
 
     public function testUntrustedEmptyNumberIsNotKeptAsPrevious(): void
@@ -200,6 +222,7 @@ final class TrustCallbacksTest extends TestCase
         // null from sanitize() means "empty" for number; the trust gate never reads it as "keep".
         $GLOBALS['pb_test_meta']['post'][11]['count'] = [5];
         $this->assertNull($this->write(self::field('number', 'count'), ''));
+        $this->assertArrayHasKey('count', $GLOBALS['pb_test_meta']['post'][11]);
     }
 
     public function testContributorRestTextSanitised(): void
@@ -249,17 +272,23 @@ final class TrustCallbacksTest extends TestCase
         $this->assertSame('Hi', $this->write(self::field('text', 'subtitle'), '<b>Hi</b>'));
     }
 
-    public function testTermObjectNoticedForTermMeta(): void
+    public function testTermAndUserCodeWritesRefused(): void
     {
         $GLOBALS['pb_test_terms'][5] = ['term_id' => 5, 'taxonomy' => 'product_cat', 'slug' => 'a'];
         $GLOBALS['pb_test_meta']['term'][5]['snippet'] = ['<b>keep</b>'];
-        $this->trust->hook();
-        foreach ($GLOBALS['pb_test_hooks']['get_object_subtype_term'] ?? [] as $h) {
-            ($h['callback'])('product_cat', 5);
-        }
+        $GLOBALS['pb_test_meta']['user'][3]['snippet'] = ['<b>keep</b>'];
         $code = self::field('code', 'snippet');
-        $out = ($this->trust->sanitizeCallback($code, new TermMetaStore()))('<script>x</script>', 'snippet', 'term', 'product_cat');
-        $this->assertSame('<b>keep</b>', $out);
+        $GLOBALS['pb_test_meta_reg']['term']['product_cat']['snippet'] = ['sanitize_callback' => $this->trust->sanitizeCallback($code, new TermMetaStore())];
+        $GLOBALS['pb_test_meta_reg']['user']['']['snippet'] = ['sanitize_callback' => $this->trust->sanitizeCallback($code, new UserMetaStore())];
+        $this->trust->guard('term', 'product_cat', $code);
+        $this->trust->guard('user', '', $code);
+        $this->trust->hook();
+
+        (new TermMetaStore())->set(ObjectRef::term(5, 'product_cat'), $code, '<script>x</script>');
+        (new UserMetaStore())->set(ObjectRef::user(3), $code, '<script>x</script>');
+        $this->assertSame('<b>keep</b>', $GLOBALS['pb_test_meta']['term'][5]['snippet'][0]);
+        $this->assertSame('<b>keep</b>', $GLOBALS['pb_test_meta']['user'][3]['snippet'][0]);
+        $this->assertSame(['term:5:product_cat', 'user:3:'], array_column($this->trust->takeRefusals(), 'object'));
     }
 
     public function testOptionCallbackUsesItsPage(): void
@@ -269,15 +298,20 @@ final class TrustCallbacksTest extends TestCase
         $cb = $this->trust->sanitizeCallback($code, new OptionStore(), ObjectRef::option('theme-settings'));
         // sanitize_option_{$option} passes ($value, $option, $original).
         $this->assertSame('<b>keep</b>', $cb('<script>x</script>', 'theme-settings_snippet', '<script>x</script>'));
+        $this->assertSame('option:theme-settings', $this->trust->takeRefusals()[0]['object']);
+        $cb2 = $this->trust->sanitizeCallback($code, new OptionStore(), ObjectRef::option('other'));
+        $this->assertSame('', $cb2('<script>x</script>', 'other_snippet', '<script>x</script>'), 'nothing stored: empty');
         $this->as(self::ADMIN);
         $this->assertSame('<script>x</script>', $cb('<script>x</script>', 'theme-settings_snippet', '<script>x</script>'));
     }
 
-    public function testHookIsIdempotentAndPassesSubtypeThrough(): void
+    public function testHookIsIdempotent(): void
     {
         $this->trust->hook();
         $this->trust->hook();
-        $this->assertCount(1, $GLOBALS['pb_test_hooks']['get_object_subtype_post']);
-        $this->assertSame('event', ($GLOBALS['pb_test_hooks']['get_object_subtype_post'][0]['callback'])('event', 3));
+        foreach (['add', 'update', 'delete'] as $op) {
+            $this->assertCount(1, $GLOBALS['pb_test_hooks']["{$op}_post_metadata"]);
+        }
+        $this->assertCount(1, $GLOBALS['pb_test_hooks']['update_user_metadata_by_mid']);
     }
 }

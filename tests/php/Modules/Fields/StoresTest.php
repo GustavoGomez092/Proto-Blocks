@@ -15,13 +15,12 @@ use ProtoBlocks\Modules\Fields\Storage\TermMetaStore;
 use ProtoBlocks\Modules\Fields\Storage\UserMetaStore;
 
 require_once __DIR__ . '/wp-stubs.php';
-require_once __DIR__ . '/stubs/Storage.php';
 
 final class StoresTest extends TestCase
 {
     protected function setUp(): void
     {
-        foreach (['pb_test_meta', 'pb_test_meta_reg', 'pb_test_options', 'pb_test_autoload', 'pb_test_slashed', 'pb_test_posts', 'pb_test_terms'] as $g) {
+        foreach (['pb_test_meta', 'pb_test_meta_reg', 'pb_test_options', 'pb_test_autoload', 'pb_test_posts', 'pb_test_terms'] as $g) {
             $GLOBALS[$g] = [];
         }
         $GLOBALS['pb_test_posts'][10] = ['ID' => 10, 'post_type' => 'event', 'post_status' => 'draft'];
@@ -112,7 +111,6 @@ final class StoresTest extends TestCase
             $this->assertSame($value, $store->get($ref, $f), $kind);
             $this->assertSame([$value], $GLOBALS['pb_test_meta'][$kind][$ref->id]['rows'], "$kind: one row");
         }
-        $this->assertCount(3, $GLOBALS['pb_test_slashed'], 'every meta write is slashed first');
     }
 
     public function testMetaStoreWritesRunTheRegisteredSanitizeCallback(): void
@@ -120,6 +118,29 @@ final class StoresTest extends TestCase
         $GLOBALS['pb_test_meta_reg']['post']['event']['subtitle'] = ['sanitize_callback' => static fn($v) => strtoupper((string) $v)];
         (new PostMetaStore())->set(ObjectRef::post(10), self::field('subtitle'), 'hi');
         $this->assertSame('HI', $GLOBALS['pb_test_meta']['post'][10]['subtitle'][0]);
+    }
+
+    public function testHasIgnoresTheRegisteredDefault(): void
+    {
+        // Core's filter_default_metadata makes get_post_meta() return the default with no row.
+        $GLOBALS['pb_test_meta_reg']['post']['event']['subtitle'] = ['default' => 'Untitled'];
+        $f = self::field('subtitle');
+        $store = new PostMetaStore();
+        $this->assertSame(['Untitled'], get_post_meta(10, 'subtitle', false), 'the stub models core');
+        $this->assertFalse($store->has(ObjectRef::post(10), $f));
+        $this->assertNull($store->get(ObjectRef::post(10), $f));
+        $store->set(ObjectRef::post(10), $f, 'Real');
+        $this->assertTrue($store->has(ObjectRef::post(10), $f));
+        $this->assertSame('Real', $store->get(ObjectRef::post(10), $f));
+    }
+
+    public function testBackslashesSurviveSlashing(): void
+    {
+        $code = "a\\b \' \\d+";
+        foreach ([[new PostMetaStore(), ObjectRef::post(10)], [new TermMetaStore(), ObjectRef::term(5, 'product_cat')], [new UserMetaStore(), ObjectRef::user(3)]] as [$store, $ref]) {
+            $store->set($ref, self::field('snippet', 'code'), $code);
+            $this->assertSame($code, $store->get($ref, self::field('snippet', 'code')));
+        }
     }
 
     public function testStoredEmptyStringIsPresent(): void

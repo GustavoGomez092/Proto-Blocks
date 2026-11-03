@@ -16,7 +16,6 @@ use ProtoBlocks\Modules\Fields\Types\TypeRegistry;
 require_once __DIR__ . '/wp-stubs.php';
 require_once __DIR__ . '/../../Fields/wp-stubs.php';
 require_once __DIR__ . '/stubs/Structured.php';
-require_once __DIR__ . '/stubs/Storage.php';
 
 if (!defined('ABSPATH')) {
     define('ABSPATH', __DIR__ . '/');
@@ -41,6 +40,8 @@ final class MetaRegistrarTest extends TestCase
     protected function tearDown(): void
     {
         unset($GLOBALS['wp_version']);
+        $GLOBALS['pb_test_current_user'] = 0;
+        $GLOBALS['pb_test_caps'] = [];
     }
 
     /** @return list<FieldGroup> */
@@ -170,6 +171,36 @@ final class MetaRegistrarTest extends TestCase
         $this->assertSame([['user', '', 'phone']], $r->registered());
         $this->assertArrayHasKey('phone', $GLOBALS['pb_test_meta_reg']['user']['']);
         $this->assertArrayNotHasKey('revisions_enabled', $GLOBALS['pb_test_meta_reg']['user']['']['phone']);
+    }
+
+    public function testSensitiveCoreUserMetaKeysRefused(): void
+    {
+        $loc = [[['param' => 'user_role', 'operator' => '==', 'value' => 'all']]];
+        $r = self::registrar([self::group('group_u', $loc, [
+            self::text('field_u1', 'wp_capabilities'),
+            self::text('field_u2', 'wp_user_level'),
+            self::text('field_u3', 'wp_2_capabilities'),
+            self::text('field_u4', 'session_tokens'),
+            self::text('field_u5', 'capabilities'),
+            self::text('field_u6', 'phone'),
+        ])]);
+        $this->assertSame([['user', '', 'phone']], $r->registered());
+        $this->assertSame(array_fill(0, 5, 'protected_meta_key'), array_column($r->report()->warnings, 'code'));
+        $this->assertFalse(MetaRegistrar::isProtectedUserKey('my_capability_note'));
+    }
+
+    public function testCodeFieldsAreGuardedAfterRegistration(): void
+    {
+        $GLOBALS['pb_test_caps'] = [2 => ['edit_post']];
+        $GLOBALS['pb_test_current_user'] = 2;
+        $GLOBALS['pb_test_posts'][7] = ['ID' => 7, 'post_type' => 'event', 'post_status' => 'draft'];
+        $GLOBALS['pb_test_meta']['post'][7]['embed'] = ['<script>ok()</script>'];
+        self::registrar([self::group('group_c', [[['param' => 'post_type', 'operator' => '==', 'value' => 'event']]], [self::text('field_c1', 'embed', 'code'), self::text('field_c2', 'note')])]);
+
+        $this->assertFalse(update_post_meta(7, 'embed', '<script>evil()</script>'));
+        $this->assertSame('<script>ok()</script>', $GLOBALS['pb_test_meta']['post'][7]['embed'][0]);
+        $this->assertTrue(update_post_meta(7, 'note', '<b>n</b>'));
+        $this->assertSame('n', $GLOBALS['pb_test_meta']['post'][7]['note'][0]);
     }
 
     public function testBranchWithoutPostTypeRegistersForAllPostTypes(): void

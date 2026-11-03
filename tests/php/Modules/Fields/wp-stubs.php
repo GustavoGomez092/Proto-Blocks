@@ -19,7 +19,9 @@ declare(strict_types=1);
  *   pb_test_hooks[$hook][]        add_action/add_filter registrations:
  *                                 ['callback' => ..., 'priority' => int, 'args' => int]
  *   pb_test_meta_reg[$type][$subtype][$key]  register_meta args ('' subtype = all)
- *   pb_test_meta[$type][$id][$key]           list of stored values
+ *   pb_test_meta[$type][$id][$key]           list of stored values (update_*_meta model core:
+ *                                 subtype filter, unslash, sanitize_callback, update_{type}_metadata;
+ *                                 get_*_meta returns the registered default for a missing key)
  *   pb_test_posts[$id]            array|object: ID, post_type, post_status, post_author,
  *                                 post_mime_type, page_template, ...
  *   pb_test_terms[$id]            array|object: term_id, taxonomy, name, slug
@@ -87,7 +89,35 @@ if (!function_exists('register_term_meta')) {
 }
 
 if (!function_exists('pb_test_get_meta')) {
-    /** get_metadata() semantics: '' key → all keys; single → first value or ''; else list. */
+    /** Runs pb_test_filters (apply_filters) and then add_filter() registrations by priority, like core's apply_filters(). */
+    function pb_test_apply_hooks(string $hook, $value, ...$args)
+    {
+        $value = apply_filters($hook, $value, ...$args);
+        $hooks = $GLOBALS['pb_test_hooks'][$hook] ?? [];
+        usort($hooks, static fn(array $a, array $b): int => $a['priority'] <=> $b['priority']);
+        foreach ($hooks as $h) {
+            $value = ($h['callback'])($value, ...array_slice($args, 0, max(0, $h['args'] - 1)));
+        }
+        return $value;
+    }
+
+    /** get_object_subtype() without its filter. */
+    function pb_test_meta_subtype(string $type, $id): string
+    {
+        if ($type === 'post') {
+            return (string) get_post_type((int) $id);
+        }
+        if ($type === 'term') {
+            $t = get_term((int) $id);
+            return (string) ($t->taxonomy ?? '');
+        }
+        return $type === 'user' ? 'user' : '';
+    }
+
+    /**
+     * get_metadata() semantics: '' key → all keys; single → first value or ''; else list.
+     * A missing key yields the registered default, as core's filter_default_metadata() does.
+     */
     function pb_test_get_meta(string $type, $id, string $key, bool $single)
     {
         $all = $GLOBALS['pb_test_meta'][$type][(int) $id] ?? [];
@@ -95,19 +125,36 @@ if (!function_exists('pb_test_get_meta')) {
             return $all;
         }
         if (!array_key_exists($key, $all)) {
+            $subtype = pb_test_meta_subtype($type, $id);
+            $reg = $GLOBALS['pb_test_meta_reg'][$type][$subtype][$key]
+                ?? $GLOBALS['pb_test_meta_reg'][$type][''][$key]
+                ?? null;
+            if (is_array($reg) && array_key_exists('default', $reg)) {
+                return $single ? $reg['default'] : [$reg['default']];
+            }
             return $single ? '' : [];
         }
         return $single ? ($all[$key][0] ?? '') : $all[$key];
     }
 
-    /** update_metadata() with core's sanitize_meta(): the registered sanitize_callback runs first. */
+    /**
+     * update_metadata() in core's order: get_object_subtype (filtered),
+     * wp_unslash, sanitize_meta (the registered sanitize_callback), then the
+     * update_{$type}_metadata short-circuit; a non-null check is the result.
+     */
     function pb_test_update_meta(string $type, $id, string $key, $value, string $subtype): bool
     {
+        $subtype = (string) pb_test_apply_hooks("get_object_subtype_{$type}", pb_test_meta_subtype($type, $id) ?: $subtype, (int) $id);
+        $value = wp_unslash($value);
         $reg = $GLOBALS['pb_test_meta_reg'][$type][$subtype][$key]
             ?? $GLOBALS['pb_test_meta_reg'][$type][''][$key]
             ?? null;
         if (is_array($reg) && isset($reg['sanitize_callback']) && is_callable($reg['sanitize_callback'])) {
             $value = call_user_func($reg['sanitize_callback'], $value, $key, $type, $subtype);
+        }
+        $check = pb_test_apply_hooks("update_{$type}_metadata", null, (int) $id, $key, $value, '');
+        if ($check !== null) {
+            return (bool) $check;
         }
         $GLOBALS['pb_test_meta'][$type][(int) $id][$key] = [$value];
         return true;
@@ -120,6 +167,32 @@ if (!function_exists('pb_test_get_meta')) {
         }
         unset($GLOBALS['pb_test_meta'][$type][(int) $id][$key]);
         return true;
+    }
+}
+
+if (!function_exists('metadata_exists')) {
+    /** A stored row, regardless of registered defaults. */
+    function metadata_exists($meta_type, $object_id, $meta_key)
+    {
+        return isset($GLOBALS['pb_test_meta'][$meta_type][(int) $object_id][$meta_key]);
+    }
+}
+if (!function_exists('wp_slash')) {
+    function wp_slash($value)
+    {
+        if (is_array($value)) {
+            return array_map('wp_slash', $value);
+        }
+        return is_string($value) ? addslashes($value) : $value;
+    }
+}
+if (!function_exists('wp_unslash')) {
+    function wp_unslash($value)
+    {
+        if (is_array($value)) {
+            return array_map('wp_unslash', $value);
+        }
+        return is_string($value) ? stripslashes($value) : $value;
     }
 }
 

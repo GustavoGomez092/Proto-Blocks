@@ -26,9 +26,8 @@ final class UserMetaStore implements Store
         if (!$this->usable($ref, $f)) {
             return false;
         }
-        $all = get_user_meta($ref->id, $f->name, false);
-
-        return is_array($all) && $all !== [];
+        // Not get_user_meta(): it returns the registered default when no row exists.
+        return metadata_exists('user', $ref->id, $f->name);
     }
 
     private function usable(ObjectRef $ref, Field $f): bool

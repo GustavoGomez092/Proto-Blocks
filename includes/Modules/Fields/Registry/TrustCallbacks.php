@@ -12,35 +12,45 @@ use ProtoBlocks\Security\AttributeSanitizer;
 
 /**
  * The write-time trust boundary for field values (spec "Trust for field
- * values"): every meta registration and options field gets these callbacks.
+ * values"). Trust is decided from the CURRENT user per write, never per post:
+ * a writer with unfiltered_html stores values as given (normalised by type),
+ * anyone else gets the type's sanitiser.
  *
- * sanitize: the value is normalised by type for everyone. A writer with
- * unfiltered_html stores it as given; anyone else gets the type's sanitiser,
- * except for a field that holds a code value at any depth
- * (`hasUnfilteredHtml()`, never sanitize()'s null, which is also number's
- * empty value): then the stored value is kept whole and a refusal is
- * recorded for the save path to report. Trust is decided from the CURRENT
- * user, per write, never per post.
+ * Fields that hold a code value at any depth (`hasUnfilteredHtml()`, never
+ * sanitize()'s null, which is also number's empty value) are never written by
+ * an untrusted user:
  *
- * WordPress gives sanitize callbacks no object ID. update_metadata() and
- * add_metadata() call get_object_subtype() for the object immediately before
- * sanitize_meta(), so hook() listens to `get_object_subtype_{type}` and the
- * callback consumes that ID once. If no object was noted, nothing is kept and
- * the empty value is returned: an untrusted writer can lose a code value
- * there but can never write one.
+ * - Meta: guard() marks the key per kind and subtype; hook() adds
+ *   short-circuit filters on add_/update_/delete_{type}_metadata and
+ *   update_{type}_metadata_by_mid. They receive the real object, run before
+ *   any row is touched, and return false (refused) for an untrusted writer,
+ *   so the stored value stays exactly as it is and a refusal is recorded.
+ *   WordPress gives sanitize callbacks no object ID, so the meta sanitize
+ *   callback cannot know the previous value; it returns the empty value,
+ *   which the guard then refuses to write. A direct sanitize_meta() caller
+ *   gets the empty value: nothing untrusted, nothing from another object.
+ * - Options: the options page is known, so the sanitize_option callback
+ *   returns the stored option (or the empty value when none exists).
  *
- * auth: the kind's edit capability for the object; a field that holds code
- * also needs unfiltered_html. The incoming $allowed is ignored on purpose:
+ * Post revisions need no special case: sanitize callbacks registered for a
+ * concrete post type never run for the `revision` subtype, and revisions are
+ * only enabled for concrete post types.
+ *
+ * auth: the kind's edit capability for the object; a field holding code also
+ * needs unfiltered_html. The incoming $allowed is ignored on purpose:
  * MetaRegistrar marks these keys protected, so core always passes false.
  */
 final class TrustCallbacks
 {
     public const KINDS = ['post', 'term', 'user'];
 
-    /** @var array<string, int> meta type => object id noted by get_object_subtype */
-    private array $noted = [];
+    /** Runs before other short-circuit filters, so nothing else writes first. */
+    private const GUARD_PRIORITY = -10000;
 
-    /** @var list<array{object: string, field: string, message: string}> */
+    /** @var array<string, array<string, array<string, Field>>> kind => subtype ('' = all) => meta key => field */
+    private array $guarded = [];
+
+    /** @var array<string, array{object: string, field: string, message: string}> keyed by object|field */
     private array $refusals = [];
 
     private bool $hooked = false;
@@ -49,7 +59,15 @@ final class TrustCallbacks
     {
     }
 
-    /** Listens for the object of each meta write. Idempotent. */
+    /** Marks a registered meta key as code-holding when its field is. */
+    public function guard(string $kind, string $subtype, Field $f): void
+    {
+        if (in_array($kind, self::KINDS, true) && $f->name !== '' && $this->types->for($f)->hasUnfilteredHtml($f)) {
+            $this->guarded[$kind][$subtype][$f->name] = $f;
+        }
+    }
+
+    /** Adds the metadata short-circuit guards. Idempotent. */
     public function hook(): void
     {
         if ($this->hooked) {
@@ -57,34 +75,42 @@ final class TrustCallbacks
         }
         $this->hooked = true;
         foreach (self::KINDS as $kind) {
-            add_filter("get_object_subtype_{$kind}", function ($subtype, $objectId = 0) use ($kind) {
-                $this->noted[$kind] = (int) $objectId;
-
-                return $subtype;
-            }, 10, 2);
+            $byObject = fn($check, $objectId = 0, $metaKey = '') => $this->guardWrite($check, $kind, (int) $objectId, (string) $metaKey);
+            add_filter("add_{$kind}_metadata", $byObject, self::GUARD_PRIORITY, 3);
+            add_filter("update_{$kind}_metadata", $byObject, self::GUARD_PRIORITY, 3);
+            add_filter("delete_{$kind}_metadata", $byObject, self::GUARD_PRIORITY, 3);
+            add_filter("update_{$kind}_metadata_by_mid", function ($check, $metaId = 0, $value = null, $metaKey = '') use ($kind) {
+                return $this->guardWrite($check, $kind, $this->objectOfMeta($kind, (int) $metaId), (string) $metaKey);
+            }, self::GUARD_PRIORITY, 4);
         }
     }
 
     /**
-     * For register_meta()'s sanitize_callback, called with ($value, $metaKey,
-     * $objectType, $objectSubtype), or for `sanitize_option_{$option}`, called
-     * with ($value, $option, $original): pass the options page as $ref then.
+     * For register_meta()'s sanitize_callback ($value, $metaKey, $objectType,
+     * $objectSubtype), or, with the options page as $ref, for
+     * `sanitize_option_{$option}` ($value, $option, $original).
      */
     public function sanitizeCallback(Field $f, Store $store, ?ObjectRef $ref = null): callable
     {
         $type = $this->types->for($f);
 
-        return function ($value, $metaKey = '', $objectType = '', ...$rest) use ($f, $store, $ref, $type) {
-            $target = $ref ?? $this->takeNoted(is_string($objectType) ? $objectType : '', $rest[0] ?? null);
+        return function ($value, ...$rest) use ($f, $store, $ref, $type) {
             $normalized = $type->normalize($value, $f);
-            if (!AttributeSanitizer::shouldSanitizeForUser(get_current_user_id())) {
+            if (!self::untrusted()) {
                 return $normalized;
             }
-            if ($type->hasUnfilteredHtml($f)) {
-                return $this->keepPrevious($f, $store, $target, $type->requiresUnfilteredHtml());
+            if (!$type->hasUnfilteredHtml($f)) {
+                return $type->sanitize($normalized, $f);
+            }
+            if ($ref !== null) {
+                $this->refuse($ref->key(), $f);
+                if ($store->has($ref, $f)) {
+                    return $store->get($ref, $f);
+                }
             }
 
-            return $type->sanitize($normalized, $f);
+            // Meta: the metadata guard refuses this write, so the stored value is untouched.
+            return $type->emptyValue($f);
         };
     }
 
@@ -115,93 +141,99 @@ final class TrustCallbacks
     }
 
     /**
-     * Refusals recorded since the last call, then cleared: the save path
-     * reports them next to the field.
+     * Refusals recorded since the last call (one per object and field), then
+     * cleared: the save path reports them next to the field.
      *
      * @return list<array{object: string, field: string, message: string}>
      */
     public function takeRefusals(): array
     {
-        $out = $this->refusals;
+        $out = array_values($this->refusals);
         $this->refusals = [];
 
         return $out;
     }
 
-    /**
-     * The noted object, consumed. Discarded when WordPress names another
-     * subtype for this write than the noted object has (a stale note).
-     */
-    private function takeNoted(string $kind, mixed $subtype): ?ObjectRef
+    /** @internal the metadata short-circuit: false refuses the write, anything else passes $check through. */
+    public function guardWrite($check, string $kind, int $objectId, string $metaKey)
     {
-        if (!isset($this->noted[$kind])) {
-            return null;
+        if ($check !== null || !isset($this->guarded[$kind]) || !self::untrusted()) {
+            return $check;
         }
-        $id = $this->noted[$kind];
-        unset($this->noted[$kind]);
-        if ($id <= 0) {
-            return null;
+        $subtype = $this->subtypeOf($kind, $objectId);
+        $field = $this->guardedField($kind, $subtype, $metaKey);
+        if ($field === null) {
+            return $check;
         }
-        $ref = match ($kind) {
-            'post' => ObjectRef::post($id),
-            'term' => $this->termRef($id),
-            'user' => ObjectRef::user($id),
-            default => null,
-        };
-        if ($ref !== null && $kind !== 'user' && is_string($subtype) && $subtype !== '' && $subtype !== $ref->subtype) {
-            return null;
-        }
+        // Same shape as ObjectRef::key().
+        $this->refuse($kind . ':' . $objectId . ':' . ($subtype ?? ''), $field);
 
-        return $ref;
+        return false;
     }
 
-    /**
-     * Where the value to keep lives: the object itself, then, for a post
-     * revision or autosave that holds nothing yet, its parent post (core
-     * copies the parent's meta into the revision, and that copy must not
-     * lose a code value an untrusted writer cannot see).
-     *
-     * @return list<ObjectRef>
-     */
-    private static function sources(?ObjectRef $target): array
+    private static function untrusted(): bool
     {
-        if ($target === null) {
-            return [];
+        return AttributeSanitizer::shouldSanitizeForUser(get_current_user_id());
+    }
+
+    /** The guarded field for the object's subtype; when the subtype is unknown, any subtype's (fail closed). */
+    private function guardedField(string $kind, ?string $subtype, string $metaKey): ?Field
+    {
+        $bySubtype = $this->guarded[$kind] ?? [];
+        if ($bySubtype === [] || $metaKey === '') {
+            return null;
         }
-        $out = [$target];
-        if ($target->kind === ObjectRef::POST && $target->subtype === 'revision') {
-            $post = get_post($target->id);
-            $parent = is_object($post) ? (int) ($post->post_parent ?? 0) : 0;
-            if ($parent > 0 && $parent !== $target->id) {
-                $out[] = ObjectRef::post($parent);
+        if ($subtype === null) {
+            foreach ($bySubtype as $fields) {
+                if (isset($fields[$metaKey])) {
+                    return $fields[$metaKey];
+                }
             }
+
+            return null;
         }
 
-        return $out;
+        return $bySubtype[$subtype][$metaKey] ?? $bySubtype[''][$metaKey] ?? null;
     }
 
-    private function termRef(int $id): ?ObjectRef
+    /** '' for users; null when the object cannot be found. */
+    private function subtypeOf(string $kind, int $objectId): ?string
     {
-        $term = get_term($id);
+        if ($kind === 'user') {
+            return '';
+        }
+        if ($objectId <= 0) {
+            return null;
+        }
+        if ($kind === 'post') {
+            $type = get_post_type($objectId);
 
-        return is_object($term) && isset($term->taxonomy) ? ObjectRef::term($id, (string) $term->taxonomy) : null;
+            return is_string($type) && $type !== '' ? $type : null;
+        }
+        $term = get_term($objectId);
+
+        return is_object($term) && isset($term->taxonomy) ? (string) $term->taxonomy : null;
     }
 
-    private function keepPrevious(Field $f, Store $store, ?ObjectRef $target, bool $leaf): mixed
+    private function objectOfMeta(string $kind, int $metaId): int
     {
-        $this->refusals[] = [
-            'object' => $target?->key() ?? '',
+        if ($metaId <= 0 || !function_exists('get_metadata_by_mid')) {
+            return 0;
+        }
+        $row = get_metadata_by_mid($kind, $metaId);
+        $column = $kind . '_id';
+
+        return is_object($row) && isset($row->{$column}) ? (int) $row->{$column} : 0;
+    }
+
+    private function refuse(string $object, Field $f): void
+    {
+        $this->refusals[$object . '|' . $f->name] = [
+            'object' => $object,
             'field' => $f->name,
-            'message' => $leaf
+            'message' => $this->types->for($f)->requiresUnfilteredHtml()
                 ? __('Only users with unfiltered HTML may edit this field.', 'proto-blocks')
                 : __('This field contains a code sub-field that only users with unfiltered HTML may edit.', 'proto-blocks'),
         ];
-        foreach (self::sources($target) as $source) {
-            if ($store->has($source, $f)) {
-                return $store->get($source, $f);
-            }
-        }
-
-        return $this->types->for($f)->emptyValue($f);
     }
 }

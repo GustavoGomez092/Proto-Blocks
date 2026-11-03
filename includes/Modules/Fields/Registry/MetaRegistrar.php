@@ -28,6 +28,13 @@ use ProtoBlocks\OptionsPages\ProtectedOptions;
  * Custom Fields panel never lists or edits them; REST writes still work
  * because the auth callback decides on its own.
  *
+ * User fields may not use core's sensitive user-meta keys (`<prefix>capabilities`,
+ * `<prefix>user_level`, multisite `wp_<n>_capabilities`, `session_tokens`):
+ * they are refused with a `protected_meta_key` warning. Post and term keys
+ * need no such list: field names start with a letter (GroupValidator::
+ * NAME_PATTERN), so core's underscore-prefixed keys (`_edit_lock`,
+ * `_wp_page_template`, ...) cannot occur.
+ *
  * A name used by two groups on the same kind and subtype (or on a subtype and
  * on "every subtype") is registered once, for the first group by menu_order
  * then source order, with a `duplicate_meta_key` warning.
@@ -81,6 +88,18 @@ final class MetaRegistrar
                     foreach ($group->fields as $field) {
                         $type = $this->storedType($field);
                         if ($type === null) {
+                            continue;
+                        }
+                        if ($kind === 'user' && self::isProtectedUserKey($field->name)) {
+                            $this->report->addWarning(
+                                sprintf('%s.%s', $group->key, $field->name),
+                                'protected_meta_key',
+                                sprintf(
+                                    /* translators: %s: meta key */
+                                    __('The user meta key "%s" is reserved by WordPress; this field is not stored.', 'proto-blocks'),
+                                    $field->name
+                                )
+                            );
                             continue;
                         }
                         $owner = $this->claim($claimed, $kind, $subtype, $field->name, $group);
@@ -147,6 +166,19 @@ final class MetaRegistrar
         return isset($this->protected[$metaType][$metaKey]) ? true : (bool) $protected;
     }
 
+    /** Core user-meta keys that grant roles, levels or sessions. */
+    public static function isProtectedUserKey(string $name): bool
+    {
+        if ($name === 'session_tokens' || preg_match('/(?:^|_)capabilities\z|user_level\z/D', $name)) {
+            return true;
+        }
+        $prefix = isset($GLOBALS['wpdb']) && is_object($GLOBALS['wpdb']) && method_exists($GLOBALS['wpdb'], 'get_blog_prefix')
+            ? (string) $GLOBALS['wpdb']->get_blog_prefix()
+            : '';
+
+        return $prefix !== '' && ($name === $prefix . 'capabilities' || $name === $prefix . 'user_level');
+    }
+
     private function storedType(Field $field): ?FieldTypeInterface
     {
         if ($field->name === '') {
@@ -205,6 +237,7 @@ final class MetaRegistrar
             register_meta('user', $field->name, $args);
         }
 
+        $this->trust->guard($kind, $subtype, $field);
         $this->registered[] = [$kind, $subtype, $field->name];
         $this->protected[$kind][$field->name] = true;
     }
