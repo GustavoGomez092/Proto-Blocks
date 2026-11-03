@@ -50,3 +50,6 @@ yarn-error.log*
 test-results/
 playwright-report/
 tests/e2e/.auth/
+
+# Agent worktrees
+.claude/worktrees/
