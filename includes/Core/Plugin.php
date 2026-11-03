@@ -452,6 +452,12 @@ final class Plugin
         $this->services['updater'] = new GitHubUpdater(PROTO_BLOCKS_FILE);
         $this->services['updater']->register();
 
+        // Content-model modules (post types, taxonomies). Booted on
+        // after_setup_theme 1 so a theme's proto_blocks_modules filter applies,
+        // still before core re-registers its built-in types on init 0.
+        $this->services['modules'] = new \ProtoBlocks\Modules\Manager($this->getContentModel());
+        add_action('after_setup_theme', [$this->services['modules'], 'boot'], 1);
+
         // Tailwind Manager
         $tailwindManager = TailwindManager::getInstance();
         $tailwindManager->init($this->getDiscovery());
@@ -906,6 +912,25 @@ final class Plugin
             $this->services['preview_capture'] = new PreviewCapture();
         }
         return $this->services['preview_capture'];
+    }
+
+    /**
+     * Declared post types and taxonomies (files and PHP calls), built lazily.
+     */
+    public function getContentModel(): \ProtoBlocks\ContentModel\Registry
+    {
+        if (!isset($this->services['content_model'])) {
+            $this->services['content_model'] = new \ProtoBlocks\ContentModel\Registry(
+                new \ProtoBlocks\ContentModel\FileLoader(),
+                fn() => \ProtoBlocks\ContentModel\SchemaPaths::roots()
+            );
+        }
+        return $this->services['content_model'];
+    }
+
+    public function getModules(): \ProtoBlocks\Modules\Manager
+    {
+        return $this->services['modules'];
     }
 
     public function getTailwindManager(): TailwindManager
