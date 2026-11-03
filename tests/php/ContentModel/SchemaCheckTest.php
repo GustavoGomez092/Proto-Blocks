@@ -88,6 +88,30 @@ final class SchemaCheckTest extends TestCase
         $this->assertSame(['/a'], $run(['a' => 6]));
     }
 
+    public function testAllOfReportsEveryBranch(): void
+    {
+        $schema = ['allOf' => [
+            ['type' => 'object', 'properties' => ['a' => ['type' => 'integer']]],
+            ['required' => ['b']],
+        ]];
+        $run = static fn(mixed $d): array => array_column(SchemaCheck::validate($d, $schema), 'path');
+
+        $this->assertSame([], $run(['a' => 1, 'b' => 2]));
+        $this->assertSame(['/b'], $run(['a' => 1]));
+        $this->assertSame(['/a', '/b'], $run(['a' => 'x']));
+    }
+
+    public function testNameIsOptionalForOverrides(): void
+    {
+        $this->assertSame([], $this->paths(['template' => [['core/paragraph']]]));
+        $this->assertSame([], $this->paths(['labels' => ['menu_name' => 'Topics']], '#/$defs/taxonomy'));
+    }
+
+    public function testInlineTaxonomyRequiresName(): void
+    {
+        $this->assertSame(['/taxonomies/0/name'], $this->paths(['taxonomies' => [['hierarchical' => true]]]));
+    }
+
     public function testSlugPattern(): void
     {
         $this->assertSame(['/slug'], $this->paths(['name' => 'X', 'slug' => 'Product']));

@@ -19,7 +19,7 @@ final class RewriteHashTest extends TestCase
 
     protected function tearDown(): void
     {
-        unset($GLOBALS['pb_test_options'][RewriteHash::OPTION]);
+        unset($GLOBALS['pb_test_options'][RewriteHash::OPTION], $GLOBALS['pb_test_customize_preview']);
         $GLOBALS['pb_test_flushes'] = 0;
     }
 
@@ -76,6 +76,19 @@ final class RewriteHashTest extends TestCase
 
         $this->assertTrue(RewriteHash::maybeFlush('def', 'themeA'));
         $this->assertSame(2, $GLOBALS['pb_test_flushes']);
+    }
+
+    public function testCustomizerPreviewNeverFlushes(): void
+    {
+        RewriteHash::maybeFlush('abc', 'themeA');
+        $GLOBALS['pb_test_customize_preview'] = true;
+
+        $this->assertFalse(RewriteHash::maybeFlush('def', 'themeB'));
+        $this->assertSame(1, $GLOBALS['pb_test_flushes']);
+        $this->assertSame(['themeA' => 'abc'], $GLOBALS['pb_test_options'][RewriteHash::OPTION]);
+
+        $GLOBALS['pb_test_customize_preview'] = false;
+        $this->assertFalse(RewriteHash::maybeFlush('abc', 'themeA'));
     }
 
     public function testKeyedPerTheme(): void

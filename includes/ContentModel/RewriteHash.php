@@ -35,11 +35,17 @@ final class RewriteHash
 
     /**
      * Soft-flush and store the hash when it differs from the stored one.
+     * Never during a Customizer theme preview: the previewed theme's hash
+     * would overwrite the live one and the two would flush alternately.
      *
      * @return bool Whether rules were flushed.
      */
     public static function maybeFlush(string $hash, string $themeKey): bool
     {
+        if (function_exists('is_customize_preview') && is_customize_preview()) {
+            return false;
+        }
+
         $stored = get_option(self::OPTION, []);
         if (is_array($stored) && ($stored[$themeKey] ?? null) === $hash) {
             return false;

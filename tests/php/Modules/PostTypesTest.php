@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ProtoBlocks\Tests\Modules;
 
 use PHPUnit\Framework\TestCase;
-use ProtoBlocks\ContentModel\Declaration;
 use ProtoBlocks\ContentModel\FileLoader;
 use ProtoBlocks\ContentModel\Issue;
 use ProtoBlocks\ContentModel\MenuIcon;
@@ -200,9 +199,8 @@ final class PostTypesTest extends TestCase
 
     public function testMissingNameSkipped(): void
     {
-        $file = $this->root . '/proto-types/widget/type.jsonc';
-        $registry = $this->registryWith([new Declaration('type', 'widget', ['menu_position' => 40], 'file', $file, $this->root)]);
-        $module = new PostTypes($registry);
+        $file = $this->write('proto-types/widget/type.jsonc', '{"menu_position": 40}');
+        $module = new PostTypes($this->registry());
 
         $module->register();
         $this->assertArrayNotHasKey('widget', $GLOBALS['pb_test_registered']['post_type'] ?? []);
@@ -217,9 +215,8 @@ final class PostTypesTest extends TestCase
 
     public function testMissingNameBecomesOverrideWhenRegisteredLater(): void
     {
-        $file = $this->root . '/proto-types/widget/type.jsonc';
-        $registry = $this->registryWith([new Declaration('type', 'widget', ['menu_position' => 40], 'file', $file, $this->root)]);
-        $module = new PostTypes($registry);
+        $this->write('proto-types/widget/type.jsonc', '{"menu_position": 40}');
+        $module = new PostTypes($this->registry());
         $GLOBALS['pb_test_filters']['register_post_type_args'][] = [$module, 'filterArgs'];
 
         $module->register();
@@ -229,6 +226,64 @@ final class PostTypesTest extends TestCase
         $this->assertSame([], $module->issues());
         $this->assertSame(['widget'], $module->overridden());
         $this->assertSame(40, $GLOBALS['pb_test_registered']['post_type']['widget']['menu_position']);
+    }
+
+    public function testNamelessPostOverrideFileEndToEnd(): void
+    {
+        $this->write('proto-types/post/type.jsonc', "{\n  // Only an editor template for posts.\n  \"template\": [[\"core/heading\"]],\n  \"template_lock\": \"all\"\n}");
+        $module = new PostTypes($this->registry());
+        $module->boot();
+        $GLOBALS['pb_test_filters']['register_post_type_args'][] = [$module, 'filterArgs'];
+
+        register_post_type('post', ['public' => true, '_builtin' => true]); // core, init 0
+        $module->seal();
+        $module->register();
+        $module->attachTaxonomies();
+        $module->resolvePending();
+
+        $post = get_post_type_object('post');
+        $this->assertSame([['core/heading']], $post->template);
+        $this->assertSame('all', $post->template_lock);
+        $this->assertTrue($post->public);
+        $this->assertSame(['post'], $module->overridden());
+        $this->assertSame([], $module->registered());
+        $this->assertSame([], $module->issues());
+    }
+
+    public function testNamelessLatePostOverrideAppliesToObject(): void
+    {
+        $this->write('proto-types/post/type.jsonc', '{"template": [["core/heading"]]}');
+        $post = (object) ['name' => 'post', '_builtin' => true, 'labels' => []];
+        $GLOBALS['pb_test_post_types']['post'] = $post;
+        $module = new PostTypes($this->registry());
+
+        $module->register();
+        $module->resolvePending();
+
+        $this->assertSame([['core/heading']], $post->template);
+        $this->assertSame([], $module->issues());
+    }
+
+    public function testSupportsFalseRemovesEveryFeature(): void
+    {
+        $this->write('proto-types/post/type.jsonc', '{"supports": false}');
+        $GLOBALS['pb_test_post_types']['post'] = (object) ['name' => 'post', '_builtin' => true, 'labels' => []];
+        $GLOBALS['pb_test_supports']['post'] = ['title' => true, 'editor' => true];
+        $module = new PostTypes($this->registry());
+
+        $module->register();
+
+        $this->assertSame([], $GLOBALS['pb_test_supports']['post']);
+    }
+
+    public function testStringKeyedFalseSupportIsRemoved(): void
+    {
+        $GLOBALS['pb_test_supports']['post'] = ['title' => true, 'editor' => true];
+        $apply = new \ReflectionMethod(PostTypes::class, 'applySupports');
+
+        $apply->invoke(null, 'post', ['title' => true, 'editor' => false, 'author' => ['x']]);
+
+        $this->assertSame(['title' => true, 'author' => [['x']]], $GLOBALS['pb_test_supports']['post']);
     }
 
     public function testRegisterSealsPhpDeclarations(): void
@@ -341,25 +396,6 @@ final class PostTypesTest extends TestCase
     {
         $root = $this->root;
         return new Registry(new FileLoader(), static fn () => [$root]);
-    }
-
-    /**
-     * A registry whose state holds these type declarations, for shapes the
-     * loader cannot produce (a declaration without a name).
-     *
-     * @param list<Declaration> $types
-     */
-    private function registryWith(array $types): Registry
-    {
-        $registry = $this->registry();
-        $byslug = [];
-        foreach ($types as $type) {
-            $byslug[$type->slug] = $type;
-        }
-        $state = new \ReflectionProperty(Registry::class, 'state');
-        $state->setValue($registry, ['declarations' => ['type' => $byslug, 'taxonomy' => []], 'doubles' => [], 'issues' => []]);
-
-        return $registry;
     }
 
     private function write(string $relative, string $contents): string

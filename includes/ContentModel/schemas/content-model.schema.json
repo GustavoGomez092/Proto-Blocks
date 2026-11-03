@@ -9,7 +9,6 @@
     },
     "type": {
       "type": "object",
-      "required": ["name"],
       "properties": {
         "$schema": { "type": "string" },
         "name": { "type": "string", "minLength": 1, "maxLength": 100 },
@@ -67,7 +66,7 @@
           "items": {
             "anyOf": [
               { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,31}$" },
-              { "$ref": "#/$defs/taxonomy" }
+              { "allOf": [{ "$ref": "#/$defs/taxonomy" }, { "required": ["name"] }] }
             ]
           }
         },
@@ -76,7 +75,6 @@
     },
     "taxonomy": {
       "type": "object",
-      "required": ["name"],
       "properties": {
         "$schema": { "type": "string" },
         "name": { "type": "string", "minLength": 1, "maxLength": 100 },

@@ -312,14 +312,17 @@ final class PostTypes implements ModuleInterface
         }
     }
 
-    /** Make the type's supports exactly the declared list. */
+    /**
+     * Make the type's supports exactly the declared list (`false`: none). A
+     * string key set to `false` is removed like an unlisted feature.
+     */
     private static function applySupports(string $slug, mixed $declared): void
     {
         $wanted = [];
         foreach (is_array($declared) ? $declared : [] as $key => $value) {
             if (is_int($key) && is_string($value)) {
                 $wanted[$value] = true;
-            } elseif (is_string($key)) {
+            } elseif (is_string($key) && $value !== false) {
                 $wanted[$key] = $value;
             }
         }

@@ -19,6 +19,7 @@ declare(strict_types=1);
 //   pb_test_flushes                        flush_rewrite_rules() call count
 //   pb_test_stylesheet                     get_stylesheet() value (default 'theme')
 //   pb_test_is_admin                       is_admin() value (default false)
+//   pb_test_customize_preview              is_customize_preview() value (default false)
 //   pb_test_screen                         get_current_screen() value (object with ->id, or null)
 //   pb_test_caps[$userId]                  capabilities of a user, read by current_user_can()
 
@@ -142,6 +143,12 @@ if (!function_exists('is_admin')) {
     function is_admin()
     {
         return (bool) ($GLOBALS['pb_test_is_admin'] ?? false);
+    }
+}
+if (!function_exists('is_customize_preview')) {
+    function is_customize_preview()
+    {
+        return (bool) ($GLOBALS['pb_test_customize_preview'] ?? false);
     }
 }
 if (!function_exists('get_current_screen')) {
