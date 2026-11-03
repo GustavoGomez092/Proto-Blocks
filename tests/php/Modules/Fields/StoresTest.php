@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Tests\Modules\Fields;
 
-use PHPUnit\Framework\TestCase;
 use ProtoBlocks\Modules\Fields\Definition\Field;
 use ProtoBlocks\Modules\Fields\Definition\GroupNormalizer;
 use ProtoBlocks\Modules\Fields\Registry\GroupIndex;
@@ -16,13 +15,11 @@ use ProtoBlocks\Modules\Fields\Storage\UserMetaStore;
 
 require_once __DIR__ . '/wp-stubs.php';
 
-final class StoresTest extends TestCase
+final class StoresTest extends FieldsTestCase
 {
     protected function setUp(): void
     {
-        foreach (['pb_test_meta', 'pb_test_meta_reg', 'pb_test_options', 'pb_test_autoload', 'pb_test_posts', 'pb_test_terms', 'pb_test_hooks', 'pb_test_filters'] as $g) {
-            $GLOBALS[$g] = [];
-        }
+        parent::setUp();
         $GLOBALS['pb_test_posts'][10] = ['ID' => 10, 'post_type' => 'event', 'post_status' => 'draft'];
         $GLOBALS['pb_test_terms'][5] = ['term_id' => 5, 'taxonomy' => 'product_cat', 'slug' => 'a'];
     }

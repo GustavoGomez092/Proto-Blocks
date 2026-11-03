@@ -252,6 +252,22 @@ test('without file modifications the screen is read-only', async () => {
 	expect(screen.getByRole('button', { name: 'Add taxonomy' })).toBeDisabled();
 });
 
+test('on multisite the taxonomy screens show the multisite banner and are read-only', async () => {
+	mockBootstrap({ screen: 'taxonomies', fileModsAllowed: true, writeReason: 'multisite' });
+	mockApi(routes(5));
+	const view = open('&taxonomy=media-type');
+
+	expect(await screen.findByText(/This is a multisite network; only network administrators can edit declaration files\./)).toBeInTheDocument();
+	expect(screen.getByRole('button', { name: 'Save to file' })).toBeDisabled();
+	view.unmount();
+
+	mockApi(routes(5));
+	open('');
+	await screen.findByText('Genre');
+	expect(screen.getByText(/This is a multisite network; only network administrators can edit declaration files\./)).toBeInTheDocument();
+	expect(screen.getByRole('button', { name: 'Add taxonomy' })).toBeDisabled();
+});
+
 test('a 409 conflict opens the conflict dialog and Reload refetches the file', async () => {
 	const user = userEvent.setup();
 	const api = mockApi(

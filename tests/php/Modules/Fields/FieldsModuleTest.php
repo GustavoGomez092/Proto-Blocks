@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Tests\Modules\Fields;
 
-use PHPUnit\Framework\TestCase;
 use ProtoBlocks\ContentModel\Issue;
 use ProtoBlocks\Modules\Fields\FieldsModule;
 use ProtoBlocks\Modules\Fields\Read\FieldReader;
@@ -18,7 +17,7 @@ require_once __DIR__ . '/../../ContentModel/stubs/hooks.php';
 require_once __DIR__ . '/SourcesTest.php';
 require_once __DIR__ . '/../../../../includes/Modules/Fields/functions.php';
 
-final class FieldsModuleTest extends TestCase
+final class FieldsModuleTest extends FieldsTestCase
 {
     private const FIXTURES = __DIR__ . '/../../../fixtures/fields';
     private const ADMIN = 1;
@@ -26,28 +25,11 @@ final class FieldsModuleTest extends TestCase
 
     protected function setUp(): void
     {
-        PhpGroups::reset();
-        FieldsModule::setInstance(null);
-        foreach (['pb_test_actions', 'pb_test_hooks', 'pb_test_filters', 'pb_test_meta', 'pb_test_meta_reg', 'pb_test_posts', 'pb_test_bindings', 'pb_test_doing_it_wrong'] as $g) {
-            $GLOBALS[$g] = [];
-        }
+        parent::setUp();
         $GLOBALS['pb_test_posts'][10] = ['ID' => 10, 'post_type' => 'speaker', 'post_status' => 'publish', 'post_author' => self::AUTHOR];
         $GLOBALS['pb_test_caps'][self::ADMIN] = ['edit_posts', 'edit_post', 'unfiltered_html'];
         $GLOBALS['pb_test_caps'][self::AUTHOR] = ['edit_posts', 'edit_post'];
         $GLOBALS['pb_test_current_user'] = self::AUTHOR;
-    }
-
-    protected function tearDown(): void
-    {
-        PhpGroups::reset();
-        FieldsModule::setInstance(null);
-        FieldReader::setShared(null);
-        unset($GLOBALS['pb_test_caps'][self::ADMIN], $GLOBALS['pb_test_caps'][self::AUTHOR]);
-        foreach (['pb_test_actions', 'pb_test_hooks', 'pb_test_filters', 'pb_test_meta', 'pb_test_meta_reg', 'pb_test_posts', 'pb_test_bindings'] as $g) {
-            $GLOBALS[$g] = [];
-        }
-        $GLOBALS['pb_test_current_user'] = 0;
-        $GLOBALS['pb_test_is_admin'] = false;
     }
 
     private static function module(): FieldsModule
@@ -276,5 +258,24 @@ final class FieldsModuleTest extends TestCase
         $module = new FieldsModule();
         FieldsModule::setInstance($module);
         $this->assertSame($module, FieldsModule::instance());
+    }
+
+    public function testSaveHooks(): void
+    {
+        $module = self::module();
+        $module->boot();
+        $save = $module->saveHandler();
+
+        $this->assertSame(10, has_action('save_post', [$save, 'savePost']));
+        $this->assertSame(2, self::hooks('save_post')[0]['args']);
+        $this->assertSame(10, has_action('created_term', [$save, 'saveTerm']));
+        $this->assertSame(10, has_action('edited_term', [$save, 'saveTerm']));
+        $this->assertSame(3, self::hooks('edited_term')[0]['args']);
+        foreach (['user_register', 'personal_options_update', 'edit_user_profile_update'] as $hook) {
+            $this->assertSame(10, has_action($hook, [$save, 'saveUser']), $hook);
+            $this->assertSame(1, self::hooks($hook)[0]['args'], $hook);
+        }
+        $this->assertSame(10, has_action('rest_api_init', [$module->editRoutes(), 'registerRoutes']));
+        $this->assertSame($save, $module->saveHandler());
     }
 }

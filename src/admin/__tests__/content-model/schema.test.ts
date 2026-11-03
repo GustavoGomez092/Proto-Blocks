@@ -116,7 +116,19 @@ test.each(UNSAFE_KEYS)('parity with SchemaCheck: %s names PHP code and is refuse
 	expect(paths(taxonomySchema, { name: 'X', [key]: 'phpinfo' })).toEqual([[key]]);
 	expect(paths(optionsSchema, { title: 'X', [key]: 'phpinfo' })).toEqual([[key]]);
 	const result = typeSchema.safeParse({ name: 'X', [key]: 'phpinfo' });
-	expect(result.success ? '' : result.error.issues[0].message).toBe('Not allowed in a declaration file.');
+	// meta_box_cb accepts only the literal false in type and taxonomy files (see below).
+	expect(result.success ? '' : result.error.issues[0].message).toBe(
+		key === 'meta_box_cb' ? 'Must be one of: [false].' : 'Not allowed in a declaration file.'
+	);
+});
+
+// Same inputs as UntrustedKeysTest::testSchemaRefusesUnsafeKeysForEveryKind.
+test('parity with SchemaCheck: meta_box_cb accepts only the literal false in type and taxonomy', () => {
+	expect(paths(typeSchema, { name: 'X', meta_box_cb: false })).toEqual([]);
+	expect(paths(taxonomySchema, { name: 'X', meta_box_cb: false })).toEqual([]);
+	expect(paths(typeSchema, { name: 'X', meta_box_cb: true })).toEqual([['meta_box_cb']]);
+	expect(paths(taxonomySchema, { name: 'X', meta_box_cb: 'post_categories_meta_box' })).toEqual([['meta_box_cb']]);
+	expect(paths(optionsSchema, { title: 'X', meta_box_cb: false })).toEqual([['meta_box_cb']]);
 });
 
 test('parity with SchemaCheck: inline taxonomies and labels refuse code and markup', () => {

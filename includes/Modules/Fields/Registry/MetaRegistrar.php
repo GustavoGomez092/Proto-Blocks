@@ -24,6 +24,9 @@ use ProtoBlocks\OptionsPages\ProtectedOptions;
  * each gets a `sanitize_option_<page>_<name>` filter with the same trust
  * callback instead, so update_option() goes through the same boundary.
  *
+ * REST exposure: a field's `show_in_rest` setting (false opts out); without
+ * it, password and code fields (and containers holding one) are not exposed.
+ *
  * Registered keys are marked protected (`is_protected_meta`), so core's raw
  * Custom Fields panel never lists or edits them; REST writes still work
  * because the auth callback decides on its own.
@@ -231,7 +234,7 @@ final class MetaRegistrar
             'type' => $metaType,
             'single' => true,
             'default' => self::defaultFor($field, $type, $metaType),
-            'show_in_rest' => ['schema' => $schema],
+            'show_in_rest' => $this->showInRest($field) ? ['schema' => $schema] : false,
             'sanitize_callback' => $this->trust->sanitizeCallback($field, $this->stores[$kind]),
             'auth_callback' => $this->trust->authCallback($field, $kind),
         ];
@@ -272,6 +275,51 @@ final class MetaRegistrar
         $callback = $this->trust->sanitizeCallback($field, $this->stores['option'], ObjectRef::option($page));
         add_filter("sanitize_option_{$option}", $callback, 10, 3);
         $this->registeredOptions[] = ['option', $page, $option];
+    }
+
+    /**
+     * Whether the value is exposed through core's REST meta (readable
+     * anonymously in the `view` context of published posts, viewable terms
+     * and public users). A field's `show_in_rest` setting decides when set;
+     * otherwise every field is exposed except secrets: password and code
+     * fields, and containers holding one at any depth.
+     */
+    private function showInRest(Field $field): bool
+    {
+        $explicit = $field->setting('show_in_rest');
+        if ($explicit !== null) {
+            return $explicit === true || $explicit === 1 || $explicit === '1';
+        }
+
+        return !$this->holdsSecret($field);
+    }
+
+    private function holdsSecret(Field $field): bool
+    {
+        if ($field->type === 'password') {
+            return true;
+        }
+        try {
+            if ($this->types->for($field)->requiresUnfilteredHtml()) {
+                return true;
+            }
+        } catch (\InvalidArgumentException) {
+            return true;
+        }
+        foreach ($field->subFields as $sub) {
+            if ($this->holdsSecret($sub)) {
+                return true;
+            }
+        }
+        foreach ($field->layouts as $layout) {
+            foreach ($layout['subFields'] as $sub) {
+                if ($this->holdsSecret($sub)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

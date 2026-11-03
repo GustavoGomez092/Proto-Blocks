@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Tests\Modules\Fields;
 
-use PHPUnit\Framework\TestCase;
 use ProtoBlocks\Modules\Fields\Definition\FieldGroup;
 use ProtoBlocks\Modules\Fields\Definition\GroupNormalizer;
 use ProtoBlocks\Modules\Fields\Registry\GroupIndex;
@@ -16,29 +15,9 @@ use ProtoBlocks\Modules\Fields\Types\TypeRegistry;
 require_once __DIR__ . '/wp-stubs.php';
 require_once __DIR__ . '/stubs/Structured.php';
 
-final class MetaRegistrarTest extends TestCase
+final class MetaRegistrarTest extends FieldsTestCase
 {
     private const FIXTURES = __DIR__ . '/../../../fixtures/fields';
-
-    protected function setUp(): void
-    {
-        foreach (['pb_test_filters', 'pb_test_hooks', 'pb_test_meta_reg', 'pb_test_supports', 'pb_test_meta', 'pb_test_posts', 'pb_test_object_terms', 'pb_test_terms', 'pb_test_users'] as $g) {
-            $GLOBALS[$g] = [];
-        }
-        $GLOBALS['pb_test_current_user'] = 0;
-        unset($GLOBALS['wp_version']);
-    }
-
-    protected function tearDown(): void
-    {
-        // Leave no registered meta / hooks behind for tests that assert a clean slate.
-        foreach (['pb_test_filters', 'pb_test_hooks', 'pb_test_meta_reg', 'pb_test_supports', 'pb_test_meta', 'pb_test_posts', 'pb_test_object_terms', 'pb_test_terms', 'pb_test_users'] as $g) {
-            $GLOBALS[$g] = [];
-        }
-        unset($GLOBALS['wp_version']);
-        $GLOBALS['pb_test_current_user'] = 0;
-        $GLOBALS['pb_test_caps'] = [];
-    }
 
     /** @return list<FieldGroup> */
     private static function realistic(): array
@@ -318,5 +297,28 @@ final class MetaRegistrarTest extends TestCase
             };
             $this->assertTrue($ok, "$name: default " . var_export($default, true) . " for type {$args['type']}");
         }
+    }
+
+    public function testShowInRestOptOutAndSecretDefaults(): void
+    {
+        $loc = [[['param' => 'post_type', 'operator' => '==', 'value' => 'event']]];
+        self::registrar([self::group('group_rest', $loc, [
+            self::text('f_plain', 'plain'),
+            ['key' => 'f_hidden', 'name' => 'hidden_note', 'label' => 'h', 'type' => 'text', 'show_in_rest' => false],
+            ['key' => 'f_zero', 'name' => 'zero_note', 'label' => 'z', 'type' => 'text', 'show_in_rest' => 0],
+            self::text('f_pass', 'secret', 'password'),
+            self::text('f_code', 'snippet', 'code'),
+            ['key' => 'f_rows', 'name' => 'embeds', 'label' => 'e', 'type' => 'repeater', 'sub_fields' => [self::text('f_rows_html', 'html', 'code')]],
+            ['key' => 'f_creds', 'name' => 'creds', 'label' => 'c', 'type' => 'group', 'sub_fields' => [self::text('f_creds_pw', 'pw', 'password')]],
+            ['key' => 'f_open_code', 'name' => 'public_snippet', 'label' => 'p', 'type' => 'code', 'show_in_rest' => true],
+        ])]);
+
+        $reg = $GLOBALS['pb_test_meta_reg']['post']['event'];
+        $this->assertSame(['type' => 'string'], $reg['plain']['show_in_rest']['schema']);
+        foreach (['hidden_note', 'zero_note', 'secret', 'snippet', 'embeds', 'creds'] as $name) {
+            $this->assertFalse($reg[$name]['show_in_rest'], $name);
+            $this->assertIsCallable($reg[$name]['sanitize_callback'], $name . ' is still registered');
+        }
+        $this->assertSame(['type' => 'string'], $reg['public_snippet']['show_in_rest']['schema'], 'an explicit opt-in wins');
     }
 }

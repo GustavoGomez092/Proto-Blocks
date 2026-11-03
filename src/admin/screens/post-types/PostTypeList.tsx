@@ -1,6 +1,6 @@
 import { __, sprintf } from '@wordpress/i18n';
 import { FilePenIcon, PlusIcon, PowerOffIcon } from 'lucide-react';
-import { getBootstrap } from '@/admin/bootstrap';
+import { getBootstrap, type WriteReason } from '@/admin/bootstrap';
 import { PageHeader } from '@/admin/components/shell/PageHeader';
 import { ReadOnlyBanner, READ_ONLY_BANNER_ID } from '@/admin/components/shell/ReadOnlyBanner';
 import { ScreenError } from '@/admin/components/shell/ScreenError';
@@ -59,7 +59,8 @@ export function PostTypeList({
 	result: ListResult | null;
 	loading: boolean;
 	error: unknown;
-	readOnly: boolean;
+	/** Why file writes are off, or null when they are allowed. */
+	readOnly: WriteReason;
 	creating: boolean;
 	onRetry: () => void;
 	onEdit: (slug: string) => void;
@@ -67,7 +68,7 @@ export function PostTypeList({
 	onCreated: (slug: string) => void;
 }) {
 	const enabled = result?.moduleEnabled !== false;
-	const createReadOnly = readOnly || result?.createTarget.writable === false;
+	const createReadOnly = readOnly !== null || result?.createTarget.writable === false;
 	const description = __('Every post type on this site. Proto-Blocks ones are saved as files in your theme.', 'proto-blocks');
 
 	const header = (
@@ -126,9 +127,9 @@ export function PostTypeList({
 	return (
 		<div className="grid gap-6">
 			{header}
-			{readOnly ? (
+			{readOnly !== null ? (
 				<ReadOnlyBanner
-					reason="file_mods"
+					reason={readOnly}
 					description={__(
 						"You can browse everything, but changes can't be saved. Ask your developer to edit the files in the theme, or to allow file changes on this environment.",
 						'proto-blocks'
@@ -167,7 +168,7 @@ export function PostTypeList({
 							let action: string = override ? __('Override', 'proto-blocks') : __('Edit', 'proto-blocks');
 							/* translators: %s: post type name. */
 							let actionLabel: string = sprintf(override ? __('Override %s', 'proto-blocks') : __('Edit %s', 'proto-blocks'), item.label);
-							if (readOnly) {
+							if (readOnly !== null) {
 								action = __('View', 'proto-blocks');
 								/* translators: %s: post type name. */
 								actionLabel = sprintf(__('View %s', 'proto-blocks'), item.label);

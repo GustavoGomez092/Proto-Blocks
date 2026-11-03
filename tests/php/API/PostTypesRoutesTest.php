@@ -137,6 +137,22 @@ final class PostTypesRoutesTest extends ContentModelRoutesTestCase
         self::assertSame('file_mods', self::bySlug($result)['product']['readOnlyReason']);
     }
 
+    public function testListReadOnlyReasonIsMultisiteForSubSiteAdmin(): void
+    {
+        $this->write('proto-types/product/type.jsonc', '{"name": "Product"}');
+        try {
+            $GLOBALS['pb_test_multisite'] = true;
+            $GLOBALS['pb_test_super_admins'] = [];
+
+            $result = $this->routes([], true, false)->index();
+
+            self::assertSame('multisite', $result['createTarget']['reason']);
+            self::assertSame('multisite', self::bySlug($result)['product']['readOnlyReason']);
+        } finally {
+            unset($GLOBALS['pb_test_multisite'], $GLOBALS['pb_test_super_admins']);
+        }
+    }
+
     public function testDetail(): void
     {
         $this->write('proto-types/product/type.jsonc', '{"name": "Product", "taxonomies": [{"name": "Brand"}]}');

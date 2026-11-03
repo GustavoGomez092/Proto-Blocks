@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Tests\Modules\Fields;
 
-use PHPUnit\Framework\TestCase;
 use ProtoBlocks\Modules\Fields\Definition\Field;
 use ProtoBlocks\Modules\Fields\Registry\TrustCallbacks;
 use ProtoBlocks\Modules\Fields\Storage\ObjectRef;
@@ -22,7 +21,7 @@ require_once __DIR__ . '/stubs/Structured.php';
  * update_metadata() order (subtype, unslash, sanitize_callback, then the
  * update_{type}_metadata short-circuit), so assertions are on what is STORED.
  */
-final class TrustCallbacksTest extends TestCase
+final class TrustCallbacksTest extends FieldsTestCase
 {
     private const ADMIN = 1;
     private const AUTHOR = 2;
@@ -33,9 +32,7 @@ final class TrustCallbacksTest extends TestCase
 
     protected function setUp(): void
     {
-        foreach (['pb_test_filters', 'pb_test_hooks', 'pb_test_meta', 'pb_test_meta_rows', 'pb_test_meta_reg', 'pb_test_terms', 'pb_test_options', 'pb_test_users'] as $g) {
-            $GLOBALS[$g] = [];
-        }
+        parent::setUp();
         $GLOBALS['pb_test_caps'] = [
             self::ADMIN => ['edit_posts', 'edit_post', 'unfiltered_html', 'edit_term', 'manage_options'],
             self::AUTHOR => ['edit_posts', 'edit_post'],
@@ -50,11 +47,6 @@ final class TrustCallbacksTest extends TestCase
         $GLOBALS['pb_test_current_user'] = self::AUTHOR;
         $this->trust = new TrustCallbacks(TypeRegistry::withCoreTypes());
         $this->store = new PostMetaStore();
-    }
-
-    protected function tearDown(): void
-    {
-        $GLOBALS['pb_test_current_user'] = 0;
     }
 
     private static function field(string $type, string $name = 'x', array $sub = [], array $settings = []): Field

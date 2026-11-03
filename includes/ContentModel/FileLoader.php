@@ -168,6 +168,18 @@ final class FileLoader
             ));
         }
 
+        // Type and taxonomy files: callback keys and markup labels are stripped
+        // with a warning so the declaration still registers (the writer refuses
+        // them instead). Options pages keep failing the schema check.
+        if ($kind !== Declaration::OPTIONS && is_array($data) && !array_is_list($data)) {
+            [$stripped, $unsafe] = UntrustedKeys::filter(
+                new Declaration($kind, $slug, $data, Declaration::ORIGIN_FILE, $file, $root),
+                self::SCHEMA_REFS[$kind]
+            );
+            $data = $stripped->data;
+            array_push($issues, ...$unsafe);
+        }
+
         $schemaErrors = SchemaCheck::validate($data, SchemaCheck::schema(), self::SCHEMA_REFS[$kind]);
         if ($schemaErrors !== []) {
             foreach ($schemaErrors as $schemaError) {

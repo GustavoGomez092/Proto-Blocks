@@ -177,6 +177,9 @@ abstract class ContentModelRoutes
     /** A refused or failed write as a REST error; its message carries no absolute path. */
     public static function writeError(WriteException $e): WP_Error
     {
+        if ($e->errorCode === 'file_mods' && AdminRestController::writeReason() === 'multisite') {
+            return AdminRestController::writeBlockedError();
+        }
         $data = $e->data;
         unset($data['status']);
 
@@ -296,7 +299,7 @@ abstract class ContentModelRoutes
         return [
             'path' => $target['path'] === '' ? '' : self::displayPath(dirname($target['path'], 2)),
             'writable' => $target['writable'],
-            'reason' => $target['reason'],
+            'reason' => self::targetReason($target['reason']),
         ];
     }
 
@@ -315,6 +318,12 @@ abstract class ContentModelRoutes
         }
 
         return $this->writer()->target($kind, $slug, self::fileDeclaration($declaration));
+    }
+
+    /** A writer's 'file_mods' reason as 'multisite' when the cause is a non-network administrator. */
+    protected static function targetReason(?string $reason): ?string
+    {
+        return $reason === 'file_mods' && AdminRestController::writeReason() === 'multisite' ? 'multisite' : $reason;
     }
 
     /** $declaration when it is a standalone file of its own, else null. */
@@ -443,7 +452,7 @@ abstract class ContentModelRoutes
         } else {
             $target = $this->saveTarget($kind, $slug, $declaration);
             $editable = $target['writable'];
-            $reason = $target['reason'];
+            $reason = self::targetReason($target['reason']);
         }
 
         $own = [];
