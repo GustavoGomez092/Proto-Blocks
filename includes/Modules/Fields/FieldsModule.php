@@ -245,12 +245,19 @@ final class FieldsModule implements ModuleInterface
     /** @return array<string, Store> kind (ObjectRef::POST, ...) => store */
     public function stores(): array
     {
-        return $this->stores ??= [
+        if ($this->stores !== null) {
+            return $this->stores;
+        }
+        $stores = [
             ObjectRef::POST => new PostMetaStore(),
             ObjectRef::TERM => new TermMetaStore(),
             ObjectRef::USER => new UserMetaStore(),
             ObjectRef::OPTION => new OptionStore($this->index()),
         ];
+        // FieldReader (and Task 9's SaveHandler/BoxPayload) take the stores from here.
+        $stores = apply_filters('proto_blocks_field_stores', $stores);
+
+        return $this->stores = array_filter(is_array($stores) ? $stores : [], static fn(mixed $s): bool => $s instanceof Store);
     }
 
     public function trust(): TrustCallbacks
@@ -489,6 +496,8 @@ final class FieldsModule implements ModuleInterface
         }
 
         $groups = $this->acf->filterDuplicates(self::dedupe($entries, $issues));
+        $groups = apply_filters('proto_blocks_field_groups', $groups);
+        $groups = array_values(array_filter(is_array($groups) ? $groups : [], static fn(mixed $g): bool => $g instanceof FieldGroup));
         foreach ($this->acf->skipped() as $skipped) {
             $issues[] = new Issue(Issue::WARNING, 'acf_duplicate_key', sprintf(
                 /* translators: %s: field group title */
