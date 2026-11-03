@@ -572,6 +572,55 @@ final class OptionsValuesTest extends TestCase
         self::assertSame(422, $error->get_error_data()['status']);
     }
 
+    public function testResponsesMaskCodeValuesForUntrustedUsers(): void
+    {
+        $this->extra = [self::standalone('group_extra', 'theme-settings', [[
+            'key' => 'field_extra_tracking',
+            'name' => 'tracking',
+            'label' => 'Tracking',
+            'type' => 'group',
+            'sub_fields' => [
+                ['key' => 'field_extra_tracking_id', 'name' => 'id', 'label' => 'ID', 'type' => 'text'],
+                ['key' => 'field_extra_tracking_snippet', 'name' => 'snippet', 'label' => 'Snippet', 'type' => 'code'],
+            ],
+        ]])];
+        $GLOBALS['pb_test_options']['theme-settings_head_scripts'] = '<script>raw-head-marker()</script>';
+        $GLOBALS['pb_test_options']['theme-settings_tracking'] = ['id' => 'G-1', 'snippet' => '<script>raw-group-marker()</script>'];
+        $routes = new OptionsValuesRoutes($this->registry(), $this->values());
+        $post = static fn (): \WP_REST_Response => $routes->post(new \WP_REST_Request([
+            'slug' => 'theme-settings',
+            'fields' => ['group_theme_settings_1' => ['phone' => '555']],
+            'present' => ['group_theme_settings_1' => ['phone']],
+        ]));
+
+        // Untrusted: manage_options without unfiltered_html.
+        $GLOBALS['pb_test_current_user'] = 3;
+        $get = $routes->get(new \WP_REST_Request(['slug' => 'theme-settings']))->get_data();
+        $saved = $post();
+        self::assertInstanceOf(\WP_REST_Response::class, $saved);
+        foreach (['GET' => $get, 'POST' => $saved->get_data()] as $method => $data) {
+            self::assertArrayHasKey('head_scripts', $data['values'], $method);
+            self::assertNull($data['values']['head_scripts'], $method);
+            self::assertNull($data['values']['tracking'], $method);
+            $encoded = (string) json_encode($data);
+            self::assertStringNotContainsString('raw-head-marker', $encoded, $method);
+            self::assertStringNotContainsString('raw-group-marker', $encoded, $method);
+        }
+        self::assertSame('555', $saved->get_data()['values']['phone']);
+        self::assertEquals((object) ['head_scripts' => 'unfiltered_html', 'tracking' => 'unfiltered_html'], $get['readOnly']);
+        // Masking is a response concern: the stored values are untouched.
+        self::assertSame('<script>raw-head-marker()</script>', $GLOBALS['pb_test_options']['theme-settings_head_scripts']);
+
+        // Trusted: the values are present.
+        $GLOBALS['pb_test_caps'][3][] = 'unfiltered_html';
+        $get = $routes->get(new \WP_REST_Request(['slug' => 'theme-settings']))->get_data();
+        $saved = $post()->get_data();
+        foreach (['GET' => $get, 'POST' => $saved] as $method => $data) {
+            self::assertSame('<script>raw-head-marker()</script>', $data['values']['head_scripts'], $method);
+            self::assertSame('<script>raw-group-marker()</script>', $data['values']['tracking']['snippet'], $method);
+        }
+    }
+
     public function testPostIgnoresMalformedBody(): void
     {
         $routes = new OptionsValuesRoutes($this->registry(), $this->values());

@@ -50,6 +50,27 @@ if (!function_exists('wp_die')) {
         throw new PbTestWpDie(is_string($message) ? $message : 'wp_die', $status);
     }
 }
+if (!function_exists('wp_enqueue_style')) {
+    /** Records the handle in pb_test_enqueued_styles. */
+    function wp_enqueue_style($handle, $src = '', $deps = [], $ver = false, $media = 'all'): void
+    {
+        $GLOBALS['pb_test_enqueued_styles'][] = $handle;
+    }
+}
+if (!function_exists('wp_enqueue_media')) {
+    /** Counts calls in pb_test_enqueued_media. */
+    function wp_enqueue_media($args = []): void
+    {
+        $GLOBALS['pb_test_enqueued_media'] = (int) ($GLOBALS['pb_test_enqueued_media'] ?? 0) + 1;
+    }
+}
+if (!function_exists('wp_enqueue_editor')) {
+    /** Counts calls in pb_test_enqueued_editor. */
+    function wp_enqueue_editor(): void
+    {
+        $GLOBALS['pb_test_enqueued_editor'] = (int) ($GLOBALS['pb_test_enqueued_editor'] ?? 0) + 1;
+    }
+}
 if (!isset($GLOBALS['wpdb'])) {
     $GLOBALS['wpdb'] = new class {
         public string $prefix = 'wp_';

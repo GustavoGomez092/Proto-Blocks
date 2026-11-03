@@ -68,12 +68,13 @@ final class OptionsValuesRoutes
         }
 
         $userId = get_current_user_id();
+        $readOnly = $this->values->readOnly($page, $userId);
 
         return new \WP_REST_Response([
-            'values' => $this->values->read($page),
+            'values' => self::mask($this->values->read($page), $readOnly),
             'trusted' => !AttributeSanitizer::shouldSanitizeForUser($userId),
             // field name => reason; cast so an empty map is `{}` in JSON, not `[]`.
-            'readOnly' => (object) $this->values->readOnly($page, $userId),
+            'readOnly' => (object) $readOnly,
         ], 200);
     }
 
@@ -84,17 +85,41 @@ final class OptionsValuesRoutes
             return self::notFound();
         }
 
+        $userId = get_current_user_id();
         $result = $this->values->save(
             $page,
             self::groupsOf($r->get_param('fields'), static fn (mixed $v): bool => is_array($v)),
             self::presentOf($r->get_param('present')),
-            get_current_user_id()
+            $userId
         );
         if ($result instanceof \WP_Error) {
             return $result;
         }
 
-        return new \WP_REST_Response(['values' => $result, 'notices' => $this->values->notices()], 200);
+        return new \WP_REST_Response([
+            'values' => self::mask($result, $this->values->readOnly($page, $userId)),
+            'notices' => $this->values->notices(),
+        ], 200);
+    }
+
+    /**
+     * Values with every read-only field (code, or a container holding code,
+     * for a user without unfiltered_html) set to null, so those values never
+     * leave the server for that user. The same rule PageRenderer applies.
+     *
+     * @param array<string, mixed>  $values
+     * @param array<string, string> $readOnly field name => reason
+     * @return array<string, mixed>
+     */
+    private static function mask(array $values, array $readOnly): array
+    {
+        foreach (array_keys($readOnly) as $name) {
+            if (array_key_exists($name, $values)) {
+                $values[$name] = null;
+            }
+        }
+
+        return $values;
     }
 
     private function page(\WP_REST_Request $r): ?PageDefinition
