@@ -19,6 +19,7 @@ export const SCREENS: Partial<Record<Screen, ScreenComponent>> = {
 	taxonomies: lazy(() => import('./TaxonomiesScreen')),
 	fields: lazy(() => import('./FieldsScreen')),
 	'options-page': lazy(() => import('./OptionsPageScreen')),
+	'options-pages': lazy(() => import('./OptionsPagesScreen')),
 };
 
 /** Screen name as shown in the WordPress menu, for headings and errors. */
@@ -38,6 +39,8 @@ export function screenLabel(screen: string): string {
 			return __('Post Types', 'proto-blocks');
 		case 'taxonomies':
 			return __('Taxonomies', 'proto-blocks');
+		case 'options-pages':
+			return __('Options Pages', 'proto-blocks');
 		default:
 			return screen;
 	}

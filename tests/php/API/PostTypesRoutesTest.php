@@ -228,7 +228,7 @@ final class PostTypesRoutesTest extends ContentModelRoutesTestCase
 
         $menus = array_column($GLOBALS['pb_test_menus'], null, 'slug');
         unset($GLOBALS['pb_test_menus']);
-        foreach (['proto-blocks-post-types' => ['Post Types', 'post-types'], 'proto-blocks-taxonomies' => ['Taxonomies', 'taxonomies']] as $slug => [$title, $screen]) {
+        foreach (['proto-blocks-post-types' => ['Post Types', 'post-types'], 'proto-blocks-taxonomies' => ['Taxonomies', 'taxonomies'], 'proto-blocks-options-pages' => ['Options Pages', 'options-pages']] as $slug => [$title, $screen]) {
             self::assertSame('proto-blocks', $menus[$slug]['parent']);
             self::assertSame($title, $menus[$slug]['menu_title']);
             self::assertSame('manage_options', $menus[$slug]['capability']);

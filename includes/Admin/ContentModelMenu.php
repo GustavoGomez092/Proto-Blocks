@@ -30,6 +30,7 @@ final class ContentModelMenu
         $pages = [
             [self::POST_TYPES_SLUG, __('Post Types', 'proto-blocks'), 'post-types'],
             [self::TAXONOMIES_SLUG, __('Taxonomies', 'proto-blocks'), 'taxonomies'],
+            ['proto-blocks-options-pages', __('Options Pages', 'proto-blocks'), 'options-pages'],
         ];
 
         foreach ($pages as [$slug, $title, $screen]) {
