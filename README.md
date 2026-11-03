@@ -29,7 +29,7 @@ A next-generation WordPress plugin that enables developers to create Gutenberg b
 
 ## Requirements
 
-- WordPress 6.3+
+- WordPress 6.5+
 - PHP 8.0+
 
 ## Installation
