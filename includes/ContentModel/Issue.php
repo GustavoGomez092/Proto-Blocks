@@ -20,6 +20,7 @@ final class Issue
      * @param string      $source  Absolute file path, or "<file>:<line>" of a PHP call.
      * @param string|null $slug    Declaration slug, when known.
      * @param string|null $kind    'type' or 'taxonomy', when known.
+     * @param string|null $key     Field group key, for field-group findings such as `duplicate_group_key`.
      */
     public function __construct(
         public readonly string $level,
@@ -27,16 +28,19 @@ final class Issue
         public readonly string $message,
         public readonly string $source,
         public readonly ?string $slug = null,
-        public readonly ?string $kind = null
+        public readonly ?string $kind = null,
+        public readonly ?string $key = null
     ) {
     }
 
     /**
-     * @return array{level: string, code: string, message: string, source: string, slug: ?string, kind: ?string}
+     * `key` is present only when set.
+     *
+     * @return array{level: string, code: string, message: string, source: string, slug: ?string, kind: ?string, key?: string}
      */
     public function toArray(): array
     {
-        return [
+        $out = [
             'level' => $this->level,
             'code' => $this->code,
             'message' => $this->message,
@@ -44,5 +48,10 @@ final class Issue
             'slug' => $this->slug,
             'kind' => $this->kind,
         ];
+        if ($this->key !== null) {
+            $out['key'] = $this->key;
+        }
+
+        return $out;
     }
 }

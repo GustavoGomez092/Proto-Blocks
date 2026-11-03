@@ -23,7 +23,7 @@ final class AdminApp
 {
     public const MOUNT_ID = 'proto-blocks-admin';
     public const PORTAL_ID = 'proto-blocks-admin-portal';
-    public const SCREENS = ['dashboard', 'tailwind', 'system', 'previews', 'wizard', 'post-types', 'taxonomies', 'options-page'];
+    public const SCREENS = ['dashboard', 'tailwind', 'system', 'previews', 'wizard', 'post-types', 'taxonomies', 'fields', 'options-page'];
 
     /** Script handle of the built admin app. */
     public const SCRIPT_HANDLE = 'proto-blocks-admin';

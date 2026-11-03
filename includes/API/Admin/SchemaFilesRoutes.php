@@ -28,6 +28,13 @@ use WP_REST_Request;
  * theme roots, hash check, atomic swap); this class adds the slug check, the content guardrails and
  * the typed-slug confirmation for deletes.
  *
+ * Kinds added with SchemaFileWriter::extendKind() (C5; Phase 2 `field-group`
+ * → `proto-fields/<slug>/group.jsonc`) use the same three routes: their slug
+ * grammar is the extension's, the file is found by SchemaFileWriter::existing()
+ * (no Registry entry), there are no guardrails (the writer runs the kind's
+ * validator), warnings are the warning-level declaration findings, and a
+ * delete always needs `confirm` = the slug (stored values are orphaned).
+ *
  * - GET admin/schema-files/<kind>/<slug> (permission), query `name?` → FileResult
  * - POST|PUT|PATCH admin/schema-files/<kind>/<slug> (writePermission), body
  *   {text: string, hash: string|null, acknowledge: string[]} → {path, hash, created, warnings: Issue[]}
@@ -49,7 +56,12 @@ final class SchemaFilesRoutes extends ContentModelRoutes
     public function registerRoutes(string $namespace, callable $permission, callable $writePermission): void
     {
         // The pattern only bounds the characters; slugError() applies each kind's own grammar and length.
-        register_rest_route($namespace, '/' . AdminRestController::BASE . '/schema-files/(?P<kind>type|taxonomy|options)/(?P<slug>[a-z][a-z0-9_-]{0,63})', [
+        // Kinds added with SchemaFileWriter::extendKind() (C5, e.g. `field-group`) join the alternation.
+        $kinds = implode('|', array_map(
+            static fn (string $kind): string => preg_quote($kind, '@'),
+            ['type', 'taxonomy', 'options', ...SchemaFileWriter::extendedKinds()]
+        ));
+        register_rest_route($namespace, '/' . AdminRestController::BASE . '/schema-files/(?P<kind>' . $kinds . ')/(?P<slug>[a-z][a-z0-9_-]{0,63})', [
             [
                 'methods' => 'GET',
                 'callback' => [$this, 'get'],
@@ -74,30 +86,35 @@ final class SchemaFilesRoutes extends ContentModelRoutes
     {
         $kind = self::urlParam($request, 'kind');
         $slug = self::urlParam($request, 'slug');
-        $error = self::slugError($kind, $slug);
+        $error = self::fileSlugError($kind, $slug);
         if ($error !== null) {
             return $error;
         }
 
-        $declaration = $this->registry()->get($kind, $slug);
-        $file = self::fileDeclaration($declaration);
+        // An extended kind (C5) has no Registry entry: its file is found by the writer, under the writable roots.
+        $extended = SchemaFileWriter::isExtended($kind);
+        $declaration = $extended ? null : $this->registry()->get($kind, $slug);
+        $file = $extended ? $this->writer()->existing($kind, $slug) : self::fileDeclaration($declaration);
         $target = $this->writer()->target($kind, $slug, $file);
 
         $path = $file !== null ? $file->source : $target['path'];
         $text = null;
-        if ($file !== null) {
+        if ($file !== null && (!$extended || self::isOwnFile($file->source))) {
             $text = self::read($file->source);
-        } elseif ($target['path'] !== '' && self::isOwnFile($target['path'])) {
+        } elseif ($file === null && $target['path'] !== '' && self::isOwnFile($target['path'])) {
             // A file the loader rejected (broken JSONC, schema errors): serve it so it can be fixed.
             $text = self::read($target['path']);
         }
 
         if ($text !== null) {
-            $data = self::decode($text) ?? ($file !== null ? $file->data : []);
+            $data = self::decode($text, $kind) ?? ($file !== null ? $file->data : []);
             $hash = SchemaFileWriter::hash($text);
         } else {
-            $text = DeclarationTemplate::render($kind, $this->templateName($request, $slug, $declaration));
-            $data = self::decode($text) ?? [];
+            $name = $this->templateName($request, $slug, $declaration);
+            $text = $extended
+                ? (SchemaFileWriter::extendedTemplate($kind, $slug, $name) ?? "{\n}\n")
+                : DeclarationTemplate::render($kind, $name);
+            $data = self::decode($text, $kind) ?? [];
             $hash = null;
         }
 
@@ -122,7 +139,7 @@ final class SchemaFilesRoutes extends ContentModelRoutes
     {
         $kind = self::urlParam($request, 'kind');
         $slug = self::urlParam($request, 'slug');
-        $error = self::slugError($kind, $slug);
+        $error = self::fileSlugError($kind, $slug);
         if ($error !== null) {
             return $error;
         }
@@ -139,8 +156,9 @@ final class SchemaFilesRoutes extends ContentModelRoutes
         }
         $acknowledge = array_values(array_filter($acknowledge, 'is_string'));
 
-        $declaration = $this->registry()->get($kind, $slug);
-        $file = self::fileDeclaration($declaration);
+        $extended = SchemaFileWriter::isExtended($kind);
+        $declaration = $extended ? null : $this->registry()->get($kind, $slug);
+        $file = $extended ? $this->writer()->existing($kind, $slug) : self::fileDeclaration($declaration);
         $target = $this->writer()->target($kind, $slug, $file);
         if (!$target['writable']) {
             return $this->unwritable($target);
@@ -160,7 +178,8 @@ final class SchemaFilesRoutes extends ContentModelRoutes
         }
 
         // Guardrails only on data the writer would accept; otherwise its validation error is the answer.
-        $after = self::validData($kind, $slug, $text);
+        // An extended kind has no guardrails (C5): its validator runs inside write().
+        $after = $extended ? null : self::validData($kind, $slug, $text);
         if ($after !== null) {
             // No declaration yet: Guardrails starts from the registered type (a new override file).
             $findings = $this->guardrails()->checkSave($kind, $slug, $declaration?->data, $after);
@@ -179,6 +198,14 @@ final class SchemaFilesRoutes extends ContentModelRoutes
             $result = $this->writer()->write($kind, $slug, $text, $hash, $file);
         } catch (WriteException $e) {
             return self::writeError($e);
+        }
+        if ($extended) {
+            return [
+                'path' => self::displayPath($result['path']),
+                'hash' => $result['hash'],
+                'created' => $result['created'],
+                'warnings' => self::extendedWarnings($kind, $slug, $result['data'], $result['path']),
+            ];
         }
         $this->registry()->invalidate();
 
@@ -200,12 +227,15 @@ final class SchemaFilesRoutes extends ContentModelRoutes
     {
         $kind = self::urlParam($request, 'kind');
         $slug = self::urlParam($request, 'slug');
-        $error = self::slugError($kind, $slug);
+        $error = self::fileSlugError($kind, $slug);
         if ($error !== null) {
             return $error;
         }
         if ($this->writer()->target($kind, $slug, null)['reason'] === 'file_mods') {
             return AdminRestController::writeBlockedError();
+        }
+        if (SchemaFileWriter::isExtended($kind)) {
+            return $this->deleteExtended($kind, $slug, $request->get_param('confirm'));
         }
 
         $declaration = $this->registry()->get($kind, $slug);
@@ -253,6 +283,81 @@ final class SchemaFilesRoutes extends ContentModelRoutes
         $this->registry()->invalidate();
 
         return ['deleted' => self::displayPath($result['deleted']), 'kept' => $result['kept']];
+    }
+
+    /**
+     * Delete an extended kind's file (a field group). `confirm` must always be
+     * the slug: values stored for its fields stay in the database, orphaned,
+     * and how many there are cannot be counted cheaply.
+     *
+     * @return array{deleted: string, kept: list<string>}|WP_Error
+     */
+    private function deleteExtended(string $kind, string $slug, mixed $confirm)
+    {
+        $existing = $this->writer()->existing($kind, $slug);
+        if ($existing === null) {
+            return new WP_Error('proto_blocks_not_found', __('There is no declaration file to delete.', 'proto-blocks'), ['status' => 404]);
+        }
+        if ($confirm !== $slug) {
+            return new WP_Error(
+                'proto_blocks_confirm_required',
+                __('Values saved in these fields stay in the database but are no longer shown. Type the slug to confirm.', 'proto-blocks'),
+                ['status' => 409, 'content' => ['count' => 0, 'taxonomies' => new \stdClass()]]
+            );
+        }
+
+        try {
+            $result = $this->writer()->delete($kind, $slug, $existing);
+        } catch (WriteException $e) {
+            return self::writeError($e);
+        }
+
+        return ['deleted' => self::displayPath($result['deleted']), 'kept' => $result['kept']];
+    }
+
+    /**
+     * Warning-level `proto_blocks_declaration_errors` findings for a saved
+     * extended-kind file, in the Issue shape the other kinds return.
+     *
+     * @param array<string|int, mixed> $data
+     * @return list<array<string, mixed>>
+     */
+    private static function extendedWarnings(string $kind, string $slug, array $data, string $path): array
+    {
+        $out = [];
+        foreach (SchemaFileWriter::declarationFindings($kind, $data, $slug) as $finding) {
+            if ($finding['level'] !== \ProtoBlocks\ContentModel\Issue::WARNING) {
+                continue;
+            }
+            $out[] = [
+                'level' => $finding['level'],
+                'code' => $finding['code'] ?? 'declaration_warning',
+                'message' => self::scrub(($finding['path'] === '' ? '' : $finding['path'] . ': ') . $finding['message']),
+                'source' => self::displayPath($path),
+                'slug' => $slug,
+                'kind' => $kind,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** slugError() for every kind the writer knows, the extended ones included (C5). */
+    private static function fileSlugError(mixed $kind, mixed $slug): ?WP_Error
+    {
+        if (!is_string($kind) || !SchemaFileWriter::isExtended($kind)) {
+            return self::slugError($kind, $slug);
+        }
+        $error = is_string($slug) ? SchemaFileWriter::slugError($kind, $slug) : 'pattern';
+        if ($error === null) {
+            return null;
+        }
+
+        return new WP_Error(
+            'proto_blocks_invalid_slug',
+            SchemaFileWriter::slugMessage($kind, is_string($slug) ? $slug : '', $error),
+            ['status' => 400, 'reason' => $error]
+        );
     }
 
     /**
@@ -323,10 +428,10 @@ final class SchemaFilesRoutes extends ContentModelRoutes
     }
 
     /** @return array<string|int, mixed>|null */
-    private static function decode(string $text): ?array
+    private static function decode(string $text, string $kind = ''): ?array
     {
         try {
-            return Jsonc::decode($text);
+            return SchemaFileWriter::isExtended($kind) ? SchemaFileWriter::decodeFor($kind, $text) : Jsonc::decode($text);
         } catch (JsoncException) {
             return null;
         }

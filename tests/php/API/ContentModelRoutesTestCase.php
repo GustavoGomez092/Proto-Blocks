@@ -46,6 +46,8 @@ abstract class ContentModelRoutesTestCase extends TestCase
     protected function setUp(): void
     {
         PhpDeclarations::reset();
+        // A booted Fields module (any earlier test) adds the `field-group` kind process-wide.
+        SchemaFileWriter::resetKinds();
         $tmp = sys_get_temp_dir() . '/pb-cm-routes-' . bin2hex(random_bytes(6));
         mkdir($tmp);
         $this->root = (string) realpath($tmp);
@@ -76,6 +78,7 @@ abstract class ContentModelRoutesTestCase extends TestCase
         // modules() boots the Fields module too: drop its process-wide state.
         \ProtoBlocks\Modules\Fields\FieldsModule::setInstance(null);
         \ProtoBlocks\Modules\Fields\Read\FieldReader::setShared(null);
+        SchemaFileWriter::resetKinds();
         if ($this->root !== '') {
             @chmod($this->root, 0755);
             self::removeTree($this->root);
@@ -131,6 +134,9 @@ abstract class ContentModelRoutesTestCase extends TestCase
         }
         $manager = new Manager($this->registry());
         $manager->boot();
+        // Booting the Fields module adds the `field-group` kind; these tests pin the
+        // Phase 1 kinds (FieldGroupWriteTest covers the extended one).
+        SchemaFileWriter::resetKinds();
         if ($register) {
             $manager->postTypes()?->register();
             $manager->taxonomies()?->register();

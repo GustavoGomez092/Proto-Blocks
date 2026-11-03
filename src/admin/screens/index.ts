@@ -17,6 +17,7 @@ export const SCREENS: Partial<Record<Screen, ScreenComponent>> = {
 	previews: lazy(() => import('./PreviewsScreen')),
 	'post-types': lazy(() => import('./PostTypesScreen')),
 	taxonomies: lazy(() => import('./TaxonomiesScreen')),
+	fields: lazy(() => import('./FieldsScreen')),
 	'options-page': lazy(() => import('./OptionsPageScreen')),
 };
 

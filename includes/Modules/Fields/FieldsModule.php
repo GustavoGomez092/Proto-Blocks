@@ -8,10 +8,12 @@ use ProtoBlocks\ContentModel\Issue;
 use ProtoBlocks\ContentModel\Jsonc;
 use ProtoBlocks\ContentModel\JsoncException;
 use ProtoBlocks\ContentModel\Registry;
+use ProtoBlocks\ContentModel\SchemaFileWriter;
 use ProtoBlocks\ContentModel\SchemaPaths;
 use ProtoBlocks\Modules\Fields\Bindings\FieldBindingSource;
 use ProtoBlocks\Modules\Fields\Definition\FieldGroup;
 use ProtoBlocks\Modules\Fields\Definition\GroupNormalizer;
+use ProtoBlocks\Modules\Fields\Definition\GroupValidator;
 use ProtoBlocks\Modules\Fields\Definition\Report;
 use ProtoBlocks\Modules\Fields\Edit\ChoiceResolver;
 use ProtoBlocks\Modules\Fields\Edit\EditRoutes;
@@ -222,6 +224,7 @@ final class FieldsModule implements ModuleInterface
         }
         $this->booted = true;
 
+        self::registerFileKind(); // C5: builder writes to proto-fields/<slug>/group.jsonc go through the Phase 1 writer
         FieldReader::setShared($this->reader());
         $this->bindings()->register();
         add_action('init', [$this, 'registerMeta'], 20);
@@ -241,6 +244,48 @@ final class FieldsModule implements ModuleInterface
         add_action('personal_options_update', [$this->saveHandler(), 'saveUser'], 10, 1);
         add_action('edit_user_profile_update', [$this->saveHandler(), 'saveUser'], 10, 1);
         add_action('rest_api_init', [$this->editRoutes(), 'registerRoutes']);
+    }
+
+    /**
+     * The `field-group` declaration kind for SchemaFileWriter and the
+     * schema-files routes: `proto-fields/<slug>/group.jsonc`, slug
+     * GroupFiles::SLUG_PATTERN, validated by GroupValidator (then the
+     * declaration-errors filter) before anything is written. Called from
+     * boot(), before `rest_api_init` builds the route regex; idempotent.
+     * UntrustedKeys does not apply: no part of a group file is handed to
+     * register_post_type()/register_taxonomy() or called; GroupNormalizer
+     * keeps only known keys and meta is registered with the plugin's own callbacks.
+     */
+    public static function registerFileKind(): void
+    {
+        SchemaFileWriter::extendKind(
+            'field-group',
+            GroupFiles::FOLDER,
+            'group',
+            static fn(array $data): array => array_map(
+                static fn(array $e): array => ['path' => $e['path'], 'message' => $e['message']],
+                GroupValidator::validate($data, false)->errors
+            ),
+            [
+                'slugPattern' => GroupFiles::SLUG_PATTERN,
+                'decode' => \Closure::fromCallable([self::class, 'decodeFile']),
+                'template' => static fn(string $slug, string $name): string => self::groupTemplate($slug, $name),
+            ]
+        );
+    }
+
+    /** The text a new `proto-fields/<slug>/group.jsonc` starts from. */
+    public static function groupTemplate(string $slug, string $name): string
+    {
+        $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG;
+
+        return "{\n"
+            . '  "key": ' . json_encode('group_' . str_replace('-', '_', $slug), $flags) . ",\n"
+            . '  "title": ' . json_encode($name, $flags) . ",\n"
+            . "  \"fields\": [],\n"
+            . "  // Where the group shows, e.g. [[{ \"param\": \"post_type\", \"operator\": \"==\", \"value\": \"post\" }]]\n"
+            . "  \"location\": []\n"
+            . "}\n";
     }
 
     public function index(): GroupIndex
@@ -577,7 +622,7 @@ final class FieldsModule implements ModuleInterface
                 $key,
                 $loser['label'],
                 $winner['label']
-            ), $winner['label'], null, 'field-group');
+            ), $winner['label'], null, 'field-group', $key);
         }
         $keep = array_flip(array_values($winners));
         $out = [];
