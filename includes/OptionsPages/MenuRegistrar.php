@@ -22,7 +22,7 @@ final class MenuRegistrar
 
     /** @var array<string, string> */
     private array $suffixes = [];
-    /** @var list<array{slug: string, message: string, code?: string, level?: string}> */
+    /** @var list<array{slug: string, message: string, code: string, level: string}> */
     private array $warnings = [];
 
     public function __construct(callable $iconResolver, callable $render, callable $capabilityKnown)
@@ -55,7 +55,7 @@ final class MenuRegistrar
                 $cur = $declared[$cur->menu];
                 if ($cur->slug === $slug) {
                     $topLevel[$slug] = true;
-                    $this->warn($slug, __('Menu parents form a cycle; the page is registered at the top level.', 'proto-blocks'));
+                    $this->warn($slug, __('Menu parents form a cycle; the page is registered at the top level.', 'proto-blocks'), 'menu_cycle');
                     break;
                 }
             }
@@ -73,7 +73,7 @@ final class MenuRegistrar
             }
             $this->registerOne($page, $forceTop, $declared);
             foreach ($page->children as $child) {
-                $this->registerChild($child, $page, $forceTop);
+                $this->registerChild($child, $page, $declared, $topLevel);
             }
         };
         foreach ($declared as $page) {
@@ -87,7 +87,11 @@ final class MenuRegistrar
         return $this->suffixes;
     }
 
-    /** @return list<array{slug: string, message: string, code?: string, level?: string}> */
+    /**
+     * Every entry carries a level ('warning' or 'info'); consumers must filter on it.
+     *
+     * @return list<array{slug: string, message: string, code: string, level: string}>
+     */
     public function warnings(): array
     {
         return $this->warnings;
@@ -105,7 +109,7 @@ final class MenuRegistrar
         if ($top) {
             $icon = ($this->iconResolver)($page);
             if ($icon['warning'] !== null) {
-                $this->warn($page->slug, $icon['warning']);
+                $this->warn($page->slug, $icon['warning'], 'icon_invalid');
             }
             $suffix = add_menu_page(
                 $page->title,
@@ -122,7 +126,7 @@ final class MenuRegistrar
                     /* translators: %s: parent menu slug */
                     __('Parent menu "%s" does not exist; the page is reachable only by URL.', 'proto-blocks'),
                     $page->menu
-                ));
+                ), 'parent_missing');
             }
             $suffix = add_submenu_page(
                 $page->menu,
@@ -143,14 +147,25 @@ final class MenuRegistrar
         }
     }
 
-    private function registerChild(PageDefinition $child, PageDefinition $page, bool $forceTop): void
+    /**
+     * @param array<string, PageDefinition> $declared
+     * @param array<string, true>           $topLevel
+     */
+    private function registerChild(PageDefinition $child, PageDefinition $page, array $declared, array $topLevel): void
     {
         $this->checkCapability($child);
         $parent = $child->menu;
-        if (!$forceTop && $page->menu !== 'top') {
-            // The page is itself only a submenu, so WordPress would hide
-            // anything registered beneath it: place the child beside it.
-            $parent = $page->menu;
+        // Walk up through declared pages to the nearest ancestor that is
+        // registered top-level or sits under a WordPress-owned menu.
+        $anchor = $page;
+        $steps = 0;
+        while (!isset($topLevel[$anchor->slug]) && isset($declared[$anchor->menu]) && $steps++ <= count($declared)) {
+            $anchor = $declared[$anchor->menu];
+        }
+        $anchorIsTop = isset($topLevel[$anchor->slug]) || $anchor->menu === 'top';
+        if (!$anchorIsTop || $anchor !== $page) {
+            // Submenu pages cannot have children: WordPress would hide them.
+            $parent = $anchorIsTop ? $anchor->slug : $anchor->menu;
             $this->warn($child->slug, sprintf(
                 /* translators: 1: child page slug, 2: page slug, 3: parent menu */
                 __('Child page "%1$s" of "%2$s" is listed under "%3$s", beside its parent, because submenu pages cannot have children.', 'proto-blocks'),
@@ -178,7 +193,7 @@ final class MenuRegistrar
                 /* translators: %s: capability name */
                 __('Capability "%s" is not granted to any role; only super admins can open this page.', 'proto-blocks'),
                 $page->capability
-            ));
+            ), 'capability_unknown');
         }
     }
 
@@ -200,13 +215,8 @@ final class MenuRegistrar
         return isset($GLOBALS['submenu'][$parent]) || isset($GLOBALS['admin_page_hooks'][$parent]);
     }
 
-    private function warn(string $slug, string $message, ?string $code = null, ?string $level = null): void
+    private function warn(string $slug, string $message, string $code, string $level = 'warning'): void
     {
-        $entry = ['slug' => $slug, 'message' => $message];
-        if ($code !== null) {
-            $entry['code'] = $code;
-            $entry['level'] = $level ?? 'warning';
-        }
-        $this->warnings[] = $entry;
+        $this->warnings[] = ['slug' => $slug, 'message' => $message, 'code' => $code, 'level' => $level];
     }
 }

@@ -92,7 +92,7 @@ final class MenuRegistrarTest extends TestCase
         $r = $this->register(['x' => self::page('x', ['menu' => 'edit.php?post_type=nope'])]);
         self::assertCount(1, $GLOBALS['pb_test_menus']);
         self::assertContains(
-            ['slug' => 'x', 'message' => 'Parent menu "edit.php?post_type=nope" does not exist; the page is reachable only by URL.'],
+            ['slug' => 'x', 'message' => 'Parent menu "edit.php?post_type=nope" does not exist; the page is reachable only by URL.', 'code' => 'parent_missing', 'level' => 'warning'],
             $r->warnings()
         );
     }
@@ -103,7 +103,7 @@ final class MenuRegistrarTest extends TestCase
             ['x' => self::page('x')],
             static fn(PageDefinition $p): array => ['value' => 'dashicons-admin-generic', 'warning' => 'Icon not found: icons/x.svg']
         );
-        self::assertContains(['slug' => 'x', 'message' => 'Icon not found: icons/x.svg'], $r->warnings());
+        self::assertContains(['slug' => 'x', 'message' => 'Icon not found: icons/x.svg', 'code' => 'icon_invalid', 'level' => 'warning'], $r->warnings());
     }
 
     public function testIconResolvedOnlyForTopLevel(): void
@@ -124,7 +124,7 @@ final class MenuRegistrarTest extends TestCase
         $r = $this->register(['x' => self::page('x', ['capability' => 'manage_woocomerce'])]);
         self::assertSame('manage_woocomerce', $GLOBALS['pb_test_menus'][0]['capability']);
         self::assertContains(
-            ['slug' => 'x', 'message' => 'Capability "manage_woocomerce" is not granted to any role; only super admins can open this page.'],
+            ['slug' => 'x', 'message' => 'Capability "manage_woocomerce" is not granted to any role; only super admins can open this page.', 'code' => 'capability_unknown', 'level' => 'warning'],
             $r->warnings()
         );
     }
@@ -137,7 +137,7 @@ final class MenuRegistrarTest extends TestCase
             self::assertNull($m['parent']);
         }
         $msg = 'Menu parents form a cycle; the page is registered at the top level.';
-        self::assertSame([['slug' => 'a', 'message' => $msg], ['slug' => 'b', 'message' => $msg]], $r->warnings());
+        self::assertSame([['slug' => 'a', 'message' => $msg, 'code' => 'menu_cycle', 'level' => 'warning'], ['slug' => 'b', 'message' => $msg, 'code' => 'menu_cycle', 'level' => 'warning']], $r->warnings());
     }
 
     public function testTailIntoCycleKeepsSubmenuPlacement(): void
@@ -194,9 +194,28 @@ final class MenuRegistrarTest extends TestCase
         $r = $this->register(['x' => $p]);
         self::assertSame('hook_x-kid', $r->hookSuffixes()['x-kid']);
         self::assertContains(
-            ['slug' => 'x-kid', 'message' => 'Capability "bogus_cap" is not granted to any role; only super admins can open this page.'],
+            ['slug' => 'x-kid', 'message' => 'Capability "bogus_cap" is not granted to any role; only super admins can open this page.', 'code' => 'capability_unknown', 'level' => 'warning'],
             $r->warnings()
         );
+    }
+
+    public function testChildOfDepthTwoSubmenuRegistersUnderTopAncestor(): void
+    {
+        $c = self::page('c');
+        $b = self::page('b', ['menu' => 'c']);
+        $a = self::page('a', ['menu' => 'b', 'children' => [['slug' => 'kid', 'title' => 'Kid']]]);
+        $r = $this->register(['a' => $a, 'b' => $b, 'c' => $c]);
+        $kid = null;
+        foreach ($GLOBALS['pb_test_menus'] as $m) {
+            if ($m['slug'] === 'a-kid') {
+                $kid = $m;
+            }
+        }
+        self::assertSame('c', $kid['parent']);
+        $info = array_values(array_filter($r->warnings(), static fn(array $w): bool => $w['code'] === 'child_of_submenu'));
+        self::assertCount(1, $info);
+        self::assertSame('info', $info[0]['level']);
+        self::assertSame('a-kid', $info[0]['slug']);
     }
 
     public function testChildOfSubmenuPageRegistersBesideParent(): void
@@ -208,7 +227,7 @@ final class MenuRegistrarTest extends TestCase
         $m = $GLOBALS['pb_test_menus'];
         self::assertCount(2, $m);
         self::assertSame(['edit.php?post_type=product', 'cadco-display-settings-extra'], [$m[1]['parent'], $m[1]['slug']]);
-        $w = array_values(array_filter($r->warnings(), static fn(array $w): bool => ($w['code'] ?? '') === 'child_of_submenu'));
+        $w = array_values(array_filter($r->warnings(), static fn(array $w): bool => $w['code'] === 'child_of_submenu'));
         self::assertCount(1, $w);
         self::assertSame('info', $w[0]['level']);
         self::assertStringContainsString('cadco-display-settings', $w[0]['message']);
