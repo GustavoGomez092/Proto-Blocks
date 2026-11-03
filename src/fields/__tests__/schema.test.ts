@@ -5,7 +5,7 @@
  */
 import fs from 'fs';
 import path from 'path';
-import Ajv2020 from 'ajv/dist/2020';
+import { createGroupAjv } from '../model/schema';
 
 const root = path.resolve( __dirname, '../../..' );
 const fixtures = path.join( root, 'tests/fixtures/fields' );
@@ -19,29 +19,7 @@ function compile() {
 			'utf8'
 		)
 	);
-	const ajv = new Ajv2020( { allErrors: true } );
-	// The schema's one non-standard keyword: no two fields at one level share
-	// a non-empty name (GroupValidator's duplicate_name).
-	ajv.addKeyword( {
-		keyword: 'uniqueFieldNames',
-		type: 'array',
-		schemaType: 'boolean',
-		validate: ( enabled: boolean, data: unknown[] ) => {
-			if ( ! enabled ) {
-				return true;
-			}
-			const names = data
-				.map( ( f ) =>
-					f && typeof f === 'object'
-						? ( f as { name?: unknown } ).name
-						: undefined
-				)
-				.filter(
-					( n ): n is string => typeof n === 'string' && n !== ''
-				);
-			return new Set( names ).size === names.length;
-		},
-	} );
+	const ajv = createGroupAjv();
 	return ajv.compile( schema );
 }
 

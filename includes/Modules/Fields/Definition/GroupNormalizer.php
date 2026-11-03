@@ -11,7 +11,8 @@ namespace ProtoBlocks\Modules\Fields\Definition;
  * need only this class: a group with any structural error yields `group =>
  * null` (fail closed). On top of the validator it reports `unknown_type`
  * (the field is skipped, the group stays), `location_ignored`,
- * `mixed_location_kinds` and `missing_location`. It never throws.
+ * `mixed_location_kinds` and `missing_location`. Bad input never throws; only
+ * a missing or corrupt shipped alias map does (see loadAliases()).
  */
 final class GroupNormalizer
 {
@@ -36,15 +37,46 @@ final class GroupNormalizer
     /** @var array<string, string>|null */
     private static ?array $aliases = null;
 
-    /** @return array<string, string> ACF type => canonical type, from schemas/field-type-aliases.json */
+    /**
+     * ACF type => canonical type, from schemas/field-type-aliases.json (memoised).
+     *
+     * @return array<string, string>
+     * @throws \RuntimeException when the shipped alias map is missing or invalid
+     */
     public static function aliases(): array
     {
-        if (self::$aliases === null) {
-            $file = dirname(__DIR__, 4) . '/schemas/field-type-aliases.json';
-            $data = is_readable($file) ? json_decode((string) file_get_contents($file), true) : null;
-            self::$aliases = is_array($data) ? array_filter($data, 'is_string') : [];
+        return self::$aliases ??= self::loadAliases(self::aliasesFile());
+    }
+
+    /** The alias map shipped with the plugin (schemas/ must be in the release zip). */
+    public static function aliasesFile(): string
+    {
+        return dirname(__DIR__, 4) . '/schemas/field-type-aliases.json';
+    }
+
+    /**
+     * Reads and checks an alias map. A missing or malformed map is a packaging
+     * bug, never silently an empty map: every ACF alias type would be dropped.
+     *
+     * @return array<string, string>
+     * @throws \RuntimeException
+     */
+    public static function loadAliases(string $file): array
+    {
+        $text = is_readable($file) ? file_get_contents($file) : false;
+        if ($text === false) {
+            throw new \RuntimeException(sprintf('Proto-Blocks: field type alias map %s is missing or unreadable.', $file));
         }
-        return self::$aliases;
+        $data = json_decode($text, true);
+        if (!is_array($data) || $data === [] || array_is_list($data)) {
+            throw new \RuntimeException(sprintf('Proto-Blocks: field type alias map %s is not a JSON object.', $file));
+        }
+        foreach ($data as $from => $to) {
+            if (!is_string($from) || !is_string($to) || !in_array($to, self::TYPES, true)) {
+                throw new \RuntimeException(sprintf('Proto-Blocks: field type alias map %s maps "%s" to an unknown type.', $file, (string) $from));
+            }
+        }
+        return $data;
     }
 
     /**
@@ -55,7 +87,7 @@ final class GroupNormalizer
     {
         $report = GroupValidator::validate($raw, $impliedLocation !== null);
         if (array_is_list($raw) && $raw !== []) {
-            $report->addError('', 'invalid_field', __('Expected one field group, got a list; use normalizeMany().', 'proto-blocks'));
+            $report->addError('', 'expected_group', __('Expected one field group, got a list; use normalizeMany().', 'proto-blocks'));
         }
         if (!$report->ok()) {
             return ['group' => null, 'report' => $report];

@@ -241,6 +241,58 @@ final class GroupNormalizerTest extends TestCase
         $this->assertFalse($garbage['report']->ok());
     }
 
+    public function testAliasMapLoadsFromShippedPath(): void
+    {
+        $shipped = dirname(__DIR__, 4) . '/schemas/field-type-aliases.json';
+        $this->assertFileExists($shipped);
+        $this->assertSame(realpath($shipped), realpath(GroupNormalizer::aliasesFile()));
+        $this->assertSame(GroupNormalizer::loadAliases($shipped), GroupNormalizer::aliases());
+        $this->assertCount(10, GroupNormalizer::aliases());
+        $this->assertSame('relationship', GroupNormalizer::aliases()['post_object']);
+    }
+
+    public function testUnreadableAliasFileIsLoud(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        GroupNormalizer::loadAliases(sys_get_temp_dir() . '/pb-missing-aliases-' . uniqid() . '.json');
+    }
+
+    public function testInvalidAliasFileIsLoud(): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'pb-aliases');
+        file_put_contents($file, '{"checkbox": "nope-not-a-type", ');
+        try {
+            $this->expectException(\RuntimeException::class);
+            GroupNormalizer::loadAliases($file);
+        } finally {
+            unlink($file);
+        }
+    }
+
+    public function testEmptyLocationBranchFailsClosed(): void
+    {
+        $fields = [['key' => 'field_a', 'name' => 'a', 'label' => 'A', 'type' => 'text']];
+
+        $result = GroupNormalizer::normalize(self::simpleGroup($fields, [[]]), 'php');
+        $this->assertFalse($result['group']->location->isRenderable());
+        $this->assertContains('empty_location_branch', self::codes($result['report']->warnings));
+
+        // An empty branch beside a real one still fails closed.
+        $mixed = GroupNormalizer::normalize(self::simpleGroup($fields, [
+            [['param' => 'post_type', 'operator' => '==', 'value' => 'post']],
+            [],
+        ]), 'php');
+        $this->assertFalse($mixed['group']->location->isRenderable());
+    }
+
+    public function testListPassedToNormalizeIsExpectedGroupError(): void
+    {
+        $raw = self::simpleGroup([['key' => 'field_a', 'name' => 'a', 'label' => 'A', 'type' => 'text']]);
+        $result = GroupNormalizer::normalize([$raw], 'php');
+        $this->assertNull($result['group']);
+        $this->assertContains('expected_group', self::codes($result['report']->errors));
+    }
+
     public function testToArrayShape(): void
     {
         $group = self::realistic();

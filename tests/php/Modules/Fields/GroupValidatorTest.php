@@ -100,6 +100,43 @@ final class GroupValidatorTest extends TestCase
         $this->assertSame(['fields[2].name'], array_column($errors, 'path'));
     }
 
+    public function testNameWithTrailingNewlineRejected(): void
+    {
+        $group = [
+            'key' => 'group_x', 'title' => 'X',
+            'location' => [[['param' => 'post_type', 'operator' => '==', 'value' => 'post']]],
+            'fields' => [['key' => 'field_a', 'name' => "title\n", 'label' => 'A', 'type' => 'text']],
+        ];
+        $this->assertContains('invalid_name', array_column(GroupValidator::validate($group, false)->errors, 'code'));
+        $this->assertSame(0, preg_match(GroupValidator::NAME_PATTERN, "ok\n"));
+    }
+
+    public function testDuplicateKeyAtAnyDepthIsError(): void
+    {
+        $group = [
+            'key' => 'group_x', 'title' => 'X',
+            'location' => [[['param' => 'post_type', 'operator' => '==', 'value' => 'post']]],
+            'fields' => [
+                ['key' => 'field_a', 'name' => 'a', 'label' => 'A', 'type' => 'text'],
+                ['key' => 'field_rows', 'name' => 'rows', 'label' => 'Rows', 'type' => 'repeater', 'sub_fields' => [
+                    ['key' => 'field_a', 'name' => 'inner', 'label' => 'Inner', 'type' => 'text'],
+                ]],
+            ],
+        ];
+        $errors = GroupValidator::validate($group, false)->errors;
+        $this->assertSame(['duplicate_key'], array_column($errors, 'code'));
+        $this->assertSame('fields[1].sub_fields[0].key', $errors[0]['path']);
+    }
+
+    public function testEmptyLocationBranchWarned(): void
+    {
+        $group = ['key' => 'group_x', 'title' => 'X', 'location' => [[]], 'fields' => []];
+        $report = GroupValidator::validate($group, false);
+        $this->assertSame([], $report->errors);
+        $this->assertSame(['empty_location_branch'], array_column($report->warnings, 'code'));
+        $this->assertSame([], GroupValidator::validate($group, true)->warnings);
+    }
+
     public function testInvalidOperatorAndShapeAreErrors(): void
     {
         $group = [

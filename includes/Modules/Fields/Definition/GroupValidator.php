@@ -10,13 +10,15 @@ namespace ProtoBlocks\Modules\Fields\Definition;
  * entry. Accepts one group or an ACF Tools export array of groups.
  *
  * Errors: missing_key, missing_title, missing_fields, invalid_field,
- * missing_type, invalid_name, duplicate_name, layouts_not_allowed,
- * layouts_required, sub_fields_required, invalid_condition, invalid_location,
- * invalid_position, invalid_style. Warning: unsupported_location_rule.
+ * missing_type, invalid_name, duplicate_name, duplicate_key,
+ * layouts_not_allowed, layouts_required, sub_fields_required,
+ * invalid_condition, invalid_location, invalid_position, invalid_style.
+ * Warnings: unsupported_location_rule, empty_location_branch.
  */
 final class GroupValidator
 {
-    public const NAME_PATTERN = '/^[A-Za-z][A-Za-z0-9_-]{0,63}$/';
+    /** `D`: `$` must not accept a trailing newline. */
+    public const NAME_PATTERN = '/^[A-Za-z][A-Za-z0-9_-]{0,63}$/D';
 
     /** Types that hold no value and may have an empty name. */
     public const LAYOUT_ONLY_TYPES = ['tab', 'accordion', 'message'];
@@ -77,7 +79,8 @@ final class GroupValidator
             $report->addError($p('fields'), 'missing_fields', __('The field group needs a "fields" list.', 'proto-blocks'));
             return;
         }
-        self::fields($g['fields'], $p('fields'), $report);
+        $keys = [];
+        self::fields($g['fields'], $p('fields'), $report, $keys);
     }
 
     private static function location(mixed $location, string $at, Report $report): void
@@ -96,6 +99,10 @@ final class GroupValidator
         foreach ($location as $i => $branch) {
             if (!is_array($branch) || !array_is_list($branch)) {
                 $invalid("{$at}[$i]");
+                continue;
+            }
+            if ($branch === []) {
+                $report->addWarning("{$at}[$i]", 'empty_location_branch', __('A location rule set is empty; the group will not be shown anywhere until it has a rule.', 'proto-blocks'));
                 continue;
             }
             foreach ($branch as $j => $rule) {
@@ -122,8 +129,11 @@ final class GroupValidator
         );
     }
 
-    /** @param list<mixed> $fields */
-    private static function fields(array $fields, string $at, Report $report): void
+    /**
+     * @param list<mixed> $fields
+     * @param array<string, true> $keys field keys seen anywhere in the group (keys are group-wide unique)
+     */
+    private static function fields(array $fields, string $at, Report $report, array &$keys): void
     {
         $seen = [];
         foreach ($fields as $i => $f) {
@@ -134,6 +144,14 @@ final class GroupValidator
             }
             if (!self::nonEmptyString($f['key'] ?? null)) {
                 $report->addError("$path.key", 'missing_key', __('The field has no key.', 'proto-blocks'));
+            } elseif (isset($keys[$f['key']])) {
+                $report->addError("$path.key", 'duplicate_key', sprintf(
+                    /* translators: %s: field key */
+                    __('The field key "%s" is used more than once in this group.', 'proto-blocks'),
+                    $f['key']
+                ));
+            } else {
+                $keys[$f['key']] = true;
             }
             $type = $f['type'] ?? null;
             if (!self::nonEmptyString($type)) {
@@ -176,17 +194,18 @@ final class GroupValidator
                         $type
                     ));
                 } else {
-                    self::fields($subs, "$path.sub_fields", $report);
+                    self::fields($subs, "$path.sub_fields", $report, $keys);
                 }
             }
 
             if ($type === 'flexible_content') {
-                self::layouts($f['layouts'] ?? null, "$path.layouts", $report);
+                self::layouts($f['layouts'] ?? null, "$path.layouts", $report, $keys);
             }
         }
     }
 
-    private static function layouts(mixed $layouts, string $at, Report $report): void
+    /** @param array<string, true> $keys */
+    private static function layouts(mixed $layouts, string $at, Report $report, array &$keys): void
     {
         if (!is_array($layouts) || $layouts === []) {
             $report->addError($at, 'layouts_required', __('A flexible_content field needs at least one layout.', 'proto-blocks'));
@@ -216,7 +235,7 @@ final class GroupValidator
                 $report->addError("$path.sub_fields", 'invalid_field', __('A layout\'s sub_fields must be a list.', 'proto-blocks'));
                 continue;
             }
-            self::fields($subs, "$path.sub_fields", $report);
+            self::fields($subs, "$path.sub_fields", $report, $keys);
         }
     }
 

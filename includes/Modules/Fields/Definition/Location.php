@@ -22,8 +22,17 @@ final class Location
     ) {
     }
 
+    /** False with no rules, any unsupported param, or any empty AND-branch (which would match everything). */
     public function isRenderable(): bool
     {
-        return $this->unsupported === [] && $this->or !== [];
+        if ($this->unsupported !== [] || $this->or === []) {
+            return false;
+        }
+        foreach ($this->or as $branch) {
+            if ($branch === []) {
+                return false;
+            }
+        }
+        return true;
     }
 }

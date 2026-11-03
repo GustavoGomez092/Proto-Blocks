@@ -47,7 +47,8 @@ export type ConditionOperator =
 export type ConditionRule = {
 	field: string;
 	operator: ConditionOperator;
-	value?: string;
+	/** PHP always emits the key; null when the rule carries no value (e.g. `==empty`). */
+	value: string | null;
 };
 
 export type LayoutDef = {
