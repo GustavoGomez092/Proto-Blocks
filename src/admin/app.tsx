@@ -53,7 +53,7 @@ export function AdminApp({ bootstrap }: { bootstrap: AdminBootstrap }) {
 	return (
 		<PortalProvider>
 			<TooltipProvider>
-				<div className="max-w-[1200px] pb-10">
+				<div className="mr-5 max-w-[1200px] pb-10">
 					{Screen ? (
 						<ScreenBoundary screen={bootstrap.screen}>
 							<Suspense fallback={<ScreenSkeleton />}>

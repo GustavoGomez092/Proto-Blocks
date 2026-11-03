@@ -149,3 +149,23 @@ test('a load failure shows the screen error', async () => {
 
 	expect(await screen.findByText("Couldn't load Setup Wizard")).toBeInTheDocument();
 });
+
+test.each([
+	['vanilla, Tailwind still on', 'vanilla', true, true],
+	['vanilla, Tailwind off', 'vanilla', false, false],
+])('Finish note about Tailwind (%s)', async (_label, style, tailwindEnabled, shown) => {
+	const user = userEvent.setup();
+	const data = payload({ style, tailwindEnabled });
+	mockApi({ 'GET admin/wizard': data, 'POST admin/wizard/style': data });
+	renderScreen();
+	await goToStyleStep(user);
+	await user.click(screen.getByRole('button', { name: /Continue/ }));
+	await screen.findByRole('heading', { name: 'Proto Blocks is ready' });
+
+	const note = 'Tailwind stays enabled; turn it off in Tailwind Settings if you no longer need it.';
+	if (shown) {
+		expect(screen.getByText(note)).toBeInTheDocument();
+	} else {
+		expect(screen.queryByText(note)).not.toBeInTheDocument();
+	}
+});

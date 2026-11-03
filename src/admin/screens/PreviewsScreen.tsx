@@ -379,7 +379,7 @@ function CaptureTable({ data, fileModsAllowed }: { data: PreviewsData; fileModsA
 				</Button>
 				<RunStatus run={run} />
 			</div>
-			<Table className="min-w-[720px]">
+			<Table className="min-w-[720px] table-fixed">
 				<TableHeader>
 					<TableRow>
 						<TableHead className="w-10 px-4">
@@ -389,16 +389,16 @@ function CaptureTable({ data, fileModsAllowed }: { data: PreviewsData; fileModsA
 								onCheckedChange={(checked) => toggleAll(checked === true)}
 							/>
 						</TableHead>
-						<TableHead scope="col" className="text-[13px] text-muted-foreground">
+						<TableHead scope="col" className="w-[30%] text-[13px] text-muted-foreground">
 							{__('Block', 'proto-blocks')}
 						</TableHead>
-						<TableHead scope="col" className="text-[13px] text-muted-foreground">
+						<TableHead scope="col" className="w-[168px] text-[13px] text-muted-foreground">
 							{__('Preview', 'proto-blocks')}
 						</TableHead>
 						<TableHead scope="col" className="text-[13px] text-muted-foreground">
 							{__('Status', 'proto-blocks')}
 						</TableHead>
-						<TableHead scope="col" className="px-4 text-right text-[13px] text-muted-foreground">
+						<TableHead scope="col" className="w-[130px] px-4 text-right text-[13px] text-muted-foreground">
 							{__('Action', 'proto-blocks')}
 						</TableHead>
 					</TableRow>

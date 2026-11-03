@@ -41,6 +41,45 @@
   (`AdminPage::renderSettingsPage`, `SetupWizard::renderWizard`,
   `PreviewCapture::renderAdminUi`, `Tailwind\AdminSettings::render`).
 
+### Phase 1: post types and taxonomies
+
+#### Added
+- **Post types and taxonomies from one line of PHP or a JSONC file.**
+  `proto_post_type('Book')` / `proto_taxonomy('Genre', ['post_types' => ['book']])`
+  in the theme, or `proto-types/<slug>/type.jsonc` and
+  `proto-taxonomies/<slug>/taxonomy.jsonc` (comments and trailing commas
+  allowed, `.json` too). Plurals, slugs and every admin label are generated;
+  defaults follow the spec (public, REST, archive, `with_front` off, menu
+  position 22). Child theme folders win over the parent; extra roots via
+  `proto_blocks_schema_paths`. A file beats a PHP call for the same slug and
+  both are flagged ("Declared twice" badge, admin notice, `double_declaration`
+  in `wp proto-blocks validate`).
+- **Overrides of core and plugin types and taxonomies**: a declaration for an
+  already registered slug (or `post`, `page`, `attachment`, `category`,
+  `post_tag`) applies only its declared keys, e.g. a starter `template` for
+  posts.
+- Menu icons from a dashicon, an `https://` URL or a theme file; theme SVGs are
+  sanitised on the server and inlined as `data:` URIs.
+- Rewrite rules flush automatically when the declarations change.
+- **Post Types and Taxonomies admin screens** (Proto Blocks menu): every
+  registered type and taxonomy with its origin, source and counts; edit forms
+  that save back to the JSONC file keeping comments; create and delete;
+  confirmation before a save that affects existing content; block template
+  scaffolding (`single-<slug>.html`, `archive-<slug>.html`, never
+  overwriting; off on classic themes); read-only under `DISALLOW_FILE_MODS` /
+  `DISALLOW_FILE_EDIT`.
+- REST routes `proto-blocks/v1/admin/types`, `admin/types/<slug>`,
+  `admin/types/<slug>/scaffold`, `admin/taxonomies`, `admin/taxonomies/<slug>`
+  and `proto-blocks/v1/schema-files/<type|taxonomy>/<slug>`.
+- **`wp proto-blocks type list|create|scaffold|validate|rename` and
+  `wp proto-blocks taxonomy list|create|validate|rename`**;
+  `wp proto-blocks validate` also reports declarations.
+- `proto_blocks_modules` filter to switch the post type and taxonomy modules
+  off.
+- E2E coverage for the content model (fixture block and classic themes,
+  in-WordPress parity check against two live sites' hand-written
+  registrations, visual baselines for both screens).
+
 ### Security hardening
 
 #### Security

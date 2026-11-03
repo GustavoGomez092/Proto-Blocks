@@ -44,6 +44,7 @@ final class AdminRestController
         Admin\PostTypesRoutes::class,
         Admin\TaxonomiesRoutes::class,
         Admin\SchemaFilesRoutes::class,
+        Admin\OptionsPagesRoutes::class,
     ];
 
     /**

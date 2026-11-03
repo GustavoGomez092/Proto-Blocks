@@ -156,3 +156,17 @@ test('clearing the cache confirms, calls DELETE admin/cache and toasts', async (
 	);
 	expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
 });
+
+test('with no cached templates the Clear cache button is disabled', async () => {
+	mockApi({ 'GET admin/dashboard': payload({ stats: { blocks: 12, cachedTemplates: 0, cacheSize: '0 B' } }) });
+	renderScreen();
+
+	expect(await screen.findByRole('button', { name: 'Clear cache' })).toBeDisabled();
+});
+
+test('the Category column shows the label the server sends, not the slug', async () => {
+	mockApi({ 'GET admin/dashboard': payload({ blocks: [block('card', { category: 'QA Shop blocks' })] }) });
+	renderScreen();
+
+	expect(await screen.findByText('QA Shop blocks')).toBeInTheDocument();
+});

@@ -1,0 +1,8 @@
+// fixture comment: the E2E suite checks that saving from the UI keeps it.
+{
+  "name": "Book",
+  "menu_icon": "dashicons-book",
+  "taxonomies": [
+    { "name": "Genre", "hierarchical": true },
+  ],
+}

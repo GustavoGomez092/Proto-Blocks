@@ -1260,6 +1260,109 @@ Debug mode enables:
 
 **Note:** Disable debug mode in production for security and performance.
 
+## Post types and taxonomies
+
+Proto-Blocks registers post types and taxonomies from one line of PHP or a small JSONC file in your theme. Names are enough: the plural, the slug and every admin label are generated.
+
+### One line of PHP
+
+Call these in `functions.php` (any time before `init` priority 9):
+
+```php
+proto_post_type('Product');
+proto_post_type('Case Study', ['menu_icon' => 'icons/case-study.svg', 'has_archive' => false]);
+proto_taxonomy('Genre', ['post_types' => ['book'], 'hierarchical' => true]);
+```
+
+The second argument takes any key a declaration file accepts: Proto-Blocks' own `name`, `plural`, `slug`, `taxonomies` (types) and `post_types` (taxonomies), plus any `register_post_type()` / `register_taxonomy()` argument.
+
+Defaults for a post type: public, in the REST API (block editor), automatic archive, `rewrite` `{ "slug": "<slug>", "with_front": false }`, supports `title`, `editor`, `thumbnail`, `excerpt`, `revisions`, menu position 22 (just below Pages) and the Proto-Blocks icon. A taxonomy defaults to public, in the REST API, shown as an admin column, flat (like tags), with `with_front` off. Declared `labels` merge over the generated ones, a `rewrite` array merges over the default, every other key replaces the default.
+
+### JSONC files
+
+The same declarations as files, one folder per slug (the folder name is the slug):
+
+```
+your-theme/
+  proto-types/
+    book/type.jsonc
+    post/type.jsonc              <- override of the core post type
+  proto-taxonomies/
+    topic/taxonomy.jsonc
+```
+
+```jsonc
+// proto-types/book/type.jsonc
+{
+  "name": "Book",
+  "menu_icon": "dashicons-book",
+  "taxonomies": [
+    { "name": "Genre", "hierarchical": true },   // declared inline
+    "topic",                                     // an existing taxonomy, by slug
+  ],
+}
+```
+
+```jsonc
+// proto-taxonomies/topic/taxonomy.jsonc
+{ "name": "Topic", "post_types": ["book", "post"] }
+```
+
+Comments and trailing commas are allowed; plain `.json` works too. Files are checked against a JSON schema; an invalid file is skipped and reported on the screens and by `wp proto-blocks validate`.
+
+### Precedence
+
+- A child theme's folder beats the parent theme's folder for the same slug.
+- Extra read-only roots can be added with the `proto_blocks_schema_paths` filter (they come after the theme folders).
+- A file beats a PHP call for the same slug. Both are flagged as "Declared twice" (list badge, admin notice and a `double_declaration` warning in `wp proto-blocks validate`); the PHP declaration is ignored until you remove it.
+- A standalone taxonomy file beats a taxonomy of the same slug declared inline in a type.
+
+### Overrides of core and plugin types
+
+A declaration whose slug is already registered (by WordPress core, a plugin or the theme), or is `post`, `page`, `attachment`, `category` or `post_tag`, is an override: only the keys you write are applied on top of the existing registration, through the `register_post_type_args` / `register_taxonomy_args` filters, with no defaults added. For example a starter block template for posts:
+
+```jsonc
+// proto-types/post/type.jsonc
+{
+  "template": [
+    ["core/heading", { "level": 2, "placeholder": "Eyebrow title" }],
+    ["core/paragraph", {}]
+  ],
+  "template_lock": false
+}
+```
+
+Rewrite rules are flushed automatically when the declarations change; there is no need to visit Settings > Permalinks.
+
+### Menu icons
+
+`menu_icon` accepts a dashicon (`dashicons-book`), an `https://` URL, or a file in the theme relative to the theme folder (`icons/book.svg`, or a `png`, `jpg`, `jpeg`, `webp`). SVG files are sanitised on the server (scripts, event handlers, external references and `<style>` are removed), inlined as a `data:` URI and tinted to match the admin colour scheme. Anything else falls back to the default icon with an `icon_invalid` warning.
+
+### Admin screens
+
+**Proto Blocks > Post Types** and **Proto Blocks > Taxonomies** list everything registered on the site with its origin (Proto-Blocks file, Proto-Blocks PHP, Core, Plugin, Theme), its source and counts. Proto-Blocks declarations open in a form that saves back to the JSONC file, keeping your comments; core and plugin types get "Create override file". Saves that would hide something existing content uses (for example removing `editor` from a type with posts) ask for confirmation first. The Post Types edit screen can scaffold `single-<slug>.html` / `archive-<slug>.html` block templates into a block theme (existing files are never overwritten). When `DISALLOW_FILE_MODS` or `DISALLOW_FILE_EDIT` is set, both screens are read-only.
+
+The modules can be switched off with the `proto_blocks_modules` filter:
+
+```php
+add_filter('proto_blocks_modules', fn ($modules) => ['taxonomies' => false] + $modules);
+```
+
+### WP-CLI
+
+```bash
+wp proto-blocks type list
+wp proto-blocks type create "Case Study" [--slug=<slug>] [--plural=<plural>] [--json]
+wp proto-blocks type scaffold book [--taxonomies]     # block templates, never overwrites
+wp proto-blocks type validate
+wp proto-blocks type rename book novel [--migrate]    # --migrate moves existing posts
+wp proto-blocks taxonomy list
+wp proto-blocks taxonomy create Genre [--slug=<slug>] [--plural=<plural>] [--json]
+wp proto-blocks taxonomy rename genre category-genre [--migrate]
+```
+
+`wp proto-blocks validate` reports blocks and declarations together.
+
 ## WP-CLI Commands
 
 ```bash
@@ -1269,8 +1372,12 @@ wp proto-blocks list
 # Create a new block scaffold
 wp proto-blocks create testimonial --title="Testimonial" --fields="quote:wysiwyg,author:text"
 
-# Validate all blocks
+# Validate all blocks and post type / taxonomy declarations
 wp proto-blocks validate
+
+# Post types and taxonomies (see "Post types and taxonomies")
+wp proto-blocks type list
+wp proto-blocks taxonomy list
 
 # Clear template cache
 wp proto-blocks cache clear
@@ -1309,7 +1416,7 @@ The **Proto-Blocks** admin is a React app (Tailwind 4 + shadcn/ui, built from `s
 | `/admin/wizard/style`, `/admin/wizard/complete` | POST | Wizard steps |
 | `/admin/wizard/demos` | POST | Install the demo blocks for the chosen style (*writes files*; not used by the UI since 2.15) |
 
-The preview capture upload keeps its own route, `POST /preview-capture`, which also writes files and is gated the same way. Four `admin-ajax.php` actions remain, none of them used by the admin screens' controls: `proto_blocks_tailwind_get_compile_inputs` and `proto_blocks_tailwind_store_css` (the in-browser Tailwind compiler), `proto_blocks_preview` (block previews in the editor) and `proto_blocks_capture_render` (the page Preview Capture renders in its hidden iframe).
+The preview capture upload keeps its own route, `POST /preview-capture`, which also writes files and is gated the same way. Four `admin-ajax.php` actions remain: `proto_blocks_tailwind_get_compile_inputs` and `proto_blocks_tailwind_store_css` (the in-browser Tailwind compiler), `proto_blocks_preview` (block previews in the editor) and `proto_blocks_capture_render` (the page Preview Capture renders in its hidden iframe).
 
 Admin development: `npm run build` compiles the app, `npm run test:js` runs the Jest suite, and `npm run test:e2e` runs the Playwright suite against a wp-env site (see `tests/e2e/README.md`). PHP 8.1 or newer is required.
 
