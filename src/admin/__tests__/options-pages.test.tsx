@@ -31,6 +31,15 @@ const SLUG = 'cadco-display-settings';
 const cadcoText = readFileSync(join(__dirname, '../../../tests/fixtures/options-pages/cadco-display-settings/page.jsonc'), 'utf8');
 const cadcoData = parseJsonc(cadcoText).data;
 
+// The screens are React.lazy() dynamic imports. The first test in this file
+// would otherwise pay the cold transform of the whole screen module graph
+// inside findBy*'s 1 s window, which a starved CI runner or a busy worker
+// pool overruns. Load the modules up front, under the hook's own timeout.
+beforeAll(async () => {
+	await import('@/admin/screens/OptionsPagesScreen');
+	await import('@/admin/screens/OptionsPageScreen');
+}, 60000);
+
 beforeAll(() => {
 	if (!('ResizeObserver' in window)) {
 		(window as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
