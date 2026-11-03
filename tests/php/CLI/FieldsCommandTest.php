@@ -184,11 +184,29 @@ final class FieldsCommandTest extends TestCase
         $this->assertStringContainsString('Unknown format: xml', self::error(fn() => $command->list([], ['format' => 'xml'])));
     }
 
-    public function testListLogsInsteadOfPrintingAnEmptyJsonTable(): void
+    public function testEmptyListPrintsAnEmptyDocumentForJsonAndCsv(): void
     {
-        (new FieldsCommand(static fn() => new FieldsModule()))->list([], ['format' => 'json']);
+        $command = new FieldsCommand(static fn() => new FieldsModule());
+        $command->list([], ['format' => 'json']);
+        $command->list([], ['format' => 'csv']);
+
+        $this->assertSame(['json:[]', 'csv:[]'], \WP_CLI::messages('format'));
+        $this->assertSame([], \WP_CLI::messages('log'));
+    }
+
+    public function testEmptyTableListLogsAMessage(): void
+    {
+        (new FieldsCommand(static fn() => new FieldsModule()))->list([], []);
 
         $this->assertSame(['No field groups.'], \WP_CLI::messages('log'));
+        $this->assertSame([], \WP_CLI::messages('format'));
+    }
+
+    public function testUnicodeTitlesSurviveSanitising(): void
+    {
+        $skipped = [['key' => 'k', 'title' => "Caf\u{E9} \u{65E5}\u{672C}", 'source' => 's']];
+
+        $this->assertSame("Caf\u{E9} \u{65E5}\u{672C}", FieldsCommand::rows([], $skipped)[0]['title']);
     }
 
     public function testValidateExitsOneOnErrors(): void

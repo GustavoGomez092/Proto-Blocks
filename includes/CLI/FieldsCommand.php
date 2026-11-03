@@ -28,6 +28,11 @@ final class FieldsCommand {
 	public const STATUS_UNRENDERABLE = 'unrenderable';
 	public const STATUS_SKIPPED_ACF  = 'skipped-acf';
 
+	private const LIST_COLUMNS = array( 'key', 'title', 'source', 'path', 'fields', 'location', 'status' );
+
+	/** Location params that confine a group to some posts. */
+	private const NARROWING_PARAMS = array( 'post_type', 'post', 'page_template', 'post_taxonomy' );
+
 	/** @var \Closure(): ?FieldsModule */
 	private \Closure $resolve;
 
@@ -39,11 +44,6 @@ final class FieldsCommand {
 			? \Closure::fromCallable( $resolve )
 			: static fn(): ?FieldsModule => \ProtoBlocks\Core\Plugin::getInstance()->getModules()->fields();
 	}
-
-	private const LIST_COLUMNS = array( 'key', 'title', 'source', 'path', 'fields', 'location', 'status' );
-
-	/** Location params that confine a group to some posts. */
-	private const NARROWING_PARAMS = array( 'post_type', 'post', 'page_template', 'post_taxonomy' );
 
 	/**
 	 * One row per group, then one per group skipped because ACF registers its key.
@@ -197,7 +197,7 @@ final class FieldsCommand {
 		}
 		$groups = $module->index()->all();
 		$rows   = self::rows( $groups, $module->acf()->skipped() );
-		if ( array() === $rows ) {
+		if ( array() === $rows && 'table' === $format ) {
 			WP_CLI::log( 'No field groups.' );
 			return;
 		}
