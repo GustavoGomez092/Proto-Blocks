@@ -140,13 +140,45 @@ final class BinaryIntegrityTest extends TestCase
         $bm = new BinaryManager($this->binDir, $sha);
         $this->assertTrue($bm->isTrusted());
 
-        // Replace the file the way an uploads-write attacker would. Bump the
-        // mtime so the per-request memo (size|mtime|inode) cannot mask it.
+        // Replace the file the way an uploads-write attacker would.
         $path = $this->binDir . 'tailwindcss';
         file_put_contents($path, "#!/bin/sh\necho \"~ tailwindcss v4.1.0\"\ntouch " . escapeshellarg($this->binDir . 'pwned') . "\n");
         touch($path, time() + 5);
 
         $this->assertSame(BinaryManager::TRUST_MISMATCH, $bm->getTrustState());
+        $this->assertNull($bm->getVersion());
+        $this->assertFileDoesNotExist($this->binDir . 'pwned', 'the tampered binary must not have been executed');
+    }
+
+    public function test_tamper_preserving_size_mtime_and_inode_is_refused(): void
+    {
+        // Rewritten in place (same inode), to the same length, with the
+        // original timestamps put back (`touch -r`), within the same second
+        // and with PHP's stat cache primed by the first check: no file
+        // metadata changes that a cache key could notice. Only the hash can.
+        $path = $this->binDir . 'tailwindcss';
+        $evil = "#!/bin/sh\ntouch " . escapeshellarg($this->binDir . 'pwned') . "\necho \"~ tailwindcss v4.1.0\"\n";
+        $good = "#!/bin/sh\necho \"~ tailwindcss v4.1.0\"\n#";
+        $good .= str_repeat('x', strlen($evil) - strlen($good) - 1) . "\n";
+        $this->assertSame(strlen($good), strlen($evil));
+
+        $sha = $this->writeBinary($good);
+        $bm = new BinaryManager($this->binDir, $sha);
+        $this->assertSame(BinaryManager::TRUST_TRUSTED, $bm->getTrustState());
+        $before = stat($path);
+
+        $handle = fopen($path, 'r+');
+        $this->assertNotFalse($handle);
+        fwrite($handle, $evil);
+        fclose($handle);
+        touch($path, $before['mtime'], $before['atime']);
+
+        clearstatcache(true, $path);
+        $after = stat($path);
+        $this->assertSame([$before['size'], $before['mtime'], $before['ino']], [$after['size'], $after['mtime'], $after['ino']]);
+
+        $this->assertSame(BinaryManager::TRUST_MISMATCH, $bm->getTrustState());
+        $this->assertFalse($bm->isTrusted());
         $this->assertNull($bm->getVersion());
         $this->assertFileDoesNotExist($this->binDir . 'pwned', 'the tampered binary must not have been executed');
     }

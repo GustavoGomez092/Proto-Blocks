@@ -64,13 +64,6 @@ class BinaryManager
     private ?string $expectedSha256;
 
     /**
-     * Per-request memo of the trust check, keyed by file identity.
-     *
-     * @var array<string, bool>
-     */
-    private array $trustMemo = [];
-
-    /**
      * Constructor
      */
     public function __construct(?string $binDir = null, ?string $expectedSha256 = null)
@@ -157,8 +150,12 @@ class BinaryManager
     /**
      * Whether the on-disk binary matches the expected hash.
      *
-     * Called before every exec. Memoised per request on (size, mtime, inode)
-     * so a settings-page render does not hash a 100 MB file several times.
+     * Called before every exec, and hashes the file every time. There is
+     * deliberately no memo: file metadata is not integrity. Size, mtime and
+     * inode survive an in-place rewrite plus `touch -r`, timestamps have
+     * one-second resolution, and PHP's stat cache (left stale by writes and
+     * touch() on PHP 8.1) can serve pre-tamper values for the rest of the
+     * request.
      */
     public function isTrusted(): bool
     {
@@ -171,6 +168,8 @@ class BinaryManager
     public function getTrustState(): string
     {
         $path = $this->getBinaryPath();
+        // Never answer "is it there" from a stat cached earlier in the request.
+        clearstatcache(true, $path);
         if (!is_file($path)) {
             return self::TRUST_MISSING;
         }
@@ -180,15 +179,11 @@ class BinaryManager
             return self::TRUST_UNVERIFIED;
         }
 
-        $stat = @stat($path);
-        $key = $expected . '|' . ($stat ? $stat['size'] . '|' . $stat['mtime'] . '|' . $stat['ino'] : 'nostat');
+        $actual = @hash_file('sha256', $path);
 
-        if (!array_key_exists($key, $this->trustMemo)) {
-            $actual = @hash_file('sha256', $path);
-            $this->trustMemo = [$key => is_string($actual) && hash_equals($expected, strtolower($actual))];
-        }
-
-        return $this->trustMemo[$key] ? self::TRUST_TRUSTED : self::TRUST_MISMATCH;
+        return is_string($actual) && hash_equals($expected, strtolower($actual))
+            ? self::TRUST_TRUSTED
+            : self::TRUST_MISMATCH;
     }
 
     /**
@@ -563,7 +558,6 @@ class BinaryManager
         }
 
         // Record the verified hash so every later exec can re-check the file.
-        $this->trustMemo = [];
         Manager::getInstance()->updateSettings(['cli_sha256' => $verify['sha256']]);
 
         // Verify it runs
@@ -589,7 +583,6 @@ class BinaryManager
      */
     public function uninstall(): bool
     {
-        $this->trustMemo = [];
         $binaryPath = $this->getBinaryPath();
         if (file_exists($binaryPath)) {
             return unlink($binaryPath);
