@@ -210,4 +210,53 @@ final class AdminRestControllerTest extends TestCase
     {
         self::assertContains(DashboardRoutes::class, AdminRestController::ROUTE_GROUPS);
     }
+
+    public function testDashboardRoutesRegisterCacheDeleteBehindPermission(): void
+    {
+        (new AdminRestController())->registerRoutes();
+
+        $found = null;
+        foreach ($GLOBALS['pb_test_routes'] as $route) {
+            if ($route['route'] === '/admin/cache') {
+                $found = $route;
+            }
+        }
+        self::assertNotNull($found, 'admin/cache is registered');
+        self::assertSame('DELETE', $found['args'][0]['methods']);
+
+        $GLOBALS['pb_test_caps'] = [1 => ['edit_posts']];
+        self::assertFalse(($found['args'][0]['permission_callback'])());
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function testExampleBlocksPostIsRejectedWhenLockedBeforeWriting(): void
+    {
+        define('PROTO_BLOCKS_EXAMPLE_BLOCKS_FROM_CONFIG', true);
+        define('PROTO_BLOCKS_EXAMPLE_BLOCKS', true);
+        $GLOBALS['pb_test_options'] = [];
+
+        $routes = new DashboardRoutes(new AdminPage(new Cache(sys_get_temp_dir() . '/pb-dash-' . bin2hex(random_bytes(4)))));
+        $result = $routes->setExampleBlocks(new \WP_REST_Request(['enabled' => false]));
+
+        self::assertInstanceOf(\WP_Error::class, $result);
+        self::assertSame('proto_blocks_locked', $result->get_error_code());
+        self::assertSame(409, $result->get_error_data()['status']);
+        self::assertArrayNotHasKey(AdminPage::OPTION_EXAMPLE_BLOCKS, $GLOBALS['pb_test_options']);
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function testInstallAndRemoveReturnFileModsErrorWhenDisabled(): void
+    {
+        define('DISALLOW_FILE_MODS', true);
+
+        $routes = new DashboardRoutes(new AdminPage(new Cache(sys_get_temp_dir() . '/pb-dash-' . bin2hex(random_bytes(4)))));
+
+        foreach ([$routes->install(new \WP_REST_Request(['type' => 'vanilla'])), $routes->remove()] as $result) {
+            self::assertInstanceOf(\WP_Error::class, $result);
+            self::assertSame('proto_blocks_file_mods', $result->get_error_code());
+            self::assertSame(403, $result->get_error_data()['status']);
+        }
+    }
 }

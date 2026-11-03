@@ -5,6 +5,7 @@ import {
 	BlocksIcon,
 	DatabaseZapIcon,
 	DownloadIcon,
+	EraserIcon,
 	HardDriveIcon,
 	ImageIcon,
 	LoaderCircleIcon,
@@ -15,7 +16,7 @@ import {
 	Trash2Icon,
 	WindIcon,
 } from 'lucide-react';
-import { adminGet, adminPost, ApiError } from '@/admin/api';
+import { adminDelete, adminGet, adminPost, ApiError } from '@/admin/api';
 import { getBootstrap } from '@/admin/bootstrap';
 import { ConfirmDialog } from '@/admin/components/shell/ConfirmDialog';
 import { PageHeader } from '@/admin/components/shell/PageHeader';
@@ -58,7 +59,6 @@ export interface DashboardData {
 	installed: string[];
 	/** Same-named theme folders that are custom or edited, so kept. */
 	conflicts: string[];
-	skipped: string[];
 	blocks: DashboardBlock[];
 }
 
@@ -575,6 +575,61 @@ function ExampleAndDemoBlocks({
 	);
 }
 
+function ClearCache({ cachedTemplates, onData }: { cachedTemplates: number; onData: (data: DashboardData) => void }) {
+	const [open, setOpen] = useState(false);
+	const [clearing, setClearing] = useState(false);
+
+	const clear = async () => {
+		setClearing(true);
+		try {
+			const result = await adminDelete<{ cleared: number; data: DashboardData }>('admin/cache');
+			onData(result.data);
+			toast.success(
+				sprintf(
+					/* translators: %d: number of cached templates */
+					_n('%d cached template cleared.', '%d cached templates cleared.', result.cleared, 'proto-blocks'),
+					result.cleared
+				)
+			);
+		} catch (error) {
+			toast.error(__("Couldn't clear the cache.", 'proto-blocks'), {
+				description: error instanceof Error ? error.message : undefined,
+			});
+		} finally {
+			setClearing(false);
+			setOpen(false);
+		}
+	};
+
+	return (
+		<>
+			<div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-muted-foreground">
+				<p>{__('Clear the template cache to force every block to recompile. Useful while developing.', 'proto-blocks')}</p>
+				<Button variant="outline" size="sm" disabled={clearing} onClick={() => setOpen(true)}>
+					<EraserIcon aria-hidden="true" />
+					{__('Clear cache', 'proto-blocks')}
+				</Button>
+			</div>
+			<ConfirmDialog
+				open={open}
+				title={sprintf(
+					/* translators: %d: number of cached templates */
+					_n('Clear %d cached template?', 'Clear %d cached templates?', cachedTemplates, 'proto-blocks'),
+					cachedTemplates
+				)}
+				description={__('Templates are compiled again the next time each block renders.', 'proto-blocks')}
+				confirmLabel={clearing ? __('Clearing…', 'proto-blocks') : __('Clear cache', 'proto-blocks')}
+				onConfirm={clear}
+				onCancel={() => {
+					if (!clearing) {
+						setOpen(false);
+					}
+				}}
+			/>
+		</>
+	);
+}
+
 function LoadingState() {
 	return (
 		<div aria-busy="true" className="grid gap-6">
@@ -653,6 +708,8 @@ export default function DashboardScreen() {
 						icon={<HardDriveIcon />}
 					/>
 				</section>
+
+				<ClearCache cachedTemplates={data.stats.cachedTemplates} onData={onData} />
 
 				<SectionCard aria-labelledby="pb-blocks-title">
 					<CardHead

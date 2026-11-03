@@ -46,6 +46,14 @@ final class DashboardRoutes
             ],
         ]);
 
+        register_rest_route($namespace, $base . '/cache', [
+            [
+                'methods' => 'DELETE',
+                'callback' => [$this, 'clearCache'],
+                'permission_callback' => $permission,
+            ],
+        ]);
+
         register_rest_route($namespace, $base . '/example-blocks', [
             [
                 'methods' => 'POST',
@@ -92,10 +100,11 @@ final class DashboardRoutes
     /** @return array<string,mixed>|WP_Error */
     public function setExampleBlocks(WP_REST_Request $request)
     {
-        $page = $this->page();
-        $state = $page->dashboardData()['exampleBlocks'];
-
-        if ($state['locked']) {
+        if (AdminRestController::exampleBlocksState(
+            defined('PROTO_BLOCKS_EXAMPLE_BLOCKS_FROM_CONFIG') && \PROTO_BLOCKS_EXAMPLE_BLOCKS_FROM_CONFIG,
+            defined('PROTO_BLOCKS_EXAMPLE_BLOCKS') && \PROTO_BLOCKS_EXAMPLE_BLOCKS,
+            null
+        )['locked']) {
             return new WP_Error(
                 'proto_blocks_locked',
                 __('Example blocks are managed from the configuration constant.', 'proto-blocks'),
@@ -107,7 +116,22 @@ final class DashboardRoutes
         // Block registration depends on this value; clear cached templates so the change takes effect.
         Plugin::getInstance()->getCache()->clear();
 
-        return $page->dashboardData();
+        return $this->page()->dashboardData();
+    }
+
+    /**
+     * Clears the compiled template cache.
+     *
+     * @return array<string,mixed>
+     */
+    public function clearCache(): array
+    {
+        $cleared = Plugin::getInstance()->getCache()->clear();
+
+        return [
+            'cleared' => $cleared,
+            'data' => $this->page()->dashboardData(),
+        ];
     }
 
     /**
@@ -118,6 +142,10 @@ final class DashboardRoutes
      */
     public function install(WP_REST_Request $request)
     {
+        if (!AdminPage::fileModsAllowed()) {
+            return AdminRestController::fileModsError();
+        }
+
         $type = (string) $request->get_param('type');
         $invalid = AdminRestController::validateDemoType($type, TailwindManager::getInstance()->isEnabled());
         if ($invalid instanceof WP_Error) {
@@ -145,6 +173,10 @@ final class DashboardRoutes
      */
     public function remove()
     {
+        if (!AdminPage::fileModsAllowed()) {
+            return AdminRestController::fileModsError();
+        }
+
         $page = $this->page();
         $result = $page->removeDemoBlocks();
         if ($result instanceof WP_Error) {

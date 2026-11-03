@@ -150,7 +150,6 @@ class AdminPage
             ],
             'installed' => $this->getInstalledDemoBlocks(),
             'conflicts' => $this->getConflictingDemoBlocks(),
-            'skipped' => $this->getSkippedDemoBlocks(),
             'blocks' => $rows,
         ];
     }

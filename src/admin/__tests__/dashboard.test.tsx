@@ -179,3 +179,30 @@ test('shows ScreenError when the request fails', async () => {
 
 	expect(await screen.findByText("Couldn't load Blocks")).toBeInTheDocument();
 });
+
+test('clearing the cache confirms, calls DELETE admin/cache and toasts', async () => {
+	const user = userEvent.setup();
+	const api = mockApi({
+		'GET admin/dashboard': payload(),
+		'DELETE admin/cache': () => ({
+			cleared: 4,
+			data: payload({ stats: { blocks: 12, cachedTemplates: 0, cacheSize: '0 B' } }),
+		}),
+	});
+	renderScreen();
+
+	await user.click(await screen.findByRole('button', { name: 'Clear cache' }));
+
+	const dialog = await screen.findByRole('alertdialog');
+	expect(within(dialog).getByText('Clear 4 cached templates?')).toBeInTheDocument();
+	await user.click(within(dialog).getByRole('button', { name: 'Clear cache' }));
+
+	expect(await screen.findByText('4 cached templates cleared.')).toBeInTheDocument();
+	expect(api).toHaveBeenCalledWith(
+		expect.objectContaining({
+			url: 'https://example.test/wp-json/proto-blocks/v1/admin/cache',
+			method: 'DELETE',
+		})
+	);
+	expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+});
