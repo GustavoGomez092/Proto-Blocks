@@ -1,0 +1,4 @@
+{
+  "name": "Genre",
+  "post_types": ["product"]
+}

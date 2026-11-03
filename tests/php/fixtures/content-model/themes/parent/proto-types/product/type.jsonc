@@ -1,0 +1,7 @@
+{
+  // A product post type, declared in the parent theme.
+  "name": "Product",
+  "has_archive": true,
+  /* trailing commas are tolerated */
+  "supports": ["title", "editor"],
+}

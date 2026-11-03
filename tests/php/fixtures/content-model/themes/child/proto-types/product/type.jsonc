@@ -1,0 +1,5 @@
+{
+  // The child theme replaces the parent's product.
+  "name": "Product",
+  "has_archive": "shop"
+}

@@ -50,15 +50,4 @@ if (!function_exists('wp_parse_url')) {
     function wp_parse_url($url, $component = -1) { return parse_url((string) $url, $component); }
 }
 
-if (!function_exists('apply_filters')) {
-    /**
-     * Same shape as tests/php/Fields/wp-stubs.php so either definition may
-     * win: tests register callbacks in $GLOBALS['pb_test_filters'][$hook][].
-     */
-    function apply_filters($hook, $value, ...$args) {
-        foreach ($GLOBALS['pb_test_filters'][$hook] ?? [] as $callback) {
-            $value = $callback($value, ...$args);
-        }
-        return $value;
-    }
-}
+// apply_filters() is stubbed once in tests/php/bootstrap.php.
