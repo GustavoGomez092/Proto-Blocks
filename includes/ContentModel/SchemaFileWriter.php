@@ -18,6 +18,24 @@ final class SchemaFileWriter
     /** Extensions a declaration folder may hold and still be removed with it. */
     private const OWN_FILES = '/\.(?:jsonc?|svg|png|jpe?g|webp)\z/iD';
 
+    /** Slug grammar of an extended kind unless it names its own; `D` so `$` refuses a trailing newline. */
+    public const EXTENDED_SLUG_PATTERN = '/^[a-z][a-z0-9_-]{0,31}$/D';
+
+    /** Kind names an extension may take. */
+    private const KIND_PATTERN = '/^[a-z][a-z0-9-]{0,31}\z/D';
+
+    /** Folder and basename grammar of an extension. */
+    private const SEGMENT_PATTERN = '/^[a-z][a-z0-9_-]{0,63}\z/D';
+
+    /**
+     * Kinds added by modules (C5 extendKind): kind => folder, basename,
+     * validator, slug pattern, decoder, template. Not FileLoader::FOLDERS:
+     * the Registry stays type/taxonomy/options only.
+     *
+     * @var array<string, array{folder: string, basename: string, validate: \Closure, slugPattern: string, decode: ?\Closure, template: ?\Closure}>
+     */
+    private static array $extended = [];
+
     /** @var list<string> */
     private array $roots;
 
@@ -83,6 +101,151 @@ final class SchemaFileWriter
         return $findings;
     }
 
+    /**
+     * Adds a declaration kind this writer may write: `<root>/<folder>/<slug>/<basename>.jsonc|.json`.
+     *
+     * For an extended kind write() decodes with `$options['decode']` (default
+     * Jsonc::decode), runs $validate instead of SchemaCheck, then the
+     * `proto_blocks_declaration_errors` filter; it has no `slug` key check.
+     * Every other rule (file mods, slug grammar, size, hash conflict,
+     * confinement, symlink refusal, atomic swap) is the same as for a type.
+     * Registering a kind again replaces it.
+     *
+     * @param \Closure(array<string|int, mixed>): list<array{path: string, message: string}> $validate
+     * @param array{slugPattern?: string, decode?: \Closure(string): array<string|int, mixed>, template?: \Closure(string, string): string} $options
+     *        slugPattern: anchored regex with `D` (default EXTENDED_SLUG_PATTERN); decode: throws JsoncException;
+     *        template: fn(slug, name): text served for a file that does not exist yet
+     * @throws \InvalidArgumentException on a kind, folder or basename the writer cannot address safely
+     */
+    public static function extendKind(string $kind, string $folder, string $basename, \Closure $validate, array $options = []): void
+    {
+        if (preg_match(self::KIND_PATTERN, $kind) !== 1 || isset(FileLoader::FOLDERS[$kind])) {
+            throw new \InvalidArgumentException(sprintf('Invalid declaration kind "%s".', $kind));
+        }
+        if (preg_match(self::SEGMENT_PATTERN, $folder) !== 1 || preg_match(self::SEGMENT_PATTERN, $basename) !== 1) {
+            throw new \InvalidArgumentException('An extended kind needs a plain folder and basename.');
+        }
+        $taken = in_array($folder, FileLoader::FOLDERS, true);
+        foreach (self::$extended as $other => $spec) {
+            $taken = $taken || ($other !== $kind && $spec['folder'] === $folder);
+        }
+        if ($taken) {
+            throw new \InvalidArgumentException(sprintf('The folder "%s" belongs to another kind.', $folder));
+        }
+        $pattern = $options['slugPattern'] ?? self::EXTENDED_SLUG_PATTERN;
+        if (!is_string($pattern) || !str_ends_with($pattern, 'D') || @preg_match($pattern, '') === false) {
+            throw new \InvalidArgumentException('The slug pattern must be a valid regex with the D modifier.');
+        }
+        $decode = $options['decode'] ?? null;
+        $template = $options['template'] ?? null;
+
+        self::$extended[$kind] = [
+            'folder' => $folder,
+            'basename' => $basename,
+            'validate' => $validate,
+            'slugPattern' => $pattern,
+            'decode' => $decode instanceof \Closure ? $decode : null,
+            'template' => $template instanceof \Closure ? $template : null,
+        ];
+    }
+
+    /** @return list<string> the kinds added with extendKind(), in order */
+    public static function extendedKinds(): array
+    {
+        return array_keys(self::$extended);
+    }
+
+    public static function isExtended(string $kind): bool
+    {
+        return isset(self::$extended[$kind]);
+    }
+
+    /** Tests only: forget every extended kind. */
+    public static function resetKinds(): void
+    {
+        self::$extended = [];
+    }
+
+    /** null when $slug may be used for $kind (any kind), else 'pattern', 'length', 'reserved' or 'kind'. */
+    public static function slugError(string $kind, string $slug): ?string
+    {
+        if (isset(self::$extended[$kind])) {
+            return preg_match(self::$extended[$kind]['slugPattern'], $slug) === 1 ? null : 'pattern';
+        }
+        if (!isset(FileLoader::FOLDERS[$kind])) {
+            return 'kind';
+        }
+
+        return Slug::error($slug, $kind);
+    }
+
+    /** The message for a slugError() code. */
+    public static function slugMessage(string $kind, string $slug, string $code): string
+    {
+        if ($code === 'kind') {
+            return __('Unknown declaration kind.', 'proto-blocks');
+        }
+        if (isset(self::$extended[$kind])) {
+            return sprintf(
+                /* translators: %s: the slug as typed */
+                __('"%s" is not a valid slug: start with a lowercase letter and use only a-z, 0-9, "_" and "-" (32 characters at most).', 'proto-blocks'),
+                $slug
+            );
+        }
+
+        return FileLoader::slugMessage($code, $slug, $kind);
+    }
+
+    /** The folder an extended kind's files live in (`proto-fields`), or null. */
+    public static function extendedFolder(string $kind): ?string
+    {
+        return self::$extended[$kind]['folder'] ?? null;
+    }
+
+    /** The new-file text an extended kind serves for $slug, or null when it has no template. */
+    public static function extendedTemplate(string $kind, string $slug, string $name): ?string
+    {
+        $template = self::$extended[$kind]['template'] ?? null;
+
+        return $template !== null ? (string) $template($slug, $name) : null;
+    }
+
+    /**
+     * Decodes $text as $kind's writer would.
+     *
+     * @return array<string|int, mixed>
+     * @throws JsoncException
+     */
+    public static function decodeFor(string $kind, string $text): array
+    {
+        $decode = self::$extended[$kind]['decode'] ?? null;
+
+        return $decode !== null ? $decode($text) : Jsonc::decode($text);
+    }
+
+    /**
+     * The existing file of an extended kind under the writable roots, as a
+     * minimal file Declaration (no data) for target(), write() and delete();
+     * the first root that has one wins (the child theme over its parent),
+     * `.jsonc` over `.json`. Null for other kinds (the Registry knows those),
+     * for an invalid slug, or when no root has the file.
+     */
+    public function existing(string $kind, string $slug): ?Declaration
+    {
+        if (!isset(self::$extended[$kind]) || self::slugError($kind, $slug) !== null) {
+            return null;
+        }
+        foreach ($this->roots as $root) {
+            foreach (self::candidates($root, $kind, $slug) as $path) {
+                if (is_file($path) || is_link($path)) {
+                    return new Declaration($kind, $slug, [], Declaration::ORIGIN_FILE, $path, $root);
+                }
+            }
+        }
+
+        return null;
+    }
+
     public static function hash(string $text): string
     {
         return hash('sha256', $text);
@@ -95,7 +258,7 @@ final class SchemaFileWriter
      */
     public function target(string $kind, string $slug, ?Declaration $existing): array
     {
-        if (!isset(FileLoader::FOLDERS[$kind]) || Slug::error($slug, $kind) !== null) {
+        if (self::slugError($kind, $slug) !== null) {
             return ['path' => '', 'writable' => false, 'reason' => 'outside_root'];
         }
 
@@ -131,8 +294,9 @@ final class SchemaFileWriter
             );
         }
 
+        $extended = self::$extended[$kind] ?? null;
         try {
-            $data = Jsonc::decode($text);
+            $data = self::decodeFor($kind, $text);
         } catch (JsoncException $e) {
             throw new WriteException(
                 'invalid_jsonc',
@@ -148,7 +312,9 @@ final class SchemaFileWriter
             );
         }
 
-        $errors = SchemaCheck::validate($data, SchemaCheck::schema(), '#/$defs/' . $kind);
+        $errors = $extended !== null
+            ? self::extendedErrors($extended['validate'], $data)
+            : SchemaCheck::validate($data, SchemaCheck::schema(), '#/$defs/' . $kind);
         if ($errors === []) {
             $errors = self::declarationErrors($kind, $data, $slug);
         }
@@ -161,7 +327,7 @@ final class SchemaFileWriter
             );
         }
 
-        if (array_key_exists('slug', $data) && $data['slug'] !== $slug) {
+        if ($extended === null && array_key_exists('slug', $data) && $data['slug'] !== $slug) {
             throw new WriteException(
                 'slug_mismatch',
                 400,
@@ -311,10 +477,32 @@ final class SchemaFileWriter
         return [$jsonc, true];
     }
 
+    /**
+     * An extended kind's validator findings in the writer's error shape; a
+     * finding in any other shape is an error (fail closed).
+     *
+     * @param array<string|int, mixed> $data
+     * @return list<array{path: string, message: string}>
+     */
+    private static function extendedErrors(\Closure $validate, array $data): array
+    {
+        $found = $validate($data);
+        $errors = [];
+        foreach (is_array($found) ? $found : [null] as $error) {
+            $errors[] = is_array($error) && is_string($error['message'] ?? null)
+                ? ['path' => is_string($error['path'] ?? null) ? $error['path'] : '', 'message' => $error['message']]
+                : ['path' => '', 'message' => __('A validation rule refused this declaration.', 'proto-blocks')];
+        }
+
+        return $errors;
+    }
+
     /** @return array{0: string, 1: string} */
     private static function candidates(string $root, string $kind, string $slug): array
     {
-        $base = $root . '/' . FileLoader::FOLDERS[$kind] . '/' . $slug . '/' . FileLoader::BASENAMES[$kind];
+        $folder = self::$extended[$kind]['folder'] ?? FileLoader::FOLDERS[$kind];
+        $basename = self::$extended[$kind]['basename'] ?? FileLoader::BASENAMES[$kind];
+        $base = $root . '/' . $folder . '/' . $slug . '/' . $basename;
 
         return [$base . '.jsonc', $base . '.json'];
     }
@@ -349,12 +537,12 @@ final class SchemaFileWriter
 
     private function assertSlug(string $kind, string $slug): void
     {
-        if (!isset(FileLoader::FOLDERS[$kind])) {
+        $error = self::slugError($kind, $slug);
+        if ($error === 'kind') {
             throw new WriteException('invalid_slug', 400, __('Unknown declaration kind.', 'proto-blocks'));
         }
-        $error = Slug::error($slug, $kind);
         if ($error !== null) {
-            throw new WriteException('invalid_slug', 400, FileLoader::slugMessage($error, $slug, $kind), ['reason' => $error]);
+            throw new WriteException('invalid_slug', 400, self::slugMessage($kind, $slug, $error), ['reason' => $error]);
         }
     }
 

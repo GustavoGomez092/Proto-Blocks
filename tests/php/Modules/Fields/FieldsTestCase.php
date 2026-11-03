@@ -6,6 +6,7 @@ namespace ProtoBlocks\Tests\Modules\Fields;
 
 use PHPUnit\Framework\TestCase;
 use ProtoBlocks\ContentModel\PhpDeclarations;
+use ProtoBlocks\ContentModel\SchemaFileWriter;
 use ProtoBlocks\Modules\Fields\FieldsModule;
 use ProtoBlocks\Modules\Fields\Read\FieldReader;
 use ProtoBlocks\Modules\Fields\Sources\PhpGroups;
@@ -63,5 +64,6 @@ abstract class FieldsTestCase extends TestCase
         FieldsModule::setInstance(null);
         PhpGroups::reset();
         PhpDeclarations::reset();
+        SchemaFileWriter::resetKinds();
     }
 }

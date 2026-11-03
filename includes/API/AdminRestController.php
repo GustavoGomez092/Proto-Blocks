@@ -46,6 +46,7 @@ final class AdminRestController
         Admin\TaxonomiesRoutes::class,
         Admin\SchemaFilesRoutes::class,
         Admin\OptionsPagesRoutes::class,
+        Admin\FieldsRoutes::class,
     ];
 
     /**

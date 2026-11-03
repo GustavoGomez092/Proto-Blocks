@@ -532,6 +532,7 @@ final class Plugin
             // Preview Capture submenu (a React admin screen).
             add_action('admin_menu', [$this->getPreviewCapture(), 'addMenuPage']);
             add_action('admin_menu', [new \ProtoBlocks\Admin\ContentModelMenu($this->getAdminApp()), 'register'], 11);
+            add_action('admin_menu', [new \ProtoBlocks\Admin\FieldsMenu($this->getAdminApp()), 'register'], 11);
         }
 
         // Preview Capture iframe render target -- served via

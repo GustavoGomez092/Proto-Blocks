@@ -3,7 +3,7 @@
  * window.protoBlocksAdmin before the admin script runs.
  */
 
-export type Screen = 'dashboard' | 'tailwind' | 'system' | 'previews' | 'wizard' | 'post-types' | 'taxonomies';
+export type Screen = 'dashboard' | 'tailwind' | 'system' | 'previews' | 'wizard' | 'post-types' | 'taxonomies' | 'fields';
 
 export type FileModsConstant = 'DISALLOW_FILE_MODS' | 'DISALLOW_FILE_EDIT';
 
