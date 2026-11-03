@@ -17,7 +17,14 @@ use ProtoBlocks\Modules\Fields\Storage\ObjectRef;
  * Submitted values are copied only while they fit MAX_SUBMITTED_BYTES in
  * total (JSON): an oversized submission keeps its error but not its value, so
  * a crafted 10,000-row post cannot park megabytes in the options table.
- * Nothing is stored for user 0 (nobody could read it back).
+ * Nothing is stored for user 0 (nobody could read it back). At most
+ * MAX_ERRORS paths are kept.
+ *
+ * Submitted values are stored RAW, exactly as the user posted them (only
+ * unslashed): they never went through a sanitiser because they were not
+ * saved. Consumers must hand them back only as controlled input values
+ * (React state, `value=` through esc_attr / esc_textarea) and never render
+ * them as HTML.
  */
 final class ErrorStore
 {
@@ -26,13 +33,16 @@ final class ErrorStore
     /** Upper bound on the JSON size of the submitted values kept per entry. */
     public const MAX_SUBMITTED_BYTES = 65536;
 
+    /** Upper bound on the number of error paths kept per entry. */
+    public const MAX_ERRORS = 500;
+
     private const PREFIX = 'proto_fields_err_';
 
     /**
      * Replaces the entry; no errors deletes it (a clean save clears stale errors).
      *
      * @param array<string, string> $errors path => message
-     * @param array<string, mixed> $submitted top-level field name => submitted value
+     * @param array<string, mixed> $submitted top-level field name => submitted value, raw (render as input values only)
      */
     public function put(ObjectRef $ref, int $userId, array $errors, array $submitted): void
     {
@@ -47,6 +57,9 @@ final class ErrorStore
 
         $clean = [];
         foreach ($errors as $path => $message) {
+            if (count($clean) >= self::MAX_ERRORS) {
+                break;
+            }
             $clean[(string) $path] = (string) $message;
         }
         $kept = [];
