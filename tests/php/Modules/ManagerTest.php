@@ -15,7 +15,6 @@ use ProtoBlocks\Modules\PostTypes;
 use ProtoBlocks\Modules\Taxonomies;
 
 require_once __DIR__ . '/../CLI/wp-stubs.php';
-require_once __DIR__ . '/../ContentModel/stubs/theme.php';
 require_once __DIR__ . '/../ContentModel/stubs/hooks.php';
 require_once __DIR__ . '/../../../includes/content-model.php';
 

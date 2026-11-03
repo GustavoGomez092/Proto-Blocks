@@ -10,7 +10,6 @@ use ProtoBlocks\Modules\Fields\Types\RepeaterType;
 use ProtoBlocks\Modules\Fields\Types\TypeRegistry;
 
 require_once __DIR__ . '/wp-stubs.php';
-require_once __DIR__ . '/../../Fields/wp-stubs.php';
 require_once __DIR__ . '/stubs/Structured.php';
 
 if (!defined('ABSPATH')) {

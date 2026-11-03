@@ -17,14 +17,12 @@ final class DoubleDeclarationNoticeTest extends TestCase
     {
         $GLOBALS['pb_test_screen'] = (object) ['id' => 'toplevel_page_proto-blocks'];
         $GLOBALS['pb_test_current_user'] = 7;
-        $GLOBALS['pb_test_user'] = 7;
-        $GLOBALS['pb_test_user_id'] = 7;
         $GLOBALS['pb_test_caps'][7] = ['manage_options'];
     }
 
     protected function tearDown(): void
     {
-        unset($GLOBALS['pb_test_screen'], $GLOBALS['pb_test_current_user'], $GLOBALS['pb_test_user'], $GLOBALS['pb_test_user_id'], $GLOBALS['pb_test_caps'][7]);
+        unset($GLOBALS['pb_test_screen'], $GLOBALS['pb_test_current_user'], $GLOBALS['pb_test_caps'][7]);
     }
 
     public function testNamesBothLocations(): void

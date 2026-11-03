@@ -16,7 +16,6 @@ use ProtoBlocks\Fields\Types\InnerBlocksField;
 use ProtoBlocks\Fields\Types\RepeaterField;
 use ProtoBlocks\Template\Renderer;
 
-require_once __DIR__ . '/wp-stubs.php';
 
 /**
  * The PHP field layer receives block attribute JSON exactly as a contributor

@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Tests\API;
 
-// Security stubs first: this file sorts before the other API tests, and the
-// first definition of a stub wins for the whole run (Security's esc_url_raw
-// actually sanitises; the Admin one passes URLs through).
+// Shared stubs come from tests/php/bootstrap.php; these add the kses
+// allowlist and the script/inline-script stand-ins.
 require_once __DIR__ . '/../Security/wp-stubs.php';
 require_once __DIR__ . '/../Admin/wp-stubs.php';
 

@@ -12,7 +12,6 @@ use ProtoBlocks\ContentModel\TaxonomyArgs;
 use ProtoBlocks\Tests\ContentModel\Support\WpObjectProps;
 
 require_once __DIR__ . '/../CLI/wp-stubs.php';
-require_once __DIR__ . '/stubs/theme.php';
 require_once __DIR__ . '/../../../includes/content-model.php';
 
 /**

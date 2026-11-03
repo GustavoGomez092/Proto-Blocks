@@ -37,7 +37,7 @@ final class AdminAppTest extends TestCase
         }
         self::assertSame('system', $data['screen']);
         self::assertStringEndsWith('/proto-blocks/v1/', $data['restRoot']);
-        self::assertSame('nonce-wp_rest', $data['restNonce']);
+        self::assertSame('nonce:wp_rest', $data['restNonce']);
         self::assertIsBool($data['fileModsAllowed']);
     }
 
