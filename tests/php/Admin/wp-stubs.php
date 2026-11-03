@@ -11,9 +11,33 @@
  * Stubs collect into:
  * - $GLOBALS['pb_test_inline']              wp_add_inline_script calls
  * - $GLOBALS['pb_test_routes']              register_rest_route calls
+ * - $GLOBALS['pb_test_options']             update_option writes (the
+ *   get_option stub in tests/php/bootstrap.php reads them)
  */
 
 declare(strict_types=1);
+
+if (!function_exists('update_option')) {
+    function update_option($option, $value, $autoload = null): bool
+    {
+        $GLOBALS['pb_test_options'][$option] = $value;
+        return true;
+    }
+}
+
+if (!function_exists('get_bloginfo')) {
+    function get_bloginfo($show = '', $filter = 'raw'): string
+    {
+        return $show === 'version' ? '6.8.3' : '';
+    }
+}
+
+if (!function_exists('wp_is_writable')) {
+    function wp_is_writable($path): bool
+    {
+        return is_writable((string) $path);
+    }
+}
 
 if (!function_exists('get_current_user_id')) {
     function get_current_user_id(): int

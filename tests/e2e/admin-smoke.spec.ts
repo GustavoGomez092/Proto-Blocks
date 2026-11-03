@@ -9,7 +9,7 @@ test.describe( 'Proto-Blocks admin smoke', () => {
 				`/wp-admin/admin.php?page=${ slug }`
 			);
 			expect( response?.status() ).toBe( 200 );
-			await expect( page.locator( '.wrap' ).first() ).toBeVisible();
+			await expect( page.locator( '.wrap, #proto-blocks-admin' ).first() ).toBeVisible();
 			await expect( page.locator( 'body' ) ).not.toContainText(
 				/Fatal error|There has been a critical error/
 			);
