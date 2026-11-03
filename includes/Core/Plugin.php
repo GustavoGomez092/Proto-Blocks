@@ -523,9 +523,8 @@ final class Plugin
             add_action('admin_menu', [$this->getAdminPage(), 'addMenuPage']);
             add_action('admin_enqueue_scripts', [$this->getAssets(), 'enqueueAdminAssets']);
 
-            // Preview Capture submenu + its own enqueue.
+            // Preview Capture submenu (a React admin screen).
             add_action('admin_menu', [$this->getPreviewCapture(), 'addMenuPage']);
-            add_action('admin_enqueue_scripts', [$this->getPreviewCapture(), 'enqueueAssets']);
         }
 
         // Preview Capture iframe render target -- served via

@@ -11,6 +11,7 @@ namespace ProtoBlocks\API;
 
 use ProtoBlocks\Admin\AdminPage;
 use ProtoBlocks\API\Admin\DashboardRoutes;
+use ProtoBlocks\API\Admin\PreviewsRoutes;
 use ProtoBlocks\API\Admin\SystemRoutes;
 use ProtoBlocks\API\Admin\WizardRoutes;
 use WP_Error;
@@ -39,6 +40,7 @@ final class AdminRestController
         WizardRoutes::class,
         DashboardRoutes::class,
         Admin\TailwindRoutes::class,
+        PreviewsRoutes::class,
     ];
 
     /**

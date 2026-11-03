@@ -7,9 +7,10 @@
  *
  *   1. Lists all registered blocks with their current preview status
  *      (present / missing) and a thumbnail of the existing PNG.
- *   2. JS captures each block in an off-screen iframe using
- *      html2canvas-pro at a fixed 1280px render width and POSTs the
- *      resulting base64 PNG back to a REST endpoint.
+ *   2. The React screen (src/admin/screens/PreviewsScreen.tsx) captures
+ *      each block in an off-screen iframe using html2canvas-pro at a
+ *      fixed 1280px render width and POSTs the resulting base64 PNG back
+ *      to a REST endpoint.
  *   3. The REST endpoint writes the PNG to `{block-folder}/preview.png`
  *      so it survives across themes and gets picked up automatically
  *      by SchemaReader::detectPreviewImage().
@@ -40,7 +41,7 @@ class PreviewCapture
 
     public function addMenuPage(): void
     {
-        add_submenu_page(
+        $hook = add_submenu_page(
             AdminPage::SLUG,
             __('Preview Capture', 'proto-blocks'),
             __('Preview Capture', 'proto-blocks'),
@@ -48,20 +49,24 @@ class PreviewCapture
             self::SLUG,
             [$this, 'route']
         );
+        if (is_string($hook)) {
+            Plugin::getInstance()->getAdminApp()?->addScreenHook($hook, 'previews');
+        }
     }
 
     /**
-     * Page entry point -- renders the capture admin UI. The iframe
-     * render target is served via admin-ajax.php (see handleRender)
-     * because admin pages emit chrome (admin bar, sidebar, menu)
-     * before the page callback runs, which pollutes the iframe doc.
+     * Page entry point -- the React Preview Capture screen
+     * (src/admin/screens/PreviewsScreen.tsx). The iframe render target is
+     * served via admin-ajax.php (see handleRender) because admin pages emit
+     * chrome (admin bar, sidebar, menu) before the page callback runs, which
+     * pollutes the iframe doc.
      */
     public function route(): void
     {
         if (!current_user_can(self::CAPABILITY)) {
             wp_die(esc_html__('You do not have permission to access this page.', 'proto-blocks'));
         }
-        $this->renderAdminUi();
+        Plugin::getInstance()->getAdminApp()?->renderScreen('previews');
     }
 
     /**
@@ -269,111 +274,6 @@ class PreviewCapture
     }
 
     /**
-     * Render the capture-UI admin page (table of blocks + buttons).
-     */
-    private function renderAdminUi(): void
-    {
-        $blocks = $this->collectBlocks();
-        ?>
-        <div class="wrap proto-blocks-capture">
-            <h1><?php echo esc_html__('Proto-Blocks Preview Capture', 'proto-blocks'); ?></h1>
-            <p class="proto-blocks-capture__intro">
-                <?php echo esc_html__('Auto-generate inserter preview thumbnails for every registered Proto-Block. Captures use the live front-end render at 1280px width.', 'proto-blocks'); ?>
-            </p>
-
-            <div class="proto-blocks-capture__actions">
-                <button type="button" class="button button-primary" data-action="capture-missing">
-                    <?php echo esc_html__('Capture missing', 'proto-blocks'); ?>
-                </button>
-                <button type="button" class="button" data-action="capture-selected">
-                    <?php echo esc_html__('Capture selected', 'proto-blocks'); ?>
-                </button>
-                <button type="button" class="button" data-action="capture-all">
-                    <?php echo esc_html__('Recapture all', 'proto-blocks'); ?>
-                </button>
-                <span class="proto-blocks-capture__status" aria-live="polite"></span>
-            </div>
-
-            <table class="widefat striped proto-blocks-capture__table">
-                <thead>
-                    <tr>
-                        <td class="check-column"><input type="checkbox" data-select-all></td>
-                        <th><?php echo esc_html__('Block', 'proto-blocks'); ?></th>
-                        <th><?php echo esc_html__('Preview', 'proto-blocks'); ?></th>
-                        <th><?php echo esc_html__('Status', 'proto-blocks'); ?></th>
-                        <th><?php echo esc_html__('Action', 'proto-blocks'); ?></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($blocks as $block): ?>
-                    <tr data-block-row="<?php echo esc_attr($block['name']); ?>"
-                        data-has-preview="<?php echo $block['hasPreview'] ? '1' : '0'; ?>"
-                        data-render-url="<?php echo esc_attr($block['renderUrl']); ?>">
-                        <th scope="row" class="check-column">
-                            <input type="checkbox" data-block-checkbox value="<?php echo esc_attr($block['name']); ?>">
-                        </th>
-                        <td>
-                            <strong><?php echo esc_html($block['title']); ?></strong><br>
-                            <code><?php echo esc_html($block['name']); ?></code>
-                        </td>
-                        <td class="proto-blocks-capture__thumb-cell">
-                            <?php if ($block['previewUrl']): ?>
-                            <img src="<?php echo esc_url($block['previewUrl']); ?>?v=<?php echo (int) ($block['previewMtime'] ?? 0); ?>"
-                                alt="" class="proto-blocks-capture__thumb">
-                            <?php else: ?>
-                            <span class="proto-blocks-capture__thumb proto-blocks-capture__thumb--empty">
-                                <?php echo esc_html__('— no preview —', 'proto-blocks'); ?>
-                            </span>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <span class="proto-blocks-capture__badge proto-blocks-capture__badge--<?php echo $block['hasPreview'] ? 'ok' : 'missing'; ?>">
-                                <?php echo $block['hasPreview']
-                                    ? esc_html__('Present', 'proto-blocks')
-                                    : esc_html__('Missing', 'proto-blocks'); ?>
-                            </span>
-                            <span class="proto-blocks-capture__row-status" aria-live="polite"></span>
-                        </td>
-                        <td>
-                            <button type="button" class="button button-small" data-action="capture-one"
-                                data-block="<?php echo esc_attr($block['name']); ?>">
-                                <?php echo esc_html__('Capture', 'proto-blocks'); ?>
-                            </button>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                    <?php if (empty($blocks)): ?>
-                    <tr>
-                        <td colspan="5">
-                            <?php echo esc_html__('No Proto-Blocks are registered yet.', 'proto-blocks'); ?>
-                        </td>
-                    </tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-
-            <!-- Hidden iframe used as the capture surface. JS swaps its
-                 src for each block, runs html2canvas-pro against the
-                 loaded document, then POSTs the resulting PNG back.
-
-                 sandbox: `allow-same-origin` is required so this page can
-                 reach the frame's contentDocument for html2canvas, and
-                 `allow-scripts` is kept because block view scripts and the
-                 theme's front-end JS often drive layout (reveal animations,
-                 sliders, counters) that the snapshot must show in its final
-                 state. Everything else -- top-level navigation, form
-                 submission, popups, pointer lock, modals -- stays blocked,
-                 which costs the render nothing. -->
-            <iframe class="proto-blocks-capture__frame"
-                title="Preview render"
-                aria-hidden="true"
-                sandbox="allow-same-origin allow-scripts"
-                referrerpolicy="no-referrer"></iframe>
-        </div>
-        <?php
-    }
-
-    /**
      * Output a minimal HTML document containing just the requested
      * block, with the front-end theme + plugin styles enqueued. Used
      * as the iframe target during capture. Calls `exit` so WP's admin
@@ -453,11 +353,12 @@ wp_print_footer_scripts();
     }
 
     /**
-     * Build the block list for the admin UI.
+     * Every registered block with its preview status, for the Preview
+     * Capture screen (GET admin/previews drops `path`).
      *
      * @return array<int, array{name:string,title:string,path:string,hasPreview:bool,previewUrl:?string,previewMtime:?int,renderUrl:string}>
      */
-    private function collectBlocks(): array
+    public function collectBlocks(): array
     {
         $registrar  = Plugin::getInstance()->getRegistrar();
         $registered = $registrar->getRegisteredBlocks();
@@ -631,61 +532,5 @@ wp_print_footer_scripts();
                 'image' => ['required' => true, 'type' => 'string'],
             ],
         ]);
-    }
-
-    /**
-     * Enqueue capture-only assets (vendor + glue + admin styles).
-     */
-    public function enqueueAssets(string $hookSuffix): void
-    {
-        // The hook suffix for a submenu is "proto-blocks_page_<slug>".
-        if (!str_ends_with($hookSuffix, self::SLUG)) {
-            return;
-        }
-
-        $base = plugins_url('', PROTO_BLOCKS_FILE);
-
-        wp_enqueue_script(
-            'html2canvas-pro',
-            $base . '/assets/vendor/html2canvas-pro.min.js',
-            [],
-            '1.5.13',
-            true
-        );
-
-        wp_enqueue_script(
-            'proto-blocks-capture',
-            $base . '/assets/admin/preview-capture.js',
-            ['html2canvas-pro', 'wp-api-fetch'],
-            $this->fileVersion('assets/admin/preview-capture.js'),
-            true
-        );
-
-        wp_localize_script('proto-blocks-capture', 'protoBlocksCapture', [
-            'restUrl' => esc_url_raw(rest_url('proto-blocks/v1/preview-capture')),
-            'nonce'   => wp_create_nonce('wp_rest'),
-            'width'   => 1280,
-            /**
-             * Milliseconds the capture waits after fonts and images have settled
-             * before it rasterises, so load-time animation (reveals, counters,
-             * a hero zoom) lands at its final frame.
-             *
-             * @param int $ms Default 1000.
-             */
-            'settleMs' => max(0, (int) apply_filters('proto_blocks_capture_settle_ms', 1000)),
-        ]);
-
-        wp_enqueue_style(
-            'proto-blocks-capture',
-            $base . '/assets/css/preview-capture.css',
-            [],
-            $this->fileVersion('assets/css/preview-capture.css')
-        );
-    }
-
-    private function fileVersion(string $relative): string
-    {
-        $abs = plugin_dir_path(PROTO_BLOCKS_FILE) . $relative;
-        return file_exists($abs) ? (string) filemtime($abs) : '1.0.0';
     }
 }
