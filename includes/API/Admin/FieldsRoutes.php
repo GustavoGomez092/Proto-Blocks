@@ -10,7 +10,6 @@ declare(strict_types=1);
 namespace ProtoBlocks\API\Admin;
 
 use ProtoBlocks\API\AdminRestController;
-use ProtoBlocks\CLI\Commands;
 use ProtoBlocks\CLI\FieldsCommand;
 use ProtoBlocks\ContentModel\Declaration;
 use ProtoBlocks\ContentModel\FileLoader;
@@ -158,12 +157,12 @@ final class FieldsRoutes extends ContentModelRoutes
                 continue;
             }
             $out[] = [
-                'key' => Commands::safeArg($key),
-                'title' => Commands::safeArg($acf['title']),
+                'key' => FieldsCommand::safeArg($key),
+                'title' => FieldsCommand::safeArg($acf['title']),
                 'origin' => 'acf',
                 'file' => null,
                 'source' => null,
-                'location' => Commands::safeArg($acf['locationSummary']),
+                'location' => FieldsCommand::safeArg($acf['locationSummary']),
                 'fieldCount' => self::acfFieldCount($key),
                 'position' => 'normal',
                 'status' => FieldsCommand::STATUS_ACTIVE,

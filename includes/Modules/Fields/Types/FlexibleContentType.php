@@ -61,7 +61,7 @@ final class FlexibleContentType implements FieldTypeInterface
 
         return [
             'type' => 'array',
-            'items' => ['oneOf' => $variants],
+            'items' => ['type' => 'object', 'oneOf' => $variants],
             'maxItems' => RepeaterType::maxRows($field),
         ];
     }

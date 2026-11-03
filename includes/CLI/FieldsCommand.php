@@ -46,6 +46,16 @@ final class FieldsCommand {
 	}
 
 	/**
+	 * Strips control characters. A copy of Commands::safeArg(): that class
+	 * extends WP_CLI_Command, so it cannot be loaded by a REST request.
+	 *
+	 * @param string $value Untrusted text.
+	 */
+	public static function safeArg( string $value ): string {
+		return preg_replace( '/[\x00-\x1F\x7F]/', '', $value ) ?? '';
+	}
+
+	/**
 	 * One row per group, then one per group skipped because ACF registers its key.
 	 *
 	 * @param list<FieldGroup>                                        $groups
@@ -56,21 +66,21 @@ final class FieldsCommand {
 		$rows = array();
 		foreach ( $groups as $group ) {
 			$rows[] = array(
-				'key'      => Commands::safeArg( $group->key ),
-				'title'    => Commands::safeArg( $group->title ),
-				'source'   => Commands::safeArg( $group->source ),
-				'path'     => Commands::safeArg( (string) ( $group->path ?? '' ) ),
+				'key'      => self::safeArg( $group->key ),
+				'title'    => self::safeArg( $group->title ),
+				'source'   => self::safeArg( $group->source ),
+				'path'     => self::safeArg( (string) ( $group->path ?? '' ) ),
 				'fields'   => count( $group->fields ),
-				'location' => Commands::safeArg( AcfBridge::locationSummary( $group->location->or ) ),
+				'location' => self::safeArg( AcfBridge::locationSummary( $group->location->or ) ),
 				'status'   => $group->location->isRenderable() ? self::STATUS_ACTIVE : self::STATUS_UNRENDERABLE,
 			);
 		}
 		foreach ( $skipped as $one ) {
 			$rows[] = array(
-				'key'      => Commands::safeArg( $one['key'] ),
-				'title'    => Commands::safeArg( $one['title'] ),
+				'key'      => self::safeArg( $one['key'] ),
+				'title'    => self::safeArg( $one['title'] ),
 				'source'   => 'acf',
-				'path'     => Commands::safeArg( $one['source'] ),
+				'path'     => self::safeArg( $one['source'] ),
 				'fields'   => 0,
 				'location' => '',
 				'status'   => self::STATUS_SKIPPED_ACF,
@@ -189,7 +199,7 @@ final class FieldsCommand {
 	public function list( $args, $assoc ): void {
 		$format = (string) ( $assoc['format'] ?? 'table' );
 		if ( ! in_array( $format, array( 'table', 'json', 'csv' ), true ) ) {
-			WP_CLI::error( 'Unknown format: ' . Commands::safeArg( $format ) );
+			WP_CLI::error( 'Unknown format: ' . self::safeArg( $format ) );
 		}
 		$module = ( $this->resolve )();
 		if ( null === $module ) {
@@ -237,7 +247,7 @@ final class FieldsCommand {
 		}
 
 		foreach ( $result['lines'] as $line ) {
-			WP_CLI::line( sprintf( '%s %s %s %s: %s', $line['level'], Commands::safeArg( $line['file'] ), '' === $line['path'] ? '-' : Commands::safeArg( $line['path'] ), Commands::safeArg( $line['code'] ), Commands::safeArg( $line['message'] ) ) );
+			WP_CLI::line( sprintf( '%s %s %s %s: %s', $line['level'], self::safeArg( $line['file'] ), '' === $line['path'] ? '-' : self::safeArg( $line['path'] ), self::safeArg( $line['code'] ), self::safeArg( $line['message'] ) ) );
 		}
 		if ( $result['errors'] > 0 ) {
 			WP_CLI::error( sprintf( '%d error(s), %d warning(s).', $result['errors'], $result['warnings'] ) );
