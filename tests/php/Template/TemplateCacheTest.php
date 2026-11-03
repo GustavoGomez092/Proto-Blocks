@@ -10,9 +10,7 @@ use ProtoBlocks\Template\Cache;
 if (!defined('PROTO_BLOCKS_CACHE_ENABLED')) {
     define('PROTO_BLOCKS_CACHE_ENABLED', true);
 }
-if (!defined('WP_CONTENT_DIR')) {
-    define('WP_CONTENT_DIR', sys_get_temp_dir() . '/pb-wp-content');
-}
+// WP_CONTENT_DIR comes from tests/php/bootstrap.php.
 
 /**
  * Template\Cache: JSON-only storage, legacy .php entries never included,

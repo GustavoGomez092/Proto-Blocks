@@ -60,29 +60,10 @@ class Renderer
         $html = $this->executeTemplate($templatePath, $processedAttributes, $protoConfig, $block);
 
         // Parse and update DOM with attribute values
+        // UTF-8 safe on every libxml, and leaves no XML declaration node for
+        // the whole-document saveHTML() below to print (see HtmlLoader).
         $dom = new DOMDocument('1.0', 'UTF-8');
-        libxml_use_internal_errors(true);
-        $dom->loadHTML(
-            '<?xml encoding="UTF-8"?>' . $html,
-            LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
-        );
-        libxml_clear_errors();
-
-        // The XML declaration prefixed above stops libxml assuming ISO-8859-1,
-        // but libxml keeps it as a processing-instruction node in the document.
-        // The whole-document saveHTML() below would then serialise it straight
-        // back out, putting a stray XML declaration in front of every rendered
-        // block on the front end. Drop the node now that it has done its job.
-        // Snapshot childNodes first: removing from a live DOMNodeList while
-        // iterating it skips siblings.
-        //
-        // (Note for future editors: do not write a literal PHP close tag in a
-        // comment here -- it ends PHP mode even inside a // comment.)
-        foreach (iterator_to_array($dom->childNodes) as $node) {
-            if (XML_PI_NODE === $node->nodeType) {
-                $dom->removeChild($node);
-            }
-        }
+        HtmlLoader::load($dom, $html);
 
         // Apply WordPress core features (alignment, colors, etc.)
         $this->applyCoreFeatures($dom, $processedAttributes);

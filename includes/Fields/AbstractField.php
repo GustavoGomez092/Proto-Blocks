@@ -118,12 +118,7 @@ abstract class AbstractField implements FieldInterface
 
             try {
                 $tempDoc = new DOMDocument('1.0', 'UTF-8');
-                libxml_use_internal_errors(true);
-                $tempDoc->loadHTML(
-                    '<?xml encoding="UTF-8"?><div>' . $html . '</div>',
-                    LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
-                );
-                libxml_clear_errors();
+                \ProtoBlocks\Template\HtmlLoader::load($tempDoc, '<div>' . $html . '</div>');
 
                 $contentNode = $tempDoc->getElementsByTagName('div')->item(0);
                 if ($contentNode && $contentNode->hasChildNodes()) {
