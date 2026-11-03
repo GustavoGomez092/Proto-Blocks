@@ -9,11 +9,11 @@ import { Input } from '@/admin/components/ui/input';
 import { cn } from '@/admin/lib/utils';
 import { useA11yProps, useRegisteredInput, type FieldInputProps } from '../registry';
 
-/** shadcn Input's look, for native textarea and select. */
+/** The Input's look (navy border and teal wash on focus), for native textarea and select. */
 export const CONTROL_CLASS = cn(
-	'w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground',
-	'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
-	'aria-invalid:border-destructive aria-invalid:ring-destructive/20 disabled:cursor-not-allowed disabled:opacity-50'
+	'w-full min-w-0 rounded-md border border-input bg-background px-3 py-[9px] text-body text-foreground shadow-none transition-[color,box-shadow,border-color] outline-none placeholder:text-faint hover:border-[#b5bfcc]',
+	'focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-brand-soft focus-visible:outline-none',
+	'aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive-soft disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60'
 );
 
 const INPUT_MODES: Record< string, 'email' | 'url' | 'decimal' | undefined > = {
@@ -30,7 +30,7 @@ function Affix( { children, side }: { children: string; side: 'left' | 'right' }
 	return (
 		<span
 			className={ cn(
-				'flex items-center border border-input bg-muted px-3 text-sm text-muted-foreground',
+				'flex items-center border border-input bg-subtle px-3 text-label text-muted-foreground',
 				side === 'left' ? 'rounded-l-md border-r-0' : 'rounded-r-md border-l-0'
 			) }
 		>
@@ -56,7 +56,7 @@ export function TextInput( { field, path }: FieldInputProps ) {
 			spellCheck={ field.type === 'text' ? undefined : false }
 			placeholder={ field.placeholder || undefined }
 			className={ cn(
-				isEmail && 'pl-8',
+				isEmail && 'pl-9',
 				field.type === 'number' && 'tabular-nums',
 				prepend && 'rounded-l-none',
 				append && 'rounded-r-none'
@@ -71,7 +71,7 @@ export function TextInput( { field, path }: FieldInputProps ) {
 		<div className="relative flex">
 			{ prepend && <Affix side="left">{ prepend }</Affix> }
 			{ isEmail && (
-				<AtSignIcon aria-hidden="true" className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+				<AtSignIcon aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" />
 			) }
 			{ input }
 			{ append && <Affix side="right">{ append }</Affix> }
@@ -89,7 +89,7 @@ export function TextareaInput( { field, path }: FieldInputProps ) {
 			{ ...a11y }
 			rows={ rows }
 			placeholder={ field.placeholder || undefined }
-			className={ cn( CONTROL_CLASS, 'min-h-16 resize-y' ) }
+			className={ cn( CONTROL_CLASS, 'min-h-[88px] resize-y' ) }
 		/>
 	);
 }

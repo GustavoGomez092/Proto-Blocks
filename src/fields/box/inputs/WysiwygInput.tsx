@@ -81,7 +81,7 @@ export function WysiwygInput( { field, path }: FieldInputProps ) {
 	return (
 		<div className="flex flex-col gap-2">
 			{ hidden }
-			<div className="overflow-hidden rounded-md border border-input">
+			<div className="overflow-hidden rounded-md border border-input bg-background">
 				{ value.trim() !== '' ? (
 					<iframe
 						sandbox="allow-same-origin"
@@ -91,7 +91,7 @@ export function WysiwygInput( { field, path }: FieldInputProps ) {
 						className="block h-24 w-full border-0 bg-background"
 					/>
 				) : (
-					<p className="p-3 text-[13px] text-muted-foreground">{ __( 'No content yet.', 'proto-blocks' ) }</p>
+					<p className="p-3 text-caption text-muted-foreground">{ __( 'No content yet.', 'proto-blocks' ) }</p>
 				) }
 			</div>
 			<Button

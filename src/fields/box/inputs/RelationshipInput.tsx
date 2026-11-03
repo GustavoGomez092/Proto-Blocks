@@ -6,7 +6,8 @@
  */
 import { Suspense, useRef, useState } from 'react';
 import { __, _n, sprintf } from '@wordpress/i18n';
-import { PlusIcon, XIcon } from 'lucide-react';
+import { SearchIcon, XIcon } from 'lucide-react';
+import { cn } from '@/admin/lib/utils';
 import { useController } from 'react-hook-form';
 import { Badge } from '@/admin/components/ui/badge';
 import { Button } from '@/admin/components/ui/button';
@@ -145,19 +146,23 @@ export function RelationshipInput( { field, path }: FieldInputProps ) {
 				<input key={ id } type="hidden" name={ `${ name }[]` } value={ String( id ) } />
 			) ) }
 			{ ids.length > 0 && (
-				<div className="rounded-md border border-border">
-					<p className="border-b border-border bg-muted px-3 py-1.5 text-[13px] text-muted-foreground">{ count }</p>
+				<div className="rounded-lg border border-border bg-background">
+					<p className="rounded-t-lg border-b border-divider bg-subtle px-3 py-1.5 text-caption text-muted-foreground">{ count }</p>
 					<ol
 						ref={ listRef }
 						aria-label={ sprintf( /* translators: %s: field label */ __( '%s, in order', 'proto-blocks' ), fieldLabel ) }
-						className="flex flex-col text-sm"
+						className="flex flex-col text-label"
 					>
 						{ ids.map( ( id, i ) => {
 							const title = titleOf( id );
 							return (
-								<li key={ id } data-item={ id } className="flex items-center gap-2 border-b border-border px-3 py-1.5 last:border-b-0">
+								<li key={ id } data-item={ id } className="flex min-h-10 items-center gap-2 border-b border-divider py-1 pr-1.5 pl-3 last:border-b-0">
 									<span className="min-w-0 flex-1 truncate">{ title }</span>
-									{ known[ id ]?.type && <Badge variant="secondary">{ known[ id ].type }</Badge> }
+									{ known[ id ]?.type && (
+										<Badge variant="secondary" className="font-mono text-micro">
+											{ known[ id ].type }
+										</Badge>
+									) }
 									{ ! single && (
 										<MoveButtons
 											index={ i }
@@ -177,6 +182,7 @@ export function RelationshipInput( { field, path }: FieldInputProps ) {
 										type="button"
 										variant="ghost"
 										size="icon-xs"
+										className="size-7 rounded-md text-muted-foreground hover:bg-destructive-soft hover:text-destructive [&_svg]:size-3.5"
 										data-remove=""
 										aria-label={ sprintf( /* translators: %s: post title */ __( 'Remove %s', 'proto-blocks' ), title ) }
 										onClick={ () => remove( i ) }
@@ -189,29 +195,40 @@ export function RelationshipInput( { field, path }: FieldInputProps ) {
 					</ol>
 				</div>
 			) }
-			<div className="flex items-center gap-2">
+			{ /* The picker trigger, drawn as a search bar (the frame's "Search venues… / Browse"). */ }
+			<div
+				data-picker-trigger=""
+				className={ cn(
+					'flex h-[38px] items-center gap-2.5 rounded-md border border-input bg-background pr-1.5 pl-3',
+					full && 'bg-subtle'
+				) }
+			>
+				<SearchIcon aria-hidden="true" className="size-4 shrink-0 text-faint" />
+				<span aria-hidden="true" className="min-w-0 flex-1 truncate text-label text-faint">
+					{ __( 'Search and pick…', 'proto-blocks' ) }
+				</span>
 				<Button
 					ref={ addRef }
 					type="button"
 					variant="outline"
 					size="sm"
+					className="h-7 rounded-[5px] px-2.5 text-caption"
 					disabled={ full }
 					aria-haspopup="dialog"
 					aria-labelledby={ `${ a11y.id }-add ${ a11y.labelId }` }
 					onFocus={ preloadPicker }
 					onClick={ () => setOpen( true ) }
 				>
-					<PlusIcon aria-hidden="true" />
 					<span id={ `${ a11y.id }-add` }>
 						{ single && ids.length > 0 ? __( 'Replace', 'proto-blocks' ) : __( 'Add', 'proto-blocks' ) }
 					</span>
 				</Button>
-				{ full && (
-					<span className="text-[13px] text-muted-foreground">
-						{ sprintf( /* translators: %d: maximum */ __( 'Up to %d.', 'proto-blocks' ), max ) }
-					</span>
-				) }
 			</div>
+			{ full && (
+				<span className="text-caption text-muted-foreground">
+					{ sprintf( /* translators: %d: maximum */ __( 'Up to %d.', 'proto-blocks' ), max ) }
+				</span>
+			) }
 			{ open && (
 				// The hidden inputs above stay mounted if the picker chunk fails to load.
 				<ChunkBoundary onRetry={ retryPicker }>

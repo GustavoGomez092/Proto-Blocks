@@ -11,7 +11,7 @@
  */
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { __, _n, sprintf } from '@wordpress/i18n';
-import { ChevronDownIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { ChevronDownIcon, GripVerticalIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { get, useFieldArray, useFormState, useWatch } from 'react-hook-form';
 import { Badge } from '@/admin/components/ui/badge';
 import { Button } from '@/admin/components/ui/button';
@@ -21,6 +21,9 @@ import { FieldList } from '../FieldsForm';
 import { dottedPath, inputName, type FieldPath } from '../names';
 import { EmptyMarker, useAnnounce, useBox, useFieldA11y, type FieldInputProps } from '../registry';
 import { MoveButtons, refocusMoved, toId } from './MediaInputs';
+
+/** Row header icon buttons: quiet grey on the row's subtle header, not link-blue. */
+export const ROW_ACTION_CLASS = 'size-7 rounded-md text-muted-foreground hover:bg-background hover:text-foreground [&_svg]:size-3.5';
 
 /** Rows past this many start collapsed. */
 const OPEN_ROWS = 20;
@@ -94,11 +97,17 @@ export function RowCard( { rowKey, errorPath, index, count, noun, badge, summary
 	const n = index + 1;
 	const what = noun( n );
 	return (
-		<li data-row={ rowKey } aria-labelledby={ headId } className="rounded-md border border-border bg-background">
-			<div className={ cn( 'flex items-center gap-2 px-2 py-1.5', ! collapsed && 'border-b border-border' ) }>
-				<span id={ headId } className="flex min-w-0 flex-1 items-center gap-2">
+		<li data-row={ rowKey } aria-labelledby={ headId } className="rounded-lg border border-border bg-background">
+			<div
+				className={ cn(
+					'flex min-h-10 items-center gap-1 bg-subtle py-1 pr-1.5 pl-2',
+					collapsed ? 'rounded-lg' : 'rounded-t-lg border-b border-divider'
+				) }
+			>
+				<GripVerticalIcon aria-hidden="true" className="size-4 shrink-0 text-faint" />
+				<span id={ headId } className="flex min-w-0 flex-1 items-center gap-2 pl-1">
 					{ badge }
-					<span className="truncate text-sm font-medium">{ summary }</span>
+					<span className="truncate text-label font-medium text-foreground">{ summary }</span>
 				</span>
 				<MoveButtons
 					index={ index }
@@ -117,6 +126,7 @@ export function RowCard( { rowKey, errorPath, index, count, noun, badge, summary
 					type="button"
 					variant="ghost"
 					size="icon-xs"
+					className={ cn( ROW_ACTION_CLASS, 'hover:bg-destructive-soft hover:text-destructive' ) }
 					data-remove=""
 					aria-label={ sprintf( /* translators: %s: e.g. "row 2" */ __( 'Remove %s', 'proto-blocks' ), what ) }
 					onClick={ () => onRemove( index ) }
@@ -127,6 +137,7 @@ export function RowCard( { rowKey, errorPath, index, count, noun, badge, summary
 					type="button"
 					variant="ghost"
 					size="icon-xs"
+					className={ ROW_ACTION_CLASS }
 					aria-expanded={ ! collapsed }
 					aria-controls={ bodyId }
 					aria-label={ sprintf(
@@ -250,7 +261,11 @@ export function RepeaterInput( { field, path }: FieldInputProps ) {
 							index={ i }
 							count={ rows.length }
 							noun={ noun }
-							badge={ <Badge variant="outline">{ i + 1 }</Badge> }
+							badge={
+								<Badge variant="outline" className="min-w-6 justify-center rounded-sm bg-background px-1.5 font-mono text-micro text-muted-foreground tabular-nums">
+									{ i + 1 }
+								</Badge>
+							}
 							summary={ titleField ? <RowTitle path={ [ ...path, i ] } field={ titleField } /> : undefined }
 							defaultCollapsed={ i >= OPEN_ROWS }
 							onMove={ onMove }
@@ -276,7 +291,7 @@ export function RepeaterInput( { field, path }: FieldInputProps ) {
 					<PlusIcon aria-hidden="true" />
 					{ buttonLabel }
 				</Button>
-				<span className="text-[13px] text-muted-foreground">{ rowCount( rows.length, max ) }</span>
+				<span className="text-caption text-muted-foreground tabular-nums">{ rowCount( rows.length, max ) }</span>
 			</div>
 		</div>
 	);
