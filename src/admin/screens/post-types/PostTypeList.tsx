@@ -189,7 +189,7 @@ export function PostTypeList({
 											) : null}
 										</span>
 									</TableCell>
-									<TableCell className="hidden max-w-[280px] md:table-cell">
+									<TableCell className="hidden max-w-[280px] whitespace-normal md:table-cell">
 										{item.source ? (
 											<code className="font-mono text-[12.5px] break-all text-muted-foreground">{item.source}</code>
 										) : (
@@ -197,7 +197,7 @@ export function PostTypeList({
 										)}
 									</TableCell>
 									<TableCell className="text-right tabular-nums">
-										<a href={itemsUrl(item.slug)}>{item.count.toLocaleString()}</a>
+										<a href={itemsUrl(item.slug)} data-testid="count">{item.count.toLocaleString()}</a>
 									</TableCell>
 									<TableCell className="text-right">
 										<Button variant="ghost" size="sm" aria-label={actionLabel} onClick={() => onEdit(item.slug)}>

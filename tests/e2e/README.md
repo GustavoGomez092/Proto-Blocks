@@ -18,3 +18,11 @@ Screenshot baselines are platform-specific (file names include the project and O
 e.g. `-chromium-darwin`). Baselines generated on macOS will not match on Linux; generate the
 CI baselines on Linux (e.g. in the CI image/Docker) and commit those separately.
 Reports: `playwright-report/`, failures: `test-results/` (both git-ignored).
+
+Content model specs (`post-types`, `taxonomies`, `content-model-visual`) use the fixture themes
+in `tests/e2e/fixtures/themes`, mounted at `wp-content/pb-e2e-fixtures` (the `mappings` key in
+`.wp-env.json`; after changing it run `npm run wp-env start -- --update`). Each spec installs a
+fresh copy into `wp-content/themes` (the screens write into the theme), activates it and
+restores the previous theme afterwards. `tests/e2e/fixtures/parity.php` is the in-WordPress
+parity check (`npx wp-env run tests-cli wp eval-file wp-content/pb-e2e-fixtures/parity.php`).
+The committed content-model baselines were generated on macOS (`-chromium-darwin`).
