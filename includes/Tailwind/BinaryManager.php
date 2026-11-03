@@ -451,6 +451,16 @@ class BinaryManager
      */
     public function download(bool $force = false): array
     {
+        // Installing an executable is exactly what DISALLOW_FILE_MODS /
+        // DISALLOW_FILE_EDIT forbid. Checked here so every path that can
+        // trigger a download (REST compile, auto-compile) honours it.
+        if (!\ProtoBlocks\Admin\AdminPage::fileModsAllowed()) {
+            return [
+                'success' => false,
+                'message' => \__('File modifications are disabled on this site, so the Tailwind CLI cannot be downloaded.', 'proto-blocks'),
+            ];
+        }
+
         // Check if exec is available
         if (!function_exists('exec') || !$this->isExecAvailable()) {
             return [
