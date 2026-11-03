@@ -25,7 +25,8 @@ function truthy( v: unknown ): boolean {
 export function optionsFor( field: FieldDef, resolved: Record< string, Option[] > ): Option[] {
 	const source = field.settings?.optionsSource;
 	if ( source !== undefined && source !== null ) {
-		return resolved?.[ field.name ] ?? [];
+		// BoxPayload keys choices by field key; older payloads by name.
+		return resolved?.[ field.key ] ?? resolved?.[ field.name ] ?? [];
 	}
 	const choices = field.settings?.choices;
 	if ( Array.isArray( choices ) ) {

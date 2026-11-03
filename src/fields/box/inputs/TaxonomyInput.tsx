@@ -27,6 +27,24 @@ export function isTaxonomyGroup( field: FieldDef ): boolean {
 	return t === 'checkbox' || t === 'radio';
 }
 
+/**
+ * The term list for a field at `display[path]`: inline (`{terms: [...]}` or a
+ * bare array, top-level fields), or a reference (`{terms: '<taxonomy>'}`,
+ * nested fields) to the shared `display['terms:<taxonomy>']` list the server
+ * sends once per taxonomy. A row added in the browser has no entry yet and
+ * uses the shared list of the field's taxonomy.
+ */
+export function termList( field: FieldDef, own: unknown, display: Record< string, unknown > | undefined ): unknown {
+	const shared = ( taxonomy: unknown ) =>
+		typeof taxonomy === 'string' && taxonomy !== '' && display && Object.prototype.hasOwnProperty.call( display, `terms:${ taxonomy }` )
+			? display[ `terms:${ taxonomy }` ]
+			: undefined;
+	if ( own && typeof own === 'object' && ! Array.isArray( own ) && typeof ( own as { terms?: unknown } ).terms === 'string' ) {
+		return shared( ( own as { terms: string } ).terms );
+	}
+	return own === undefined ? shared( field.settings?.taxonomy ) : own;
+}
+
 /** Terms in tree order (each parent followed by its children), with their depth. */
 function treeOrder( display: unknown ): Array< Term & { depth: number } > {
 	const raw = Array.isArray( display )
@@ -72,10 +90,10 @@ function treeOrder( display: unknown ): Array< Term & { depth: number } > {
 const CHECK_CLASS = 'size-4 shrink-0 accent-primary';
 
 export function TaxonomyInput( { field, path }: FieldInputProps ) {
-	const { control, groupKey } = useBox();
+	const { control, groupKey, payload } = useBox();
 	const a11y = useFieldA11y();
 	const a11yProps = useA11yProps();
-	const terms = treeOrder( useDisplay( path ) );
+	const terms = treeOrder( termList( field, useDisplay( path ), payload.display as Record< string, unknown > | undefined ) );
 	const { field: ctl } = useController( { control, name: dottedPath( path ) } );
 	const value = toIds( ctl.value );
 	const name = inputName( groupKey, path );

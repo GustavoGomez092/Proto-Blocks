@@ -94,14 +94,26 @@ export type GroupDef = {
 /** The JSON payload a field box mounts from (built by PHP BoxPayload, Task 12). */
 export type BoxPayload = {
 	groupKey: string;
+	/** The group title (PHP always sends it). */
+	title?: string;
 	fields: FieldDef[];
 	values: Record<string, unknown>;
-	/** Pre-resolved media, relationship and term data. */
+	/**
+	 * Pre-resolved data keyed by dotted value path ('hero', 'agenda.0.photo'):
+	 * image {id,url,alt}; file {id,url,title,filename}; video {id,url};
+	 * gallery [{id,url,alt}]; relationship [{id,title,type,status}];
+	 * taxonomy {terms: [{id,name,parent}]} at a top-level path, or
+	 * {terms: '<taxonomy>'} referencing the shared 'terms:<taxonomy>' list.
+	 */
 	display: Record<string, unknown>;
 	/** optionsSource choices, by field name. */
 	choices: Record<string, { key: string; label: string }[]>;
+	/** True when the term lists were cut to the per-payload cap. */
+	display_truncated?: boolean;
 	errors: Record<string, string>;
 	canUnfiltered: boolean;
+	/** Top-level fields this user may not edit, with the reason; their values are not sent. */
+	readOnly?: Record< string, 'unfiltered_html' >;
 	maxRows: Record<string, number>;
 	restRoot: string;
 	restNonce: string;

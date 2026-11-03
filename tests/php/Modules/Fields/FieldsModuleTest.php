@@ -278,4 +278,37 @@ final class FieldsModuleTest extends FieldsTestCase
         $this->assertSame(10, has_action('rest_api_init', [$module->editRoutes(), 'registerRoutes']));
         $this->assertSame($save, $module->saveHandler());
     }
+
+    public function testBoxHooks(): void
+    {
+        proto_field_group('product', ['key' => 'group_product', 'title' => 'Product', 'fields' => [['key' => 'f_sku', 'name' => 'sku', 'label' => 'SKU', 'type' => 'text']]]);
+        proto_field_group('taxonomy:category', [
+            'key' => 'group_cat',
+            'title' => 'Category extras',
+            'fields' => [['key' => 'f_colour', 'name' => 'colour', 'label' => 'Colour', 'type' => 'color']],
+        ]);
+        do_action('init');
+        $module = self::module();
+        $module->boot();
+
+        $this->assertSame(10, has_action('add_meta_boxes', [$module->metaBoxes(), 'addMetaBoxes']));
+        $this->assertSame(2, self::hooks('add_meta_boxes')[0]['args']);
+        $this->assertSame(10, has_action('admin_enqueue_scripts', [$module->metaBoxes(), 'enqueue']));
+        $this->assertSame(10, has_action('load-edit-tags.php', [$module->termForms(), 'register']));
+        $this->assertSame(10, has_action('load-term.php', [$module->termForms(), 'register']));
+        $this->assertFalse(has_action('admin_init'), 'no group index load on every admin request (heartbeat, admin-ajax)');
+        $this->assertSame(10, has_action('show_user_profile', [$module->userForms(), 'renderProfile']));
+        $this->assertSame(10, has_action('register_form', [$module->userForms(), 'renderRegister']));
+        $this->assertFalse(has_action('category_add_form_fields'), 'term forms wait for the term screen (boot() reads no group)');
+
+        $GLOBALS['pb_test_taxonomies']['category'] = (object) ['name' => 'category'];
+        $_GET = ['taxonomy' => 'category'];
+        foreach (self::hooks('load-edit-tags.php') as $hook) {
+            ($hook['callback'])();
+        }
+        $this->assertSame(10, has_action('category_add_form_fields', [$module->termForms(), 'renderAdd']));
+        $this->assertSame(10, has_action('category_edit_form_fields', [$module->termForms(), 'renderEdit']));
+        $this->assertFalse(has_action('post_tag_add_form_fields'));
+        $_GET = [];
+    }
 }

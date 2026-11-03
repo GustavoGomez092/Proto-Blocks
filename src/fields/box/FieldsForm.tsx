@@ -10,7 +10,7 @@
  * row subscribes to its own error only, and conditional rows watch only
  * their controlling fields. A keystroke re-renders nothing else.
  */
-import { Suspense, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { __, _n, sprintf } from '@wordpress/i18n';
 import { CircleAlertIcon } from 'lucide-react';
 import { get, useForm, useFormState, useWatch } from 'react-hook-form';
@@ -22,6 +22,7 @@ import type { BoxPayload, FieldDef } from '../model/types';
 import { isVisible } from '../validation/conditions';
 import { buildValueSchema, type ValueSchemaOptions } from '../validation/value-schema';
 import { domId, dottedPath, PRESENT_NAME, type FieldPath } from './names';
+import { registerForm } from './editor-save';
 import {
 	AnnounceContext,
 	Announcer,
@@ -148,7 +149,8 @@ function RowBody( { field, scope, visible }: { field: FieldDef; scope: FieldPath
 	const { control, groupKey, payload } = useBox();
 	const path = [ ...scope, field.name ];
 	const name = dottedPath( path );
-	const readOnly = field.type === 'code' && ! payload.canUnfiltered;
+	// Code (or a container holding code) the user may not write: the server sent no value and a readOnly reason.
+	const readOnly = ( field.type === 'code' && ! payload.canUnfiltered ) || ( scope.length === 0 && !! payload.readOnly?.[ field.name ] );
 	const editable = hasInput( field.type ) && ! readOnly;
 	const { errors } = useFormState( { control, name, exact: true } );
 	const message = ( get( errors, name ) as { message?: string } | undefined )?.message;
@@ -269,7 +271,27 @@ function focusField( id: string ): void {
 	window.setTimeout( () => el.focus(), 0 );
 }
 
-function ServerErrorSummary( { errors, fields }: { errors: Record< string, string >; fields: FieldDef[] } ) {
+/**
+ * A payload map entry for a field: by field key (BoxPayload keys choices and
+ * maxRows by key), falling back to the field name.
+ */
+export function byField< T >( map: Record< string, T > | undefined, f: FieldDef ): T | undefined {
+	if ( ! map ) {
+		return undefined;
+	}
+	if ( f.key && Object.prototype.hasOwnProperty.call( map, f.key ) ) {
+		return map[ f.key ];
+	}
+	return Object.prototype.hasOwnProperty.call( map, f.name ) ? map[ f.name ] : undefined;
+}
+
+/**
+ * How the summary describes the save: 'saved' (posts, terms, users: the valid
+ * fields were written) or 'not-saved' (options pages: a 422 writes nothing).
+ */
+export type SaveOutcome = 'saved' | 'not-saved';
+
+function ServerErrorSummary( { errors, fields, outcome }: { errors: Record< string, string >; fields: FieldDef[]; outcome: SaveOutcome } ) {
 	const { groupKey, payload } = useBox();
 	const ref = useRef< HTMLDivElement >( null );
 	useEffect( () => {
@@ -277,11 +299,17 @@ function ServerErrorSummary( { errors, fields }: { errors: Record< string, strin
 	}, [] );
 	const entries = Object.entries( errors );
 	const count = entries.length;
-	const title = payload.object?.startsWith( 'post:' )
-		? /* translators: %d: number of fields with errors */
-		  _n( 'The post was saved, but %d field needs attention', 'The post was saved, but %d fields need attention', count, 'proto-blocks' )
-		: /* translators: %d: number of fields with errors */
-		  _n( 'Saved, but %d field needs attention', 'Saved, but %d fields need attention', count, 'proto-blocks' );
+	let title: string;
+	if ( outcome === 'not-saved' ) {
+		/* translators: %d: number of fields with errors */
+		title = _n( 'Nothing was saved. %d field needs attention.', 'Nothing was saved. %d fields need attention.', count, 'proto-blocks' );
+	} else if ( payload.object?.startsWith( 'post:' ) ) {
+		/* translators: %d: number of fields with errors */
+		title = _n( 'The post was saved, but %d field needs attention', 'The post was saved, but %d fields need attention', count, 'proto-blocks' );
+	} else {
+		/* translators: %d: number of fields with errors */
+		title = _n( 'Saved, but %d field needs attention', 'Saved, but %d fields need attention', count, 'proto-blocks' );
+	}
 	const labelOf = ( path: string ) => {
 		const top = fields.find( ( f ) => f.name === path.split( '.' )[ 0 ] );
 		return top?.label || path;
@@ -322,26 +350,31 @@ function ServerErrorSummary( { errors, fields }: { errors: Record< string, strin
 
 /* ---------- the form ---------- */
 
-export function FieldsForm( { payload }: { payload: BoxPayload } ) {
+/**
+ * `outcome` defaults from the payload's object: an options page (`option:`)
+ * saves nothing when a field is invalid; every other object saves the valid
+ * fields.
+ */
+export function FieldsForm( { payload, outcome }: { payload: BoxPayload; outcome?: SaveOutcome } ) {
+	const saveOutcome: SaveOutcome = outcome ?? ( payload.object?.startsWith( 'option:' ) ? 'not-saved' : 'saved' );
 	const { groupKey, fields, canUnfiltered } = payload;
-	const serverErrors = useMemo(
-		() => ( payload.errors && typeof payload.errors === 'object' && ! Array.isArray( payload.errors ) ? payload.errors : {} ),
-		[ payload.errors ]
+	const [ serverErrors, setServerErrors ] = useState< Record< string, string > >( () =>
+		payload.errors && typeof payload.errors === 'object' && ! Array.isArray( payload.errors ) ? payload.errors : {}
 	);
 
 	const resolver = useMemo( () => {
 		const opts: ValueSchemaOptions = {
-			maxRows: ( f ) => payload.maxRows?.[ f.name ] ?? null,
-			choices: ( f ) => payload.choices?.[ f.name ]?.map( ( c ) => String( c.key ) ) ?? null,
+			maxRows: ( f ) => byField( payload.maxRows, f ) ?? null,
+			choices: ( f ) => byField( payload.choices, f )?.map( ( c ) => String( c.key ) ) ?? null,
 			// Never report what the user cannot change here.
-			skip: ( f ) => ! hasInput( f.type ) || ( f.type === 'code' && ! canUnfiltered ),
+			skip: ( f ) => ! hasInput( f.type ) || ( f.type === 'code' && ! canUnfiltered ) || !! payload.readOnly?.[ f.name ],
 		};
 		return zodResolver( buildValueSchema( fields, opts ) as never );
-	}, [ fields, payload.maxRows, payload.choices, canUnfiltered ] );
+	}, [ fields, payload.maxRows, payload.choices, payload.readOnly, canUnfiltered ] );
 
 	const defaultValues = useMemo( () => initialValues( fields, payload.values ), [ fields, payload.values ] );
 
-	const { control, setError, trigger } = useForm< Record< string, unknown > >( {
+	const { control, setError, clearErrors, setValue, trigger } = useForm< Record< string, unknown > >( {
 		defaultValues,
 		resolver,
 		mode: 'onBlur',
@@ -354,6 +387,32 @@ export function FieldsForm( { payload }: { payload: BoxPayload } ) {
 			setError( path, { type: 'server', message } );
 		}
 	}, [ serverErrors, setError ] );
+
+	// Errors read after a block editor meta box save (editor-save.ts).
+	useEffect( () => {
+		const own = new Set( fields.map( ( f ) => f.name ) );
+		return registerForm( {
+			groupKey,
+			object: payload.object,
+			restRoot: payload.restRoot,
+			restNonce: payload.restNonce,
+			applyServer: ( errors, submitted ) => {
+				const mine: Record< string, string > = {};
+				for ( const [ path, message ] of Object.entries( errors ) ) {
+					if ( own.has( path.split( '.' )[ 0 ] ) ) {
+						mine[ path ] = message;
+					}
+				}
+				clearErrors();
+				for ( const [ name, value ] of Object.entries( submitted ) ) {
+					if ( own.has( name ) && Object.prototype.hasOwnProperty.call( mine, name ) ) {
+						setValue( name, value, { shouldDirty: false, shouldValidate: false } );
+					}
+				}
+				setServerErrors( mine );
+			},
+		} );
+	}, [ fields, groupKey, payload.object, payload.restRoot, payload.restNonce, clearErrors, setValue ] );
 
 	// Validate when the surrounding form is submitted, without ever blocking it.
 	const root = useRef< HTMLDivElement >( null );
@@ -378,7 +437,7 @@ export function FieldsForm( { payload }: { payload: BoxPayload } ) {
 		<BoxContext.Provider value={ box }>
 			<AnnounceContext.Provider value={ announce }>
 				<div ref={ root } className="@container">
-					{ Object.keys( serverErrors ).length > 0 && <ServerErrorSummary errors={ serverErrors } fields={ fields } /> }
+					{ Object.keys( serverErrors ).length > 0 && <ServerErrorSummary errors={ serverErrors } fields={ fields } outcome={ saveOutcome } /> }
 					<FieldList fields={ fields } scope={ [] } initialErrors={ initialErrors } />
 					{ /* One polite live region per box for row and list actions. */ }
 					<Announcer ref={ announcer } />

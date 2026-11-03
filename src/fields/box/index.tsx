@@ -8,12 +8,15 @@
  */
 import './styles.css';
 import { useEffect } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { PortalProvider } from '@/admin/components/shell/PortalProvider';
 import type { BoxPayload } from '../model/types';
 import { FieldsForm } from './FieldsForm';
+import { subscribeToMetaBoxSave, subscribeToTermAdd } from './editor-save';
 
 const PORTAL_ID = 'proto-blocks-fields-portal';
+
+const roots = new Map< HTMLElement, { root: Root; host: HTMLElement } >();
 
 function Committed( { onCommit }: { onCommit: () => void } ) {
 	useEffect( onCommit, [] ); // eslint-disable-line react-hooks/exhaustive-deps
@@ -75,7 +78,9 @@ export function mountFieldBoxes( root: ParentNode = document ): number {
 		const host = document.createElement( 'div' );
 		host.className = 'proto-blocks-fields';
 		el.appendChild( host );
-		createRoot( host ).render(
+		const root = createRoot( host );
+		roots.set( el, { root, host } );
+		root.render(
 			<PortalProvider container={ portalNode }>
 				<FieldsForm payload={ payload } />
 				<Committed onCommit={ committed } />
@@ -85,10 +90,37 @@ export function mountFieldBoxes( root: ParentNode = document ): number {
 	return mounts.length;
 }
 
+/** Unmounts the boxes under `container` and mounts them again from their payload (empty term add form). */
+export function remountFieldBoxes( container: ParentNode ): number {
+	for ( const el of Array.from( container.querySelectorAll< HTMLElement >( '[data-proto-fields-box]' ) ) ) {
+		const mounted = roots.get( el );
+		if ( mounted ) {
+			mounted.root.unmount();
+			mounted.host.remove();
+			roots.delete( el );
+		}
+		delete el.dataset.protoFieldsMounted;
+	}
+	return mountFieldBoxes( container );
+}
+
+function start() {
+	mountFieldBoxes();
+	if ( document.body.classList.contains( 'block-editor-page' ) ) {
+		subscribeToMetaBoxSave( () => undefined );
+	}
+	subscribeToTermAdd( () => {
+		const form = document.getElementById( 'addtag' );
+		if ( form ) {
+			remountFieldBoxes( form );
+		}
+	} );
+}
+
 if ( typeof document !== 'undefined' ) {
 	if ( document.readyState === 'loading' ) {
-		document.addEventListener( 'DOMContentLoaded', () => mountFieldBoxes() );
+		document.addEventListener( 'DOMContentLoaded', start );
 	} else {
-		mountFieldBoxes();
+		start();
 	}
 }
