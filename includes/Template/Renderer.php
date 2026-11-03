@@ -195,24 +195,7 @@ class Renderer
         //   $is_preview = !isset($block) || $block === null;
 
         // Create template helper
-        $template = new class($attributes) {
-            private array $attrs;
-
-            public function __construct(array $attrs)
-            {
-                $this->attrs = $attrs;
-            }
-
-            public function has_value(string $name): bool
-            {
-                return !empty($this->attrs[$name]);
-            }
-
-            public function get(string $name, mixed $default = null): mixed
-            {
-                return $this->attrs[$name] ?? $default;
-            }
-        };
+        $template = new TemplateHelper($attributes, $block);
 
         include $templatePath;
 

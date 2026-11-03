@@ -58,6 +58,7 @@ require_once PROTO_BLOCKS_DIR . 'includes/content-model.php';
 
 // Load autoloader
 require_once PROTO_BLOCKS_DIR . 'includes/Core/Autoloader.php';
+require_once PROTO_BLOCKS_DIR . 'includes/Modules/Fields/functions.php';
 
 // Initialize autoloader
 Core\Autoloader::register();
