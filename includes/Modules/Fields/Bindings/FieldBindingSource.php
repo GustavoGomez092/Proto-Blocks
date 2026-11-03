@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProtoBlocks\Modules\Fields\Bindings;
 
 use ProtoBlocks\Modules\Fields\Definition\Field;
+use ProtoBlocks\Modules\Fields\Definition\GroupValidator;
 use ProtoBlocks\Modules\Fields\Read\FieldReader;
 use ProtoBlocks\Modules\Fields\Registry\GroupIndex;
 use ProtoBlocks\Modules\Fields\Storage\ObjectRef;
@@ -29,7 +30,17 @@ use ProtoBlocks\Modules\Fields\Storage\ObjectRef;
  * mapped to the bound attribute (image/file url/alt/id, link url/title) or
  * picked with the `key` arg; anything still not scalar is null. A url
  * attribute always goes through esc_url, other non-content attributes
- * through esc_attr. Null makes core keep the block's saved content.
+ * through esc_attr; a URL that esc_url rejects is null. Null makes core
+ * keep the block's saved content.
+ *
+ * The `key` arg is policy-checked too: it only indexes image/file/link/video
+ * arrays, a single-post relationship, or one sub-field of a `group` that
+ * itself passes the code/password/`bindings: false` rules (one level only).
+ *
+ * Caching: values depend on the viewer (a user with `read_post`, `edit_term`
+ * or `edit_user` sees what an anonymous visitor does not), and those values
+ * render on public pages. A full-page cache that serves logged-in users must
+ * vary by user, or must not cache their pages.
  */
 final class FieldBindingSource
 {
@@ -37,6 +48,9 @@ final class FieldBindingSource
 
     /** Field types that are never exposed through bindings. */
     private const NEVER = ['code', 'password'];
+
+    /** Types whose escaped value is a fixed-shape array the `key` arg may index. */
+    private const KEYED = ['image', 'file', 'link', 'video'];
 
     /** Attributes whose value is a URL. */
     private const URL_ATTRIBUTES = ['url', 'href', 'src'];
@@ -186,16 +200,27 @@ final class FieldBindingSource
         if ($field === null || $field !== $hit['field']) {
             return null;
         }
-        if (in_array($field->type, self::NEVER, true) || $field->setting('bindings') === false) {
+        if (!self::bindable($field)) {
             return null;
         }
 
         return $field;
     }
 
+    /** The per-field policy: never code/password, honour `bindings: false`. */
+    private static function bindable(Field $field): bool
+    {
+        return !in_array($field->type, self::NEVER, true) && $field->setting('bindings') !== false;
+    }
+
     /**
      * The scalar to bind: the `key` arg or the attribute mapping for arrays,
      * the value itself for scalars; null for anything else.
+     *
+     * `key` only indexes the fixed-shape arrays of KEYED types and a
+     * single-post relationship. On a `group` it names one sub-field, which
+     * must itself pass bindable(); one level only (a sub-field whose value is
+     * an array is not scalar, so nested groups and repeaters give null).
      *
      * @param array<string, mixed> $args
      */
@@ -203,7 +228,15 @@ final class FieldBindingSource
     {
         if (array_key_exists('key', $args)) {
             $key = $args['key'];
-            if (!is_string($key) || preg_match('/\A[a-z][a-z0-9_]{0,31}\z/D', $key) !== 1 || !is_array($value)) {
+            if (!is_string($key) || preg_match(GroupValidator::NAME_PATTERN, $key) !== 1 || !is_array($value)) {
+                return null;
+            }
+            if ($field->type === 'group') {
+                if (!self::subFieldBindable($field, $key)) {
+                    return null;
+                }
+            } elseif (!in_array($field->type, self::KEYED, true)
+                && !($field->type === 'relationship' && (int) $field->setting('max', 0) === 1)) {
                 return null;
             }
             $value = $value[$key] ?? null;
@@ -215,12 +248,30 @@ final class FieldBindingSource
         return is_scalar($value) ? $value : null;
     }
 
-    private function forAttribute(string|int|float|bool $value, string $attribute): string
+    /** A group's sub-field of that name exists and every same-named one passes the policy. */
+    private static function subFieldBindable(Field $group, string $name): bool
+    {
+        $found = false;
+        foreach ($group->subFields as $sub) {
+            if ($sub->name !== $name) {
+                continue;
+            }
+            if (!self::bindable($sub)) {
+                return false;
+            }
+            $found = true;
+        }
+
+        return $found;
+    }
+
+    private function forAttribute(string|int|float|bool $value, string $attribute): ?string
     {
         $string = is_bool($value) ? ($value ? '1' : '') : (string) $value;
 
         if (in_array($attribute, self::URL_ATTRIBUTES, true)) {
-            return esc_url($string);
+            $url = esc_url($string);
+            return $url === '' ? null : $url; // rejected (javascript:) or empty: keep the saved content
         }
         if (in_array($attribute, self::TEXT_ATTRIBUTES, true)) {
             return $string;

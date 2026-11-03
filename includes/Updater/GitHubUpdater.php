@@ -673,8 +673,8 @@ final class GitHubUpdater
             'homepage'      => 'https://github.com/' . self::OWNER . '/' . self::REPO,
             'download_link' => $package,
             'trunk'         => $package,
-            'requires'      => '6.3',
-            'requires_php'  => '8.0',
+            'requires'      => '6.5',
+            'requires_php'  => '8.1',
             'last_updated'  => $release['published_at'],
             'sections'      => [
                 'changelog' => self::changelog_html($release['body']),

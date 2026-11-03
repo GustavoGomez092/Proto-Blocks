@@ -45,10 +45,19 @@ final class FieldBindingSourceTest extends TestCase
         // Term 5 is a category for these tests.
         $GLOBALS['pb_test_terms'][5] = ['term_id' => 5, 'taxonomy' => 'category', 'slug' => 'news', 'name' => 'News'];
         $GLOBALS['pb_test_meta']['term'][5]['kicker'] = ['<i>Breaking</i>'];
+
+        $GLOBALS['pb_test_options']['site-settings_smtp'] = [
+            'host' => '<b>mail.test</b>',
+            'password' => 'hunter2',
+            'script' => '<script>secret()</script>',
+            'internal' => 'staff only',
+            'nested' => ['deep' => 'deep value'],
+        ];
     }
 
     protected function tearDown(): void
     {
+        unset($GLOBALS['pb_test_public_types']);
         $GLOBALS['pb_test_current_user'] = 0;
         unset($GLOBALS['pb_test_caps'][self::READER], $GLOBALS['pb_test_caps'][self::ADMIN]);
     }
@@ -63,6 +72,23 @@ final class FieldBindingSourceTest extends TestCase
                     ['key' => 'field_internal', 'name' => 'internal', 'label' => 'Internal', 'type' => 'text', 'bindings' => false],
                     ['key' => 'field_secret', 'name' => 'secret', 'label' => 'Secret', 'type' => 'password'],
                 ],
+            ],
+            [
+                'key' => 'group_site', 'title' => 'Site settings',
+                'location' => [[['param' => 'options_page', 'operator' => '==', 'value' => 'site-settings']]],
+                'fields' => [[
+                    'key' => 'field_smtp', 'name' => 'smtp', 'label' => 'SMTP', 'type' => 'group',
+                    'sub_fields' => [
+                        ['key' => 'field_smtp_host', 'name' => 'host', 'label' => 'Host', 'type' => 'text'],
+                        ['key' => 'field_smtp_password', 'name' => 'password', 'label' => 'Password', 'type' => 'password'],
+                        ['key' => 'field_smtp_script', 'name' => 'script', 'label' => 'Script', 'type' => 'code'],
+                        ['key' => 'field_smtp_internal', 'name' => 'internal', 'label' => 'Internal', 'type' => 'text', 'bindings' => false],
+                        [
+                            'key' => 'field_smtp_nested', 'name' => 'nested', 'label' => 'Nested', 'type' => 'group',
+                            'sub_fields' => [['key' => 'field_smtp_deep', 'name' => 'deep', 'label' => 'Deep', 'type' => 'text']],
+                        ],
+                    ],
+                ]],
             ],
             [
                 'key' => 'group_cat', 'title' => 'Category',
@@ -144,6 +170,48 @@ final class FieldBindingSourceTest extends TestCase
         self::assertSame('&lt;b&gt;Hi&lt;/b&gt;', $source->value(['name' => 'subtitle', 'context' => 'post:11'], self::block(), 'content'));
     }
 
+    public function testPublishedPostOfNonPublicTypeHiddenFromVisitors(): void
+    {
+        $GLOBALS['pb_test_public_types'] = ['page'];
+        $source = $this->source();
+
+        self::actAs(self::VISITOR);
+        self::assertNull($source->value(['name' => 'subtitle'], self::block(), 'content'));
+
+        self::actAs(self::READER);
+        self::assertSame('&lt;b&gt;Hi&lt;/b&gt;', $source->value(['name' => 'subtitle'], self::block(), 'content'));
+    }
+
+    // ------------------------------------------------------------ key on group sub-fields
+
+    public function testKeyOnGroupAppliesThePolicyToTheSubField(): void
+    {
+        $source = $this->source();
+        $args = static fn(string $key): array => ['name' => 'smtp', 'key' => $key, 'context' => 'option:site-settings'];
+
+        foreach ([self::VISITOR, self::ADMIN] as $user) {
+            self::actAs($user);
+            self::assertNull($source->value($args('password'), self::block(), 'content'), 'password sub-field');
+            self::assertNull($source->value($args('script'), self::block(), 'content'), 'code sub-field');
+            self::assertNull($source->value($args('internal'), self::block(), 'content'), 'bindings:false sub-field');
+            self::assertNull($source->value($args('nested'), self::block(), 'content'), 'nested group');
+            self::assertNull($source->value($args('nested.deep'), self::block(), 'content'), 'dotted key');
+            self::assertNull($source->value($args('missing'), self::block(), 'content'), 'unknown sub-field');
+            self::assertSame('&lt;b&gt;mail.test&lt;/b&gt;', $source->value($args('host'), self::block(), 'content'));
+        }
+        // A group without key has no mapping.
+        self::assertNull($source->value(['name' => 'smtp', 'context' => 'option:site-settings'], self::block(), 'content'));
+    }
+
+    public function testKeyOnlyIndexesAllowedTypes(): void
+    {
+        $source = $this->source();
+        self::assertNull($source->value(['name' => 'agenda', 'key' => 'title'], self::block(), 'content'), 'repeater');
+        self::assertNull($source->value(['name' => 'sections', 'key' => 'quote'], self::block(), 'content'), 'flexible content');
+        self::assertNull($source->value(['name' => 'audience', 'key' => 'a'], self::block(), 'content'), 'multi select');
+        self::assertSame('https://x.test/hero.jpg', $source->value(['name' => 'hero', 'key' => 'url'], self::block(), 'content'), 'image');
+    }
+
     public function testMissingPostIsNull(): void
     {
         self::actAs(self::ADMIN);
@@ -201,20 +269,20 @@ final class FieldBindingSourceTest extends TestCase
     public function testLinkMapsUrlAndTextAndBlocksJavascriptUrls(): void
     {
         $source = $this->source();
-        self::assertSame('', $source->value(['name' => 'register_link'], self::block(), 'url'));
+        self::assertNull($source->value(['name' => 'register_link'], self::block(), 'url'));
         self::assertSame('Go &lt;b&gt;now&lt;/b&gt;', $source->value(['name' => 'register_link'], self::block(), 'text'));
         self::assertSame('Go &lt;b&gt;now&lt;/b&gt;', $source->value(['name' => 'register_link'], self::block(), 'content'));
         self::assertNull($source->value(['name' => 'register_link'], self::block(), 'alt'));
         // A key naming a URL part bound to a url attribute still goes through esc_url.
-        self::assertSame('', $source->value(['name' => 'register_link', 'key' => 'url'], self::block(), 'url'));
+        self::assertNull($source->value(['name' => 'register_link', 'key' => 'url'], self::block(), 'url'));
     }
 
     public function testTextFieldBoundToUrlGoesThroughEscUrl(): void
     {
         $GLOBALS['pb_test_meta']['post'][10]['subtitle'] = ['javascript:alert(1)'];
         $source = $this->source();
-        self::assertSame('', $source->value(['name' => 'subtitle'], self::block(), 'url'));
-        self::assertSame('', $source->value(['name' => 'stream_url'], self::block(), 'url'));
+        self::assertNull($source->value(['name' => 'subtitle'], self::block(), 'url'));
+        self::assertNull($source->value(['name' => 'stream_url'], self::block(), 'url'));
 
         $GLOBALS['pb_test_meta']['post'][10]['subtitle'] = ['https://ok.test/?a=1'];
         self::assertSame('https://ok.test/?a=1', $source->value(['name' => 'subtitle'], self::block(), 'url'));
@@ -298,5 +366,9 @@ final class FieldBindingSourceTest extends TestCase
         self::assertStringNotContainsString("'6.3', '<'", $main);
         self::assertStringContainsString('WordPress 6.5 or higher', $main);
         self::assertStringContainsString('- WordPress 6.5+', (string) file_get_contents($root . '/README.md'));
+
+        $updater = (string) file_get_contents($root . '/includes/Updater/GitHubUpdater.php');
+        self::assertMatchesRegularExpression("/'requires'\\s*=>\\s*'6\\.5',/", $updater);
+        self::assertMatchesRegularExpression("/'requires_php'\\s*=>\\s*'8\\.1',/", $updater);
     }
 }
