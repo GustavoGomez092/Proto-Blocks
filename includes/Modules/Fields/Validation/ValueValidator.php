@@ -28,7 +28,7 @@ final class ValueValidator
     /**
      * @param list<Field> $fields
      * @param array<string, mixed> $input field name => submitted value
-     * @param (callable(Field): ?array)|null $choiceResolver allowed values for a field with `optionsSource`; null = unknown, membership is not checked
+     * @param (callable(Field): ?array)|null $choiceResolver allowed values for a field with `optionsSource`; absent or null result rejects every value (fail closed)
      * @param (callable(Field): ?int)|null $maxRows hard cap on rows for a field (e.g. the proto_blocks_repeater_max_items filter); null = no extra cap
      * @return array{valid: array<string, mixed>, errors: array<string, string>, hidden: list<string>}
      */
@@ -161,8 +161,15 @@ final class ValueValidator
                 return sprintf(__('Enter at least %d characters.', 'proto-blocks'), $min);
             }
             $pattern = $f->setting('pattern');
-            if (is_string($pattern) && $pattern !== '' && ConditionEvaluator::matches($pattern, $value) === false) {
-                return __('The value does not match the required format.', 'proto-blocks');
+            if (is_string($pattern) && $pattern !== '') {
+                if (ConditionEvaluator::compilePattern($pattern) === null) {
+                    // A definition error: never accept a value a broken rule could not check.
+                    return __('Invalid pattern rule.', 'proto-blocks');
+                }
+                // false = no match, null = engine failure on this subject (backtracking, invalid UTF-8): both fail closed.
+                if (ConditionEvaluator::matches($pattern, $value) !== true) {
+                    return __('The value does not match the required format.', 'proto-blocks');
+                }
             }
         }
         return null;
@@ -190,18 +197,21 @@ final class ValueValidator
     private static function choice(Field $f, mixed $value, ?callable $resolver): ?string
     {
         $allowed = null;
-        if ($f->setting('optionsSource') !== null && $resolver !== null) {
-            $resolved = $resolver($f);
-            $allowed = is_array($resolved) ? array_map('strval', array_values($resolved)) : null;
-        }
-        if ($allowed === null) {
+        if ($f->setting('optionsSource') !== null) {
+            // Dynamic source: the caller must resolve it. Without a resolved list, fail closed.
+            $resolved = $resolver !== null ? $resolver($f) : null;
+            if (!is_array($resolved)) {
+                return __('Invalid choice.', 'proto-blocks');
+            }
+            $allowed = array_map('strval', array_values($resolved));
+        } else {
             $static = $f->setting('choices');
             if (is_array($static) && $static !== []) {
                 $allowed = array_map('strval', array_is_list($static) ? $static : array_keys($static));
             }
         }
         if ($allowed === null) {
-            return null; // nothing to check against (dynamic source with no resolver)
+            return null; // no choices declared at all
         }
 
         $multiple = !empty($f->setting('multiple'));

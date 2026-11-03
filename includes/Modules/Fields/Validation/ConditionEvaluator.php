@@ -92,10 +92,28 @@ final class ConditionEvaluator
         if ($pattern === '' || strlen($pattern) > self::MAX_PATTERN_LENGTH) {
             return null;
         }
-        $regex = '/' . str_replace('/', '\/', $pattern) . '/Du';
+        $regex = '/' . self::escapeDelimiter($pattern) . '/Du';
         // The @ is deliberate: an invalid user regex raises a warning, and the
         // false return is the signal we act on.
         return @preg_match($regex, '') === false ? null : $regex;
+    }
+
+    /** Escapes each '/' that is not already escaped; a backslash always protects the next character. */
+    private static function escapeDelimiter(string $pattern): string
+    {
+        $out = '';
+        $len = strlen($pattern);
+        for ($i = 0; $i < $len; $i++) {
+            $c = $pattern[$i];
+            if ($c === '\\' && $i + 1 < $len) {
+                $out .= $c . $pattern[++$i];
+            } elseif ($c === '/') {
+                $out .= '\\/';
+            } else {
+                $out .= $c;
+            }
+        }
+        return $out;
     }
 
     /** True/false for a match; null when the pattern is unusable or the engine gave up. */

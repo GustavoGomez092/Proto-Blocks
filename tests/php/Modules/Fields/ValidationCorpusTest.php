@@ -24,7 +24,7 @@ final class ValidationCorpusTest extends TestCase
     /** @return array<string, array{0: array<string, mixed>}> */
     public static function cases(): array
     {
-        $cases = json_decode((string) file_get_contents(self::CORPUS), true, 512, JSON_THROW_ON_ERROR);
+        $cases = json_decode((string) file_get_contents(self::CORPUS), true, 512, JSON_THROW_ON_ERROR)['cases'];
         $out = [];
         foreach ($cases as $case) {
             $out[$case['id']] = [$case];
@@ -106,6 +106,46 @@ final class ValidationCorpusTest extends TestCase
         } finally {
             ini_set('pcre.backtrack_limit', (string) $previous);
         }
+    }
+
+    /** @return array{valid: array<string, mixed>, errors: array<string, string>, hidden: list<string>} */
+    private static function validatePattern(string $pattern, string $value): array
+    {
+        $fields = self::fields([['key' => 'field_p', 'name' => 'p', 'label' => 'P', 'type' => 'text', 'pattern' => $pattern]]);
+        return ValueValidator::validate($fields, ['p' => $value]);
+    }
+
+    public function testPatternBacktrackExhaustionIsRejected(): void
+    {
+        $previous = ini_set('pcre.backtrack_limit', '100');
+        try {
+            $r = self::validatePattern('^(a+)+$', str_repeat('a', 30) . 'b');
+        } finally {
+            ini_set('pcre.backtrack_limit', (string) $previous);
+        }
+        self::assertSame([], $r['valid']);
+        self::assertSame(['p' => 'The value does not match the required format.'], $r['errors']);
+    }
+
+    public function testPatternInvalidUtf8SubjectIsRejected(): void
+    {
+        $r = self::validatePattern('^ab', "ab\xff");
+        self::assertSame([], $r['valid']);
+        self::assertSame(['p' => 'The value does not match the required format.'], $r['errors']);
+    }
+
+    public function testPatternWithEscapedSlashCompilesAndMatches(): void
+    {
+        self::assertSame(['p'], array_keys(self::validatePattern('^a\\/b$', 'a/b')['valid']));
+        self::assertSame(['p'], array_keys(self::validatePattern('^a/b$', 'a/b')['valid']));
+        self::assertNull(ConditionEvaluator::compilePattern('abc\\'));
+    }
+
+    public function testUncompilablePatternIsADefinitionError(): void
+    {
+        $r = self::validatePattern('([a-', 'x');
+        self::assertSame([], $r['valid']);
+        self::assertSame(['p' => 'Invalid pattern rule.'], $r['errors']);
     }
 
     /**
