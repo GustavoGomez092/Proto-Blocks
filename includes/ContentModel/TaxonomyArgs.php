@@ -33,7 +33,7 @@ final class TaxonomyArgs
         $plural = is_string($data['plural'] ?? null) && $data['plural'] !== '' ? $data['plural'] : Inflector::plural($name);
 
         $args = [
-            'labels'            => Labels::taxonomy($name, $plural),
+            'labels'            => Labels::taxonomy($name, $plural, ($data['hierarchical'] ?? false) === true),
             'public'            => true,
             'show_in_rest'      => true,
             'show_admin_column' => true,

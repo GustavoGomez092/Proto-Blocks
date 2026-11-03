@@ -97,6 +97,24 @@ final class ContentModelCommandsTest extends TestCase
         $this->assertNull(ContentModelCommands::normalizeSlug(str_repeat('a', 33), 'taxonomy'));
     }
 
+    // ---- scaffoldArchive -----------------------------------------------------
+
+    public function testScaffoldArchiveFollowsTheRegisteredType(): void
+    {
+        // An override of core `post` that does not mention has_archive: no archive.
+        $this->assertFalse(ContentModelCommands::scaffoldArchive(['supports' => ['title']], (object) ['name' => 'post', 'has_archive' => false]));
+        // The registered value wins over the file (it already includes the file's).
+        $this->assertFalse(ContentModelCommands::scaffoldArchive(['has_archive' => true], (object) ['has_archive' => false]));
+        $this->assertTrue(ContentModelCommands::scaffoldArchive([], (object) ['has_archive' => 'books']));
+    }
+
+    public function testScaffoldArchiveFallsBackToTheFileThenThePluginDefault(): void
+    {
+        $this->assertFalse(ContentModelCommands::scaffoldArchive(['has_archive' => false], null));
+        $this->assertTrue(ContentModelCommands::scaffoldArchive(['has_archive' => 'books'], null));
+        $this->assertTrue(ContentModelCommands::scaffoldArchive([], null));
+    }
+
     // ---- createDeclaration ---------------------------------------------------
 
     public function testCreateWritesTheCommentedTemplate(): void

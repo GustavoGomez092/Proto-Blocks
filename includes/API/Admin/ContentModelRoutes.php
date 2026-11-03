@@ -424,9 +424,22 @@ abstract class ContentModelRoutes
             }
         }
 
+        $parentType = $declaration?->parentType;
+        $message = null;
         if ($declaration === null) {
             $editable = false;
             $reason = 'not_proto';
+        } elseif ($parentType !== null) {
+            // Declared inside a type: its own screen cannot save it.
+            $editable = false;
+            $reason = 'inline';
+            $message = sprintf(
+                /* translators: %s: the post type file that declares the taxonomy, e.g. proto-types/book/type.jsonc. */
+                __('Declared inline in %s; edit it there.', 'proto-blocks'),
+                $declaration->origin === Declaration::ORIGIN_FILE
+                    ? 'proto-types/' . $parentType . '/' . basename(str_replace('\\', '/', $declaration->source))
+                    : self::displayPath($declaration->source)
+            );
         } else {
             $target = $this->saveTarget($kind, $slug, $declaration);
             $editable = $target['writable'];
@@ -440,7 +453,7 @@ abstract class ContentModelRoutes
             }
         }
 
-        return [
+        $item = [
             'slug' => $slug,
             'label' => self::label($slug, $object, $declaration),
             'origin' => $origin,
@@ -453,6 +466,26 @@ abstract class ContentModelRoutes
             'readOnlyReason' => $editable ? null : $reason,
             'issues' => $own,
         ];
+        if ($kind === Declaration::TAXONOMY) {
+            $item['readOnlyMessage'] = $message;
+            $item['objectTypes'] = self::objectTypes($object, $declaration);
+            $item['parentType'] = $parentType;
+        }
+
+        return $item;
+    }
+
+    /**
+     * The post types a taxonomy is attached to: the registered object's,
+     * else the declared `post_types` (an inline taxonomy's include its type).
+     *
+     * @return list<string>
+     */
+    protected static function objectTypes(?object $object, ?Declaration $declaration): array
+    {
+        $types = $object !== null ? ($object->object_type ?? []) : ($declaration?->data['post_types'] ?? []);
+
+        return array_values(array_unique(array_filter(is_array($types) ? $types : [], 'is_string')));
     }
 
     /** @return array{0: string, 1: string} */

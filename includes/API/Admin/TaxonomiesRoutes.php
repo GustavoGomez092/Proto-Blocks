@@ -64,12 +64,12 @@ final class TaxonomiesRoutes extends ContentModelRoutes
             return self::notFound(Declaration::TAXONOMY);
         }
 
-        $objectTypes = $object !== null ? ($object->object_type ?? []) : ($declaration->data['post_types'] ?? []);
+        $item = $this->listItem(Declaration::TAXONOMY, $slug, $object, $declaration);
 
         return [
-            'item' => $this->listItem(Declaration::TAXONOMY, $slug, $object, $declaration),
+            'item' => $item,
             'effective' => self::effective(Declaration::TAXONOMY, $object, $declaration),
-            'objectTypes' => array_values(array_filter(is_array($objectTypes) ? $objectTypes : [], 'is_string')),
+            'objectTypes' => $item['objectTypes'],
             'content' => ['count' => $this->guardrails()->contentFor(Declaration::TAXONOMY, $slug, null)['count']],
         ];
     }
