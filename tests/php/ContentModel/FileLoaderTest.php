@@ -8,6 +8,8 @@ use PHPUnit\Framework\TestCase;
 use ProtoBlocks\ContentModel\Declaration;
 use ProtoBlocks\ContentModel\FileLoader;
 use ProtoBlocks\ContentModel\Issue;
+use ProtoBlocks\ContentModel\Jsonc;
+use ProtoBlocks\ContentModel\SchemaCheck;
 
 
 final class FileLoaderTest extends TestCase
@@ -115,6 +117,27 @@ final class FileLoaderTest extends TestCase
 
         $this->assertArrayNotHasKey('book', $result['declarations']['type']);
         $this->assertStringContainsString('/taxonomies/0/name', $this->issue($result, 'schema_invalid')->message);
+    }
+
+    public function testCallbackKeyIsStrippedWithWarningAndTypeStillLoads(): void
+    {
+        $text = '{"name": "Widget", "rest_controller_class": "WP_REST_Posts_Controller", "labels": {"menu_name": "<b>W</b>"}}';
+        $this->write('proto-types/widget/type.jsonc', $text);
+
+        $result = (new FileLoader())->load([$this->parent]);
+
+        $widget = $result['declarations']['type']['widget'] ?? null;
+        $this->assertInstanceOf(Declaration::class, $widget);
+        $this->assertArrayNotHasKey('rest_controller_class', $widget->data);
+        $this->assertArrayNotHasKey('menu_name', $widget->data['labels']);
+        $codes = array_map(static fn (Issue $i) => $i->code . ':' . $i->level, $result['issues']);
+        $this->assertContains('unsafe_key:' . Issue::WARNING, $codes);
+        $this->assertContains('unsafe_label:' . Issue::WARNING, $codes);
+        $this->assertNotContains('schema_invalid:' . Issue::ERROR, $codes);
+
+        // The writer still refuses the same text.
+        $errors = SchemaCheck::validate(Jsonc::decode($text), SchemaCheck::schema(), '#/$defs/type');
+        $this->assertContains('/rest_controller_class', array_column($errors, 'path'));
     }
 
     public function testSchemaErrorsSkipDeclaration(): void

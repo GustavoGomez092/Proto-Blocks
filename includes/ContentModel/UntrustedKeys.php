@@ -9,9 +9,10 @@ namespace ProtoBlocks\ContentModel;
  * WordPress something it calls or instantiates, and its label strings never
  * carry markup.
  *
- * The schema refuses UNSAFE_KEYS and `<`/`>` in labels, so the writer and
- * the loader reject such files; this class is the defence in depth for
- * file declarations that reach PostTypeArgs/TaxonomyArgs anyway. PHP
+ * The schema refuses UNSAFE_KEYS and `<`/`>` in labels, so the writer rejects
+ * such files; the loader runs filter() before its schema check (strip plus
+ * warning, the type still registers), and PostTypeArgs/TaxonomyArgs call it
+ * again as defence in depth. PHP
  * declarations are trusted code and keep every key (forSchemaCheck() hides
  * the keys from their schema check).
  */
@@ -53,7 +54,8 @@ final class UntrustedKeys
 
         foreach ($data as $key => $value) {
             $key = (string) $key;
-            $unsafe = in_array($key, self::UNSAFE_KEYS, true)
+            // `meta_box_cb: false` hides a taxonomy box in core; it is data, not code.
+            $unsafe = (in_array($key, self::UNSAFE_KEYS, true) && !($key === 'meta_box_cb' && $value === false))
                 || (!in_array($key, $known, true) && self::namesCallable($value));
             if ($unsafe) {
                 unset($data[$key]);
@@ -138,12 +140,16 @@ final class UntrustedKeys
 
     /**
      * Whether a decoded JSON value names an existing PHP function or static
-     * method ("fn", "Class::method", ["Class", "method"]). Classes are only
-     * looked up, never autoloaded.
+     * method ("Ns\\fn", "Class::method", ["Class", "method"]). A string must
+     * contain `::` or a backslash, so plain words ("Link", "Date") are never
+     * taken for functions. Classes are only looked up, never autoloaded.
      */
     public static function namesCallable(mixed $value): bool
     {
         if (is_string($value)) {
+            if (!str_contains($value, '::') && !str_contains($value, '\\')) {
+                return false;
+            }
             $value = ltrim($value, '\\');
             if ($value === '') {
                 return false;
