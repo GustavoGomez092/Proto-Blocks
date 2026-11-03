@@ -12,6 +12,7 @@ type ScreenComponent = LazyExoticComponent<() => JSX.Element>;
 export const SCREENS: Partial<Record<Screen, ScreenComponent>> = {
 	system: lazy(() => import('./SystemScreen')),
 	wizard: lazy(() => import('./WizardScreen')),
+	dashboard: lazy(() => import('./DashboardScreen')),
 };
 
 /** Screen name as shown in the WordPress menu, for headings and errors. */

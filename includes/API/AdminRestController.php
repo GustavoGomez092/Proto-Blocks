@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace ProtoBlocks\API;
 
 use ProtoBlocks\Admin\AdminPage;
+use ProtoBlocks\API\Admin\DashboardRoutes;
 use ProtoBlocks\API\Admin\SystemRoutes;
 use ProtoBlocks\API\Admin\WizardRoutes;
 use WP_Error;
@@ -36,6 +37,7 @@ final class AdminRestController
     public const ROUTE_GROUPS = [
         SystemRoutes::class,
         WizardRoutes::class,
+        DashboardRoutes::class,
     ];
 
     /**
@@ -99,5 +101,45 @@ final class AdminRestController
             __('File modifications are disabled on this site.', 'proto-blocks'),
             ['status' => 403]
         );
+    }
+
+    /**
+     * The Example Blocks switch: locked when wp-config.php defines it, in
+     * which case the constant wins over the stored option.
+     *
+     * @param mixed $optionValue Stored option value.
+     * @return array{enabled: bool, locked: bool}
+     */
+    public static function exampleBlocksState(bool $fromConfig, bool $constantValue, mixed $optionValue): array
+    {
+        return [
+            'enabled' => $fromConfig ? $constantValue : (bool) $optionValue,
+            'locked' => $fromConfig,
+        ];
+    }
+
+    /**
+     * Null when $type is a demo set that can be installed now, otherwise the
+     * error to return.
+     */
+    public static function validateDemoType(string $type, bool $tailwindEnabled): ?WP_Error
+    {
+        if ($type !== 'vanilla' && $type !== 'tailwind') {
+            return new WP_Error(
+                'proto_blocks_invalid_type',
+                __('Unknown demo block type.', 'proto-blocks'),
+                ['status' => 400]
+            );
+        }
+
+        if ($type === 'tailwind' && !$tailwindEnabled) {
+            return new WP_Error(
+                'proto_blocks_tailwind_disabled',
+                __('Turn on Tailwind CSS before installing the Tailwind demo blocks.', 'proto-blocks'),
+                ['status' => 409]
+            );
+        }
+
+        return null;
     }
 }
