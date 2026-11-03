@@ -25,15 +25,6 @@ final class SetupWizardFlowTest extends TestCase
         if (!defined('PROTO_BLOCKS_DIR')) {
             define('PROTO_BLOCKS_DIR', dirname(__DIR__, 3) . '/');
         }
-        if (!function_exists('trailingslashit')) {
-            eval('function trailingslashit($value) { return rtrim((string) $value, "/\\\\") . "/"; }');
-        }
-        if (!function_exists('get_stylesheet_directory')) {
-            eval('function get_stylesheet_directory() { return sys_get_temp_dir() . "/pb-theme"; }');
-        }
-        if (!function_exists('sanitize_key')) {
-            eval('function sanitize_key($key) { return preg_replace("/[^a-z0-9_\\\\-]/", "", strtolower((string) $key)); }');
-        }
         $GLOBALS['pb_test_options'] = [];
         $GLOBALS['pb_test_current_user'] = 1;
         $GLOBALS['pb_test_caps'] = [1 => ['manage_options']];

@@ -36,6 +36,18 @@ jobs:
       - name: Run PHPUnit
         run: composer test
 
+      # Stub collisions only show when a directory runs without the others.
+      - name: Run each test directory alone
+        run: |
+          for dir in tests/php/*/; do
+            echo "::group::$dir"
+            vendor/bin/phpunit "$dir"
+            echo "::endgroup::"
+          done
+
+      - name: Run PHPUnit in random order
+        run: vendor/bin/phpunit --order-by=random
+
   js:
     name: Jest and build
     runs-on: ubuntu-latest
@@ -47,7 +59,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies

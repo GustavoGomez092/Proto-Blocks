@@ -1,5 +1,5 @@
 import { mockApi, mockBootstrap } from './helpers';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AdminApp } from '@/admin/app';
 import { navigate } from '@/admin/lib/navigate';
@@ -53,12 +53,26 @@ test('starts on Welcome and Get Started moves to the style step', async () => {
 	expect(await screen.findByRole('heading', { name: 'Choose your style' })).toBeInTheDocument();
 });
 
-test('choosing Tailwind saves the style and lists the tailwind demos', async () => {
+test('the progress indicator has three steps: Welcome, Style, Finish', async () => {
+	mockApi({ 'admin/wizard': payload() });
+	renderScreen();
+
+	const progress = await screen.findByRole('list', { name: 'Setup progress' });
+	const steps = within(progress).getAllByRole('listitem');
+	expect(steps.map((step) => step.textContent)).toEqual(['1Welcome', '2Style', '3Finish']);
+	expect(steps[0]).toHaveAttribute('aria-current', 'step');
+});
+
+test('choosing Tailwind saves the style and goes straight to Finish', async () => {
 	const user = userEvent.setup();
 	const api = mockApi({
 		'GET admin/wizard': payload(),
 		'POST admin/wizard/style': (body: unknown) =>
-			payload({ style: (body as { style: string }).style, categoryName: (body as { categoryName: string }).categoryName }),
+			payload({
+				style: (body as { style: string }).style,
+				categoryName: (body as { categoryName: string }).categoryName,
+				tailwindEnabled: true,
+			}),
 	});
 	renderScreen();
 	await goToStyleStep(user);
@@ -67,19 +81,20 @@ test('choosing Tailwind saves the style and lists the tailwind demos', async () 
 	await user.type(screen.getByLabelText(/Block category name/), 'Shop');
 	await user.click(screen.getByRole('button', { name: /Continue/ }));
 
-	expect(await screen.findByRole('heading', { name: 'Install example blocks?' })).toBeInTheDocument();
+	expect(await screen.findByRole('heading', { name: 'Proto Blocks is ready' })).toBeInTheDocument();
 	const [options] = callsTo(api, 'admin/wizard/style')[0];
 	expect(options).toMatchObject({
 		url: 'https://example.test/wp-json/proto-blocks/v1/admin/wizard/style',
 		method: 'POST',
 		data: { style: 'tailwind', categoryName: 'Shop' },
 	});
-	expect(screen.getByText('tl-hero')).toBeInTheDocument();
-	expect(screen.getByText('tl-footer')).toBeInTheDocument();
-	expect(screen.queryByText('Accordion')).not.toBeInTheDocument();
+	expect(screen.getByText('Tailwind CSS', { selector: 'dd' })).toBeInTheDocument();
+	expect(screen.getByText('Shop', { selector: 'dd' })).toBeInTheDocument();
+	expect(screen.getByText('Tailwind Integration')).toBeInTheDocument();
+	expect(screen.getByText('Enabled')).toBeInTheDocument();
 });
 
-test('Skip for now reaches Finish with the examples skipped', async () => {
+test('Finish summarises the choices without an example-blocks row or install controls', async () => {
 	const user = userEvent.setup();
 	const api = mockApi({
 		'GET admin/wizard': payload(),
@@ -88,72 +103,17 @@ test('Skip for now reaches Finish with the examples skipped', async () => {
 	renderScreen();
 	await goToStyleStep(user);
 	await user.click(screen.getByRole('button', { name: /Continue/ }));
-	await user.click(await screen.findByRole('button', { name: 'Skip for now' }));
 
 	expect(await screen.findByRole('heading', { name: 'Proto Blocks is ready' })).toBeInTheDocument();
 	expect(screen.getByText('Styling Approach')).toBeInTheDocument();
 	expect(screen.getByText('Vanilla CSS', { selector: 'dd' })).toBeInTheDocument();
 	expect(screen.getByText('Category Name')).toBeInTheDocument();
 	expect(screen.getByText('Proto Blocks', { selector: 'dd' })).toBeInTheDocument();
-	expect(screen.getByText('Example Blocks Installed')).toBeInTheDocument();
-	expect(screen.getByText('Skipped')).toBeInTheDocument();
+	expect(screen.queryByText('Example Blocks Installed')).not.toBeInTheDocument();
 	expect(screen.queryByText('Tailwind Integration')).not.toBeInTheDocument();
+	expect(screen.queryByRole('button', { name: 'Skip for now' })).not.toBeInTheDocument();
+	expect(screen.queryByRole('button', { name: /Install Example Blocks/ })).not.toBeInTheDocument();
 	expect(callsTo(api, 'admin/wizard/demos')).toHaveLength(0);
-});
-
-test('Install Example Blocks posts, then shows the count and skipped names', async () => {
-	const user = userEvent.setup();
-	const api = mockApi({
-		'GET admin/wizard': payload(),
-		'POST admin/wizard/style': payload({ style: 'tailwind', categoryName: 'Shop', tailwindEnabled: true }),
-		'POST admin/wizard/demos': { installed: 2, skipped: ['tl-hero'] },
-	});
-	renderScreen();
-	await goToStyleStep(user);
-	await user.click(screen.getByRole('radio', { name: /Tailwind CSS/ }));
-	await user.click(screen.getByRole('button', { name: /Continue/ }));
-	await user.click(await screen.findByRole('button', { name: /Install Example Blocks/ }));
-
-	expect(await screen.findByRole('heading', { name: 'Proto Blocks is ready' })).toBeInTheDocument();
-	expect(callsTo(api, 'admin/wizard/demos')[0][0]).toMatchObject({ method: 'POST' });
-	expect(screen.getByText('2', { selector: 'dd span' })).toBeInTheDocument();
-	expect(screen.getByText('Shop', { selector: 'dd' })).toBeInTheDocument();
-	expect(screen.getByText('Tailwind Integration')).toBeInTheDocument();
-	expect(screen.getByText('Enabled')).toBeInTheDocument();
-	const skipped = screen.getByText('tl-hero').closest('[data-slot="alert"]');
-	expect(skipped).toHaveTextContent('1 block skipped');
-});
-
-test('a failed install lands on Finish with the error', async () => {
-	const user = userEvent.setup();
-	mockApi({
-		'GET admin/wizard': payload(),
-		'POST admin/wizard/style': payload(),
-		'POST admin/wizard/demos': () => {
-			throw { code: 'proto_blocks_copy_failed', message: 'Directory is not writable', data: { status: 500 } };
-		},
-	});
-	renderScreen();
-	await goToStyleStep(user);
-	await user.click(screen.getByRole('button', { name: /Continue/ }));
-	await user.click(await screen.findByRole('button', { name: /Install Example Blocks/ }));
-
-	expect(await screen.findByRole('heading', { name: 'Proto Blocks is ready' })).toBeInTheDocument();
-	expect(screen.getByText("Some blocks couldn't be installed")).toBeInTheDocument();
-	expect(screen.getByText('Directory is not writable')).toBeInTheDocument();
-	expect(screen.getByText('Skipped')).toBeInTheDocument();
-});
-
-test('with file modifications disabled the banner shows and Install is disabled', async () => {
-	const user = userEvent.setup();
-	mockApi({ 'GET admin/wizard': payload(), 'POST admin/wizard/style': payload() });
-	renderScreen({ fileModsAllowed: false, fileModsConstant: 'DISALLOW_FILE_MODS' });
-	await goToStyleStep(user);
-	await user.click(screen.getByRole('button', { name: /Continue/ }));
-
-	expect(await screen.findByText('File modifications are disabled on this site')).toBeInTheDocument();
-	expect(screen.getByRole('button', { name: /Install Example Blocks/ })).toBeDisabled();
-	expect(screen.getByRole('button', { name: 'Skip for now' })).toBeEnabled();
 });
 
 test('Back returns to the previous step', async () => {
@@ -177,7 +137,6 @@ test('Go to Dashboard completes the wizard and follows the redirect', async () =
 	renderScreen();
 	await goToStyleStep(user);
 	await user.click(screen.getByRole('button', { name: /Continue/ }));
-	await user.click(await screen.findByRole('button', { name: 'Skip for now' }));
 	await user.click(await screen.findByRole('button', { name: /Go to Dashboard/ }));
 
 	await waitFor(() => expect(navigate).toHaveBeenCalledWith('https://example.test/wp-admin/admin.php?page=proto-blocks'));

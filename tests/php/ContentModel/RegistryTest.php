@@ -11,7 +11,6 @@ use ProtoBlocks\ContentModel\PhpDeclarations;
 use ProtoBlocks\ContentModel\Registry;
 
 require_once __DIR__ . '/../CLI/wp-stubs.php';
-require_once __DIR__ . '/stubs/theme.php';
 require_once __DIR__ . '/../../../includes/content-model.php';
 
 final class RegistryTest extends TestCase

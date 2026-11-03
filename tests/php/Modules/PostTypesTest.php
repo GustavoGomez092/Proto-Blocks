@@ -13,7 +13,6 @@ use ProtoBlocks\ContentModel\Registry;
 use ProtoBlocks\Modules\PostTypes;
 
 require_once __DIR__ . '/../CLI/wp-stubs.php';
-require_once __DIR__ . '/../ContentModel/stubs/theme.php';
 require_once __DIR__ . '/../ContentModel/stubs/hooks.php';
 require_once __DIR__ . '/../../../includes/content-model.php';
 

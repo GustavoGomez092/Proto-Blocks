@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace ProtoBlocks\Admin;
 
 use ProtoBlocks\API\AdminRestController;
+use ProtoBlocks\Blocks\Discovery;
 use ProtoBlocks\Template\Cache;
 use ProtoBlocks\Core\Plugin;
 use ProtoBlocks\Tailwind\Manager as TailwindManager;
@@ -30,11 +31,34 @@ class AdminPage
     private Cache $cache;
 
     /**
+     * Block discovery; Plugin's when none is injected (tests inject one).
+     */
+    private ?Discovery $discovery;
+
+    /**
      * Constructor
      */
-    public function __construct(Cache $cache)
+    public function __construct(Cache $cache, ?Discovery $discovery = null)
     {
         $this->cache = $cache;
+        $this->discovery = $discovery;
+    }
+
+    /**
+     * Forget discovered blocks so the next read rescans the block folders.
+     * Call it after anything that adds or removes blocks (demo install or
+     * remove, the Example Blocks switch) and before building a response
+     * from dashboardData(), or the response describes the old registry.
+     */
+    public function refreshDiscovery(): void
+    {
+        delete_transient('proto_blocks_discovered');
+        $this->discovery()->refresh();
+    }
+
+    private function discovery(): Discovery
+    {
+        return $this->discovery ?? Plugin::getInstance()->getDiscovery();
     }
 
     /**
@@ -113,7 +137,7 @@ class AdminPage
      */
     public function dashboardData(): array
     {
-        $blocks = Plugin::getInstance()->getDiscovery()->getBlockInfo();
+        $blocks = $this->discovery()->getBlockInfo();
         $stats = $this->cache->getStats();
         $root = defined('ABSPATH') ? (string) \ABSPATH : '';
 
@@ -181,7 +205,7 @@ class AdminPage
     public const OPTION_EXAMPLE_BLOCKS = 'proto_blocks_example_blocks';
 
     /**
-     * Get list of demo block names
+     * Get list of demo block names (not exposed in the UI since 2.15)
      *
      * @return array List of demo block directory names
      */
@@ -197,7 +221,8 @@ class AdminPage
     }
 
     /**
-     * Get list of demo block names filtered by type (vanilla or tailwind)
+     * Get list of demo block names filtered by type (vanilla or tailwind).
+     * Not exposed in the UI since 2.15.
      *
      * @param string $type 'vanilla' or 'tailwind'
      * @return array List of demo block names of the specified type
@@ -270,9 +295,21 @@ class AdminPage
     }
 
     /**
+     * Whether $relative (a path inside a block folder) is the block's
+     * inserter preview image. Preview Capture writes preview.png into the
+     * block folder; that is generated output, not an edit to the block.
+     */
+    public static function isPreviewImage(string $relative): bool
+    {
+        return (bool) preg_match('/^preview\.(png|jpe?g|webp)$/i', str_replace('\\', '/', $relative));
+    }
+
+    /**
      * sha256 of every regular file under $dir, keyed by path relative to
      * $dir, sorted. The demo marker itself is excluded so the manifest can
-     * be stored inside the directory it describes.
+     * be stored inside the directory it describes, and so are top-level
+     * preview images (see isPreviewImage()), so capturing a preview does not
+     * turn a demo copy into "modified" developer code.
      *
      * @return array<string, string>
      */
@@ -295,7 +332,7 @@ class AdminPage
                 continue;
             }
             $relative = substr($file->getPathname(), strlen($base));
-            if ($relative === self::DEMO_MARKER) {
+            if ($relative === self::DEMO_MARKER || self::isPreviewImage($relative)) {
                 continue;
             }
             $hash = hash_file('sha256', $file->getPathname());
@@ -335,6 +372,12 @@ class AdminPage
                 ? $marker['files']
                 : null;
             if ($recorded !== null) {
+                // Markers written before previews were excluded may list one.
+                $recorded = array_filter(
+                    $recorded,
+                    static fn($path): bool => !self::isPreviewImage((string) $path),
+                    ARRAY_FILTER_USE_KEY
+                );
                 ksort($recorded);
                 return $recorded === $current;
             }
@@ -411,7 +454,8 @@ class AdminPage
 
     /**
      * Install demo blocks to the active theme
-     * Only installs/overwrites demo blocks, leaves custom blocks untouched
+     * Only installs/overwrites demo blocks, leaves custom blocks untouched.
+     * Not exposed in the UI since 2.15.
      *
      * @param string $type Type of blocks to install: 'vanilla', 'tailwind', or 'all'
      * @return int|\WP_Error Number of blocks installed or error
@@ -520,15 +564,16 @@ class AdminPage
             }
         }
 
-        // Clear the block discovery cache so new blocks are found
-        delete_transient('proto_blocks_discovered');
+        // Rescan so the new blocks are found (and listed in this response).
+        $this->refreshDiscovery();
 
         return $installed_count;
     }
 
     /**
      * Remove demo blocks from the active theme
-     * Only removes demo blocks, leaves custom blocks untouched
+     * Only removes demo blocks, leaves custom blocks untouched.
+     * Not exposed in the UI since 2.15.
      *
      * @return int|\WP_Error Number of blocks removed or error
      */
@@ -590,8 +635,8 @@ class AdminPage
             }
         }
 
-        // Clear the block discovery cache
-        delete_transient('proto_blocks_discovered');
+        // Rescan so the removed blocks drop out (of this response too).
+        $this->refreshDiscovery();
 
         return $removed_count;
     }

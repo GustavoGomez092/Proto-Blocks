@@ -29,6 +29,7 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Admin;
 
+use ProtoBlocks\API\AdminRestController;
 use ProtoBlocks\Core\Plugin;
 use ProtoBlocks\Template\Engine;
 
@@ -511,14 +512,17 @@ wp_print_footer_scripts();
         ]);
     }
 
-    public function restPermission(): bool
+    /**
+     * Writing into the theme/plugin tree is a file modification: without the
+     * capability the answer is false (rest_forbidden); with it but with file
+     * mods disabled, the proto_blocks_file_mods error the admin routes use.
+     */
+    public function restPermission(): bool|\WP_Error
     {
-        // Writing into the theme/plugin tree is a file modification: honour
-        // the site-wide policy before the capability.
-        if (!AdminPage::fileModsAllowed()) {
+        if (!current_user_can(self::CAPABILITY)) {
             return false;
         }
-        return current_user_can(self::CAPABILITY);
+        return AdminPage::fileModsAllowed() ? true : AdminRestController::fileModsError();
     }
 
     public function registerRestRoute(): void

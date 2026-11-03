@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { __, _n, sprintf } from '@wordpress/i18n';
+import { __ } from '@wordpress/i18n';
 import {
 	ArrowLeftIcon,
 	ArrowRightIcon,
-	BoxIcon,
 	CheckIcon,
-	CircleXIcon,
-	DownloadIcon,
 	FileCodeIcon,
-	InfoIcon,
 	LoaderCircleIcon,
 	PaletteIcon,
 	PartyPopperIcon,
@@ -16,11 +12,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminGet, adminPost, ApiError } from '@/admin/api';
-import { getBootstrap } from '@/admin/bootstrap';
 import { LogoMark } from '@/admin/components/shell/PageHeader';
-import { ReadOnlyBanner } from '@/admin/components/shell/ReadOnlyBanner';
 import { ScreenError } from '@/admin/components/shell/ScreenError';
-import { Alert, AlertDescription, AlertTitle } from '@/admin/components/ui/alert';
 import { Badge } from '@/admin/components/ui/badge';
 import { Button } from '@/admin/components/ui/button';
 import { Card } from '@/admin/components/ui/card';
@@ -29,30 +22,25 @@ import { Label } from '@/admin/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/admin/components/ui/radio-group';
 import { Skeleton } from '@/admin/components/ui/skeleton';
 import { cn } from '@/admin/lib/utils';
-import { interpolate } from '@/admin/lib/interpolate';
 import { navigate } from '@/admin/lib/navigate';
 
 type Style = 'vanilla' | 'tailwind';
 
-/** GET admin/wizard (includes/API/Admin/WizardRoutes.php). */
+/**
+ * GET admin/wizard (includes/API/Admin/WizardRoutes.php). The payload also
+ * carries `demos` and `installPath` for API stability; demo installation is
+ * not exposed in the UI since 2.15, so they are not read.
+ */
 export interface WizardData {
 	style: Style;
 	categoryName: string;
-	demos: Record<Style, string[]>;
-	/** Relative to the WordPress root when inside it. */
-	installPath: string;
 	tailwindEnabled: boolean;
 	completed: boolean;
 }
 
-interface InstallResult {
-	installed: number;
-	skipped: string[];
-}
-
 const CATEGORY_NAME_MAX = 100;
 const DEFAULT_CATEGORY = 'Proto Blocks';
-const STEPS = [1, 2, 3, 4] as const;
+const STEPS = [1, 2, 3] as const;
 type StepNumber = (typeof STEPS)[number];
 
 function stepLabel(step: StepNumber): string {
@@ -61,8 +49,6 @@ function stepLabel(step: StepNumber): string {
 			return __('Welcome', 'proto-blocks');
 		case 2:
 			return __('Style', 'proto-blocks');
-		case 3:
-			return __('Import', 'proto-blocks');
 		default:
 			return __('Finish', 'proto-blocks');
 	}
@@ -71,8 +57,6 @@ function stepLabel(step: StepNumber): string {
 function styleLabel(style: Style): string {
 	return style === 'tailwind' ? __('Tailwind CSS', 'proto-blocks') : __('Vanilla CSS', 'proto-blocks');
 }
-
-const code = (text: ReactNode) => <code className="font-mono text-[12.5px]">{text}</code>;
 
 function StepIndicator({ current }: { current: StepNumber }) {
 	return (
@@ -211,7 +195,7 @@ function ChooseStyle({
 		<>
 			<StepTitle className="text-[18px]">{__('Choose your style', 'proto-blocks')}</StepTitle>
 			<p className="mt-1 text-[13px] text-muted-foreground">
-				{__("This picks which example blocks you're offered next.", 'proto-blocks')}
+				{__('How your blocks are styled. You can change this later.', 'proto-blocks')}
 			</p>
 			<RadioGroup
 				value={style}
@@ -290,131 +274,19 @@ function ChooseStyle({
 	);
 }
 
-function ImportDemos({
-	style,
-	names,
-	installPath,
-	fileModsAllowed,
-	installing,
-	onBack,
-	onSkip,
-	onInstall,
-}: {
-	style: Style;
-	names: string[];
-	installPath: string;
-	fileModsAllowed: boolean;
-	installing: boolean;
-	onBack: () => void;
-	onSkip: () => void;
-	onInstall: () => void;
-}) {
-	const empty = names.length === 0;
-
-	return (
-		<>
-			{fileModsAllowed ? null : (
-				<div className="mb-5">
-					<ReadOnlyBanner
-						reason="file_mods"
-						description={__(
-							"Example blocks can't be copied into your theme. Copy them from the plugin's examples folder instead.",
-							'proto-blocks'
-						)}
-					/>
-				</div>
-			)}
-			<StepTitle className="text-[18px]">{__('Install example blocks?', 'proto-blocks')}</StepTitle>
-			{empty ? (
-				<p className="mt-1 text-[13px] text-muted-foreground">
-					{__('No example blocks are available for this style.', 'proto-blocks')}
-				</p>
-			) : (
-				<>
-					<p className="mt-1 text-[13px] text-muted-foreground">
-						{interpolate(
-							/* translators: 1: number of blocks, 2: styling approach, 3: theme folder path. */
-							__('%1$s %2$s example blocks will be copied to %3$s. Edit or delete them any time.', 'proto-blocks'),
-							names.length,
-							styleLabel(style),
-							code(installPath)
-						)}
-					</p>
-					<ul className="mt-5 grid gap-2 sm:grid-cols-2">
-						{names.map((name) => (
-							<li key={name} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-								<BoxIcon aria-hidden="true" className="size-4 text-muted-foreground" />
-								<span>{name}</span>
-							</li>
-						))}
-					</ul>
-				</>
-			)}
-			<div className="mt-8 flex flex-wrap justify-between gap-2">
-				<Button variant="ghost" onClick={onBack} disabled={installing}>
-					<ArrowLeftIcon aria-hidden="true" />
-					{__('Back', 'proto-blocks')}
-				</Button>
-				<div className="flex gap-2">
-					{empty ? (
-						<Button onClick={onSkip}>
-							{__('Continue', 'proto-blocks')}
-							<ArrowRightIcon aria-hidden="true" />
-						</Button>
-					) : (
-						<>
-							<Button variant={fileModsAllowed ? 'outline' : 'default'} onClick={onSkip} disabled={installing}>
-								{__('Skip for now', 'proto-blocks')}
-							</Button>
-							<Button onClick={onInstall} disabled={!fileModsAllowed || installing}>
-								{installing ? (
-									<>
-										<LoaderCircleIcon aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
-										{__('Installing…', 'proto-blocks')}
-									</>
-								) : (
-									<>
-										<DownloadIcon aria-hidden="true" />
-										{__('Install Example Blocks', 'proto-blocks')}
-									</>
-								)}
-							</Button>
-						</>
-					)}
-				</div>
-			</div>
-		</>
-	);
-}
-
 function Finish({
 	data,
-	result,
-	installError,
 	completing,
 	onComplete,
 }: {
 	data: WizardData;
-	result: InstallResult | null;
-	installError: string | null;
 	completing: boolean;
 	onComplete: () => void;
 }) {
-	const installed = result?.installed ?? 0;
-	const skipped = result?.skipped ?? [];
 	const category = data.categoryName.trim() === '' ? DEFAULT_CATEGORY : data.categoryName;
 	const rows: { label: string; value: ReactNode }[] = [
 		{ label: __('Styling Approach', 'proto-blocks'), value: styleLabel(data.style) },
 		{ label: __('Category Name', 'proto-blocks'), value: category },
-		{
-			label: __('Example Blocks Installed', 'proto-blocks'),
-			value:
-				installed > 0 ? (
-					<span className="tabular-nums">{installed}</span>
-				) : (
-					<span className="text-muted-foreground">{__('Skipped', 'proto-blocks')}</span>
-				),
-		},
 	];
 	if (data.style === 'tailwind') {
 		rows.push({
@@ -451,43 +323,6 @@ function Finish({
 					</div>
 				))}
 			</dl>
-			{skipped.length > 0 ? (
-				<Alert variant="warning" role="status" className="mt-4">
-					<InfoIcon aria-hidden="true" />
-					<AlertTitle className="line-clamp-none">
-						{sprintf(
-							/* translators: %d: number of blocks left untouched. */
-							_n('%d block skipped', '%d blocks skipped', skipped.length, 'proto-blocks'),
-							skipped.length
-						)}
-					</AlertTitle>
-					<AlertDescription>
-						<p>
-							{skipped.map((name, index) => (
-								<span key={name}>
-									{index > 0 ? ', ' : null}
-									{code(name)}
-								</span>
-							))}{' '}
-							{_n(
-								'already exists in your theme and is not an unmodified example, so it was left untouched.',
-								'already exist in your theme and are not unmodified examples, so they were left untouched.',
-								skipped.length,
-								'proto-blocks'
-							)}
-						</p>
-					</AlertDescription>
-				</Alert>
-			) : null}
-			{installError ? (
-				<Alert variant="destructive" className="mt-3">
-					<CircleXIcon aria-hidden="true" />
-					<AlertTitle className="line-clamp-none">{__("Some blocks couldn't be installed", 'proto-blocks')}</AlertTitle>
-					<AlertDescription>
-						<p>{installError}</p>
-					</AlertDescription>
-				</Alert>
-			) : null}
 			<div className="mt-8 flex justify-end">
 				<Button onClick={onComplete} disabled={completing}>
 					{completing ? (
@@ -516,16 +351,12 @@ type LoadState = { status: 'loading' } | { status: 'error'; error: unknown } | {
 const errorMessage = (error: unknown): string | undefined => (error instanceof Error ? error.message : undefined);
 
 export default function WizardScreen() {
-	const { fileModsAllowed } = getBootstrap();
 	const [state, setState] = useState<LoadState>({ status: 'loading' });
 	const [step, setStep] = useState<StepNumber>(1);
 	const [style, setStyle] = useState<Style>('vanilla');
 	const [categoryName, setCategoryName] = useState('');
 	const [saving, setSaving] = useState(false);
-	const [installing, setInstalling] = useState(false);
 	const [completing, setCompleting] = useState(false);
-	const [result, setResult] = useState<InstallResult | null>(null);
-	const [installError, setInstallError] = useState<string | null>(null);
 
 	const load = useCallback(() => {
 		setState({ status: 'loading' });
@@ -553,29 +384,6 @@ export default function WizardScreen() {
 			toast.error(__("Couldn't save your choices.", 'proto-blocks'), { description: errorMessage(error) });
 		} finally {
 			setSaving(false);
-		}
-	};
-
-	const skipDemos = () => {
-		setResult(null);
-		setInstallError(null);
-		setStep(4);
-	};
-
-	const installDemos = async () => {
-		setInstalling(true);
-		try {
-			setResult(await adminPost<InstallResult>('admin/wizard/demos'));
-			setInstallError(null);
-		} catch (error) {
-			setResult(null);
-			setInstallError(
-				errorMessage(error) ??
-					__('Check that the theme directory is writable, then try again from the dashboard.', 'proto-blocks')
-			);
-		} finally {
-			setInstalling(false);
-			setStep(4);
 		}
 	};
 
@@ -622,26 +430,10 @@ export default function WizardScreen() {
 				/>
 			);
 			break;
-		case 3:
-			body = (
-				<ImportDemos
-					style={data.style}
-					names={data.demos[data.style] ?? []}
-					installPath={data.installPath}
-					fileModsAllowed={fileModsAllowed}
-					installing={installing}
-					onBack={() => setStep(2)}
-					onSkip={skipDemos}
-					onInstall={installDemos}
-				/>
-			);
-			break;
 		default:
 			body = (
 				<Finish
 					data={data}
-					result={result}
-					installError={installError}
 					completing={completing}
 					onComplete={complete}
 				/>

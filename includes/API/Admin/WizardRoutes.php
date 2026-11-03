@@ -93,7 +93,11 @@ final class WizardRoutes
         return $this->wizard()->data();
     }
 
-    /** @return array{installed:int,skipped:string[]}|WP_Error */
+    /**
+     * POST admin/wizard/demos. Not exposed in the UI since 2.15.
+     *
+     * @return array{installed:int,skipped:string[]}|WP_Error
+     */
     public function installDemos()
     {
         $result = $this->wizard()->installDemos();

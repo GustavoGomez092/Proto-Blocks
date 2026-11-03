@@ -50,7 +50,7 @@ Before creating blocks, ensure you have:
 - A theme with write permissions
 - Basic understanding of PHP and HTML
 
-> **💡 Tip:** Run the Setup Wizard first (Proto-Blocks menu) to install demo blocks. These serve as excellent references while building your own.
+> **💡 Tip:** Turn on **Example Blocks** on the Proto-Blocks screen to load the bundled examples. They serve as excellent references while building your own.
 
 ### 1. Create the Block Directory
 
@@ -1289,26 +1289,27 @@ wp proto-blocks tailwind status --format=json
 
 ## Admin
 
-The **Proto-Blocks** admin is a React app (Tailwind 4 + shadcn/ui, built from `src/admin/` to `assets/js/admin.js` and `assets/css/admin.css`). It has five screens: **Blocks** (dashboard, demo blocks, cache), **Tailwind Settings**, **System Status**, **Block Previews** and the **Setup Wizard**. Nothing in the admin is rendered by PHP; each screen reads and writes through REST routes under `proto-blocks/v1/admin/*`, all requiring `manage_options` and the REST nonce:
+The **Proto-Blocks** admin is a React app (Tailwind 4 + shadcn/ui, built from `src/admin/` to `assets/js/admin.js` and `assets/css/admin.css`). It has five screens: **Blocks** (dashboard, example blocks, cache), **Tailwind Settings**, **System Status**, **Preview Capture** and the **Setup Wizard**. Nothing in the admin is rendered by PHP; each screen reads and writes through REST routes under `proto-blocks/v1/admin/*`. Every route requires `manage_options` and the REST nonce. Routes that write files (marked *writes files* below) are also refused with a `403 proto_blocks_file_mods` error when `DISALLOW_FILE_MODS` or `DISALLOW_FILE_EDIT` is set:
 
 | Route | Methods | Purpose |
 |-------|---------|---------|
-| `/admin/dashboard` | GET | Stats, blocks list, demo-block state |
+| `/admin/dashboard` | GET | Stats, blocks list, example-block state |
 | `/admin/cache` | DELETE | Clear the template cache |
 | `/admin/example-blocks` | POST | Toggle the bundled example blocks |
-| `/admin/demos/install`, `/admin/demos/remove` | POST | Install or remove demo blocks in the theme |
+| `/admin/demos/install`, `/admin/demos/remove` | POST | Install or remove demo blocks in the theme (*writes files*; not used by the UI since 2.15) |
 | `/admin/tailwind` | GET | Tailwind settings and status |
 | `/admin/tailwind/settings` | POST | Save Tailwind settings |
-| `/admin/tailwind/compile` | POST | Compile Tailwind CSS |
+| `/admin/tailwind/compile` | POST | Compile Tailwind CSS (never downloads the CLI while file mods are disabled) |
 | `/admin/tailwind/cache` | DELETE | Clear the Tailwind cache |
-| `/admin/tailwind/cli` | POST | Manage the Tailwind CLI binary |
-| `/admin/tailwind/theme-file` | POST | Write the theme Tailwind file |
+| `/admin/tailwind/cli` | POST | Download the Tailwind CLI binary (*writes files*) |
+| `/admin/tailwind/theme-file` | POST | Write the theme Tailwind file (*writes files*) |
 | `/admin/system` | GET, POST | System status; save the category name |
-| `/admin/previews` | GET | Block preview status |
+| `/admin/previews` | GET | Preview Capture status for each block |
 | `/admin/wizard` | GET | Setup wizard state |
-| `/admin/wizard/style`, `/admin/wizard/demos`, `/admin/wizard/complete` | POST | Wizard steps |
+| `/admin/wizard/style`, `/admin/wizard/complete` | POST | Wizard steps |
+| `/admin/wizard/demos` | POST | Install the demo blocks for the chosen style (*writes files*; not used by the UI since 2.15) |
 
-The preview capture upload keeps its own route, `POST /preview-capture`. The only `admin-ajax.php` actions left are the two the in-browser Tailwind compiler uses: `proto_blocks_tailwind_get_compile_inputs` and `proto_blocks_tailwind_store_css`.
+The preview capture upload keeps its own route, `POST /preview-capture`, which also writes files and is gated the same way. Four `admin-ajax.php` actions remain, none of them used by the admin screens' controls: `proto_blocks_tailwind_get_compile_inputs` and `proto_blocks_tailwind_store_css` (the in-browser Tailwind compiler), `proto_blocks_preview` (block previews in the editor) and `proto_blocks_capture_render` (the page Preview Capture renders in its hidden iframe).
 
 Admin development: `npm run build` compiles the app, `npm run test:js` runs the Jest suite, and `npm run test:e2e` runs the Playwright suite against a wp-env site (see `tests/e2e/README.md`). PHP 8.1 or newer is required.
 
@@ -1319,9 +1320,8 @@ Proto-Blocks includes a guided setup wizard that appears on first activation to 
 ### Wizard Steps
 
 1. **Welcome** - Introduction to Proto-Blocks
-2. **Configure** - Choose component style (Vanilla CSS or Tailwind CSS) and set custom category name
-3. **Install** - Automatically installs demo blocks based on your style preference
-4. **Complete** - Summary of configuration and next steps
+2. **Choose your style** - Choose component style (Vanilla CSS or Tailwind CSS) and set a custom category name
+3. **Finish** - Summary of the configuration
 
 ### Re-running the Wizard
 
@@ -1579,7 +1579,7 @@ npm run lint:js
 
 ## Demo Blocks
 
-Proto-Blocks includes two sets of demo blocks to showcase all available capabilities. These can be installed to your theme via the admin panel or the setup wizard.
+Proto-Blocks includes two sets of demo blocks to showcase all available capabilities. Turn on **Example Blocks** on the Proto-Blocks screen to load them from the plugin, or copy them from the plugin's `examples/` folder into your theme's `proto-blocks/` folder to edit them.
 
 ### Vanilla CSS Blocks
 
@@ -1829,23 +1829,14 @@ Prominent call-to-action section with customizable styling.
 - Conditional control visibility
 - SVG icon integration
 
-### Installing Demo Blocks
+### Using the Demo Blocks
 
-1. Go to **Proto-Blocks** in the WordPress admin menu
-2. Click **"Install Demo Blocks to Theme"**
-3. Demo blocks are copied to your theme's `proto-blocks/` directory
-4. Start customizing or use them as learning references
+Since 2.15 the admin no longer installs or removes demo blocks. To work with them:
 
-You can also use the **Setup Wizard** to install demo blocks during initial configuration.
+1. Turn on **Example Blocks** on the **Proto-Blocks** screen to load them straight from the plugin, or
+2. Copy the folders you want from the plugin's `examples/` directory into your theme's `proto-blocks/` directory, then customise them.
 
-### Removing Demo Blocks
-
-When you're ready to start fresh:
-
-1. Go to **Proto-Blocks** in the WordPress admin menu
-2. Click **"Remove Demo Blocks"**
-3. All demo blocks are removed from your theme
-4. Your custom blocks are not affected
+The `admin/demos/install` and `admin/demos/remove` REST routes still exist for scripted use.
 
 ---
 

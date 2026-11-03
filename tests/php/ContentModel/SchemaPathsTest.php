@@ -7,7 +7,6 @@ namespace ProtoBlocks\Tests\ContentModel;
 use PHPUnit\Framework\TestCase;
 use ProtoBlocks\ContentModel\SchemaPaths;
 
-require_once __DIR__ . '/stubs/theme.php';
 
 final class SchemaPathsTest extends TestCase
 {

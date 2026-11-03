@@ -213,6 +213,7 @@ class SetupWizard
     /**
      * Install the demo blocks of the stored style. The stored option is
      * re-validated so a stale value can never widen the install to "all".
+     * Not exposed in the UI since 2.15.
      *
      * @return array{installed:int,skipped:string[]}|\WP_Error
      */

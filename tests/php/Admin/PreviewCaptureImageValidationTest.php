@@ -2,19 +2,6 @@
 
 declare(strict_types=1);
 
-namespace {
-    if (!function_exists('wp_kses_post')) {
-        /**
-         * Minimal stand-in for the unit tests: strips <script> blocks only. The
-         * real function is WordPress's; the test covers the recursion, not kses.
-         */
-        function wp_kses_post($s)
-        {
-            return preg_replace('#<script\b[^>]*>.*?</script>#is', '', (string) $s);
-        }
-    }
-}
-
 namespace ProtoBlocks\Tests\Admin {
 
     use PHPUnit\Framework\TestCase;
@@ -106,10 +93,9 @@ namespace ProtoBlocks\Tests\Admin {
 
             $clean = PreviewCapture::ksesAttributes($attrs);
 
-            // Other suites register their own wp_kses_post stub (strip_tags vs
-            // script-only), and file load order decides which one wins; so the
-            // assertion is "every string went through wp_kses_post, nothing
-            // else was touched" rather than a fixed output.
+            // The assertion is "every string went through wp_kses_post, nothing
+            // else was touched" rather than a fixed output: the bootstrap's
+            // kses stub is an approximation of core's.
             self::assertSame(wp_kses_post($attrs['title']), $clean['title']);
             self::assertStringNotContainsString('<script>', $clean['title']);
             self::assertSame(3, $clean['count']);
