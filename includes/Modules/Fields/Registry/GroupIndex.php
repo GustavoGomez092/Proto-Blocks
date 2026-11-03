@@ -14,11 +14,19 @@ use ProtoBlocks\Modules\Fields\Storage\ObjectRef;
  * lookups the editor, the save path and the getter share. One instance per
  * request; matches for a ref without an explicit context are memoised.
  * Nothing here touches the filesystem.
+ *
+ * Built from a list, or lazily from a loader closure (the Fields module's
+ * sources). The loader runs on first use; while it returns null (not ready
+ * yet, e.g. before `init`) the index is empty, nothing is memoised and the
+ * loader is asked again on the next use.
  */
 final class GroupIndex
 {
-    /** @var list<FieldGroup> */
-    private array $groups;
+    /** @var list<FieldGroup>|null */
+    private ?array $groups = null;
+
+    /** @var (\Closure(): (list<FieldGroup>|null))|null */
+    private ?\Closure $loader = null;
 
     /** @var array<string, list<FieldGroup>> */
     private array $memo = [];
@@ -26,21 +34,60 @@ final class GroupIndex
     /** @var list<string>|null taxonomies named by post_taxonomy rules */
     private ?array $ruleTaxonomies = null;
 
-    /** @param list<FieldGroup> $groups */
-    public function __construct(array $groups)
+    /** @param list<FieldGroup>|\Closure(): (list<FieldGroup>|null) $groups */
+    public function __construct(array|\Closure $groups)
+    {
+        if ($groups instanceof \Closure) {
+            $this->loader = $groups;
+        } else {
+            $this->groups = self::sorted($groups);
+        }
+    }
+
+    /** @return list<FieldGroup> */
+    public function all(): array
+    {
+        return $this->groups();
+    }
+
+    /** Whether the groups are loaded (always true for an index built from a list). */
+    public function ready(): bool
+    {
+        $this->groups();
+
+        return $this->groups !== null;
+    }
+
+    /** @return list<FieldGroup> */
+    private function groups(): array
+    {
+        if ($this->groups !== null) {
+            return $this->groups;
+        }
+        $loaded = $this->loader !== null ? ($this->loader)() : [];
+        if (!is_array($loaded)) {
+            return [];
+        }
+        $this->loader = null;
+        $this->memo = [];
+        $this->ruleTaxonomies = null;
+
+        return $this->groups = self::sorted($loaded);
+    }
+
+    /**
+     * @param list<FieldGroup> $groups
+     * @return list<FieldGroup>
+     */
+    private static function sorted(array $groups): array
     {
         $decorated = [];
         foreach (array_values($groups) as $i => $group) {
             $decorated[] = [$group->menuOrder, $i, $group];
         }
         usort($decorated, static fn(array $a, array $b): int => [$a[0], $a[1]] <=> [$b[0], $b[1]]);
-        $this->groups = array_column($decorated, 2);
-    }
 
-    /** @return list<FieldGroup> */
-    public function all(): array
-    {
-        return $this->groups;
+        return array_column($decorated, 2);
     }
 
     /**
@@ -61,12 +108,12 @@ final class GroupIndex
         $ctx['kind'] = $ref->kind;
 
         $out = [];
-        foreach ($this->groups as $group) {
+        foreach ($this->groups() as $group) {
             if (LocationMatcher::matches($group->location, $ctx)) {
                 $out[] = $group;
             }
         }
-        if ($memoKey !== null) {
+        if ($memoKey !== null && $this->groups !== null) {
             $this->memo[$memoKey] = $out;
         }
 
@@ -191,8 +238,12 @@ final class GroupIndex
         if ($this->ruleTaxonomies !== null) {
             return $this->ruleTaxonomies;
         }
+        $groups = $this->groups();
+        if ($this->groups === null) {
+            return []; // not loaded yet: nothing to cache
+        }
         $found = [];
-        foreach ($this->groups as $group) {
+        foreach ($groups as $group) {
             foreach ($group->location->or as $branch) {
                 foreach ($branch as $rule) {
                     if ($rule['param'] === 'post_taxonomy' && str_contains($rule['value'], ':')) {

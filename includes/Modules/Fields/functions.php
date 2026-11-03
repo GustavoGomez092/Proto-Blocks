@@ -76,3 +76,21 @@ if (!function_exists('proto_rows')) {
         return $reader === null ? [] : $reader->rows($name, $context);
     }
 }
+
+if (!function_exists('proto_field_group')) {
+    /**
+     * Declares a field group in PHP. Call it from functions.php or on `init`
+     * before priority 10: the group index is built once per request after that.
+     *
+     * @param string               $target '<post type>', 'taxonomy:<taxonomy>', 'options:<page>', or '' when
+     *                                     the group carries its own `location` rules.
+     * @param array<string, mixed> $group  An ACF-shaped group: key, title, fields[], ...
+     */
+    function proto_field_group(string $target, array $group): void
+    {
+        $caller = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1)[0] ?? [];
+        $source = (string) ($caller['file'] ?? 'unknown') . ':' . (int) ($caller['line'] ?? 0);
+
+        \ProtoBlocks\Modules\Fields\Sources\PhpGroups::add($target, $group, $source);
+    }
+}

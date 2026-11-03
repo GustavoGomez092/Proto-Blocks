@@ -1,0 +1,14 @@
+// A hand-written field group with comments and a trailing comma.
+{
+    "key": "group_speaker",
+    "title": "Speaker",
+    /* Shown on every speaker post. */
+    "location": [
+        [ { "param": "post_type", "operator": "==", "value": "speaker" } ]
+    ],
+    "fields": [
+        { "key": "field_company", "name": "company", "label": "Company", "type": "text" }, // trailing comment
+        { "key": "field_born", "name": "born", "label": "Born", "type": "date_picker" },
+        { "key": "field_embed", "name": "embed", "label": "Embed", "type": "code" },
+    ],
+}
