@@ -11,11 +11,13 @@ import type { OptionsDetail, OptionsIndex, OptionsPageRow } from '@/admin/option
 
 const treeProps: { fields: unknown[]; readOnly?: boolean }[] = [];
 
+let mockRealTree = false;
 jest.mock('@/admin/fields/builder', () => {
 	const actual = jest.requireActual('@/admin/fields/builder');
 	return {
 		...actual,
 		FieldTree: (props: { fields: { name?: string }[]; readOnly?: boolean }) => {
+			if (mockRealTree) { const Real = actual.FieldTree; return <Real {...props} />; }
 			treeProps.push(props);
 			return <div data-testid="field-tree">{props.fields.map((f) => f.name).join(',')}</div>;
 		},
@@ -190,6 +192,39 @@ describe('list', () => {
 });
 
 describe('editor', () => {
+	test('the JSONC toggle shows the file text full width and hides the form, and back', async () => {
+		const user = userEvent.setup();
+		routes();
+		await openCadco();
+		const toggle = screen.getByRole('button', { name: 'JSONC' });
+		expect(toggle.getAttribute('aria-pressed')).toBe('false');
+		await user.click(toggle);
+		expect(toggle.getAttribute('aria-pressed')).toBe('true');
+		const region = screen.getByRole('region', { name: 'JSONC' });
+		expect(within(region).getByLabelText('File text that Save writes').textContent).toContain('cadco_display_settings');
+		expect(screen.queryByRole('textbox', { name: 'Title' })).toBeNull();
+		await user.click(screen.getByRole('button', { name: 'Editor' }));
+		expect(screen.queryByRole('region', { name: 'JSONC' })).toBeNull();
+		expect(screen.getByRole('textbox', { name: 'Title' })).toBeTruthy();
+	});
+
+	test('the fields card shows the column headers and opens a row inline', async () => {
+		mockRealTree = true;
+		const reset = () => { mockRealTree = false; };
+		const user = userEvent.setup();
+		routes();
+		await openCadco();
+		const card = screen.getByRole('region', { name: 'Fields' });
+		for (const heading of ['Order', 'Label', 'Name', 'Type']) {
+			expect(within(card).getByText(heading)).toBeTruthy();
+		}
+		expect(within(card).getByText('Fields shown on the page, above any tabs.')).toBeTruthy();
+		expect(screen.queryByText('Select a field to edit its settings.')).toBeNull();
+		await user.click(within(card).getByText('Hide child products'));
+		expect(within(card).getByRole('button', { name: 'Close field' })).toBeTruthy();
+		reset();
+	});
+
 	test('shows menu placement and storage from the file', async () => {
 		routes();
 		await openCadco();

@@ -109,7 +109,7 @@ export function TabsEditor({ tabs, disabled, onChange }: { tabs: Tab[]; disabled
 									<Trash2Icon aria-hidden="true" />
 								</Button>
 							</div>
-							{open === id ? <FieldsSection fields={tab.fields} readOnly={disabled} onChange={(fields) => set(index, { fields })} /> : null}
+							{open === id ? <FieldsSection title={sprintf(/* translators: %s: tab title */ __('Fields in %s', 'proto-blocks'), name)} fields={tab.fields} readOnly={disabled} onChange={(fields) => set(index, { fields })} /> : null}
 						</li>
 					);
 				})}
