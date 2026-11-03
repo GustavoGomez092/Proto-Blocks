@@ -22,7 +22,7 @@ final class MenuRegistrar
 
     /** @var array<string, string> */
     private array $suffixes = [];
-    /** @var list<array{slug: string, message: string}> */
+    /** @var list<array{slug: string, message: string, code?: string, level?: string}> */
     private array $warnings = [];
 
     public function __construct(callable $iconResolver, callable $render, callable $capabilityKnown)
@@ -45,19 +45,19 @@ final class MenuRegistrar
             $declared[$page->slug] = $page;
         }
 
-        // Break cycles: every page that sits in a cycle registers top-level.
+        // Break cycles: only pages that sit ON a cycle register top-level;
+        // pages that merely lead into one keep their submenu placement.
         $topLevel = [];
         foreach ($declared as $slug => $page) {
-            $seen = [$slug => true];
             $cur = $page;
-            while ($cur->menu !== 'top' && isset($declared[$cur->menu])) {
-                if (isset($seen[$cur->menu])) {
+            $steps = 0;
+            while ($cur->menu !== 'top' && isset($declared[$cur->menu]) && $steps++ <= count($declared)) {
+                $cur = $declared[$cur->menu];
+                if ($cur->slug === $slug) {
                     $topLevel[$slug] = true;
                     $this->warn($slug, __('Menu parents form a cycle; the page is registered at the top level.', 'proto-blocks'));
                     break;
                 }
-                $seen[$cur->menu] = true;
-                $cur = $declared[$cur->menu];
             }
         }
 
@@ -73,7 +73,7 @@ final class MenuRegistrar
             }
             $this->registerOne($page, $forceTop, $declared);
             foreach ($page->children as $child) {
-                $this->registerChild($child);
+                $this->registerChild($child, $page, $forceTop);
             }
         };
         foreach ($declared as $page) {
@@ -87,7 +87,7 @@ final class MenuRegistrar
         return $this->suffixes;
     }
 
-    /** @return list<array{slug: string, message: string}> */
+    /** @return list<array{slug: string, message: string, code?: string, level?: string}> */
     public function warnings(): array
     {
         return $this->warnings;
@@ -143,11 +143,24 @@ final class MenuRegistrar
         }
     }
 
-    private function registerChild(PageDefinition $child): void
+    private function registerChild(PageDefinition $child, PageDefinition $page, bool $forceTop): void
     {
         $this->checkCapability($child);
+        $parent = $child->menu;
+        if (!$forceTop && $page->menu !== 'top') {
+            // The page is itself only a submenu, so WordPress would hide
+            // anything registered beneath it: place the child beside it.
+            $parent = $page->menu;
+            $this->warn($child->slug, sprintf(
+                /* translators: 1: child page slug, 2: page slug, 3: parent menu */
+                __('Child page "%1$s" of "%2$s" is listed under "%3$s", beside its parent, because submenu pages cannot have children.', 'proto-blocks'),
+                $child->slug,
+                $page->slug,
+                $parent
+            ), 'child_of_submenu', 'info');
+        }
         $suffix = add_submenu_page(
-            $child->menu,
+            $parent,
             $child->title,
             $child->menuTitle,
             $child->capability,
@@ -187,8 +200,13 @@ final class MenuRegistrar
         return isset($GLOBALS['submenu'][$parent]) || isset($GLOBALS['admin_page_hooks'][$parent]);
     }
 
-    private function warn(string $slug, string $message): void
+    private function warn(string $slug, string $message, ?string $code = null, ?string $level = null): void
     {
-        $this->warnings[] = ['slug' => $slug, 'message' => $message];
+        $entry = ['slug' => $slug, 'message' => $message];
+        if ($code !== null) {
+            $entry['code'] = $code;
+            $entry['level'] = $level ?? 'warning';
+        }
+        $this->warnings[] = $entry;
     }
 }
