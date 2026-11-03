@@ -2,11 +2,16 @@ import { mockApi, mockBootstrap } from '../helpers';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import apiFetch from '@wordpress/api-fetch';
+import { parse } from 'jsonc-parser';
 import { AdminApp } from '@/admin/app';
 import { parseJsonc } from '@/admin/content-model/jsonc';
 import type { FieldsListResult, GroupRow } from '@/admin/screens/fields/GroupList';
 
 const ROOT = 'https://example.test/wp-json/proto-blocks/v1/';
+
+function parseJsoncValue(text: string): unknown {
+	return parse(text, [], { allowTrailingComma: true });
+}
 
 beforeAll(() => {
 	if (!('ResizeObserver' in window)) {
@@ -249,6 +254,73 @@ describe('Fields list', () => {
 			`POST ${ROOT}admin/schema-files/type/talk`,
 			`GET ${ROOT}admin/fields`,
 		]);
+	});
+
+	it('removes only one group from a multi-group (ACF export) file and names the others', async () => {
+		const user = userEvent.setup();
+		const text =
+			'[\n  // exported from ACF\n  { "key": "group_events", "title": "Event details", "fields": [] },\n  { "key": "group_speaker", "title": "Speaker", "fields": [] }\n]\n';
+		let body: { text: string; hash: string | null } | null = null;
+		const exported = row({ key: 'group_speaker', title: 'Speaker', file: { kind: 'field-group', slug: 'events', index: 1, path: 'proto-fields/events/group.jsonc' } });
+		mockApi({
+			'admin/fields': list({ groups: [row({ file: { kind: 'field-group', slug: 'events', index: 0, path: 'proto-fields/events/group.jsonc' } }), exported] }),
+			'admin/schema-files/field-group/events': { exists: true, path: 'demo/proto-fields/events/group.jsonc', text, hash: 'h1', data: {}, writable: true, reason: null },
+			'POST admin/schema-files/field-group/events': (data: unknown) => {
+				body = data as typeof body;
+				return { path: 'demo/proto-fields/events/group.jsonc', hash: 'h2', created: false, warnings: [] };
+			},
+		});
+		renderScreen();
+
+		await screen.findByText('Speaker');
+		await user.click(within(rowOf('Speaker')).getByRole('button', { name: 'Delete Speaker' }));
+		const dialog = await screen.findByRole('alertdialog');
+		await within(dialog).findByText('The file also holds Event details; those groups are kept.');
+		expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
+		await user.click(within(dialog).getByRole('button', { name: 'Remove field group' }));
+
+		await waitFor(() => expect(body).not.toBeNull());
+		expect(body!.hash).toBe('h1');
+		expect(body!.text).toContain('// exported from ACF');
+		expect(parseJsoncValue(body!.text)).toEqual([{ key: 'group_events', title: 'Event details', fields: [] }]);
+		expect(calls().map((c) => `${c.method} ${c.url}`)).not.toContain(`DELETE ${ROOT}admin/schema-files/field-group/events?confirm=events`);
+	});
+
+	it('deletes a list file that holds only this group as a whole file', async () => {
+		const user = userEvent.setup();
+		const text = '[ { "key": "group_events", "title": "Event details", "fields": [] } ]';
+		mockApi({
+			'admin/fields': list({ groups: [row({ file: { kind: 'field-group', slug: 'events', index: 0, path: 'proto-fields/events/group.jsonc' } })] }),
+			'admin/schema-files/field-group/events': { exists: true, path: 'demo/proto-fields/events/group.jsonc', text, hash: 'h1', data: {}, writable: true, reason: null },
+			'DELETE admin/schema-files/field-group/events?confirm=events': { deleted: 'demo/proto-fields/events/group.jsonc', kept: [] },
+		});
+		renderScreen();
+
+		await screen.findByText('Event details');
+		await user.click(within(rowOf('Event details')).getByRole('button', { name: 'Delete Event details' }));
+		const dialog = await screen.findByRole('alertdialog');
+		await user.type(await within(dialog).findByRole('textbox'), 'events');
+		await user.click(within(dialog).getByRole('button', { name: 'Delete field group' }));
+
+		await waitFor(() => expect(calls().map((c) => `${c.method} ${c.url}`)).toContain(`DELETE ${ROOT}admin/schema-files/field-group/events?confirm=events`));
+		expect(calls().some((c) => c.method === 'POST')).toBe(false);
+	});
+
+	it('explains rows that cannot be written for their own reason', async () => {
+		mockApi({
+			'admin/fields': list({
+				groups: [
+					row({ title: 'Filtered', key: 'group_filtered', editable: false, readOnlyReason: 'not_writable', source: 'proto-fields/filtered/group.jsonc' }),
+					row({ title: 'Genre extras', key: 'group_genre', origin: 'taxonomy-file', file: null, editable: false, readOnlyReason: 'inline' }),
+				],
+			}),
+		});
+		renderScreen();
+
+		await screen.findByText('Filtered');
+		expect(within(rowOf('Filtered')).queryByRole('button', { name: /^Delete/ })).not.toBeInTheDocument();
+		expect(within(rowOf('Filtered')).getByRole('button', { name: /proto-fields\/filtered\/group\.jsonc is outside the theme folders/ })).toBeInTheDocument();
+		expect(within(rowOf('Genre extras')).getByRole('button', { name: /taxonomy declared inside a post type file/ })).toBeInTheDocument();
 	});
 
 	it('asks again when removing a group from a type file hits a guardrail', async () => {

@@ -9,6 +9,8 @@ use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use ProtoBlocks\Admin\AdminApp;
 use ProtoBlocks\Admin\FieldsMenu;
 use ProtoBlocks\API\Admin\FieldsRoutes;
+use ProtoBlocks\API\Admin\SchemaFilesRoutes;
+use ProtoBlocks\Modules\Manager;
 use ProtoBlocks\API\AdminRestController;
 use ProtoBlocks\ContentModel\FileLoader;
 use ProtoBlocks\ContentModel\Registry;
@@ -253,6 +255,57 @@ JSONC);
 
         self::assertFalse($list['moduleEnabled']);
         self::assertSame([], $list['groups']);
+    }
+
+    /** The field-group kind (and route) exists only when the manager boots an enabled Fields module. */
+    public function testModuleOffHasNoFieldGroupKindOrGroups(): void
+    {
+        $schemaRoute = function (): string {
+            $GLOBALS['pb_test_routes'] = [];
+            (new SchemaFilesRoutes($this->registry(), null, new SchemaFileWriter([$this->root], true)))
+                ->registerRoutes('proto-blocks/v1', static fn(): bool => true, static fn(): bool => true);
+            foreach ($GLOBALS['pb_test_routes'] as $entry) {
+                if (str_contains((string) $entry['route'], 'schema-files')) {
+                    return ltrim((string) $entry['route'], '/');
+                }
+            }
+            self::fail('no schema-files route');
+        };
+
+        SchemaFileWriter::resetKinds();
+        $GLOBALS['pb_test_filters']['proto_blocks_modules'][] = static fn(array $defaults): array => ['fields' => false] + $defaults;
+        (new Manager($this->registry()))->boot();
+
+        self::assertSame([], SchemaFileWriter::extendedKinds());
+        $route = $schemaRoute();
+        self::assertStringNotContainsString('field-group', $route);
+        self::assertSame(0, preg_match('@^' . $route . '$@i', 'admin/schema-files/field-group/events'));
+
+        // FieldsRoutes resolves the module the manager registered: the disabled stand-in.
+        $routes = new FieldsRoutes($this->registry(), null, new SchemaFileWriter([$this->root], true));
+        $list = $routes->list();
+        self::assertFalse($list['moduleEnabled']);
+        self::assertSame([], $list['groups']);
+        self::assertFalse($list['createTarget']['writable']);
+        self::assertWpError('proto_blocks_not_found', 404, $routes->detail(new \WP_REST_Request(['key' => self::EVENTS_KEY])));
+
+        // Turned on, the same boot adds the kind to the route.
+        SchemaFileWriter::resetKinds();
+        FieldsModule::setInstance(null);
+        $GLOBALS['pb_test_filters']['proto_blocks_modules'] = [];
+        (new Manager($this->registry()))->boot();
+        self::assertSame(['field-group'], SchemaFileWriter::extendedKinds());
+        self::assertSame(1, preg_match('@^' . $schemaRoute() . '$@i', 'admin/schema-files/field-group/events'));
+    }
+
+    public function testDoubleDeclaredUsesTheIssueKey(): void
+    {
+        // The same key from PHP and from a proto-fields file: the file wins and is flagged.
+        proto_field_group('event', ['key' => self::EVENTS_KEY, 'title' => 'Events from PHP', 'fields' => [['key' => 'f_x', 'name' => 'x', 'type' => 'text']]]);
+
+        $list = $this->routes()->list();
+        self::assertTrue(self::group($list, self::EVENTS_KEY)['doubleDeclared']);
+        self::assertFalse(self::group($list, 'group_promo')['doubleDeclared'], 'same file family, other key');
     }
 
     public function testValidateReportsGroupErrors(): void

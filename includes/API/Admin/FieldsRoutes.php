@@ -338,7 +338,7 @@ final class FieldsRoutes extends ContentModelRoutes
     {
         $label = $group->path ?? $group->source;
         foreach ($issues as $issue) {
-            if ($issue->code === 'duplicate_group_key' && $issue->source === $label && str_contains($issue->message, '"' . $group->key . '"')) {
+            if ($issue->code === 'duplicate_group_key' && $issue->key === $group->key && $issue->source === $label) {
                 return true;
             }
         }

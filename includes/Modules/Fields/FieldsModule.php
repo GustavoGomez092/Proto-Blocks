@@ -252,6 +252,9 @@ final class FieldsModule implements ModuleInterface
      * GroupFiles::SLUG_PATTERN, validated by GroupValidator (then the
      * declaration-errors filter) before anything is written. Called from
      * boot(), before `rest_api_init` builds the route regex; idempotent.
+     * UntrustedKeys does not apply: no part of a group file is handed to
+     * register_post_type()/register_taxonomy() or called; GroupNormalizer
+     * keeps only known keys and meta is registered with the plugin's own callbacks.
      */
     public static function registerFileKind(): void
     {
@@ -619,7 +622,7 @@ final class FieldsModule implements ModuleInterface
                 $key,
                 $loser['label'],
                 $winner['label']
-            ), $winner['label'], null, 'field-group');
+            ), $winner['label'], null, 'field-group', $key);
         }
         $keep = array_flip(array_values($winners));
         $out = [];
