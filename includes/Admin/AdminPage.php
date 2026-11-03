@@ -69,7 +69,7 @@ class AdminPage
             Plugin::getInstance()->getAdminApp()?->addScreenHook($dashboardHook, 'dashboard');
         }
 
-        add_submenu_page(
+        $tailwindHook = add_submenu_page(
             self::SLUG,
             __('Tailwind Settings', 'proto-blocks'),
             __('Tailwind Settings', 'proto-blocks'),
@@ -77,6 +77,9 @@ class AdminPage
             self::SLUG . '-settings',
             [$this, 'renderSettingsPage']
         );
+        if (is_string($tailwindHook)) {
+            Plugin::getInstance()->getAdminApp()?->addScreenHook($tailwindHook, 'tailwind');
+        }
 
         $systemHook = add_submenu_page(
             self::SLUG,
@@ -166,35 +169,11 @@ class AdminPage
     }
 
     /**
-     * Render settings page (Tailwind Settings)
+     * Render settings page (Tailwind Settings): the React Tailwind screen.
      */
     public function renderSettingsPage(): void
     {
-        ?>
-        <div class="wrap proto-blocks-admin-ui pb-bg-background-light pb-font-display pb-text-text-main-light pb-min-h-screen">
-            <div class="pb-max-w-4xl pb-mx-auto pb-p-6 lg:pb-p-10 pb-space-y-8">
-                <!-- Header -->
-                <div>
-                    <h1 class="pb-text-3xl pb-font-bold pb-text-primary pb-mb-2"><?php esc_html_e('Tailwind Settings', 'proto-blocks'); ?></h1>
-                    <p class="pb-text-text-muted-light"><?php esc_html_e('Configure Tailwind CSS integration for your Proto Blocks.', 'proto-blocks'); ?></p>
-                </div>
-
-                <?php
-                // Render Tailwind CSS settings section
-                $tailwindAdmin = Plugin::getInstance()->getTailwindAdminSettings();
-                if ($tailwindAdmin !== null) {
-                    $tailwindAdmin->render();
-                } else {
-                    ?>
-                    <div class="pb-bg-surface-light pb-rounded-lg pb-shadow-sm pb-border pb-border-border-light pb-p-6">
-                        <p class="pb-text-text-muted-light"><?php esc_html_e('Tailwind CSS settings are not available.', 'proto-blocks'); ?></p>
-                    </div>
-                    <?php
-                }
-                ?>
-            </div>
-        </div>
-        <?php
+        Plugin::getInstance()->getAdminApp()?->renderScreen('tailwind');
     }
 
     /**

@@ -38,6 +38,7 @@ final class AdminRestController
         SystemRoutes::class,
         WizardRoutes::class,
         DashboardRoutes::class,
+        Admin\TailwindRoutes::class,
     ];
 
     /**
