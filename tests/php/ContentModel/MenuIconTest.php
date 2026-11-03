@@ -123,4 +123,28 @@ final class MenuIconTest extends TestCase
         $this->assertDefault('icons/bad.svg');
         unlink($this->theme . '/icons/bad.svg');
     }
+
+    public function testSymlinkWithDifferentTargetExtensionRejected(): void
+    {
+        file_put_contents($this->theme . '/functions.php', '<?php // secret');
+        file_put_contents($this->theme . '/data.txt', 'x');
+        symlink($this->theme . '/functions.php', $this->theme . '/icons/a.png');
+        symlink($this->theme . '/data.txt', $this->theme . '/icons/a.svg');
+        try {
+            $this->assertDefault('icons/a.png');
+            $this->assertDefault('icons/a.svg');
+        } finally {
+            unlink($this->theme . '/icons/a.png');
+            unlink($this->theme . '/icons/a.svg');
+            unlink($this->theme . '/functions.php');
+            unlink($this->theme . '/data.txt');
+        }
+    }
+
+    public function testOversizeSvgFallsBack(): void
+    {
+        file_put_contents($this->theme . '/icons/big.svg', '<svg xmlns="http://www.w3.org/2000/svg"><!--' . str_repeat('a', 40000) . '--></svg>');
+        $this->assertDefault('icons/big.svg');
+        unlink($this->theme . '/icons/big.svg');
+    }
 }

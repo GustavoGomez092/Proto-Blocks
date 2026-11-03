@@ -63,12 +63,18 @@ final class MenuIcon
             return self::invalid();
         }
 
+        // Re-apply the extension rule to the resolved target: a same-theme
+        // symlink must not smuggle another file type under an allowed name.
+        if (strtolower(pathinfo($real, PATHINFO_EXTENSION)) !== $extension) {
+            return self::invalid();
+        }
+
         if ($extension === 'svg') {
             $size = filesize($real);
             if ($size === false || $size > SvgSanitizer::MAX_BYTES) {
                 return self::invalid();
             }
-            $markup = file_get_contents($real);
+            $markup = file_get_contents($real, false, null, 0, SvgSanitizer::MAX_BYTES + 1);
             $clean  = is_string($markup) ? SvgSanitizer::sanitize($markup) : null;
             return $clean === null
                 ? self::invalid()

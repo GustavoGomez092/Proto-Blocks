@@ -96,4 +96,89 @@ final class SvgSanitizerTest extends TestCase
         $this->assertNull(SvgSanitizer::sanitize('<svg xmlns="http://www.w3.org/2000/svg"><!ENTITY x "y"></svg>'));
         $this->assertNull(SvgSanitizer::sanitize('<!doctype svg [<!entity x SYSTEM "file:///etc/passwd">]><svg xmlns="http://www.w3.org/2000/svg"/>'));
     }
+
+    public function testStyleElementsRemovedUnconditionally(): void
+    {
+        $out = SvgSanitizer::sanitize($this->svg('<style>path{mask-image:image-set("https://evil.test/x.png" 1x)}</style><style>.a{fill:red}</style><style>@\69mport "https://evil.test/a.css";</style><path d="M0 0"/>'));
+        $this->assertNotNull($out);
+        $this->assertStringNotContainsString('<style', $out);
+        $this->assertStringNotContainsString('evil.test', $out);
+        $this->assertStringContainsString('<path', $out);
+    }
+
+    public function testImageSetAndCrossFadeInStyleAttributeDropped(): void
+    {
+        $out = SvgSanitizer::sanitize($this->svg(
+            '<path style="mask-image:-webkit-image-set(&quot;https://evil.test/y.png&quot; 1x)" d="M0 0"/>'
+            . '<path style="background:cross-fade(red, blue)" d="M1 1"/>'
+        ));
+        $this->assertNotNull($out);
+        $this->assertStringNotContainsString('evil.test', $out);
+        $this->assertStringNotContainsString('style=', $out);
+        $this->assertStringContainsString('d="M1 1"', $out);
+    }
+
+    public function testSmilTargetingStyleOrClassDropped(): void
+    {
+        $out = SvgSanitizer::sanitize($this->svg(
+            '<path d="M0 0"><set attributeName="style" to="mask-image:image-set(&quot;https://evil.test/z&quot; 1x)"/>'
+            . '<animate attributeName="class" to="x"/><animateTransform attributeName="style" to="y"/></path>'
+        ));
+        $this->assertNotNull($out);
+        $this->assertStringNotContainsString('evil.test', $out);
+        $this->assertStringNotContainsString('<set', $out);
+        $this->assertStringNotContainsString('<animate', $out);
+    }
+
+    public function testImageAndFeImageHrefs(): void
+    {
+        $out = SvgSanitizer::sanitize($this->svg(
+            '<image xlink:href="https://evil.test/a.png"/><feImage xlink:href="https://evil.test/b.png"/>'
+            . '<image xlink:href="#ok1"/><feImage href="#ok2"/>'
+        ));
+        $this->assertNotNull($out);
+        $this->assertStringNotContainsString('evil.test', $out);
+        $this->assertStringContainsString('xlink:href="#ok1"', $out);
+        $this->assertStringContainsString('href="#ok2"', $out);
+    }
+
+    public function testFillUrlExternalDroppedFragmentKept(): void
+    {
+        $out = SvgSanitizer::sanitize($this->svg('<path fill="url(https://evil.test/g)" d="M0 0"/><path fill="url(#g)" d="M1 1"/>'));
+        $this->assertNotNull($out);
+        $this->assertStringNotContainsString('evil.test', $out);
+        $this->assertStringContainsString('fill="url(#g)"', $out);
+    }
+
+    public function testAnchorJavascriptHrefDropped(): void
+    {
+        $out = SvgSanitizer::sanitize($this->svg('<a xlink:href="javascript:alert(1)"><path d="M0 0"/></a>'));
+        $this->assertNotNull($out);
+        $this->assertStringNotContainsString('javascript', $out);
+        $this->assertStringContainsString('<path', $out);
+    }
+
+    public function testCommentsAndProcessingInstructionsRemoved(): void
+    {
+        $out = SvgSanitizer::sanitize($this->svg('<!-- secret --><?xml-stylesheet href="https://evil.test/s.css"?><path d="M0 0"/>'));
+        $this->assertNotNull($out);
+        $this->assertStringNotContainsString('secret', $out);
+        $this->assertStringNotContainsString('<?', $out);
+        $this->assertStringNotContainsString('evil.test', $out);
+    }
+
+    public function testNamespacedScriptRemoved(): void
+    {
+        $out = SvgSanitizer::sanitize($this->svg('<h:script xmlns:h="http://www.w3.org/1999/xhtml">alert(1)</h:script><path d="M0 0"/>'));
+        $this->assertNotNull($out);
+        $this->assertStringNotContainsString('script', $out);
+        $this->assertStringNotContainsString('alert(', $out);
+    }
+
+    public function testUtf16DoctypeRejected(): void
+    {
+        $doc = '<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE svg [<!ENTITY x "y">]><svg xmlns="http://www.w3.org/2000/svg"/>';
+        $this->assertNull(SvgSanitizer::sanitize("\xFF\xFE" . mb_convert_encoding($doc, 'UTF-16LE', 'UTF-8')));
+        $this->assertNull(SvgSanitizer::sanitize("\xFE\xFF" . mb_convert_encoding($doc, 'UTF-16BE', 'UTF-8')));
+    }
 }

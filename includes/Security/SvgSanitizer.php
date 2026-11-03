@@ -20,7 +20,9 @@ use DOMNode;
  * namespaces). The rule set mirrors the client sanitiser: non-graphic and
  * scripting elements are removed with their content, `on*` handlers are
  * dropped, SMIL animations that retarget a URL are dropped, and URL
- * attributes are checked. It is deliberately stricter than the client in two
+ * attributes are checked. `<style>` elements are removed unconditionally (an
+ * icon never needs one) and SMIL animations of `style`/`class` are dropped.
+ * It is deliberately stricter than the client in two
  * places because the output is inlined as a menu icon and never needs them:
  * href / src may only be a same-document fragment (`#id`), and any `url(...)`
  * that is not a fragment is treated as an external reference and dropped.
@@ -41,7 +43,7 @@ final class SvgSanitizer
     /** SMIL elements that can rewrite an attribute (and so a URL) at runtime. */
     private const ANIMATION_ELEMENTS = ['animate', 'set', 'animatemotion', 'animatetransform'];
 
-    private const UNSAFE_CSS = '/(expression\s*\(|javascript:|vbscript:|@import|behavior\s*:|-moz-binding|\\\\|url\s*\(\s*[\'"]?\s*+(?!#))/i';
+    private const UNSAFE_CSS = '/(expression\s*\(|javascript:|vbscript:|@import|behavior\s*:|-moz-binding|image-set\s*\(|cross-fade\s*\(|\\\\|url\s*\(\s*[\'"]?\s*+(?!#))/i';
 
     /**
      * @return string|null Sanitised `<svg>` markup, or null when the input is
@@ -108,14 +110,14 @@ final class SvgSanitizer
         }
         if (in_array($tag, self::ANIMATION_ELEMENTS, true)) {
             $target = strtolower($element->getAttribute('attributeName'));
-            if (str_contains($target, 'href') || str_starts_with($target, 'on') || str_contains($target, 'src')) {
+            if (str_contains($target, 'href') || str_starts_with($target, 'on') || str_contains($target, 'src')
+                || $target === 'style' || $target === 'class') {
                 return true;
             }
         }
-        if ($tag === 'style') {
-            return preg_match(self::UNSAFE_CSS, $element->textContent) === 1;
-        }
-        return false;
+        // A menu icon never needs a stylesheet; CSS can load resources in ways a
+        // pattern list cannot enumerate (image-set, escapes, @import, ...).
+        return $tag === 'style';
     }
 
     private static function scrubAttributes(DOMElement $element): void
@@ -126,7 +128,7 @@ final class SvgSanitizer
             $local = strtolower($attr->localName ?? $attr->nodeName);
             $value = $attr->value;
 
-            if (str_starts_with($local, 'on') || $local === 'base' && $attr->prefix === 'xml') {
+            if (str_starts_with($local, 'on') || ($local === 'base' && $attr->prefix === 'xml')) {
                 $drop[] = $attr;
             } elseif (($local === 'href' || $local === 'src') && !self::isFragment($value)) {
                 $drop[] = $attr;
