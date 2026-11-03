@@ -4,32 +4,9 @@ declare(strict_types=1);
 
 /**
  * Global-namespace WordPress stubs for the OptionsPages tests. Loaded via
- * require_once; not a test file. Everything is guarded so a real WordPress or a
+ * require_once; not a test file. Option functions live in tests/php/bootstrap.php. Everything is guarded so a real WordPress or a
  * stub from tests/php/bootstrap.php always takes precedence.
  */
-
-if (!function_exists('get_option')) {
-    function get_option($name, $default = false)
-    {
-        return $GLOBALS['pb_test_options'][$name] ?? $default;
-    }
-}
-if (!function_exists('update_option')) {
-    function update_option($name, $value, $autoload = null)
-    {
-        $GLOBALS['pb_test_update_calls'] = ($GLOBALS['pb_test_update_calls'] ?? 0) + 1;
-        $GLOBALS['pb_test_options'][$name] = $value;
-        $GLOBALS['pb_test_autoload'][$name] = $autoload;
-        return true;
-    }
-}
-if (!function_exists('delete_option')) {
-    function delete_option($name)
-    {
-        unset($GLOBALS['pb_test_options'][$name], $GLOBALS['pb_test_autoload'][$name]);
-        return true;
-    }
-}
 
 $GLOBALS['menu'] = $GLOBALS['menu'] ?? [];
 $GLOBALS['submenu'] = $GLOBALS['submenu'] ?? [];
