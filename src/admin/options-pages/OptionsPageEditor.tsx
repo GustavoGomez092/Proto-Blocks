@@ -52,6 +52,21 @@ function Section({ title, description, children }: { title: string; description?
 	);
 }
 
+/** The first named field of the page (bare fields or the first group's), for the storage example. */
+function firstFieldName(fields: unknown[]): string | undefined {
+	for (const item of fields) {
+		if (typeof item === 'object' && item !== null) {
+			const entry = item as Data;
+			if (typeof entry.name === 'string' && entry.name !== '') return entry.name;
+			if (Array.isArray(entry.fields)) {
+				const inner = firstFieldName(entry.fields);
+				if (inner) return inner;
+			}
+		}
+	}
+	return undefined;
+}
+
 /** Every problem that blocks Save, client side. */
 export function formProblems(form: OptionsPageForm, next: Data): string[] {
 	const out: string[] = [];
@@ -144,6 +159,15 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 		if (match) childErrors[Number(match[1])] = err.message;
 	}
 
+	// After a failed save, focus the first child slug the server refused, else the error summary.
+	useEffect(() => {
+		if (serverErrors.length === 0) return;
+		const child = Object.keys(childErrors)[0];
+		const target = document.getElementById(child !== undefined ? `pb-op-child-${child}-slug` : 'pb-op-save-errors');
+		target?.focus();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [serverErrors]);
+
 	const confirmDelete = async () => {
 		try {
 			await remove();
@@ -210,7 +234,7 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 				</Alert>
 			))}
 			{serverErrors.length > 0 ? (
-				<Alert variant="destructive" role="alert">
+				<Alert id="pb-op-save-errors" tabIndex={-1} variant="destructive" role="alert">
 					<AlertTitle>{__('Nothing was saved.', 'proto-blocks')}</AlertTitle>
 					<AlertDescription>
 						<ul className="list-disc pl-4">
@@ -237,7 +261,7 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 							<Label htmlFor="pb-op-title">{__('Title', 'proto-blocks')}</Label>
 							<Input id="pb-op-title" value={form.title} disabled={readOnly} onChange={(e) => patch({ title: e.target.value })} />
 						</div>
-						<MenuPlacementField value={form} parents={detail?.parents ?? []} disabled={readOnly} onChange={patch} />
+						<MenuPlacementField value={form} parents={detail?.parents ?? []} exclude={row?.children ?? []} disabled={readOnly} onChange={patch} />
 					</Section>
 					<Section title={__('Access & storage', 'proto-blocks')}>
 						<CapabilityField
@@ -248,7 +272,7 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 							disabled={readOnly}
 							onChange={(capability) => patch({ capability })}
 						/>
-						<StorageField slug={slug} storage={form.storage} saved={savedStorage} autoload={form.autoload} disabled={readOnly} onChange={patch} />
+						<StorageField slug={slug} firstField={firstFieldName(form.fields)} storage={form.storage} saved={savedStorage} autoload={form.autoload} disabled={readOnly} onChange={patch} />
 					</Section>
 					<Section title={__('Fields', 'proto-blocks')} description={__('Fields shown on the page, above any tabs.', 'proto-blocks')}>
 						<FieldsSection fields={form.fields} readOnly={readOnly} onChange={(fields) => patch({ fields })} />

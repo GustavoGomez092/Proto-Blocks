@@ -39,6 +39,8 @@ export function screenLabel(screen: string): string {
 			return __('Post Types', 'proto-blocks');
 		case 'taxonomies':
 			return __('Taxonomies', 'proto-blocks');
+		case 'options-pages':
+			return __('Options Pages', 'proto-blocks');
 		default:
 			return screen;
 	}

@@ -13,15 +13,19 @@ type Placement = Pick<OptionsPageForm, 'menu' | 'menu_title' | 'position' | 'ico
  */
 export function MenuPlacementField({
 	value,
-	parents,
+	parents: allParents,
+	exclude = [],
 	disabled,
 	onChange,
 }: {
 	value: Placement;
 	parents: { slug: string; title: string }[];
+	/** The page's own child pages (compound slugs): a page cannot sit under its child. */
+	exclude?: string[];
 	disabled: boolean;
 	onChange(patch: Partial<Placement>): void;
 }) {
+	const parents = allParents.filter((p) => !exclude.includes(p.slug));
 	const top = value.menu === 'top';
 	const options = parents.some((p) => p.slug === value.menu) || top
 		? parents

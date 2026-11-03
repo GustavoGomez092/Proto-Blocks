@@ -265,6 +265,40 @@ describe('editor', () => {
 		await user.click(screen.getByRole('button', { name: 'Save' }));
 		expect(await screen.findByText('Nothing was saved.')).toBeTruthy();
 		expect(screen.getAllByText('This slug is reserved.')).toHaveLength(2);
+		await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Child page slug' })));
+	});
+
+	test('a failed save not tied to a child focuses the error summary', async () => {
+		const user = userEvent.setup();
+		routes({
+			[`POST admin/schema-files/options/${SLUG}`]: () => {
+				throw { code: 'proto_blocks_schema_invalid', message: 'Bad.', data: { status: 400, errors: [{ path: '/menu', message: 'Unknown menu.' }] } };
+			},
+		});
+		await openCadco();
+		await user.type(screen.getByRole('textbox', { name: 'Title' }), '!');
+		await user.click(screen.getByRole('button', { name: 'Save' }));
+		const summary = (await screen.findByText('Nothing was saved.')).closest('[role="alert"]');
+		await waitFor(() => expect(document.activeElement).toBe(summary));
+	});
+
+	test('the parent menu list leaves out the page\'s own children', async () => {
+		routes({
+			[`admin/options-pages/${SLUG}`]: {
+				...detail,
+				page: row({ children: [`${SLUG}-footer`] }),
+				parents: [...detail.parents, { slug: `${SLUG}-footer`, title: 'Footer' }],
+			},
+		});
+		await openCadco();
+		const parent = screen.getByRole('combobox', { name: 'Parent menu' }) as HTMLSelectElement;
+		expect(Array.from(parent.options).map((o) => o.value)).toEqual(['edit.php?post_type=product', 'options-general.php']);
+	});
+
+	test('the per-field storage hint names a real option', async () => {
+		routes();
+		await openCadco();
+		expect(screen.getByText(`Saved as ${SLUG}_hide_children. Recommended.`)).toBeTruthy();
 	});
 
 	test('tabs: add, rename and reorder', async () => {
@@ -289,6 +323,37 @@ describe('editor', () => {
 			{ title: 'New tab', fields: [] },
 			{ title: 'Tracking codes', fields: [] },
 		]);
+	});
+
+	test('a reorder keeps the same tab expanded and focus on its Move button', async () => {
+		const user = userEvent.setup();
+		routes();
+		await openCadco();
+		await user.click(screen.getByRole('button', { name: 'Add tab' }));
+		const first = screen.getByRole('textbox', { name: 'Tab title' });
+		await user.clear(first);
+		await user.type(first, 'General');
+		await user.click(screen.getByRole('button', { name: 'Add tab' }));
+		await user.click(screen.getByRole('button', { name: 'Edit fields of New tab' }));
+		await user.click(screen.getByRole('button', { name: 'Move New tab up' }));
+		expect(screen.getByRole('button', { name: 'Edit fields of New tab' }).getAttribute('aria-expanded')).toBe('true');
+		expect(screen.getByRole('button', { name: 'Edit fields of General' }).getAttribute('aria-expanded')).toBe('false');
+		// Now first, so Up is disabled: focus lands on its Down button.
+		await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Move New tab down' })));
+	});
+
+	test('removing an earlier child keeps the right row open', async () => {
+		const user = userEvent.setup();
+		routes();
+		await openCadco();
+		await user.click(screen.getByRole('button', { name: 'Add child page' }));
+		await user.click(screen.getByRole('button', { name: 'Add child page' }));
+		const titles = screen.getAllByRole('textbox', { name: 'Child page title' });
+		await user.type(titles[0], 'One');
+		await user.type(titles[1], 'Two');
+		await user.click(screen.getByRole('button', { name: 'Edit fields of Two' }));
+		await user.click(screen.getByRole('button', { name: 'Remove One' }));
+		expect(screen.getByRole('button', { name: 'Edit fields of Two' }).getAttribute('aria-expanded')).toBe('true');
 	});
 
 	test('child pages: add one, reject a bad slug', async () => {

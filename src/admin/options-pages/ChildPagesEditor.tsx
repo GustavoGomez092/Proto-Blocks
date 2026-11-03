@@ -7,7 +7,7 @@ import { Label } from '@/admin/components/ui/label';
 import { CapabilityField, capabilityError } from './CapabilityField';
 import { CHILD_SLUG_PATTERN, type OptionsPageForm } from './declaration';
 import { FieldsSection } from './PageFieldsBuilder';
-import { fieldCount } from './TabsEditor';
+import { fieldCount, useStableIds } from './TabsEditor';
 
 type Child = OptionsPageForm['children'][number];
 
@@ -44,7 +44,8 @@ export function ChildPagesEditor({
 	errors?: Record<number, string>;
 	onChange(next: Child[]): void;
 }) {
-	const [open, setOpen] = useState<number | null>(null);
+	const rows = useStableIds(children.length);
+	const [open, setOpen] = useState<string | null>(null);
 	const set = (index: number, patch: Partial<Child>) => onChange(children.map((child, i) => (i === index ? { ...child, ...patch } : child)));
 
 	return (
@@ -54,8 +55,9 @@ export function ChildPagesEditor({
 				{children.map((child, index) => {
 					const slugError = childSlugError(child.slug) ?? errors?.[index] ?? null;
 					const name = child.title || child.slug || __('(untitled page)', 'proto-blocks');
+					const id = rows.ids[index];
 					return (
-						<li key={index} className="grid gap-3 rounded-lg border px-3 py-3">
+						<li key={id} className="grid gap-3 rounded-lg border px-3 py-3">
 							<div className="grid gap-3 sm:grid-cols-3">
 								<div className="grid gap-1.5">
 									<Label htmlFor={`pb-op-child-${index}-title`}>{__('Child page title', 'proto-blocks')}</Label>
@@ -88,25 +90,31 @@ export function ChildPagesEditor({
 							</div>
 							<div className="flex items-center gap-2">
 								<span className="text-[12.5px] text-muted-foreground">{fieldCount(child.fields)}</span>
-								<Button type="button" variant="outline" size="sm" aria-expanded={open === index} onClick={() => setOpen(open === index ? null : index)}>
+								<Button type="button" variant="outline" size="sm" aria-expanded={open === id} onClick={() => setOpen(open === id ? null : id)}>
 									{/* translators: %s: child page title */}
 									<span className="sr-only">{sprintf(__('Edit fields of %s', 'proto-blocks'), name)}</span>
 									<span aria-hidden="true">{__('Edit fields', 'proto-blocks')}</span>
 								</Button>
 								{disabled ? null : (
 									/* translators: %s: child page title */
-									<Button type="button" variant="ghost" size="icon" aria-label={sprintf(__('Remove %s', 'proto-blocks'), name)} onClick={() => onChange(children.filter((_, i) => i !== index))}>
+									<Button type="button" variant="ghost" size="icon" aria-label={sprintf(__('Remove %s', 'proto-blocks'), name)} onClick={() => {
+										rows.remove(index);
+										onChange(children.filter((_, i) => i !== index));
+									}}>
 										<Trash2Icon aria-hidden="true" />
 									</Button>
 								)}
 							</div>
-							{open === index ? <FieldsSection fields={child.fields} readOnly={disabled} onChange={(fields) => set(index, { fields })} /> : null}
+							{open === id ? <FieldsSection fields={child.fields} readOnly={disabled} onChange={(fields) => set(index, { fields })} /> : null}
 						</li>
 					);
 				})}
 			</ul>
 			{disabled ? null : (
-				<Button type="button" variant="outline" className="justify-self-start" onClick={() => onChange([...children, { slug: '', title: '', fields: [] }])}>
+				<Button type="button" variant="outline" className="justify-self-start" onClick={() => {
+					rows.add();
+					onChange([...children, { slug: '', title: '', fields: [] }]);
+				}}>
 					<PlusIcon aria-hidden="true" />
 					{__('Add child page', 'proto-blocks')}
 				</Button>

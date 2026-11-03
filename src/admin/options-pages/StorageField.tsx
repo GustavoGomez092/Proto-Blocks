@@ -19,10 +19,13 @@ export function StorageField({
 	storage,
 	saved,
 	autoload,
+	firstField,
 	disabled,
 	onChange,
 }: {
 	slug: string;
+	/** The first field's name, for a concrete example of the option name. */
+	firstField?: string;
 	storage: OptionsPageForm['storage'];
 	saved: OptionsPageForm['storage'] | null;
 	autoload: boolean;
@@ -56,8 +59,11 @@ export function StorageField({
 					<Label htmlFor="pb-op-storage-fields" className="grid gap-0.5 font-normal">
 						<span>{__('One setting per field', 'proto-blocks')}</span>
 						<span className="text-[12.5px] text-muted-foreground">
-							{/* translators: %s: page slug */}
-							{sprintf(__('Saved as %s_<field>. Recommended.', 'proto-blocks'), slug || 'page')}
+							{sprintf(
+								/* translators: %s: example option name, <page slug>_<field name> */
+								__('Saved as %s. Recommended.', 'proto-blocks'),
+								`${slug || 'page'}_${firstField || 'field'}`
+							)}
 						</span>
 					</Label>
 				</div>
