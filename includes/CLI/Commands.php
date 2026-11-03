@@ -355,8 +355,14 @@ class Commands extends WP_CLI_Command {
             }
         }
 
+        // A named block scopes the run to that block only.
+        $check_content_model = empty( $args[0] );
+
         if ( empty( $blocks ) ) {
             WP_CLI::warning( 'No Proto-Blocks found to validate.' );
+            if ( $check_content_model ) {
+                $this->validateContentModel( $assoc_args );
+            }
             return;
         }
 
@@ -378,9 +384,26 @@ class Commands extends WP_CLI_Command {
 
         if ( $has_errors ) {
             WP_CLI::error( 'Validation failed for one or more blocks.' );
-        } else {
-            WP_CLI::success( 'All blocks validated successfully.' );
+            return;
         }
+
+        WP_CLI::success( 'All blocks validated successfully.' );
+
+        if ( $check_content_model ) {
+            $this->validateContentModel( $assoc_args );
+        }
+    }
+
+    /**
+     * Print the post type and taxonomy declaration report; fails on errors.
+     *
+     * @param array $assoc_args Associative arguments.
+     */
+    private function validateContentModel( array $assoc_args ): void {
+        $plugin = Plugin::getInstance();
+        $rows   = ContentModelCommands::validationRows( $plugin->getContentModel(), $plugin->getModules()->issues() );
+
+        ContentModelCommands::printValidation( $rows, (string) ( $assoc_args['format'] ?? 'table' ) );
     }
 
     /**
@@ -1104,6 +1127,14 @@ class Commands extends WP_CLI_Command {
  */
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
     WP_CLI::add_command( 'proto-blocks', Commands::class );
+
+    // Declared post types and taxonomies.
+    WP_CLI::add_command( 'proto-blocks type', function ( $args, $assoc_args ) {
+        ( new ContentModelCommands() )->type( $args, $assoc_args );
+    } );
+    WP_CLI::add_command( 'proto-blocks taxonomy', function ( $args, $assoc_args ) {
+        ( new ContentModelCommands() )->taxonomy( $args, $assoc_args );
+    } );
 
     // Add cache subcommand
     WP_CLI::add_command( 'proto-blocks cache', function( $args, $assoc_args ) {
