@@ -8,6 +8,8 @@
  * inline script). The server is the authority on validation; FieldsForm
  * mirrors it on blur. After a save each FieldsForm re-mounts with the stored
  * values; after a 422 it re-mounts with the submitted values and the errors.
+ * Fields the user may not see (code without unfiltered_html) never reach the
+ * page: they show as a locked row with no value and no input.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { __, _n, sprintf } from '@wordpress/i18n';
@@ -20,10 +22,9 @@ import { Button } from '@/admin/components/ui/button';
 import { Card, CardContent, CardFooter } from '@/admin/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/admin/components/ui/tabs';
 import { submissionFromForm } from '@/admin/options-pages/formData';
-import type { OptionsPageData, OptionsSaveResponse } from '@/admin/options-pages/types';
+import type { HiddenField, OptionsGroupPayload, OptionsPageData, OptionsSaveResponse } from '@/admin/options-pages/types';
 import { FieldsForm } from '@/fields/box/FieldsForm';
 import { domId } from '@/fields/box/names';
-import type { BoxPayload } from '@/fields/model/types';
 
 const DATA_ID = 'proto-blocks-options-page-data';
 
@@ -48,11 +49,15 @@ const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typ
 
 /** The 422 field errors, path => message; null for any other error. */
 function fieldErrors(error: unknown): Record<string, string> | null {
-	if (!(error instanceof ApiError) || error.status !== 422 || !isRecord(error.data.errors)) {
+	if (!(error instanceof ApiError) || error.status !== 422) {
+		return null;
+	}
+	const raw = error.data?.errors;
+	if (!isRecord(raw)) {
 		return null;
 	}
 	const out: Record<string, string> = {};
-	for (const [path, message] of Object.entries(error.data.errors)) {
+	for (const [path, message] of Object.entries(raw)) {
 		if (typeof message === 'string') {
 			out[path] = message;
 		}
@@ -62,10 +67,42 @@ function fieldErrors(error: unknown): Record<string, string> | null {
 
 const topName = (path: string) => path.split('.')[0];
 
-function GroupForm({ payload }: { payload: BoxPayload }) {
+/** A form snapshot for the unsaved-changes check. */
+function snapshot(form: HTMLFormElement): string {
+	return JSON.stringify(submissionFromForm(form));
+}
+
+function HiddenRow({ groupKey, field }: { groupKey: string; field: HiddenField }) {
+	const id = domId(groupKey, [field.name]);
 	return (
-		<div className="proto-blocks-fields">
-			<FieldsForm payload={payload} />
+		<div className="flex flex-col gap-1.5" data-hidden-field={field.name}>
+			<span id={`${id}-label`} className="w-fit text-sm font-semibold text-[#1d2327]">
+				{field.label}
+			</span>
+			<p
+				role="note"
+				aria-labelledby={`${id}-label`}
+				className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-3 py-2 text-[13px] text-muted-foreground"
+			>
+				<LockIcon aria-hidden="true" className="size-4 shrink-0" />
+				{__('Hidden; only users with unfiltered HTML may view and edit this field.', 'proto-blocks')}
+			</p>
+		</div>
+	);
+}
+
+function GroupForm({ payload }: { payload: OptionsGroupPayload }) {
+	const hidden = payload.hidden ?? [];
+	return (
+		<div className="grid gap-5">
+			{payload.fields.length > 0 && (
+				<div className="proto-blocks-fields">
+					<FieldsForm payload={payload} />
+				</div>
+			)}
+			{hidden.map((f) => (
+				<HiddenRow key={f.name} groupKey={payload.groupKey} field={f} />
+			))}
 		</div>
 	);
 }
@@ -97,7 +134,7 @@ function OptionsPage({ data }: { data: OptionsPageData }) {
 	const labels = useMemo(() => {
 		const map = new Map<string, string>();
 		for (const g of allGroups) {
-			for (const f of g.fields) {
+			for (const f of [...g.fields, ...(g.hidden ?? [])]) {
 				if (f.name !== '' && !map.has(f.name)) {
 					map.set(f.name, f.label || f.name);
 				}
@@ -115,12 +152,21 @@ function OptionsPage({ data }: { data: OptionsPageData }) {
 	const [saving, setSaving] = useState(false);
 	const [activeTab, setActiveTab] = useState('tab-0');
 	const formRef = useRef<HTMLFormElement>(null);
+	/** Set by input/change events (text, native choices). */
 	const dirty = useRef(false);
+	/**
+	 * The form as it was when the user first focused it. Controls that change
+	 * without an input/change event (the true_false Switch) show up as a
+	 * difference from it. Null until the first focus after a load or save.
+	 */
+	const baseline = useRef<string | null>(null);
 	const focusAfterMount = useRef<string | null>(null);
 
 	useEffect(() => {
 		const onBeforeUnload = (e: BeforeUnloadEvent) => {
-			if (dirty.current) {
+			const form = formRef.current;
+			const changed = dirty.current || (form !== null && baseline.current !== null && snapshot(form) !== baseline.current);
+			if (changed) {
 				e.preventDefault();
 				// Older browsers need returnValue set to show the prompt.
 				e.returnValue = '';
@@ -147,15 +193,28 @@ function OptionsPage({ data }: { data: OptionsPageData }) {
 		[errors, owner]
 	);
 
-	const payloadFor = (g: BoxPayload): BoxPayload => ({ ...g, values: values[g.groupKey] ?? {}, errors: errorsFor(g.groupKey) });
+	const payloadFor = (g: OptionsGroupPayload): OptionsGroupPayload => ({
+		...g,
+		values: values[g.groupKey] ?? {},
+		errors: errorsFor(g.groupKey),
+	});
 
-	const tabErrorCount = (groups: BoxPayload[]) => {
+	const tabErrorCount = (groups: OptionsGroupPayload[]) => {
 		const keys = new Set(groups.map((g) => g.groupKey));
 		return Object.keys(errors).filter((path) => keys.has(owner.get(topName(path)) ?? '')).length;
 	};
 
+	/** 422 paths no rendered field owns (e.g. a field hidden from this user). */
+	const unplaced = Object.entries(errors).filter(([path]) => !owner.has(topName(path)));
+
 	const markDirty = () => {
 		dirty.current = true;
+	};
+
+	const onFocusIn = () => {
+		if (baseline.current === null && formRef.current) {
+			baseline.current = snapshot(formRef.current);
+		}
 	};
 
 	async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -174,6 +233,7 @@ function OptionsPage({ data }: { data: OptionsPageData }) {
 			setNotices(Array.isArray(response?.notices) ? response.notices : []);
 			setGeneration((n) => n + 1);
 			dirty.current = false;
+			baseline.current = null;
 			toast.success(__('Settings saved.', 'proto-blocks'));
 		} catch (error) {
 			const invalid = fieldErrors(error);
@@ -190,6 +250,8 @@ function OptionsPage({ data }: { data: OptionsPageData }) {
 			);
 			setErrors(invalid);
 			setNotices([]);
+			// Nothing was saved, so the edits are still unsaved.
+			dirty.current = true;
 
 			// The first error in page order decides the tab and the focus.
 			const ordered = allGroups.flatMap((g) =>
@@ -219,8 +281,7 @@ function OptionsPage({ data }: { data: OptionsPageData }) {
 		}
 	}
 
-	const readOnly = Object.entries(data.readOnly ?? {});
-	const renderGroups = (groups: BoxPayload[]) =>
+	const renderGroups = (groups: OptionsGroupPayload[]) =>
 		groups.map((g) => <GroupForm key={`${g.groupKey}:${generation}`} payload={payloadFor(g)} />);
 
 	return (
@@ -228,7 +289,10 @@ function OptionsPage({ data }: { data: OptionsPageData }) {
 			<header className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
 				<h1 className="text-[23px] leading-tight font-normal text-[#1d2327]">{data.title}</h1>
 				{data.editUrl && (
-					<a href={data.editUrl} className="inline-flex items-center gap-1 text-[13px] text-muted-foreground underline-offset-2 hover:underline">
+					<a
+						href={data.editUrl}
+						className="inline-flex items-center gap-1 text-[13px] text-muted-foreground underline-offset-2 hover:underline"
+					>
 						<PencilIcon aria-hidden="true" className="size-3.5" />
 						{__('Edit declaration', 'proto-blocks')}
 					</a>
@@ -245,29 +309,7 @@ function OptionsPage({ data }: { data: OptionsPageData }) {
 				))}
 			</div>
 
-			{readOnly.length > 0 && (
-				<Alert>
-					<LockIcon aria-hidden="true" />
-					<AlertTitle>{__('Some fields are read-only for you', 'proto-blocks')}</AlertTitle>
-					<AlertDescription>
-						<ul className="flex flex-col gap-0.5">
-							{readOnly.map(([name]) => (
-								<li key={name}>
-									<span className="font-medium">{labels.get(name) ?? name}</span>
-									{': '}
-									{__('Only users with unfiltered HTML may edit this field.', 'proto-blocks')}
-								</li>
-							))}
-						</ul>
-					</AlertDescription>
-				</Alert>
-			)}
-
-			<form ref={formRef} onSubmit={onSubmit} onChange={markDirty} onInput={markDirty} onClick={(e) => {
-				if ((e.target as HTMLElement).closest('[data-field]')) {
-					markDirty();
-				}
-			}} noValidate>
+			<form ref={formRef} onSubmit={onSubmit} onChange={markDirty} onInput={markDirty} onFocus={onFocusIn} noValidate>
 				<Card className="gap-0 py-0">
 					<CardContent className="grid gap-6 py-6">
 						{data.groups.length > 0 && <div className="grid gap-6">{renderGroups(data.groups)}</div>}
@@ -299,7 +341,12 @@ function OptionsPage({ data }: { data: OptionsPageData }) {
 									})}
 								</TabsList>
 								{data.tabs.map((tab, i) => (
-									<TabsContent key={tab.title + i} value={`tab-${i}`} forceMount className="grid gap-6 pt-4 data-[state=inactive]:hidden">
+									<TabsContent
+										key={tab.title + i}
+										value={`tab-${i}`}
+										forceMount
+										className="grid gap-6 pt-4 data-[state=inactive]:hidden"
+									>
 										{renderGroups(tab.groups)}
 									</TabsContent>
 								))}
@@ -313,10 +360,23 @@ function OptionsPage({ data }: { data: OptionsPageData }) {
 						</Button>
 						{data.tabs.length > 1 && <p className="text-[13px] text-muted-foreground">{__('Saves every tab.', 'proto-blocks')}</p>}
 						{Object.keys(errors).length > 0 && (
-							<p className="flex items-center gap-1.5 text-[13px] text-destructive">
-								<CircleAlertIcon aria-hidden="true" className="size-4" />
-								{__('Nothing was saved. Fix the marked fields and save again.', 'proto-blocks')}
-							</p>
+							<div role="alert" className="flex basis-full flex-col gap-1 text-[13px] text-destructive">
+								<p className="flex items-center gap-1.5">
+									<CircleAlertIcon aria-hidden="true" className="size-4" />
+									{__('Nothing was saved. Fix the marked fields and save again.', 'proto-blocks')}
+								</p>
+								{unplaced.length > 0 && (
+									<ul className="flex flex-col gap-0.5 pl-6">
+										{unplaced.map(([path, message]) => (
+											<li key={path}>
+												<span className="font-medium">{labels.get(topName(path)) ?? path}</span>
+												{': '}
+												{message}
+											</li>
+										))}
+									</ul>
+								)}
+							</div>
 						)}
 					</CardFooter>
 				</Card>

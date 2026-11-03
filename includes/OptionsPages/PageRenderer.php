@@ -23,9 +23,10 @@ use ProtoBlocks\Security\AttributeSanitizer;
  * The page data travels as JSON in a `<script type="application/json">`
  * element (JSON_HEX_* flags, so no stored value can close the element); no
  * inline JavaScript is printed for it. Values are read raw through Phase 2's
- * FieldReader: the client renders them as text, and code values for users
- * without unfiltered_html are shown read-only and never submitted
- * (OptionsValues::readOnly() lists them, save() refuses them).
+ * FieldReader for the fields the user may edit. For a user without
+ * unfiltered_html, the fields OptionsValues::readOnly() lists (code, and
+ * containers holding code) are left out of the form and their value is
+ * null: the page shows them as hidden, and save() refuses them anyway.
  *
  * Each group's payload has the BoxPayload JSON shape (src/fields/model/types.ts).
  * It is built here because Phase 2's PHP BoxPayload is not on this branch;
@@ -72,7 +73,8 @@ final class PageRenderer
         $ref = ObjectRef::option($page->slug);
         $stored = $this->values->fields($page);
         $trusted = !AttributeSanitizer::shouldSanitizeForUser($userId);
-        $build = fn (FieldGroup $g): array => $this->payload($page, $g, $ref, $reader, $stored, $trusted);
+        $readOnly = $this->values->readOnly($page, $userId);
+        $build = fn (FieldGroup $g): array => $this->payload($page, $g, $ref, $reader, $stored, $trusted, $readOnly);
 
         // Untabbed page groups first, then standalone groups, then tabs.
         $top = [];
@@ -108,7 +110,7 @@ final class PageRenderer
             'editUrl' => user_can($userId, 'manage_options')
                 ? esc_url_raw(admin_url('admin.php?page=proto-blocks-options-pages&slug=' . rawurlencode($page->slug)))
                 : null,
-            'readOnly' => $this->values->readOnly($page, $userId),
+            'readOnly' => $readOnly,
         ];
     }
 
@@ -169,24 +171,56 @@ final class PageRenderer
     }
 
     /**
-     * One group as a BoxPayload.
+     * One group as a BoxPayload, plus `hidden`: the fields this user may
+     * neither see nor edit (code, or a container holding code, without
+     * unfiltered_html).
      *
-     * @param array<string, Field> $stored the page's top-level stored fields by name
+     * `fields` and `values` follow OptionsValues' rules: a value field is
+     * listed only when the page reads and writes it (a known type, not
+     * shadowed by an earlier field of the same name, not under a protected
+     * option name), and every listed value field has its value (stored, or
+     * its default). Layout-only fields (tab, accordion, message) are listed
+     * without a value. A hidden field is not listed and its value is null,
+     * so no code value reaches the page for an untrusted user.
+     *
+     * @param array<string, Field>  $stored   the page's top-level stored fields by name
+     * @param array<string, string> $readOnly field name => reason
      * @return array<string, mixed>
      */
-    private function payload(PageDefinition $page, FieldGroup $group, ObjectRef $ref, FieldReader $reader, array $stored, bool $trusted): array
+    private function payload(PageDefinition $page, FieldGroup $group, ObjectRef $ref, FieldReader $reader, array $stored, bool $trusted, array $readOnly): array
     {
+        $fields = [];
         $values = [];
         $choices = [];
         $maxRows = [];
+        $hidden = [];
         foreach ($group->fields as $field) {
-            if (!isset($stored[$field->name]) || $stored[$field->name] !== $field) {
+            try {
+                $stores = $this->types->for($field)->stores();
+            } catch (\InvalidArgumentException) {
+                continue; // an unknown type is neither read nor written
+            }
+            if (!$stores) {
+                $fields[] = $field->toArray();
                 continue;
+            }
+            if (($stored[$field->name] ?? null) !== $field) {
+                continue; // shadowed by an earlier field of the same name, or dropped
             }
             // Same skip as OptionsValues::read(): a filter may have protected the name since load.
             if (ProtectedOptions::isProtected($page->optionName($field->name))) {
                 continue;
             }
+            if (isset($readOnly[$field->name])) {
+                $values[$field->name] = null;
+                $hidden[] = [
+                    'name' => $field->name,
+                    'label' => $field->label !== '' ? $field->label : $field->name,
+                    'reason' => $readOnly[$field->name],
+                ];
+                continue;
+            }
+            $fields[] = $field->toArray();
             $values[$field->name] = $reader->value($ref, $field, true);
             $options = self::providerOptions($field);
             if ($options !== null) {
@@ -199,7 +233,7 @@ final class PageRenderer
 
         return [
             'groupKey' => $group->key,
-            'fields' => array_map(static fn (Field $f): array => $f->toArray(), $group->fields),
+            'fields' => $fields,
             // Objects, so empty maps encode as {} like the TS type expects.
             'values' => (object) $values,
             'display' => (object) [],
@@ -210,6 +244,7 @@ final class PageRenderer
             'restRoot' => esc_url_raw(rest_url('proto-blocks/v1/')),
             'restNonce' => wp_create_nonce('wp_rest'),
             'object' => 'option:' . $ref->page,
+            'hidden' => $hidden,
         ];
     }
 
