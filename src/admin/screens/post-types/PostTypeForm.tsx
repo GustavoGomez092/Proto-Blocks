@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { useForm, useFormState, useWatch, Controller, type Control, type FieldErrors, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { adminGet, ApiError } from '@/admin/api';
-import { getBootstrap } from '@/admin/bootstrap';
+import { getWriteReason } from '@/admin/bootstrap';
 import { ConfirmDialog } from '@/admin/components/shell/ConfirmDialog';
 import { PageHeader } from '@/admin/components/shell/PageHeader';
 import { ScreenError } from '@/admin/components/shell/ScreenError';
@@ -857,8 +857,11 @@ function TypeForm({
 	}, [effective]);
 
 	let shellReason: ListItem['readOnlyReason'] = null;
-	if (!getBootstrap().fileModsAllowed || file.reason === 'file_mods') {
-		shellReason = 'file_mods';
+	const writeReason = getWriteReason();
+	if (writeReason !== null) {
+		shellReason = writeReason;
+	} else if (file.reason === 'file_mods' || file.reason === 'multisite') {
+		shellReason = file.reason;
 	} else if (item.readOnlyReason === 'not_writable' || file.reason === 'not_writable') {
 		shellReason = 'not_writable';
 	}

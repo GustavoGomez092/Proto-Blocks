@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { __ } from '@wordpress/i18n';
 import { adminGet } from '@/admin/api';
-import { getBootstrap } from '@/admin/bootstrap';
+import { getWriteReason } from '@/admin/bootstrap';
 import type { ListResult } from '@/admin/content-model/types';
 import { PostTypeList } from './post-types/PostTypeList';
 import { PostTypeEdit } from './post-types/PostTypeForm';
@@ -39,7 +39,7 @@ export default function PostTypesScreen() {
 	const [result, setResult] = useState<ListResult | null>(null);
 	const [error, setError] = useState<unknown>(null);
 	const [loading, setLoading] = useState(true);
-	const readOnly = !getBootstrap().fileModsAllowed;
+	const readOnly = getWriteReason();
 
 	const go = useCallback((next: View) => {
 		writeView(next);
@@ -75,7 +75,7 @@ export default function PostTypesScreen() {
 			<PostTypeEdit
 				key={view.type}
 				slug={view.type}
-				readOnly={readOnly}
+				readOnly={readOnly !== null}
 				onBack={() => go({ type: null, creating: false })}
 			/>
 		);

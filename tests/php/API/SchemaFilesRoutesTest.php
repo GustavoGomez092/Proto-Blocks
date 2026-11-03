@@ -146,6 +146,20 @@ final class SchemaFilesRoutesTest extends ContentModelRoutesTestCase
         self::assertFileDoesNotExist($this->root . '/proto-types/product/type.jsonc');
     }
 
+    public function testDeleteOnMultisiteSubSiteAnswersMultisiteError(): void
+    {
+        $this->write('proto-types/product/type.jsonc', '{"name": "Product"}');
+        try {
+            $GLOBALS['pb_test_multisite'] = true;
+            $GLOBALS['pb_test_super_admins'] = [];
+
+            self::assertWpError('proto_blocks_multisite', 403, $this->routes(false)->delete(self::request(['kind' => 'type', 'slug' => 'product'])));
+        } finally {
+            unset($GLOBALS['pb_test_multisite'], $GLOBALS['pb_test_super_admins']);
+        }
+        self::assertFileExists($this->root . '/proto-types/product/type.jsonc');
+    }
+
     public function testDeleteFileModsOffMapsTo403(): void
     {
         $this->write('proto-types/product/type.jsonc', '{"name": "Product"}');

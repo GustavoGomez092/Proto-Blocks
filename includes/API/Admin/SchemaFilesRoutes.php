@@ -32,11 +32,11 @@ use WP_REST_Request;
  * - POST|PUT|PATCH admin/schema-files/<kind>/<slug> (writePermission), body
  *   {text: string, hash: string|null, acknowledge: string[]} → {path, hash, created, warnings: Issue[]}
  *   400 proto_blocks_invalid_slug / _invalid_request / _invalid_jsonc / _schema_invalid / _slug_mismatch,
- *   403 proto_blocks_file_mods / _path_outside_root / _not_writable, 409 proto_blocks_conflict {hash},
+ *   403 proto_blocks_file_mods / _multisite / _path_outside_root / _not_writable, 409 proto_blocks_conflict {hash},
  *   409 proto_blocks_needs_confirmation {guardrails}, 413 proto_blocks_file_too_large, 500 proto_blocks_write_failed
  * - DELETE admin/schema-files/<kind>/<slug> (writePermission), query `confirm` (the typed slug; the client's
  *   adminDelete sends no body) → {deleted, kept}
- *   400 proto_blocks_invalid_slug, 403 proto_blocks_file_mods / _path_outside_root / _not_writable,
+ *   400 proto_blocks_invalid_slug, 403 proto_blocks_file_mods / _multisite / _path_outside_root / _not_writable,
  *   404 proto_blocks_not_found, 409 proto_blocks_not_a_file (PHP or inline declaration),
  *   409 proto_blocks_confirm_required {content}, 500 proto_blocks_write_failed; from the writer also
  *   400 proto_blocks_not_a_file
@@ -205,7 +205,7 @@ final class SchemaFilesRoutes extends ContentModelRoutes
             return $error;
         }
         if ($this->writer()->target($kind, $slug, null)['reason'] === 'file_mods') {
-            return AdminRestController::fileModsError();
+            return AdminRestController::writeBlockedError();
         }
 
         $declaration = $this->registry()->get($kind, $slug);
@@ -263,7 +263,7 @@ final class SchemaFilesRoutes extends ContentModelRoutes
     private function unwritable(array $target): WP_Error
     {
         return match ($target['reason']) {
-            'file_mods' => AdminRestController::fileModsError(),
+            'file_mods' => AdminRestController::writeBlockedError(),
             'not_writable' => new WP_Error(
                 'proto_blocks_not_writable',
                 /* translators: %s: path */

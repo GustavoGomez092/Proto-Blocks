@@ -328,6 +328,24 @@ test('read-only list disables Add post type', async () => {
 	expect(await screen.findByRole('button', { name: 'Add post type' })).toBeDisabled();
 });
 
+test('multisite sub-site admin sees the multisite banner and read-only list', async () => {
+	mockApi({ 'admin/types': list() });
+	renderScreen('', { fileModsAllowed: true, writeReason: 'multisite' });
+	expect(await screen.findByText(/This is a multisite network; only network administrators can edit declaration files\./)).toBeInTheDocument();
+	expect(screen.queryByText('File modifications are disabled on this site')).not.toBeInTheDocument();
+	expect(screen.getByRole('button', { name: 'Add post type' })).toBeDisabled();
+});
+
+test('multisite sub-site admin sees the multisite banner on the edit screen', async () => {
+	await openEdit(
+		{ 'admin/types/product': detail(), 'admin/schema-files/type/product': file() },
+		{ fileModsAllowed: true, writeReason: 'multisite' }
+	);
+
+	expect(screen.getByText(/This is a multisite network; only network administrators can edit declaration files\./)).toBeInTheDocument();
+	expect(screen.getByRole('button', { name: 'Save to file' })).toBeDisabled();
+});
+
 test('Scaffold is disabled on a classic theme', async () => {
 	await openEdit({ 'admin/types/product': detail({ blockTheme: false }), 'admin/schema-files/type/product': file() });
 
