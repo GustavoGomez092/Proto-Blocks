@@ -28,20 +28,21 @@ final class TermForms
     ) {
     }
 
-    /** load-edit-tags.php / load-term.php: hooks the add and edit forms of every taxonomy a group targets. */
+    /**
+     * load-edit-tags.php / load-term.php: hooks the add and edit forms of the
+     * screen's taxonomy (`?taxonomy=`, core's default post_tag) when a group
+     * targets it. An unknown taxonomy returns before the group index loads.
+     */
     public function register(): void
     {
-        foreach ($this->taxonomies() as $taxonomy) {
-            if (isset($this->hooked[$taxonomy])) {
-                continue;
-            }
-            $this->hooked[$taxonomy] = true;
-            add_action($taxonomy . '_add_form_fields', [$this, 'renderAdd'], 10, 1);
-            add_action($taxonomy . '_edit_form_fields', [$this, 'renderEdit'], 10, 2);
+        $taxonomy = isset($_GET['taxonomy']) && is_string($_GET['taxonomy']) ? sanitize_key(wp_unslash($_GET['taxonomy'])) : 'post_tag';
+        if ($taxonomy === '' || isset($this->hooked[$taxonomy]) || !taxonomy_exists($taxonomy) || $this->groupsFor($taxonomy) === []) {
+            return;
         }
-        if ($this->hooked !== []) {
-            add_action('admin_enqueue_scripts', [$this, 'enqueue']);
-        }
+        $this->hooked[$taxonomy] = true;
+        add_action($taxonomy . '_add_form_fields', [$this, 'renderAdd'], 10, 1);
+        add_action($taxonomy . '_edit_form_fields', [$this, 'renderEdit'], 10, 2);
+        add_action('admin_enqueue_scripts', [$this, 'enqueue']);
     }
 
     public function renderAdd(mixed $taxonomy = ''): void
@@ -112,29 +113,6 @@ final class TermForms
         }
 
         return $out;
-    }
-
-    /** @return list<string> */
-    private function taxonomies(): array
-    {
-        $out = [];
-        foreach ($this->index->all() as $group) {
-            foreach ($this->index->subtypesFor($group, ObjectRef::TERM) as $taxonomy) {
-                if ($taxonomy !== '') {
-                    $out[$taxonomy] = true;
-                    continue;
-                }
-                // Every taxonomy with an admin screen.
-                $all = function_exists('get_taxonomies') ? get_taxonomies(['show_ui' => true]) : [];
-                foreach (is_array($all) ? $all : [] as $name) {
-                    if (is_string($name) && $name !== '') {
-                        $out[$name] = true;
-                    }
-                }
-            }
-        }
-
-        return array_map('strval', array_keys($out));
     }
 
     private static function canAdd(string $taxonomy): bool

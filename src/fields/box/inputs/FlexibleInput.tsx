@@ -21,8 +21,16 @@ import { EmptyMarker, useBox, useFieldA11y, type FieldInputProps } from '../regi
 import { toId } from './MediaInputs';
 import { emptyRow, RowCard, rowCap, rowCount, useRowActions } from './RepeaterInput';
 
-function layoutOf( row: unknown ): string {
-	const name = row && typeof row === 'object' ? ( row as { layout?: unknown } ).layout : undefined;
+/**
+ * A row's layout name. Stored rows (and the values a failed save sends back)
+ * key it `layout`; the box posts it as `_layout` (LAYOUT_KEY). Both are read.
+ */
+export function layoutOf( row: unknown ): string {
+	if ( ! row || typeof row !== 'object' ) {
+		return '';
+	}
+	const r = row as Record< string, unknown >;
+	const name = typeof r.layout === 'string' && r.layout !== '' ? r.layout : r[ LAYOUT_KEY ];
 	return typeof name === 'string' ? name : '';
 }
 

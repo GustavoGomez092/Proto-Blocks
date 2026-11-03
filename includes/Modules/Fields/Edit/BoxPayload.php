@@ -33,8 +33,12 @@ use ProtoBlocks\Security\AttributeSanitizer;
  *             'agenda.0.photo'): image {id,url,alt}; file {id,url,title,filename};
  *             video {id,url}; gallery [{id,url,alt}]; relationship
  *             [{id,title,type,status}] (only posts the user may read);
- *             taxonomy {terms: [{id,name,parent}]} (every choosable term;
- *             the selection is in values). Strings are raw (React escapes).
+ *             taxonomy {terms: [{id,name,parent}]} at a top-level path, or
+ *             {terms: '<taxonomy>'} (a reference to the shared
+ *             `terms:<taxonomy>` list) at a nested path; the selection is in
+ *             values. Strings are raw (React escapes). At most
+ *             MAX_TERM_ENTRIES term entries (`display_truncated` says when cut).
+ *             Attachments named by submitted values need `read_post`.
  *             Built after the ErrorStore override, from the final values.
  *   choices   field key => ChoiceResolver::options(), for EVERY optionsSource field
  *             at any depth (the first field of a name is also listed by name)
@@ -48,6 +52,9 @@ final class BoxPayload
     /** Terms listed for a taxonomy field's checkbox list or select. */
     public const MAX_TERMS = 500;
 
+    /** Term entries across every list of one payload. */
+    public const MAX_TERM_ENTRIES = 2000;
+
     private const JSON_FLAGS = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES;
 
     /** @var array<string, array{errors: array<string, string>, submitted: array<string, mixed>}|null> */
@@ -55,6 +62,9 @@ final class BoxPayload
 
     /** @var array<string, list<array{id: int, name: string, parent: int}>> taxonomy => terms */
     private array $terms = [];
+
+    private int $termBudget = self::MAX_TERM_ENTRIES;
+    private bool $truncated = false;
 
     public function __construct(
         private readonly TypeRegistry $types,
@@ -76,6 +86,7 @@ final class BoxPayload
             'fields' => array_map(static fn(Field $f): array => $f->toArray(), $g->fields),
             'values' => [],
             'display' => [],
+            'display_truncated' => false,
             'choices' => [],
             'errors' => [],
             'readOnly' => [],
@@ -104,7 +115,7 @@ final class BoxPayload
         if ($entry !== null) {
             return $this->withErrors($payload, $g, $entry['errors'], $entry['submitted']); // display built there, from the final values
         }
-        $payload['display'] = $this->displayFor($g, $payload['values']);
+        $this->displayFor($g, $payload, []);
 
         return $payload;
     }
@@ -127,6 +138,7 @@ final class BoxPayload
                 $names[$f->name] = $f;
             }
         }
+        $fromRequest = [];
         foreach ($errors as $path => $message) {
             $top = explode('.', (string) $path, 2)[0];
             if (!isset($names[$top])) {
@@ -135,9 +147,10 @@ final class BoxPayload
             $payload['errors'][(string) $path] = (string) $message;
             if (array_key_exists($top, $submitted) && !isset($payload['readOnly'][$top])) {
                 $payload['values'][$top] = $submitted[$top];
+                $fromRequest[$top] = true;
             }
         }
-        $payload['display'] = $this->displayFor($g, $payload['values']);
+        $this->displayFor($g, $payload, $fromRequest);
 
         return $payload;
     }
@@ -308,27 +321,111 @@ final class BoxPayload
      * walked once from the top so a path always names the field it came
      * from (a nested `photo` image never reads a top-level `photo`).
      *
-     * @param array<string, mixed> $values
-     * @return array<string, mixed>
+     * Term lists: a top-level taxonomy field carries its list inline
+     * (`{terms: [...]}`); any nested one carries a reference
+     * (`{terms: '<taxonomy>'}`) to one shared `terms:<taxonomy>` list, so a
+     * list is never copied into every row. Every nested taxonomy field gets
+     * its shared list even with no row yet (rows added in the browser use
+     * it). At most MAX_TERM_ENTRIES term entries per payload; past that the
+     * lists are cut and `display_truncated` is true.
+     *
+     * Values from the request (a failed save's submitted values, names in
+     * $fromRequest) resolve an attachment only when the user may
+     * `read_post` it: otherwise anyone could submit an id and read back the
+     * URL and title of a private file. Stored values resolve as before.
+     *
+     * @param array<string, mixed> $payload
+     * @param array<string, true> $fromRequest
      */
-    private function displayFor(FieldGroup $g, array $values): array
+    private function displayFor(FieldGroup $g, array &$payload, array $fromRequest): void
     {
+        $this->termBudget = self::MAX_TERM_ENTRIES;
+        $this->truncated = false;
         $out = [];
+        $values = is_array($payload['values'] ?? null) ? $payload['values'] : [];
         foreach ($g->fields as $f) {
             if ($f->name !== '' && array_key_exists($f->name, $values)) {
-                $this->display($f, $values[$f->name], $f->name, $out);
+                $this->display($f, $values[$f->name], $f->name, $out, isset($fromRequest[$f->name]));
             }
         }
+        foreach ($g->fields as $f) {
+            $this->sharedTerms($f->subFields, $out);
+            foreach ($f->layouts as $layout) {
+                $this->sharedTerms($layout['subFields'] ?? [], $out);
+            }
+        }
+        $payload['display'] = $out;
+        $payload['display_truncated'] = $this->truncated;
+    }
 
-        return $out;
+    /**
+     * Shared lists for nested taxonomy fields at any depth.
+     *
+     * @param list<Field> $fields
+     * @param array<string, mixed> $out
+     */
+    private function sharedTerms(array $fields, array &$out): void
+    {
+        foreach ($fields as $f) {
+            if (!$f instanceof Field) {
+                continue;
+            }
+            if ($f->type === 'taxonomy') {
+                $this->shareTerms($f, $out);
+            }
+            $this->sharedTerms($f->subFields, $out);
+            foreach ($f->layouts as $layout) {
+                $this->sharedTerms($layout['subFields'] ?? [], $out);
+            }
+        }
+    }
+
+    /**
+     * Adds `terms:<taxonomy>` once; returns the taxonomy ('' for none).
+     *
+     * @param array<string, mixed> $out
+     */
+    private function shareTerms(Field $f, array &$out): string
+    {
+        $taxonomy = $f->setting('taxonomy');
+        if (!is_string($taxonomy) || $taxonomy === '') {
+            return '';
+        }
+        if (!array_key_exists('terms:' . $taxonomy, $out)) {
+            $out['terms:' . $taxonomy] = $this->budgeted($this->terms($f));
+        }
+
+        return $taxonomy;
+    }
+
+    /**
+     * @param list<array{id: int, name: string, parent: int}> $terms
+     * @return list<array{id: int, name: string, parent: int}>
+     */
+    private function budgeted(array $terms): array
+    {
+        if (count($terms) > $this->termBudget) {
+            $terms = array_slice($terms, 0, max(0, $this->termBudget));
+            $this->truncated = true;
+        }
+        $this->termBudget -= count($terms);
+
+        return $terms;
+    }
+
+    /** The user may read the attachment (for ids that came from the request). */
+    private static function readable(int $id, bool $fromRequest): bool
+    {
+        return $id > 0 && (!$fromRequest || current_user_can('read_post', $id));
     }
 
     /** @param array<string, mixed> $out */
-    private function display(Field $f, mixed $value, string $path, array &$out): void
+    private function display(Field $f, mixed $value, string $path, array &$out, bool $fromRequest = false): void
     {
         switch ($f->type) {
             case 'image':
-                $image = self::image(ImageType::id($value));
+                $id = ImageType::id($value);
+                $image = self::readable($id, $fromRequest) ? self::image($id) : null;
                 if ($image !== null) {
                     $out[$path] = $image;
                 }
@@ -336,7 +433,7 @@ final class BoxPayload
             case 'gallery':
                 $items = [];
                 foreach (ImageType::ids($value, 0) as $id) {
-                    $image = self::image($id);
+                    $image = self::readable($id, $fromRequest) ? self::image($id) : null;
                     if ($image !== null) {
                         $items[] = $image;
                     }
@@ -346,7 +443,7 @@ final class BoxPayload
             case 'file':
             case 'video':
                 $id = ImageType::id($value);
-                $url = $id > 0 ? wp_get_attachment_url($id) : false;
+                $url = self::readable($id, $fromRequest) ? wp_get_attachment_url($id) : false;
                 if (is_string($url) && $url !== '') {
                     $item = ['id' => $id, 'url' => $url];
                     if ($f->type === 'file') {
@@ -361,13 +458,18 @@ final class BoxPayload
                 $out[$path] = self::posts($f, $value);
                 return;
             case 'taxonomy':
-                $out[$path] = ['terms' => $this->terms($f)];
+                if (!str_contains($path, '.')) {
+                    $out[$path] = ['terms' => $this->budgeted($this->terms($f))];
+                } else {
+                    $taxonomy = $this->shareTerms($f, $out);
+                    $out[$path] = ['terms' => $taxonomy];
+                }
                 return;
             case 'group':
                 $value = is_array($value) ? $value : [];
                 foreach ($f->subFields as $sub) {
                     if ($sub->name !== '') {
-                        $this->display($sub, $value[$sub->name] ?? null, $path . '.' . $sub->name, $out);
+                        $this->display($sub, $value[$sub->name] ?? null, $path . '.' . $sub->name, $out, $fromRequest);
                     }
                 }
                 return;
@@ -387,7 +489,7 @@ final class BoxPayload
                     $subs = $f->type === 'repeater' ? $f->subFields : ($layouts[(string) ($row['layout'] ?? $row['_layout'] ?? '')] ?? []);
                     foreach ($subs as $sub) {
                         if ($sub instanceof Field && $sub->name !== '') {
-                            $this->display($sub, $row[$sub->name] ?? null, $path . '.' . $i . '.' . $sub->name, $out);
+                            $this->display($sub, $row[$sub->name] ?? null, $path . '.' . $i . '.' . $sub->name, $out, $fromRequest);
                         }
                     }
                 }

@@ -283,11 +283,25 @@ final class MetaBoxesTest extends FieldsTestCase
     public function testTermFormsHookOnlyTargetedTaxonomies(): void
     {
         $this->termGroup();
+        $GLOBALS['pb_test_taxonomies']['post_tag'] = (object) ['name' => 'post_tag'];
+
+        $_GET = ['taxonomy' => 'post_tag'];
         $forms = $this->termForms();
         $forms->register();
+        $this->assertSame([], $GLOBALS['pb_test_hooks'], 'no group targets post_tag');
+
+        $_GET = ['taxonomy' => 'nope'];
+        $forms->register();
+        $this->assertSame([], $GLOBALS['pb_test_hooks'], 'unknown taxonomy');
+
+        $_GET = ['taxonomy' => 'category'];
+        $forms->register();
+        $forms->register();
         $this->assertSame(10, has_action('category_add_form_fields', [$forms, 'renderAdd']));
+        $this->assertCount(1, $GLOBALS['pb_test_hooks']['category_add_form_fields']);
         $this->assertSame(2, $GLOBALS['pb_test_hooks']['category_edit_form_fields'][0]['args']);
-        $this->assertFalse(has_action('event_add_form_fields'));
+        $this->assertFalse(has_action('post_tag_add_form_fields'));
+        $_GET = [];
     }
 
     public function testProfileFormShowsOnlyThatUsersValues(): void

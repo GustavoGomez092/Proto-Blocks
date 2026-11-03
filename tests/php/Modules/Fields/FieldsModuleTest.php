@@ -301,11 +301,14 @@ final class FieldsModuleTest extends FieldsTestCase
         $this->assertSame(10, has_action('register_form', [$module->userForms(), 'renderRegister']));
         $this->assertFalse(has_action('category_add_form_fields'), 'term forms wait for the term screen (boot() reads no group)');
 
+        $GLOBALS['pb_test_taxonomies']['category'] = (object) ['name' => 'category'];
+        $_GET = ['taxonomy' => 'category'];
         foreach (self::hooks('load-edit-tags.php') as $hook) {
             ($hook['callback'])();
         }
         $this->assertSame(10, has_action('category_add_form_fields', [$module->termForms(), 'renderAdd']));
         $this->assertSame(10, has_action('category_edit_form_fields', [$module->termForms(), 'renderEdit']));
         $this->assertFalse(has_action('post_tag_add_form_fields'));
+        $_GET = [];
     }
 }

@@ -1,6 +1,8 @@
 import { createElement } from 'react';
 import { act, render, screen } from '@testing-library/react';
 import { byField, FieldsForm } from '../box/FieldsForm';
+import { layoutOf } from '../box/inputs/FlexibleInput';
+import { termList } from '../box/inputs/TaxonomyInput';
 import { errorsUrl, mountedForms, registerForm, subscribeToMetaBoxSave, subscribeToTermAdd, type FormHandle } from '../box/editor-save';
 
 function fakeStore() {
@@ -186,4 +188,54 @@ test( 'payload maps are read by field key, then by name', () => {
 	expect( byField( { agenda: 9 }, f ) ).toBe( 9 );
 	expect( byField( {}, f ) ).toBeUndefined();
 	expect( byField( undefined, f ) ).toBeUndefined();
+} );
+
+const taxField = ( name: string, taxonomy: string ) => ( {
+	...textField( name ), type: 'taxonomy' as const, declaredType: 'taxonomy', settings: { taxonomy, field_type: 'checkbox' },
+} );
+
+test( 'term lists: inline at a top-level path, a shared reference in rows, the shared list for a new row', () => {
+	const list = [ { id: 1, name: 'Jazz', parent: 0 } ];
+	const display = { top: { terms: list }, 'terms:genre': list, 'rows.0.genre': { terms: 'genre' } };
+	const f = taxField( 'genre', 'genre' );
+	expect( termList( f, display.top, display ) ).toEqual( { terms: list } );
+	expect( termList( f, display[ 'rows.0.genre' ], display ) ).toBe( list );
+	expect( termList( f, undefined, display ) ).toBe( list );
+	expect( termList( taxField( 'mood', 'mood' ), { terms: 'mood' }, display ) ).toBeUndefined();
+} );
+
+test( 'a row sub-field renders the terms its shared reference names', () => {
+	const rows = {
+		...textField( 'rows' ), type: 'repeater' as const, declaredType: 'repeater', subFields: [ taxField( 'genre', 'genre' ) ],
+	};
+	const payload = {
+		groupKey: 'group_t', fields: [ rows ], values: { rows: [ { genre: [ 2 ] } ] },
+		display: { 'terms:genre': [ { id: 1, name: 'Jazz', parent: 0 }, { id: 2, name: 'Rock', parent: 0 } ], 'rows.0.genre': { terms: 'genre' } },
+		choices: {}, errors: {}, canUnfiltered: true, maxRows: {}, restRoot: '/wp-json/', restNonce: 'n', object: 'post:10',
+	};
+	const { unmount } = render( createElement( 'form', null, createElement( FieldsForm, { payload } ) ) );
+	expect( ( screen.getByRole( 'checkbox', { name: 'Rock' } ) as HTMLInputElement ).checked ).toBe( true );
+	expect( ( screen.getByRole( 'checkbox', { name: 'Jazz' } ) as HTMLInputElement ).checked ).toBe( false );
+	unmount();
+} );
+
+test( 'flexible rows read their layout from `layout` (stored, or sent back after a failed save) and `_layout`', () => {
+	expect( layoutOf( { layout: 'quote', cite: 'x' } ) ).toBe( 'quote' );
+	expect( layoutOf( { _layout: 'quote' } ) ).toBe( 'quote' );
+	expect( layoutOf( { layout: '', _layout: 'text_block' } ) ).toBe( 'text_block' );
+	expect( layoutOf( null ) ).toBe( '' );
+
+	const quote = {
+		...textField( 'sections' ), type: 'flexible_content' as const, declaredType: 'flexible_content',
+		layouts: [ { key: 'l_q', name: 'quote', label: 'Quote', subFields: [ textField( 'cite' ) ] } ],
+	};
+	const payload = {
+		groupKey: 'group_f', fields: [ quote ], values: { sections: [ { layout: 'quote', cite: 'Ada' } ] }, display: {},
+		choices: {}, errors: { 'sections.0.cite': 'Too short.' }, canUnfiltered: true, maxRows: {}, restRoot: '/wp-json/', restNonce: 'n', object: 'post:10',
+	};
+	const { container, unmount } = render( createElement( 'form', null, createElement( FieldsForm, { payload } ) ) );
+	const data = new FormData( container.querySelector( 'form' ) as HTMLFormElement );
+	expect( data.get( 'proto_fields[group_f][sections][0][_layout]' ) ).toBe( 'quote' );
+	expect( data.get( 'proto_fields[group_f][sections][0][cite]' ) ).toBe( 'Ada' );
+	unmount();
 } );

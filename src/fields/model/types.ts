@@ -101,12 +101,15 @@ export type BoxPayload = {
 	/**
 	 * Pre-resolved data keyed by dotted value path ('hero', 'agenda.0.photo'):
 	 * image {id,url,alt}; file {id,url,title,filename}; video {id,url};
-	 * gallery [{id,url,alt}]; relationship [{id,title,type,status}]; and per
-	 * taxonomy field 'terms:<field key>' => [{id,name,parent}].
+	 * gallery [{id,url,alt}]; relationship [{id,title,type,status}];
+	 * taxonomy {terms: [{id,name,parent}]} at a top-level path, or
+	 * {terms: '<taxonomy>'} referencing the shared 'terms:<taxonomy>' list.
 	 */
 	display: Record<string, unknown>;
 	/** optionsSource choices, by field name. */
 	choices: Record<string, { key: string; label: string }[]>;
+	/** True when the term lists were cut to the per-payload cap. */
+	display_truncated?: boolean;
 	errors: Record<string, string>;
 	canUnfiltered: boolean;
 	/** Top-level fields this user may not edit, with the reason; their values are not sent. */

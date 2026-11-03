@@ -20,6 +20,7 @@ use ProtoBlocks\Modules\Fields\Types\TypeRegistry;
 
 require_once __DIR__ . '/wp-stubs.php';
 require_once __DIR__ . '/stubs/Structured.php';
+require_once __DIR__ . '/stubs/Box.php';
 require_once __DIR__ . '/../../ContentModel/stubs/hooks.php';
 
 final class BoxPayloadTest extends FieldsTestCase
@@ -227,6 +228,7 @@ final class BoxPayloadTest extends FieldsTestCase
         $GLOBALS['pb_test_meta']['post'][10]['hero'] = [30];
         $store = new ErrorStore();
         $store->put(ObjectRef::post(10), self::AUTHOR, ['hero' => 'Choose an image.'], ['hero' => 31]);
+        $GLOBALS['pb_test_caps'][self::AUTHOR][] = 'read_post'; // may read attachment 31
 
         $p = $this->payload(null, $store)->build($this->event(), ObjectRef::post(10), self::AUTHOR);
         $this->assertSame(31, $p['values']['hero']);
@@ -237,7 +239,8 @@ final class BoxPayloadTest extends FieldsTestCase
     {
         $p = $this->payload()->build($this->event(), ObjectRef::post(10), self::AUTHOR);
         $this->assertArrayHasKey('topics', $p['display']);
-        $this->assertSame(['terms' => []], $p['display']['topics'], 'no get_terms() in the stubs: an empty list, at the path TaxonomyInput reads');
+        $this->assertSame(['terms' => []], $p['display']['topics'], 'no terms listed: an empty inline list, at the path TaxonomyInput reads');
+        $this->assertFalse($p['display_truncated']);
     }
 
     public function testMaxRowsAreKeyedByFieldKey(): void
@@ -247,5 +250,62 @@ final class BoxPayloadTest extends FieldsTestCase
         $this->assertNotNull($agenda);
         $this->assertArrayHasKey($agenda->key, $p['maxRows']);
         $this->assertSame($p['maxRows'][$agenda->key], $p['maxRows']['agenda']);
+    }
+
+    public function testSubmittedAttachmentIdsNeedReadPost(): void
+    {
+        $GLOBALS['pb_test_posts'][31] = ['ID' => 31, 'post_type' => 'attachment', 'post_status' => 'private', 'post_title' => 'Secret scan'];
+        $GLOBALS['pb_test_attachments'][31] = ['url' => 'https://example.test/secret.pdf', 'mime' => 'image/jpeg'];
+        $GLOBALS['pb_test_attachments'][30] = ['url' => 'https://example.test/hero.jpg', 'mime' => 'image/jpeg'];
+        $GLOBALS['pb_test_meta']['post'][10]['photos'] = [[30]];
+        $store = new ErrorStore();
+        $store->put(ObjectRef::post(10), self::AUTHOR, ['hero' => 'Choose an image.', 'agenda.0.title' => 'Required.'], ['hero' => 31, 'agenda' => [['title' => '', 'notes' => '']]]);
+
+        $p = $this->payload(null, $store)->build($this->event(), ObjectRef::post(10), self::AUTHOR);
+        $this->assertSame(31, $p['values']['hero'], 'the submitted value is kept as the input value');
+        $this->assertArrayNotHasKey('hero', $p['display'], 'no URL or title for an attachment the user cannot read');
+        $this->assertStringNotContainsString('secret', BoxPayload::json($p));
+        $this->assertSame('https://example.test/hero.jpg', $p['display']['photos'][0]['url'], 'stored values resolve as before');
+    }
+
+    public function testNestedTaxonomyFieldsShareOneTermList(): void
+    {
+        $g = $this->addGroup(['key' => 'group_tax', 'title' => 'Tax', 'fields' => [
+            ['key' => 'f_top', 'name' => 'top', 'type' => 'taxonomy', 'taxonomy' => 'genre'],
+            ['key' => 'f_rows', 'name' => 'rows', 'type' => 'repeater', 'sub_fields' => [['key' => 'f_row_genre', 'name' => 'genre', 'type' => 'taxonomy', 'taxonomy' => 'genre']]],
+            ['key' => 'f_empty', 'name' => 'empty', 'type' => 'repeater', 'sub_fields' => [['key' => 'f_mood', 'name' => 'mood', 'type' => 'taxonomy', 'taxonomy' => 'mood']]],
+        ]]);
+        $GLOBALS['pb_test_term_lists']['genre'] = [['term_id' => 1, 'name' => 'Jazz & Blues', 'parent' => 0], ['term_id' => 2, 'name' => 'Rock', 'parent' => 0]];
+        $GLOBALS['pb_test_term_lists']['mood'] = [['term_id' => 9, 'name' => 'Calm', 'parent' => 0]];
+        $GLOBALS['pb_test_meta']['post'][10]['rows'] = [[['genre' => [1]], ['genre' => [2]], ['genre' => []]]];
+
+        $p = $this->payload()->build($g, ObjectRef::post(10), self::AUTHOR);
+        $list = [['id' => 1, 'name' => 'Jazz & Blues', 'parent' => 0], ['id' => 2, 'name' => 'Rock', 'parent' => 0]];
+        $this->assertSame(['terms' => $list], $p['display']['top'], 'top-level: inline list');
+        $this->assertSame($list, $p['display']['terms:genre'], 'one shared list');
+        foreach ([0, 1, 2] as $i) {
+            $this->assertSame(['terms' => 'genre'], $p['display']["rows.$i.genre"], 'rows: a reference');
+        }
+        $this->assertSame([['id' => 9, 'name' => 'Calm', 'parent' => 0]], $p['display']['terms:mood'], 'a nested field with no row yet still gets its list');
+        $this->assertSame(2, substr_count(BoxPayload::json($p), 'Rock'), 'inline once, shared once; never per row');
+    }
+
+    public function testTermEntriesAreCappedPerPayload(): void
+    {
+        $fields = [];
+        foreach (range(1, 5) as $n) {
+            $fields[] = ['key' => "f_t$n", 'name' => "t$n", 'type' => 'taxonomy', 'taxonomy' => "tax$n"];
+            $GLOBALS['pb_test_term_lists']["tax$n"] = array_map(static fn(int $i): array => ['term_id' => $i, 'name' => "T$i", 'parent' => 0], range(1, 500));
+        }
+        $g = $this->addGroup(['key' => 'group_many', 'title' => 'Many', 'fields' => $fields]);
+
+        $p = $this->payload()->build($g, ObjectRef::post(10), self::AUTHOR);
+        $total = 0;
+        foreach (range(1, 5) as $n) {
+            $total += count($p['display']["t$n"]['terms']);
+        }
+        $this->assertSame(BoxPayload::MAX_TERM_ENTRIES, $total);
+        $this->assertSame([], $p['display']['t5']['terms']);
+        $this->assertTrue($p['display_truncated']);
     }
 }
