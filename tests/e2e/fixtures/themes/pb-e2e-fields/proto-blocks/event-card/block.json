@@ -1,0 +1,16 @@
+{
+    "$schema": "https://schemas.wp.org/trunk/block.json",
+    "apiVersion": 3,
+    "name": "proto-blocks/event-card",
+    "title": "Event Card (E2E)",
+    "description": "Prints the subtitle and agenda of the current event.",
+    "category": "proto-blocks",
+    "icon": "calendar",
+    "supports": { "html": false },
+    "protoBlocks": {
+        "version": "1.0",
+        "useTailwind": false,
+        "template": "template.php",
+        "fields": {}
+    }
+}

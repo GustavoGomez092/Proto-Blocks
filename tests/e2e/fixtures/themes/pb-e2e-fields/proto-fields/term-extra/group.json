@@ -1,0 +1,8 @@
+{
+  "key": "group_pb_e2e_term_extra",
+  "title": "Term extra",
+  "location": [[{ "param": "taxonomy", "operator": "==", "value": "category" }]],
+  "fields": [
+    { "key": "field_pb_e2e_term_note", "label": "Term note", "name": "term_note", "type": "text" }
+  ]
+}
