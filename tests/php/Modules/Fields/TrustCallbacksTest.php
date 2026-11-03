@@ -17,13 +17,6 @@ use ProtoBlocks\Modules\Fields\Types\TypeRegistry;
 require_once __DIR__ . '/wp-stubs.php';
 require_once __DIR__ . '/stubs/Structured.php';
 
-if (!defined('ABSPATH')) {
-    define('ABSPATH', __DIR__ . '/');
-}
-if (!function_exists('proto_blocks_sanitize_color')) {
-    require_once __DIR__ . '/../../../../includes/helpers.php';
-}
-
 /**
  * Writes go through the stores and the Fields meta stubs, which follow core's
  * update_metadata() order (subtype, unslash, sanitize_callback, then the

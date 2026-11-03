@@ -16,13 +16,6 @@ use ProtoBlocks\Modules\Fields\Types\TypeRegistry;
 require_once __DIR__ . '/wp-stubs.php';
 require_once __DIR__ . '/stubs/Structured.php';
 
-if (!defined('ABSPATH')) {
-    define('ABSPATH', __DIR__ . '/');
-}
-if (!function_exists('proto_blocks_sanitize_color')) {
-    require_once __DIR__ . '/../../../../includes/helpers.php';
-}
-
 final class MetaRegistrarTest extends TestCase
 {
     private const FIXTURES = __DIR__ . '/../../../fixtures/fields';

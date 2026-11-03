@@ -14,12 +14,6 @@ require_once __DIR__ . '/wp-stubs.php';
 require_once __DIR__ . '/stubs/Structured.php';
 require_once __DIR__ . '/stubs/Read.php';
 
-if (!defined('ABSPATH')) {
-    define('ABSPATH', __DIR__ . '/');
-}
-if (!function_exists('proto_blocks_sanitize_color')) {
-    require_once __DIR__ . '/../../../../includes/helpers.php';
-}
 require_once __DIR__ . '/../../../../includes/Modules/Fields/functions.php';
 
 /**

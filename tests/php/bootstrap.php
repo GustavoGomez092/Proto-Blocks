@@ -687,3 +687,25 @@ if (!class_exists('WP_CLI_Command')) {
     /** Minimal stub so ProtoBlocks\CLI\Commands can be loaded without WP-CLI. */
     class WP_CLI_Command {}
 }
+
+// ------------------------------------------------------------------ notices
+
+if (!function_exists('_doing_it_wrong')) {
+    /** Records [function, message, version] in pb_test_doing_it_wrong[]. */
+    function _doing_it_wrong($fn, $message, $version)
+    {
+        $GLOBALS['pb_test_doing_it_wrong'][] = [$fn, $message, $version];
+    }
+}
+
+// ------------------------------------------------------------------ plugin helpers
+
+// The plugin's global helpers (proto_blocks_sanitize_color(), ...) are real
+// code, not stubs; they are loaded once here so no test needs its own guarded
+// require. helpers.php exits without ABSPATH.
+if (!defined('ABSPATH')) {
+    define('ABSPATH', __DIR__ . '/');
+}
+if (!function_exists('proto_blocks_sanitize_color')) {
+    require_once __DIR__ . '/../../includes/helpers.php';
+}
