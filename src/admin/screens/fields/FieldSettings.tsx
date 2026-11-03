@@ -9,6 +9,7 @@ import { Checkbox } from '@/admin/components/ui/checkbox';
 import { Input } from '@/admin/components/ui/input';
 import { Label } from '@/admin/components/ui/label';
 import { Switch } from '@/admin/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/admin/components/ui/tabs';
 import { compilePattern } from '@/fields/validation/conditions';
 import type { ConditionRule } from '@/fields/model/types';
 import { phpEmpty } from '@/fields/model/normalize';
@@ -388,62 +389,77 @@ export function FieldSettings({ field, siblings, savedName, choices = {}, onChan
 	const typeHelp = canonicalType(type) ? TYPE_META[canonicalType(type)!].help : undefined;
 
 	return (
-		<form className="grid gap-4" onSubmit={(e) => e.preventDefault()} onBlur={() => timer.current && flushRef.current()} noValidate>
-			{specs.map(renderControl)}
-			{typeHelp ? <p className="text-xs text-muted-foreground">{typeHelp}</p> : null}
+		<Tabs defaultValue="settings">
+			<TabsList aria-label={__('Field settings sections', 'proto-blocks')}>
+				<TabsTrigger value="settings">{__('Settings', 'proto-blocks')}</TabsTrigger>
+				<TabsTrigger value="logic">
+					{__('Conditional logic', 'proto-blocks')}
+					{Array.isArray(field.conditional_logic) && field.conditional_logic.length > 0 ? (
+						<span className="rounded-full bg-muted px-1.5 text-xs">{field.conditional_logic.length}</span>
+					) : null}
+				</TabsTrigger>
+			</TabsList>
+			<form className="grid gap-4" onSubmit={(e) => e.preventDefault()} onBlur={() => timer.current && flushRef.current()} noValidate>
+				{/* Mounted while hidden: react-hook-form keeps every registered control. */}
+				<TabsContent value="settings" forceMount className="grid gap-4 data-[state=inactive]:hidden">
+					{specs.map(renderControl)}
+					{typeHelp ? <p className="text-xs text-muted-foreground">{typeHelp}</p> : null}
 
-			{isFlexible(field) && onLayout ? (
-				<fieldset className="grid gap-2">
-					<legend className="mb-1 text-sm font-medium">{__('Layouts', 'proto-blocks')}</legend>
-					{layoutList(field).map((layout, l) => (
-						<div key={String(layout.key ?? l)} className="flex items-end gap-2">
-							<div className="grid flex-1 gap-1">
-								<Label htmlFor={`${idPrefix}-layout-${l}-label`}>{__('Layout label', 'proto-blocks')}</Label>
-								<Input
-									id={`${idPrefix}-layout-${l}-label`}
-									defaultValue={String(layout.label ?? '')}
-									disabled={readOnly}
-									onBlur={(e) => e.target.value !== layout.label && onLayout({ type: 'updateLayout', layout: l, patch: { label: e.target.value } })}
-								/>
-							</div>
-							<div className="grid flex-1 gap-1">
-								<Label htmlFor={`${idPrefix}-layout-${l}-name`}>{__('Layout name', 'proto-blocks')}</Label>
-								<Input
-									id={`${idPrefix}-layout-${l}-name`}
-									className="font-mono"
-									defaultValue={String(layout.name ?? '')}
-									disabled={readOnly}
-									onBlur={(e) => e.target.value !== layout.name && onLayout({ type: 'updateLayout', layout: l, patch: { name: e.target.value } })}
-								/>
-							</div>
-							{readOnly ? null : (
-								<Button
-									type="button"
-									variant="ghost"
-									size="icon"
-									aria-label={sprintf(/* translators: %s: layout label */ __('Remove layout %s', 'proto-blocks'), String(layout.label || layout.name || ''))}
-									onClick={() => onLayout({ type: 'removeLayout', layout: l })}
-								>
-									<XIcon aria-hidden="true" />
-								</Button>
-							)}
-						</div>
-					))}
-				</fieldset>
-			) : null}
-
-			<section className="grid gap-2" aria-labelledby={`${idPrefix}-logic`}>
-				<h3 id={`${idPrefix}-logic`} className="text-sm font-medium">
-					{__('Show only when…', 'proto-blocks')}
-				</h3>
-				<ConditionBuilder
-					fields={conditionScope}
-					selfKey={typeof field.key === 'string' ? field.key : undefined}
-					value={field.conditional_logic}
-					readOnly={readOnly}
-					onChange={(v: ConditionRule[][] | 0) => onChange({ conditional_logic: v })}
-				/>
-			</section>
-		</form>
+					{isFlexible(field) && onLayout ? (
+						<fieldset className="grid gap-2">
+							<legend className="mb-1 text-sm font-medium">{__('Layouts', 'proto-blocks')}</legend>
+							{layoutList(field).map((layout, l) => (
+								<div key={String(layout.key ?? l)} className="flex items-end gap-2">
+									<div className="grid flex-1 gap-1">
+										<Label htmlFor={`${idPrefix}-layout-${l}-label`}>{__('Layout label', 'proto-blocks')}</Label>
+										<Input
+											id={`${idPrefix}-layout-${l}-label`}
+											defaultValue={String(layout.label ?? '')}
+											disabled={readOnly}
+											onBlur={(e) => e.target.value !== layout.label && onLayout({ type: 'updateLayout', layout: l, patch: { label: e.target.value } })}
+										/>
+									</div>
+									<div className="grid flex-1 gap-1">
+										<Label htmlFor={`${idPrefix}-layout-${l}-name`}>{__('Layout name', 'proto-blocks')}</Label>
+										<Input
+											id={`${idPrefix}-layout-${l}-name`}
+											className="font-mono"
+											defaultValue={String(layout.name ?? '')}
+											disabled={readOnly}
+											onBlur={(e) => e.target.value !== layout.name && onLayout({ type: 'updateLayout', layout: l, patch: { name: e.target.value } })}
+										/>
+									</div>
+									{readOnly ? null : (
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon"
+											aria-label={sprintf(/* translators: %s: layout label */ __('Remove layout %s', 'proto-blocks'), String(layout.label || layout.name || ''))}
+											onClick={() => onLayout({ type: 'removeLayout', layout: l })}
+										>
+											<XIcon aria-hidden="true" />
+										</Button>
+									)}
+								</div>
+							))}
+						</fieldset>
+					) : null}
+				</TabsContent>
+				<TabsContent value="logic">
+					<section className="grid gap-2" aria-labelledby={`${idPrefix}-logic`}>
+						<h3 id={`${idPrefix}-logic`} className="text-sm font-medium">
+							{__('Show this field if', 'proto-blocks')}
+						</h3>
+						<ConditionBuilder
+							fields={conditionScope}
+							selfKey={typeof field.key === 'string' ? field.key : undefined}
+							value={field.conditional_logic}
+							readOnly={readOnly}
+							onChange={(v: ConditionRule[][] | 0) => onChange({ conditional_logic: v })}
+						/>
+					</section>
+				</TabsContent>
+			</form>
+		</Tabs>
 	);
 }
