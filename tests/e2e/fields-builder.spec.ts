@@ -393,6 +393,11 @@ test.describe( 'Field-group builder', () => {
 			// The box on a new post: that order, Company hidden until a photo is chosen.
 			await admin.createNewPost();
 			const box = page.locator( `#proto-fields-${ group.key }` );
+			// The block editor collapses its meta boxes panel by default.
+			const metaToggle = page.getByRole( 'button', { name: 'Meta Boxes' } );
+			if ( ( await metaToggle.getAttribute( 'aria-expanded' ) ) === 'false' ) {
+				await metaToggle.dispatchEvent( 'click' );
+			}
 			await expect( box ).toBeVisible();
 			const photo = box.getByText( 'Photo', { exact: true } ).first();
 			const links = box.getByText( 'Links', { exact: true } ).first();

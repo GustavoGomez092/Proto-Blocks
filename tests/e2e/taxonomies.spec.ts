@@ -22,7 +22,7 @@ const EDITOR = {
  */
 function row( page: Page, name: string ) {
 	return page.getByRole( 'row' ).filter( {
-		has: page.getByRole( 'cell', { name, exact: true } ),
+		has: page.getByRole( 'cell', { name: new RegExp( `^${ name }( |$)` ) } ),
 	} );
 }
 
