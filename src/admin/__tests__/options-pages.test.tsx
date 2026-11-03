@@ -88,7 +88,7 @@ function index(overrides: Partial<OptionsIndex> = {}): OptionsIndex {
 		moduleEnabled: true,
 		createTarget: { path: 'wp-content/themes/demo/proto-options', writable: true, reason: null },
 		pages: [row(), phpRow],
-		external: [{ slug: 'wc-settings', title: 'WooCommerce Settings', parent: 'woocommerce', origin: 'plugin', originLabel: 'woocommerce' }],
+		external: [{ slug: 'wc-settings', title: 'WooCommerce Settings', parent: 'woocommerce', origin: 'plugin', originLabel: 'Plugin: woocommerce' }],
 		warnings: [],
 		...overrides,
 	};
@@ -166,6 +166,7 @@ describe('list', () => {
 		const external = screen.getByRole('region', { name: 'Other settings pages' });
 		expect(within(external).getByText('WooCommerce Settings')).toBeTruthy();
 		expect(within(external).getByText('Plugin: woocommerce')).toBeTruthy();
+		expect(within(external).queryByText(/Plugin: Plugin:/)).toBeNull();
 		expect(within(external).queryByRole('button')).toBeNull();
 		expect(within(table).queryByText('WooCommerce Settings')).toBeNull();
 		expect(calls()[0].url).toBe('admin/options-pages');

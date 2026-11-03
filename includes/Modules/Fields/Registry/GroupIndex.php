@@ -28,6 +28,9 @@ final class GroupIndex
     /** @var (\Closure(): (list<FieldGroup>|null))|null */
     private ?\Closure $loader = null;
 
+    /** @var (\Closure(): (list<FieldGroup>|null))|null the loader, kept for reload() */
+    private ?\Closure $source = null;
+
     /** @var array<string, list<FieldGroup>> */
     private array $memo = [];
 
@@ -38,7 +41,7 @@ final class GroupIndex
     public function __construct(array|\Closure $groups)
     {
         if ($groups instanceof \Closure) {
-            $this->loader = $groups;
+            $this->loader = $this->source = $groups;
         } else {
             $this->groups = self::sorted($groups);
         }
@@ -48,6 +51,21 @@ final class GroupIndex
     public function all(): array
     {
         return $this->groups();
+    }
+
+    /**
+     * Load again on next use (a loader-built index only): a source changed
+     * after the groups were loaded, e.g. a settings page declared late.
+     */
+    public function reload(): void
+    {
+        if ($this->source === null) {
+            return;
+        }
+        $this->loader = $this->source;
+        $this->groups = null;
+        $this->memo = [];
+        $this->ruleTaxonomies = null;
     }
 
     /** Whether the groups are loaded (always true for an index built from a list). */

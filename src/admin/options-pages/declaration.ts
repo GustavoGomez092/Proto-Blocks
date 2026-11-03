@@ -20,8 +20,8 @@ export interface OptionsPageForm {
 
 /** The capability grammar of the schema and PageDefinition. */
 export const CAPABILITY_PATTERN = /^[a-z][a-z0-9_]*$/;
-/** An array storage option name (schema `optionsStorage`). */
-export const OPTION_PATTERN = /^[a-z0-9_]{1,191}$/;
+/** An array storage option name (schema `optionsStorage`, PageDefinition::OPTION_RE and OPTION_MAX 191): legacy options may use uppercase letters and hyphens. */
+export const OPTION_PATTERN = /^[A-Za-z0-9_-]{1,191}$/;
 /** A child page's slug part (schema `children[].slug`). */
 export const CHILD_SLUG_PATTERN = /^[a-z][a-z0-9-]*$/;
 /** A page slug (schema `slug`, OptionsPagesRoutes::SLUG_RE). */

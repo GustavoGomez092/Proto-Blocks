@@ -30,10 +30,11 @@ use ProtoBlocks\Security\AttributeSanitizer;
  * another. A field whose option name is protected is never read or written,
  * even when a filter protected it after the page loaded.
  *
- * Password fields follow Phase 2: read() returns the stored value raw to
- * anyone who holds the page capability, and an untrusted writer's password
- * is sanitised like text (Tasks 7/9: render it as a password input and do
- * not echo it anywhere else).
+ * Code and password fields follow Phase 2's trust rule: for a user without
+ * `unfiltered_html` they are read-only (save() refuses them with a reason)
+ * and hidden: the page payload and the REST responses mask the value, and
+ * the form shows the label and a lock only. Users with `unfiltered_html`
+ * and the page capability read and write them as stored.
  */
 final class OptionsValues
 {

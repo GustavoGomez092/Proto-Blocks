@@ -8,9 +8,13 @@ namespace ProtoBlocks\ContentModel;
  * Collects proto_post_type() / proto_taxonomy() / proto_options_page() calls made by the theme.
  *
  * Declarations are accepted until their kind is sealed: post types and
- * taxonomies when post types register (`init` priority 9), options pages when
- * their menus are built (`admin_menu` priority 10). A later call is ignored
- * with a `declared_too_late` warning.
+ * taxonomies when post types register (`init` priority 9), options pages at
+ * `wp_loaded` (priority 5) on REST, front-end and other non-admin requests
+ * and at `admin_menu` (priority 10) in the admin. Declare options pages in
+ * functions.php (any time before `wp_loaded`): a call inside `admin_menu`
+ * still reaches the menu, but such a page is not available to REST saves or
+ * proto_field() on other requests. A later call is ignored with a
+ * `declared_too_late` warning.
  */
 final class PhpDeclarations
 {
@@ -42,7 +46,7 @@ final class PhpDeclarations
                 $kind === Declaration::OPTIONS
                     ? sprintf(
                         /* translators: 1: declared page title, 2: call site */
-                        __('"%1$s" was declared at %2$s after the settings pages were added to the admin menu and was ignored. Declare it before the admin_menu action (priority 9 at the latest), for example in functions.php.', 'proto-blocks'),
+                        __('"%1$s" was declared at %2$s after the settings pages were registered (wp_loaded, or admin_menu in the admin) and was ignored. Declare it in functions.php, any time before the wp_loaded action.', 'proto-blocks'),
                         $name,
                         $source
                     )
@@ -117,7 +121,7 @@ final class PhpDeclarations
 
     /**
      * Stop accepting declarations of $kind; without one, post types and
-     * taxonomies (options pages stay open until `admin_menu`).
+     * taxonomies (options pages stay open until `wp_loaded` or `admin_menu`).
      */
     public static function seal(?string $kind = null): void
     {

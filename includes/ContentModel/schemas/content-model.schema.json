@@ -129,7 +129,7 @@
           "type": "object",
           "properties": {
             "mode": { "type": "string", "enum": ["array"] },
-            "option": { "type": "string", "pattern": "^[a-z0-9_]{1,191}$" }
+            "option": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,191}$" }
           },
           "required": ["mode", "option"]
         },

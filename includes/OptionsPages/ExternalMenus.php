@@ -65,6 +65,11 @@ final class ExternalMenus
         if ($page !== self::SCREEN) {
             return;
         }
+        // admin_menu runs before WordPress checks page access: a narrower
+        // user's menu must not replace the cached one.
+        if (!function_exists('current_user_can') || !current_user_can('manage_options')) {
+            return;
+        }
 
         $menu = $GLOBALS['menu'] ?? [];
         $submenu = $GLOBALS['submenu'] ?? [];

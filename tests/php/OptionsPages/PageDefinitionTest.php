@@ -96,6 +96,13 @@ final class PageDefinitionTest extends TestCase
         self::assertSame('My Page', $p->menuTitle);
     }
 
+    public function testMenuTitleAcceptsTheWordPressSpelling(): void
+    {
+        self::assertSame('Short', PageDefinition::fromArray('p', ['title' => 'Long Title', 'menu_title' => 'Short'], 'php')->menuTitle);
+        self::assertSame('Camel', PageDefinition::fromArray('p', ['title' => 'T', 'menu_title' => 'Snake', 'menuTitle' => 'Camel'], 'php')->menuTitle);
+        $this->assertInvalid(fn() => PageDefinition::fromArray('p', ['title' => 'T', 'menu_title' => ''], 'php'));
+    }
+
     public function testSlugFromTitle(): void
     {
         self::assertSame('theme-settings', PageDefinition::slugFromTitle('Theme Settings'));
@@ -256,6 +263,20 @@ final class PageDefinitionTest extends TestCase
             self::assertTrue(ProtectedOptions::isProtected($opt), $opt);
         }
         self::assertFalse(ProtectedOptions::isProtected('cadco_display_settings'));
+    }
+
+    public function testCoreNamesMissingFromTheFirstListAreProtected(): void
+    {
+        $names = ['require_name_email', 'comment_previously_approved', 'comment_order', 'default_comments_page',
+            'close_comments_for_old_posts', 'close_comments_days_old', 'show_comments_cookies_opt_in', 'avatar_rating',
+            'default_email_category', 'default_link_category', 'recovery_keys', 'admin_email_lifespan',
+            'wp_page_for_privacy_policy', 'site_logo', 'html_type', 'can_compress_scripts',
+            'auto_plugin_theme_update_emails', 'finished_splitting_shared_terms'];
+        foreach ($names as $opt) {
+            self::assertTrue(ProtectedOptions::isProtected($opt), $opt);
+        }
+        // page `recovery` + field `keys` would write recovery_keys
+        $this->assertInvalid(fn() => PageDefinition::fromArray('recovery', ['title' => 'R', 'fields' => [['name' => 'keys', 'type' => 'text']]], 'php'));
     }
 
     public function testUnderivableTitleWarnsAndRecordsNothing(): void

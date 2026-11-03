@@ -143,7 +143,7 @@ final class OptionsCommand
         }
 
         $registry->refresh();
-        WP_CLI::success('Created ' . $written['path']);
+        WP_CLI::success('Created ' . self::relative($written['path']));
     }
 
     /**

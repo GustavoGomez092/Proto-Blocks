@@ -31,8 +31,12 @@ use ProtoBlocks\OptionsPages\PageRenderer;
  * - `proto_blocks_declaration_errors` 10: the options-page checks the writer
  *   and `wp proto-blocks validate` run (protected option names, reserved
  *   child slugs, a `shared_storage` warning).
- * - `admin_menu` 10: seal proto_options_page() (declarations are accepted
- *   until then, so a call on `admin_menu` priority 9 still counts).
+ * - `wp_loaded` 5: pick up proto_options_page() calls made after the
+ *   registry was built at `init` 9, on every request type (REST saves and
+ *   proto_field() need them). Outside the admin this also seals the kind.
+ * - `admin_menu` 10: seal proto_options_page() on admin requests (a call on
+ *   `admin_menu` priority 9 still reaches the menu, but not REST saves or
+ *   proto_field() on other requests).
  * - `admin_menu` 20: register the menus; each page renders the React
  *   `options-page` screen, gated on the page's own capability.
  * - `proto_blocks_admin_app_hooks`: the pages' hook suffixes, so the admin
@@ -80,6 +84,7 @@ final class OptionsPages implements ModuleInterface
         $this->booted = true;
 
         add_filter('proto_blocks_declaration_errors', [$this, 'declarationErrors'], 10, 4);
+        add_action('wp_loaded', [$this, 'loaded'], 5);
         add_action('admin_menu', [$this, 'seal'], 10);
         add_action('admin_menu', [$this, 'registerMenus'], 20);
         add_filter('proto_blocks_admin_app_hooks', [$this, 'appHooks']);
@@ -154,8 +159,31 @@ final class OptionsPages implements ModuleInterface
     public function seal(): void
     {
         if (Manager::sealDeclarations($this->declarations, Declaration::OPTIONS)) {
-            $this->pages->refresh();
+            $this->refreshPages();
         }
+    }
+
+    /** The pages, and the Fields index that bridges them to proto_field(). */
+    private function refreshPages(): void
+    {
+        $this->pages->refresh();
+        $this->manager->fields()?->index()->reload();
+    }
+
+    /**
+     * Hooked to `wp_loaded` 5: the registry reflects every page declared so
+     * far. Admin requests stay open until `admin_menu` 10; other requests
+     * (REST, front end, cron) are sealed here.
+     */
+    public function loaded(): void
+    {
+        if (function_exists('is_admin') && is_admin()) {
+            if (Manager::refreshDeclarations($this->declarations)) {
+                $this->refreshPages();
+            }
+            return;
+        }
+        $this->seal();
     }
 
     /** Hooked to `admin_menu` 20. */
@@ -343,7 +371,7 @@ final class OptionsPages implements ModuleInterface
                     'path' => '/storage',
                     'message' => sprintf(
                         /* translators: 1: page slug, 2: option name, 3: other page slug */
-                        __('The page "%1$s" stores values in the option "%2$s", which the page "%3$s" also uses. Saving one page overwrites the other; give each page its own option.', 'proto-blocks'),
+                        __('The page "%1$s" stores values in the option "%2$s", which the page "%3$s" also uses. Saving one page may overwrite fields of the same name on the other; give each page its own option.', 'proto-blocks'),
                         $own->slug,
                         $name,
                         $owner

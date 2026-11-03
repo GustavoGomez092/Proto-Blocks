@@ -44,6 +44,9 @@ final class Guardrails
      */
     public function checkSave(string $kind, string $slug, ?array $before, array $after): array
     {
+        if ($kind === Declaration::OPTIONS) {
+            return []; // a settings page holds no posts or terms
+        }
         $isType = $kind === Declaration::TYPE;
         $registered = $isType ? $this->registeredSupports($slug) : null;
         if ($before === null) {
@@ -132,6 +135,9 @@ final class Guardrails
      */
     public function contentFor(string $kind, string $slug, ?array $data): array
     {
+        if ($kind === Declaration::OPTIONS) {
+            return ['count' => 0, 'taxonomies' => []];
+        }
         if ($kind !== Declaration::TYPE) {
             return ['count' => $this->terms($slug), 'taxonomies' => []];
         }

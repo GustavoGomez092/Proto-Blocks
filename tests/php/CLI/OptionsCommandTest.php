@@ -144,7 +144,7 @@ final class OptionsCommandTest extends TestCase
         $this->assertStringStartsWith($this->root, (string) realpath($file));
         $this->assertSame([], self::files($this->outside));
         $this->assertStringContainsString('"menu": "woocommerce"', (string) file_get_contents($file));
-        $this->assertSame('Created ' . $file, \WP_CLI::messages('success')[0]);
+        $this->assertSame('Created proto-options/shop-notices/page.jsonc', \WP_CLI::messages('success')[0], 'theme-relative, no absolute path');
     }
 
     public function testCreatedPageListsAfterwards(): void

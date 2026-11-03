@@ -87,9 +87,11 @@ final class PageDefinition
             $err('/title', 'A page needs a non-empty "title".');
             $title = '';
         }
-        $menuTitle = $data['menuTitle'] ?? $title;
+        // `menu_title` (WordPress's spelling) is an alias; `menuTitle` wins.
+        $menuTitleKey = !array_key_exists('menuTitle', $data) && array_key_exists('menu_title', $data) ? 'menu_title' : 'menuTitle';
+        $menuTitle = $data[$menuTitleKey] ?? $title;
         if (!is_string($menuTitle) || trim($menuTitle) === '') {
-            $err('/menuTitle', '"menuTitle" must be a non-empty string.');
+            $err('/' . $menuTitleKey, '"' . $menuTitleKey . '" must be a non-empty string.');
             $menuTitle = $title;
         }
 

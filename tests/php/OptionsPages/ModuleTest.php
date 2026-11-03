@@ -303,6 +303,56 @@ final class ModuleTest extends TestCase
         $this->assertNotNull($module->registry()->get('late-page'), 'the registry sees a page declared after init');
     }
 
+    public function testPageDeclaredAfterInitReachesRestAndProtoFieldOutsideTheAdmin(): void
+    {
+        // Let apply_filters() run what is hooked at call time, like WordPress.
+        foreach (['proto_blocks_field_stores', 'proto_blocks_field_groups'] as $hook) {
+            $GLOBALS['pb_test_filters'][$hook][] = static function ($value) use ($hook) {
+                foreach ($GLOBALS['pb_test_hooks'][$hook] ?? [] as $entry) {
+                    $value = ($entry['callback'])($value);
+                }
+                return $value;
+            };
+        }
+        $GLOBALS['pb_test_is_admin'] = false; // a REST or front-end request
+        $manager = $this->manager();
+        $module = $manager->optionsPages();
+        Manager::sealDeclarations($this->registry()); // init 9
+        $this->assertNotNull($module->registry()->get(self::CADCO), 'registry built at init 9');
+        $GLOBALS['pb_test_actions']['init'] = [[]];
+        $this->assertNotSame([], $manager->fields()->index()->all(), 'the Fields index loaded at init 20 (registerMeta)');
+        $this->assertSame(5, $this->priorityOf('wp_loaded', [$module, 'loaded']));
+
+        // init 20: after the registry was built.
+        proto_options_page('Late Notice', [
+            'storage' => ['mode' => 'array', 'option' => 'late_notice'],
+            'fields'  => [['key' => 'field_late_message', 'name' => 'message', 'type' => 'text']],
+        ]);
+        $module->loaded(); // wp_loaded; no admin_menu on this request
+
+        $this->assertNotNull($module->registry()->get('late-notice'));
+        $GLOBALS['pb_test_current_user'] = 1;
+        $GLOBALS['pb_test_caps'][1] = ['manage_options'];
+        $this->assertTrue($this->routes()->permission(new \WP_REST_Request(['slug' => 'late-notice'])), 'the REST save finds the page');
+
+        $GLOBALS['pb_test_options']['late_notice'] = ['message' => 'Closed Monday'];
+        $this->assertSame('Closed Monday', proto_field('message', 'option:late-notice'));
+
+        proto_options_page('After Loaded');
+        $this->assertArrayNotHasKey('after-loaded', PhpDeclarations::all()[Declaration::OPTIONS], 'sealed outside the admin');
+    }
+
+    public function testWpLoadedKeepsAdminRequestsOpenUntilAdminMenu(): void
+    {
+        $module = $this->manager()->optionsPages();
+        Manager::sealDeclarations($this->registry());
+        $module->loaded();
+        proto_options_page('Menu Time');
+        $this->assertArrayHasKey('menu-time', PhpDeclarations::all()[Declaration::OPTIONS]);
+        $module->seal();
+        $this->assertNotNull($module->registry()->get('menu-time'));
+    }
+
     public function testDeclarationErrorsFilter(): void
     {
         $module = $this->manager()->optionsPages();
