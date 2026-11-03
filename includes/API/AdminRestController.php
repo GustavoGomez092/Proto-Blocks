@@ -74,10 +74,18 @@ final class AdminRestController
         return current_user_can('manage_options');
     }
 
-    /** Routes that write files: also blocked by DISALLOW_FILE_MODS / DISALLOW_FILE_EDIT. */
-    public function writePermission(): bool
+    /**
+     * Routes that write files: also blocked by DISALLOW_FILE_MODS /
+     * DISALLOW_FILE_EDIT. A missing capability answers false (core's
+     * rest_forbidden); disabled file mods answer the proto_blocks_file_mods
+     * error, which WordPress passes through to the client as-is.
+     */
+    public function writePermission(): bool|WP_Error
     {
-        return $this->permission() && AdminPage::fileModsAllowed();
+        if (!$this->permission()) {
+            return false;
+        }
+        return AdminPage::fileModsAllowed() ? true : self::fileModsError();
     }
 
     /**
