@@ -1,0 +1,47 @@
+<?php
+/**
+ * Public one-liner for declaring a settings page from a theme or plugin.
+ *
+ * @package ProtoBlocks
+ */
+
+declare(strict_types=1);
+
+if (!function_exists('proto_options_page')) {
+    /**
+     * Declare a settings page in PHP.
+     *
+     * The page slug comes from the title (or `$args['slug']`). The declaration
+     * is only recorded here; validation happens when the registry loads it, so a
+     * bad declaration never fatals the site at include time.
+     *
+     * @param string $title Page title.
+     * @param array  $args  Same keys as a page.jsonc file (menu, capability, fields, ...).
+     */
+    function proto_options_page(string $title, array $args = []): void
+    {
+        $slug = isset($args['slug']) && is_string($args['slug'])
+            ? $args['slug']
+            : \ProtoBlocks\OptionsPages\PageDefinition::slugFromTitle($title);
+        unset($args['slug']);
+
+        if ($slug === null) {
+            if (function_exists('_doing_it_wrong')) {
+                _doing_it_wrong(
+                    __FUNCTION__,
+                    sprintf('Could not derive a page slug from the title "%s"; pass a "slug" argument.', $title),
+                    '1.0.0'
+                );
+            }
+            return;
+        }
+
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1);
+        $source = isset($trace[0]['file']) ? $trace[0]['file'] . ':' . ($trace[0]['line'] ?? 0) : null;
+
+        $GLOBALS['proto_blocks_php_options_pages'][$slug] = [
+            'data' => $args + ['title' => $title],
+            'source' => $source,
+        ];
+    }
+}

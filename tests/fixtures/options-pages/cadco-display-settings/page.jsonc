@@ -1,0 +1,14 @@
+{
+  // CADCO product display settings, adopted from the theme's hand-written page.
+  "title": "Display Settings",
+  "menu": "edit.php?post_type=product",
+  "capability": "manage_woocommerce",
+  "storage": { "mode": "array", "option": "cadco_display_settings" },
+  "fields": [
+    { "key": "field_cadco_hide_children", "name": "hide_children", "label": "Hide child products", "type": "true_false" },
+    { "key": "field_cadco_children_placement", "name": "children_placement", "label": "Child product placement", "type": "radio",
+      "choices": { "related": "Related products", "section": "Own section" }, "default_value": "related" },
+    { "key": "field_cadco_children_heading", "name": "children_heading", "label": "Section heading", "type": "text",
+      "conditional_logic": [[ { "field": "field_cadco_children_placement", "operator": "==", "value": "section" } ]] },
+  ],
+}

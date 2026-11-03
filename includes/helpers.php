@@ -140,3 +140,6 @@ function proto_blocks_hex_to_rgba(string $hex, float $alpha = 1): string
 
     return sprintf('rgba(%d, %d, %d, %s)', $r, $g, $b, $alpha);
 }
+
+// Settings pages: proto_options_page().
+require_once __DIR__ . '/OptionsPages/functions.php';
