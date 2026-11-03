@@ -467,11 +467,67 @@ final class OptionsValuesTest extends TestCase
         }
         self::assertSame(['GET', 'POST'], $methods);
 
-        $pattern = '#^/options/(?P<slug>[a-z][a-z0-9-]{0,63})$#D';
-        self::assertSame(1, preg_match($pattern, '/options/' . self::CADCO));
-        foreach (['../x', 'a/b', 'A', 'x' . "\n"] as $bad) {
-            self::assertSame(0, preg_match($pattern, '/options/' . $bad), $bad);
+        // Core matches routes as '@^' . $route . '$@i': case-insensitive, and `$`
+        // accepts a trailing newline, so the route only keeps out other path
+        // shapes. permission()'s slug recheck is the real guard (next test).
+        $core = '@^' . $route['route'] . '$@i';
+        self::assertSame(1, preg_match($core, '/options/' . self::CADCO));
+        foreach (['../x', 'a/b', '', '-x'] as $bad) {
+            self::assertSame(0, preg_match($core, '/options/' . $bad), $bad);
         }
+    }
+
+    public function testSlugRecheckRejectsWhatCoreRoutingLetsThrough(): void
+    {
+        $routes = new OptionsValuesRoutes($this->registry(), $this->values());
+        $GLOBALS['pb_test_current_user'] = 1;
+
+        foreach (['CADCO-DISPLAY-SETTINGS', 'A', 'x' . "\n", self::CADCO . "\n"] as $slug) {
+            $result = $routes->permission(new \WP_REST_Request(['slug' => $slug]));
+            self::assertInstanceOf(\WP_Error::class, $result, json_encode($slug));
+            self::assertSame('proto_blocks_options_page_not_found', $result->get_error_code());
+            self::assertSame(404, $result->get_error_data()['status']);
+            self::assertInstanceOf(\WP_Error::class, $routes->get(new \WP_REST_Request(['slug' => $slug])));
+            self::assertInstanceOf(\WP_Error::class, $routes->post(new \WP_REST_Request(['slug' => $slug])));
+        }
+    }
+
+    public function testReadOnlyListsCodeFieldsForUntrustedWriters(): void
+    {
+        $this->extra = [self::standalone('group_extra', 'theme-settings', [[
+            'key' => 'field_extra_tracking',
+            'name' => 'tracking',
+            'label' => 'Tracking',
+            'type' => 'group',
+            'sub_fields' => [
+                ['key' => 'field_extra_tracking_id', 'name' => 'id', 'label' => 'ID', 'type' => 'text'],
+                ['key' => 'field_extra_tracking_snippet', 'name' => 'snippet', 'label' => 'Snippet', 'type' => 'code'],
+            ],
+        ]])];
+        $routes = new OptionsValuesRoutes($this->registry(), $this->values());
+
+        $GLOBALS['pb_test_current_user'] = 3; // manage_options, no unfiltered_html
+        $data = $routes->get(new \WP_REST_Request(['slug' => 'theme-settings']))->get_data();
+        self::assertEquals((object) ['head_scripts' => 'unfiltered_html', 'tracking' => 'unfiltered_html'], $data['readOnly']);
+
+        $GLOBALS['pb_test_caps'][3][] = 'unfiltered_html';
+        $data = $routes->get(new \WP_REST_Request(['slug' => 'theme-settings']))->get_data();
+        self::assertSame('{}', json_encode($data['readOnly']));
+        self::assertSame([], $this->values()->readOnly($this->page('theme-settings'), 3));
+    }
+
+    public function testReadSkipsProtectedNames(): void
+    {
+        $GLOBALS['pb_test_options']['theme-settings_phone'] = '555';
+        $GLOBALS['pb_test_options']['theme-settings_head_scripts'] = '<script>ok()</script>';
+        $values = $this->values();
+        $page = $this->page('theme-settings');
+        $GLOBALS['pb_test_filters']['proto_blocks_protected_options'][] = static fn (array $list): array => [...$list, 'theme-settings_phone'];
+
+        $read = $values->read($page);
+
+        self::assertArrayNotHasKey('phone', $read);
+        self::assertSame('<script>ok()</script>', $read['head_scripts']);
     }
 
     public function testGetReturnsValuesAndTrust(): void

@@ -67,9 +67,13 @@ final class OptionsValuesRoutes
             return self::notFound();
         }
 
+        $userId = get_current_user_id();
+
         return new \WP_REST_Response([
             'values' => $this->values->read($page),
-            'trusted' => !AttributeSanitizer::shouldSanitizeForUser(get_current_user_id()),
+            'trusted' => !AttributeSanitizer::shouldSanitizeForUser($userId),
+            // field name => reason; cast so an empty map is `{}` in JSON, not `[]`.
+            'readOnly' => (object) $this->values->readOnly($page, $userId),
         ], 200);
     }
 
