@@ -59,7 +59,7 @@
         "capability_type": {
           "anyOf": [
             { "type": "string" },
-            { "type": "array", "items": { "type": "string" } }
+            { "type": "array", "items": { "type": "string" }, "minItems": 2, "maxItems": 2 }
           ]
         },
         "taxonomies": {

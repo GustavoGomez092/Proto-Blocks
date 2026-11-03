@@ -21,6 +21,9 @@ final class Jsonc
      */
     public static function decode(string $text): array
     {
+        if (str_starts_with($text, "\xEF\xBB\xBF")) {
+            $text = substr($text, 3);
+        }
         $stripped = self::strip($text);
 
         try {

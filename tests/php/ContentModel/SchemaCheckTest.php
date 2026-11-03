@@ -54,6 +54,40 @@ final class SchemaCheckTest extends TestCase
         $this->assertSame([], $this->paths(['name' => 'X', 'delete_with_user' => true]));
     }
 
+    public function testTrailingNewlineFailsAnchoredPattern(): void
+    {
+        $this->assertSame(['/slug'], $this->paths(['name' => 'X', 'slug' => "abc\n"]));
+    }
+
+    public function testCapabilityTypeArrayMustHaveTwoStrings(): void
+    {
+        $this->assertSame(['/capability_type'], $this->paths(['name' => 'X', 'capability_type' => ['a']]));
+        $this->assertSame([], $this->paths(['name' => 'X', 'capability_type' => ['a', 'b']]));
+        $this->assertSame(['/capability_type'], $this->paths(['name' => 'X', 'capability_type' => ['a', 'b', 'c']]));
+        $this->assertSame([], $this->paths(['name' => 'X', 'capability_type' => 'product']));
+    }
+
+    public function testInlineSchemaKeywords(): void
+    {
+        $schema = [
+            'type' => 'object',
+            'required' => ['a'],
+            'additionalProperties' => false,
+            'properties' => [
+                'a' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 5],
+                'e' => ['enum' => ['x', 'y']],
+            ],
+        ];
+        $run = static fn(mixed $d): array => array_column(SchemaCheck::validate($d, $schema), 'path');
+
+        $this->assertSame([], $run(['a' => 3, 'e' => 'x']));
+        $this->assertSame(['/a'], $run([]));
+        $this->assertSame(['/z'], $run(['a' => 3, 'z' => 1]));
+        $this->assertSame(['/e'], $run(['a' => 3, 'e' => 'q']));
+        $this->assertSame(['/a'], $run(['a' => 0]));
+        $this->assertSame(['/a'], $run(['a' => 6]));
+    }
+
     public function testSlugPattern(): void
     {
         $this->assertSame(['/slug'], $this->paths(['name' => 'X', 'slug' => 'Product']));

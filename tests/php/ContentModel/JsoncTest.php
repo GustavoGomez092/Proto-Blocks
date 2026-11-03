@@ -64,6 +64,21 @@ final class JsoncTest extends TestCase
         $this->assertSame(['labels' => []], Jsonc::decode('{"labels": {}}'));
     }
 
+    public function testProtoKeyLineReportedOnMultiLineInput(): void
+    {
+        try {
+            Jsonc::decode("{\n  // note\n  \"a\": {\n    \"__proto__\": 1\n  }\n}");
+            $this->fail('Expected JsoncException');
+        } catch (JsoncException $e) {
+            $this->assertSame(4, $e->line);
+        }
+    }
+
+    public function testLeadingBomIsIgnored(): void
+    {
+        $this->assertSame(['a' => 1], Jsonc::decode("\xEF\xBB\xBF{\"a\": 1}"));
+    }
+
     public function testProtoKeyRejected(): void
     {
         try {

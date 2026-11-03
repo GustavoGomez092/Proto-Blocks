@@ -8,7 +8,8 @@ namespace ProtoBlocks\ContentModel;
  * Minimal JSON Schema checker for declaration files.
  *
  * Supports exactly: type, enum, pattern, minLength, maxLength, minimum,
- * maximum, properties, required, additionalProperties, items, uniqueItems,
+ * maximum, properties, required, additionalProperties, items, minItems,
+ * maxItems, uniqueItems,
  * anyOf and local `#/$defs/<name>` references. Unknown keywords are ignored.
  * The browser-side checker implements the same subset.
  */
@@ -103,7 +104,7 @@ final class SchemaCheck
                 $errors[] = ['path' => $path, 'message' => "Must be at most {$node['maxLength']} characters."];
             }
             if (isset($node['pattern']) && is_string($node['pattern'])) {
-                $regex = '~' . str_replace('~', '\~', $node['pattern']) . '~u';
+                $regex = '~' . str_replace('~', '\~', $node['pattern']) . '~Du';
                 if (preg_match($regex, $data) !== 1) {
                     $errors[] = ['path' => $path, 'message' => "Must match pattern {$node['pattern']}."];
                 }
@@ -146,6 +147,12 @@ final class SchemaCheck
                 foreach ($data as $i => $value) {
                     array_push($errors, ...self::check($value, $node['items'], $root, "$path/$i"));
                 }
+            }
+            if (isset($node['minItems']) && count($data) < $node['minItems']) {
+                $errors[] = ['path' => $path, 'message' => "Must have at least {$node['minItems']} items."];
+            }
+            if (isset($node['maxItems']) && count($data) > $node['maxItems']) {
+                $errors[] = ['path' => $path, 'message' => "Must have at most {$node['maxItems']} items."];
             }
             if (!empty($node['uniqueItems'])) {
                 $seen = [];
