@@ -54,6 +54,7 @@ if (!defined('PROTO_BLOCKS_EXAMPLE_BLOCKS')) {
 if (!function_exists('proto_blocks_hex_to_rgba')) {
     require_once PROTO_BLOCKS_DIR . 'includes/helpers.php';
 }
+require_once PROTO_BLOCKS_DIR . 'includes/content-model.php';
 
 // Load autoloader
 require_once PROTO_BLOCKS_DIR . 'includes/Core/Autoloader.php';
