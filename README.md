@@ -11,6 +11,7 @@ A next-generation WordPress plugin that enables developers to create Gutenberg b
 
 ## Features
 
+- **Content model in files**: post types, taxonomies, custom fields and settings pages from one line of PHP or a JSONC file in the theme, edited from admin screens that write the same files. See [Content model](#content-model)
 - **Single Source of Truth**: Define blocks using a single `block.json` file
 - **Template Caching**: Compiled templates are cached for optimal performance
 - **Extensible Field Types**: Plugin architecture for custom field types
@@ -1260,339 +1261,144 @@ Debug mode enables:
 
 **Note:** Disable debug mode in production for security and performance.
 
-## Post types and taxonomies
+## Content model
 
-Proto-Blocks registers post types and taxonomies from one line of PHP or a small JSONC file in your theme. Names are enough: the plural, the slug and every admin label are generated.
+Since 2.15.0 Proto-Blocks also declares a site's content model: post types, taxonomies, custom fields and settings pages.
+Each is a line of PHP or a small JSONC file in the theme, edited from an admin UI that writes the same files.
+Nothing about the content model is stored in the database.
 
-### One line of PHP
+| Feature | File | PHP | Admin | Guide |
+|---|---|---|---|---|
+| Post types | `proto-types/<slug>/type.jsonc` | `proto_post_type('Event')` | Proto Blocks > Post Types | [docs/post-types.md](docs/post-types.md) |
+| Taxonomies | `proto-taxonomies/<slug>/taxonomy.jsonc` | `proto_taxonomy('Topic', ['post_types' => ['event']])` | Proto Blocks > Taxonomies | [docs/taxonomies.md](docs/taxonomies.md) |
+| Custom fields | `proto-fields/<slug>/group.jsonc` | `proto_field_group('event', [...])` | Proto Blocks > Fields | [docs/fields.md](docs/fields.md) |
+| Settings pages | `proto-options/<slug>/page.jsonc` | `proto_options_page('Theme Settings', [...])` | Proto Blocks > Options Pages | [docs/settings-pages.md](docs/settings-pages.md) |
 
-Call these in `functions.php` (any time before `init` priority 9):
+Shared rules: [content model files](docs/content-model-files.md) (JSONC, precedence, how the UI writes, read-only mode), [trust and security](docs/trust-and-security.md), [REST API](docs/rest-api.md), [WP-CLI](docs/cli.md).
+
+### Post types and taxonomies
 
 ```php
-proto_post_type('Product');
-proto_post_type('Case Study', ['menu_icon' => 'icons/case-study.svg', 'has_archive' => false]);
-proto_taxonomy('Genre', ['post_types' => ['book'], 'hierarchical' => true]);
-```
-
-The second argument takes any key a declaration file accepts: Proto-Blocks' own `name`, `plural`, `slug`, `taxonomies` (types) and `post_types` (taxonomies), plus any `register_post_type()` / `register_taxonomy()` argument.
-
-Defaults for a post type: public, in the REST API (block editor), automatic archive, `rewrite` `{ "slug": "<slug>", "with_front": false }`, supports `title`, `editor`, `thumbnail`, `excerpt`, `revisions`, menu position 22 (just below Pages) and the Proto-Blocks icon. A taxonomy defaults to public, in the REST API, shown as an admin column, flat (like tags), with `with_front` off. Declared `labels` merge over the generated ones, a `rewrite` array merges over the default, every other key replaces the default.
-
-### JSONC files
-
-The same declarations as files, one folder per slug (the folder name is the slug):
-
-```
-your-theme/
-  proto-types/
-    book/type.jsonc
-    post/type.jsonc              <- override of the core post type
-  proto-taxonomies/
-    topic/taxonomy.jsonc
+// functions.php
+proto_post_type('Event');
+proto_taxonomy('Topic', ['post_types' => ['event', 'post']]);
 ```
 
 ```jsonc
-// proto-types/book/type.jsonc
+// proto-types/event/type.jsonc — the same type as a file (the folder is the slug)
 {
-  "name": "Book",
-  "menu_icon": "dashicons-book",
-  "taxonomies": [
-    { "name": "Genre", "hierarchical": true },   // declared inline
-    "topic",                                     // an existing taxonomy, by slug
-  ],
+  "name": "Event",
+  "menu_icon": "icons/event.svg",
+  "taxonomies": [ { "name": "Event Type", "hierarchical": true } ],
 }
 ```
 
-```jsonc
-// proto-taxonomies/topic/taxonomy.jsonc
-{ "name": "Topic", "post_types": ["book", "post"] }
-```
+- The plural, slug and every label are generated; defaults are public, in REST, with an archive, `with_front` off, menu position 22.
+- Any `register_post_type()` / `register_taxonomy()` argument can be set; files cannot name PHP callbacks.
+- A file beats a PHP call of the same slug (flagged "Declared twice"); a child theme beats its parent.
+- A declaration for `post`, `page`, `category` or a plugin's slug is an override: only its keys are applied.
+- Rewrite rules flush once, automatically, when the declarations change.
+- `wp proto-blocks type scaffold event` writes `single-event.html` and `archive-event.html` into a block theme, never overwriting.
 
-Comments and trailing commas are allowed; plain `.json` works too. Files are checked against a JSON schema; an invalid file is skipped and reported on the screens and by `wp proto-blocks validate`.
+Full guides: [post types](docs/post-types.md), [taxonomies](docs/taxonomies.md).
 
-### Precedence
-
-- A child theme's folder beats the parent theme's folder for the same slug.
-- Extra read-only roots can be added with the `proto_blocks_schema_paths` filter (they come after the theme folders).
-- A file beats a PHP call for the same slug. Both are flagged as "Declared twice" (list badge, admin notice and a `double_declaration` warning in `wp proto-blocks validate`); the PHP declaration is ignored until you remove it.
-- A standalone taxonomy file beats a taxonomy of the same slug declared inline in a type.
-
-### Overrides of core and plugin types
-
-A declaration whose slug is already registered (by WordPress core, a plugin or the theme), or is `post`, `page`, `attachment`, `category` or `post_tag`, is an override: only the keys you write are applied on top of the existing registration, through the `register_post_type_args` / `register_taxonomy_args` filters, with no defaults added. For example a starter block template for posts:
+### Custom fields
 
 ```jsonc
-// proto-types/post/type.jsonc
+// proto-fields/event-details/group.jsonc — ACF local JSON shape; an ACF export drops in
 {
-  "template": [
-    ["core/heading", { "level": 2, "placeholder": "Eyebrow title" }],
-    ["core/paragraph", {}]
-  ],
-  "template_lock": false
-}
-```
-
-Rewrite rules are flushed automatically when the declarations change; there is no need to visit Settings > Permalinks.
-
-### Menu icons
-
-`menu_icon` accepts a dashicon (`dashicons-book`), an `https://` URL, or a file in the theme relative to the theme folder (`icons/book.svg`, or a `png`, `jpg`, `jpeg`, `webp`). SVG files are sanitised on the server (scripts, event handlers, external references and `<style>` are removed), inlined as a `data:` URI and tinted to match the admin colour scheme. Anything else falls back to the default icon with an `icon_invalid` warning.
-
-### Admin screens
-
-**Proto Blocks > Post Types** and **Proto Blocks > Taxonomies** list everything registered on the site with its origin (Proto-Blocks file, Proto-Blocks PHP, Core, Plugin, Theme), its source and counts. Proto-Blocks declarations open in a form that saves back to the JSONC file, keeping your comments; core and plugin types get "Create override file". Saves that would hide something existing content uses (for example removing `editor` from a type with posts) ask for confirmation first. The Post Types edit screen can scaffold `single-<slug>.html` / `archive-<slug>.html` block templates into a block theme (existing files are never overwritten). When `DISALLOW_FILE_MODS` or `DISALLOW_FILE_EDIT` is set, both screens are read-only.
-
-The modules can be switched off with the `proto_blocks_modules` filter:
-
-```php
-add_filter('proto_blocks_modules', fn ($modules) => ['taxonomies' => false] + $modules);
-```
-
-### Slugs
-
-A slug (the folder name, or the one derived from the name) must match `^[a-z][a-z0-9_-]*$`: lowercase letters, digits, `_` and `-`, starting with a letter. Post type slugs are at most 20 characters and taxonomy slugs at most 32 (WordPress' own limits). WordPress' reserved query terms (`author`, `name`, `type`, `year`, …) and core's internal types and taxonomies (`revision`, `nav_menu_item`, `wp_template`, `wp_theme`, …) are refused. `post`, `page` and `attachment` (types) and `category` and `post_tag` (taxonomies) are allowed only as overrides. The REST routes check the same rule, case-sensitively.
-
-### REST routes
-
-The screens use these routes in the `proto-blocks/v1` namespace. Every route requires `manage_options` and the REST nonce, and no response contains an absolute path.
-
-| Route | Methods | Purpose |
-|-------|---------|---------|
-| `/admin/types` | GET | Every post type on the site, tagged by origin |
-| `/admin/types/<slug>` | GET | One post type: list item, effective args, content count |
-| `/admin/types/<slug>/scaffold` | POST | Write `single-<slug>.html` / `archive-<slug>.html` block templates (*writes files*) |
-| `/admin/taxonomies` | GET | Every taxonomy, tagged by origin, with its attached post types and inline parent type |
-| `/admin/taxonomies/<slug>` | GET | One taxonomy: list item, effective args, attached types, term count |
-| `/admin/schema-files/<kind>/<slug>` | GET | The declaration file (`kind` is `type` or `taxonomy`): text, hash, parsed data, whether it can be written |
-| `/admin/schema-files/<kind>/<slug>` | POST, PUT, PATCH | Save the file: `{text, hash, acknowledge}`; schema-checked before writing, `409` on a stale hash or an unconfirmed guardrail (*writes files*) |
-| `/admin/schema-files/<kind>/<slug>` | DELETE | Delete the declaration file; `confirm=<slug>` is required when content exists (*writes files*) |
-
-When `DISALLOW_FILE_MODS` or `DISALLOW_FILE_EDIT` is set, the screens become read-only (a banner explains why, and the save, delete, create and scaffold controls are disabled), and every route marked *writes files* refuses the request with `403 proto_blocks_file_mods`. The read routes keep working.
-
-### WP-CLI
-
-```bash
-wp proto-blocks type list
-wp proto-blocks type create "Case Study" [--slug=<slug>] [--plural=<plural>] [--json]
-wp proto-blocks type scaffold book [--taxonomies]     # block templates, never overwrites
-wp proto-blocks type validate [<slug>]
-wp proto-blocks type rename book novel --yes [--migrate]    # --migrate moves existing posts
-wp proto-blocks taxonomy list
-wp proto-blocks taxonomy create Genre [--slug=<slug>] [--plural=<plural>] [--json]
-wp proto-blocks taxonomy validate [<slug>]
-wp proto-blocks taxonomy rename genre category-genre --yes [--migrate]
-```
-
-`rename` without `--yes` only prints the plan (the file move and how many posts or terms are affected) and exits with an error; nothing changes. `wp proto-blocks validate` reports blocks and declarations together.
-
-## Settings pages
-
-Proto-Blocks adds settings pages to the admin menu from one line of PHP or a small JSONC file in your theme. The page renders with the same field form as the Fields module, saves through the REST API behind the page's own capability, and its values are read with `proto_field()`.
-
-### One line of PHP
-
-Call it in `functions.php` (any time before the `wp_loaded` action):
-
-```php
-proto_options_page('Site Notice', [
-    'menu'       => 'options-general.php',
-    'capability' => 'edit_pages',
-    'fields'     => [['name' => 'message', 'label' => 'Message', 'type' => 'text']],
-]);
-```
-
-The slug comes from the title (`site-notice`) unless you pass `slug`. The second argument takes any key a page file accepts (`menu_title` is accepted as an alias of `menuTitle`).
-
-Declare pages in `functions.php` or on `init`. A call inside an `admin_menu` callback still adds the menu item, but that page is not available to REST saves or to `proto_field()` on other requests, so saving it fails. A call after `wp_loaded` (or after `admin_menu` 10 in the admin) is ignored with a `declared_too_late` warning.
-
-### JSONC files
-
-One folder per page (the folder name is the slug):
-
-```
-your-theme/
-  proto-options/
-    theme-settings/page.jsonc
-```
-
-```jsonc
-// proto-options/theme-settings/page.jsonc
-{
-  "title": "Theme Settings",
-  "menu": "top",                       // or a parent menu: "options-general.php", "edit.php?post_type=product", another page's slug
-  "icon": "dashicons-admin-generic",   // top-level pages: a dashicon or a theme .svg
-  "capability": "manage_options",      // the default
-  "tabs": [
-    { "title": "General", "fields": [ { "name": "phone", "label": "Phone", "type": "text" } ] },
-    { "title": "Tracking", "fields": [ { "name": "head_scripts", "type": "code" } ] },
-  ],
-  "children": [
-    { "slug": "footer", "title": "Footer", "fields": [ { "name": "copyright", "type": "text" } ] },
-  ],
-}
-```
-
-Fields use the Fields module's types and settings; `tabs` split them across tabs. A child page's slug is `<parent>-<child>` (`theme-settings-footer`) and it inherits the parent's capability and autoload. A file beats a PHP call for the same slug, and a child theme's folder beats the parent's. Invalid files are skipped and reported by `wp proto-blocks validate`.
-
-### Where values are stored
-
-Each field is its own option, named `<page_slug>_<field_name>` (hyphens kept): `theme-settings_phone`, `theme-settings-footer_copyright`. To keep an existing option, store every field in one array instead:
-
-```jsonc
-{
-  "title": "Display Settings",
-  "menu": "edit.php?post_type=product",
-  "capability": "manage_woocommerce",
-  "storage": { "mode": "array", "option": "cadco_display_settings" },
-  "fields": [ { "name": "hide_children", "type": "true_false" } ],
-}
-```
-
-Core and plugin-critical options (`siteurl`, `active_plugins`, `*_user_roles`, transients, `proto_blocks_*`, …) can never be a storage target; extend the list with the `proto_blocks_protected_options` filter. Two pages writing the same option get a `shared_storage` warning.
-
-### Reading values
-
-```php
-$phone  = proto_field('phone', 'option:theme-settings');
-$hidden = proto_field('hide_children', 'option:cadco-display-settings');
-```
-
-`option:<page_slug>` reads either storage mode, escaped like any other field (pass `true` as the third argument for the stored value). Standalone field groups can target a page with the location rule `options_page == <slug>`.
-
-### Capabilities and modules
-
-The menu item, the page and the `proto-blocks/v1/options/<slug>` route all require the page's declared capability (and a logged-in user); `manage_options` is not implied. For users without `unfiltered_html`, code and password fields are hidden: the form shows the label and a lock, never the value, and those fields cannot be saved. Settings pages work with the Fields module switched off; switch the settings pages themselves off with `add_filter('proto_blocks_modules', fn ($m) => ['options_pages' => false] + $m);`.
-
-### Options Pages screen and CLI
-
-**Proto Blocks > Options Pages** lists every settings page (file or PHP, with its menu, capability and storage) and, read-only, the settings pages other plugins and the theme add to the menu. The declaration editor writes `proto-options/<slug>/page.jsonc`: title, menu placement, capability, storage, tabs, child pages and fields. Comments are kept except inside an array you edit (for example `fields` or `tabs`). **New options page** takes two steps: a title (which proposes the slug), then the full form, and the file is written when you save. A PHP-declared page is shown read-only with **Create file**, which writes its declaration to a file that then takes over. Deleting a page removes its file only; saved values are kept. The editor is read-only with `DISALLOW_FILE_MODS`, for multisite non-network-admins and for files that cannot be written. A save that conflicts with a change on disk asks before overwriting.
-
-```bash
-wp proto-blocks options list
-wp proto-blocks options create "Theme Settings" [--slug=<slug>] [--menu=<menu>] [--capability=<cap>] [--storage-option=<name>]
-```
-
-`list` shows every page with its source, menu, capability and storage. `create` writes a page file into the active theme and prints its theme-relative path.
-
-### Migrating a hand-written settings page
-
-A page that already stores one array option (the CADCO theme's Products > Display Settings is the reference, `tests/fixtures/options-pages/cadco-display-settings`) is re-declared with `"storage": { "mode": "array", "option": "<existing option>" }`, the same slug, parent menu and capability. Stored values keep working and undeclared keys of the option survive a save. Differences to expect: values of `true_false` fields are stored as `'1'` or `''` (a theme that wrote booleans and reads with `!empty()` is unaffected), a field hidden by conditional logic is not written (a theme that always stored a default heading must keep its own fallback), and the per-field names `<slug>_<field>` are only used in the default `fields` storage mode.
-
-## Custom fields
-
-Proto-Blocks adds custom fields to posts, custom post types, taxonomy terms, users and settings pages. Groups are plain files (the shape mirrors ACF local JSON, so an ACF export drops in), a visual builder edits them, and `proto_field()` reads the values. Requires WordPress 6.5+ and PHP 8.1. Full guide: [docs/fields.md](docs/fields.md).
-
-### Declaring groups
-
-Three ways, all producing the same groups. A child theme's file beats the parent's; a broken child file does not fall back to the parent's.
-
-```jsonc
-// your-theme/proto-fields/speaker/group.jsonc
-{
-  "key": "group_speaker",
-  "title": "Speaker",
-  "location": [[{ "param": "post_type", "operator": "==", "value": "speaker" }]],
+  "key": "group_event_details",
+  "title": "Event details",
+  "location": [[{ "param": "post_type", "operator": "==", "value": "event" }]],
   "fields": [
-    { "key": "field_company", "name": "company", "label": "Company", "type": "text" },
-    { "key": "field_photo", "name": "photo", "label": "Photo", "type": "image" }
+    { "key": "field_event_subtitle", "name": "subtitle", "label": "Subtitle", "type": "text" },
+    { "key": "field_event_hero", "name": "hero", "label": "Hero image", "type": "image" }
   ]
 }
 ```
 
 ```php
-// functions.php
-proto_field_group('speaker', ['key' => 'group_speaker', 'title' => 'Speaker', 'fields' => [
-    ['key' => 'field_company', 'name' => 'company', 'label' => 'Company', 'type' => 'text'],
-]]);
+<h2><?php echo proto_field('subtitle'); ?></h2>              <!-- escaped for its type -->
+<?php $hero = proto_field('hero'); ?>                        <!-- {id, url, alt, width, height, sizes} -->
+<?php foreach (proto_rows('agenda') as $row) { echo $row['title']; } ?>
 ```
 
-Or put a `fields` list inline in a `proto-types/<slug>/type.jsonc`, `proto-taxonomies/<slug>/taxonomy.jsonc` or settings page file, where the location is implied.
+- 28 field types, from `text` to `flexible_content`, on posts, terms, users and settings pages.
+- Meta boxes in the block editor, the classic editor and Elementor; client and server validation; conditional logic.
+- The getter has no read-permission check: never build its context from visitor input.
+- `code` and `password` fields are written only by users with `unfiltered_html`.
+- Block Bindings source `proto-blocks/field`; `get_field()` aliases while ACF is inactive.
 
-### Types and stored values
+Full guide: [docs/fields.md](docs/fields.md).
 
-`text`, `textarea`, `email`, `url`, `number`, `password`, `wysiwyg`, `code`, `color`, `true_false` (scalars); `select`, `radio` (string or list); `date` (`Y-m-d`), `time`, `datetime`; `image`, `file` (attachment ID), `gallery`, `taxonomy`, `relationship` (lists of IDs); `video` (ID or URL); `link` (`{url, title, target}`); `group`, `repeater`, `flexible_content` (one JSON value). `tab`, `accordion` and `message` are layout only. The table of stored shapes is in [docs/fields.md](docs/fields.md#field-types-and-stored-values).
+### Settings pages
 
-### Reading values
+```jsonc
+// proto-options/theme-settings/page.jsonc
+{
+  "title": "Theme Settings",
+  "menu": "top",
+  "tabs": [ { "title": "General", "fields": [ { "name": "phone", "label": "Phone", "type": "text" } ] } ],
+}
+```
 
 ```php
-$company = proto_field('company');                     // current post, escaped for its type
-$phone   = proto_field('phone', 'option:theme-settings');
-foreach (proto_rows('sessions', $post_id) as $row) { echo $row['title']; }
+$phone = proto_field('phone', 'option:theme-settings');   // stored as option "theme-settings_phone"
 ```
 
-`$template->field('company')` does the same inside a Proto-Blocks template. Pass `true` as the last argument of `proto_field()` for the stored value; escaping is then yours. The getter has **no read-permission check**: never build `$context` from visitor input. `get_field()`, `the_field()` and `get_fields()` exist only when ACF is inactive.
+- Top-level or under any menu (`options-general.php`, `edit.php?post_type=product`, a plugin's menu), with tabs and child pages.
+- The page's own capability gates the menu, the page and its REST route.
+- One option per field (`<page_slug>_<field_name>`), or one array option with `"storage": {"mode": "array", "option": "…"}`.
+- Declare `proto_options_page()` in `functions.php`, before `wp_loaded`.
 
-The Block Bindings source `proto-blocks/field` (`args: {"name": "company"}`) feeds core paragraph, heading, image and button blocks. `code` and `password` fields are never bound; options-page fields are bindable by any author unless the field sets `"bindings": false`; a full-page cache serving logged-in users must vary by user.
+Full guide: [docs/settings-pages.md](docs/settings-pages.md).
 
-### Trust rules
+## For AI agents
 
-`code` and `password` fields are written only by users with `unfiltered_html`; others see them hidden. Everyone else's values are sanitised per type. Only values written through the plugin are vouched for, so re-typing a field to `code` renders earlier values raw. Rows per repeater are capped (`max`, and the `proto_blocks_repeater_max_items` filter, default 500). `show_in_rest` is per field; `password` and `code` default to off.
+Read these before generating code for a site built with Proto-Blocks:
 
-### Builder and ACF
+| Task | Read |
+|---|---|
+| Blocks (`block.json` + `template.php`) | this README, from "Creating Your First Block" |
+| A post type or taxonomy | [docs/post-types.md](docs/post-types.md), [docs/taxonomies.md](docs/taxonomies.md) |
+| Custom fields and reading them in templates | [docs/fields.md](docs/fields.md) |
+| A settings page | [docs/settings-pages.md](docs/settings-pages.md) |
+| File format, precedence, read-only mode | [docs/content-model-files.md](docs/content-model-files.md) |
+| What is safe, and who may write what | [docs/trust-and-security.md](docs/trust-and-security.md) |
+| HTTP clients | [docs/rest-api.md](docs/rest-api.md) |
+| Shell automation | [docs/cli.md](docs/cli.md) |
 
-**Proto Blocks > Fields** is a visual builder: one row per field, drag or keyboard reorder, group settings, a location builder, a JSONC pane that keeps comments (except inside an edited array) and **Save to file**. It is read-only with `DISALLOW_FILE_MODS`, for multisite non-network-admins, for groups ACF registers and for inline or PHP groups. A group whose `key` ACF already registers is skipped with a notice; unknown ACF field types are errors.
+The five rules that matter most:
 
-```bash
-wp proto-blocks fields list [--format=table|json|csv]
-wp proto-blocks fields validate [<path>...]      # exits 1 on errors; warns on wide_location
-```
+1. **Declare in files, then validate.** Write `proto-types/`, `proto-taxonomies/`, `proto-fields/` and `proto-options/` JSONC files in the theme (the folder name is the slug), and finish only when `wp proto-blocks validate` exits 0. Files cannot name PHP callbacks or put `<`/`>` in labels.
+2. **Echo the getter as returned.** `proto_field()`, `proto_rows()` and `$template->field()` already escape for the field type (except `code`); use `$raw = true` only when you escape yourself. Never build the context argument from request data: the getter has no read-permission check.
+3. **Treat `code` and `password` as administrator-only.** Only users with `unfiltered_html` write them; others see them hidden. Never re-type an existing field to `code`: stored values then come back raw.
+4. **Mind exposure.** Post and term fields are in core's REST API by default (user fields are not); settings page fields are bindable by any author. Set `"show_in_rest": false` and `"bindings": false` on anything private.
+5. **Respect the timing and the trust of the shell.** Call `proto_post_type()` / `proto_taxonomy()` before `init` 9, `proto_field_group()` before `init` 10, `proto_options_page()` before `wp_loaded` — in `functions.php`. WP-CLI runs as user 0, which is untrusted: seed markup with `wp --user=<admin>`, and on multisite write files as a network administrator.
 
 ## WP-CLI Commands
 
 ```bash
-# List all registered blocks
-wp proto-blocks list
-
-# Create a new block scaffold
+wp proto-blocks list                                   # registered blocks
 wp proto-blocks create testimonial --title="Testimonial" --fields="quote:wysiwyg,author:text"
-
-# Validate all blocks and post type / taxonomy declarations
-wp proto-blocks validate
-
-# Post types and taxonomies (see "Post types and taxonomies")
-wp proto-blocks type list
-wp proto-blocks taxonomy list
-
-# Custom fields (see "Custom fields")
-wp proto-blocks fields list
-wp proto-blocks fields validate
-
-# Clear template cache
-wp proto-blocks cache clear
-
-# Show cache statistics
-wp proto-blocks cache stats
-
-# Export a block
+wp proto-blocks validate                               # blocks + every declaration; exits 1 on errors
 wp proto-blocks export card --output=/path/to/export
+wp proto-blocks cache clear | stats
+wp proto-blocks tailwind enable | compile | status --format=json
 
-# Tailwind CSS: enable, compile, and inspect (status supports --format=json|yaml|table)
-wp proto-blocks tailwind enable
-wp proto-blocks tailwind compile
-wp proto-blocks tailwind status --format=json
+wp proto-blocks type list | create "Event" | scaffold event | validate | rename event happening --yes
+wp proto-blocks taxonomy list | create "Topic" | validate | rename
+wp proto-blocks options list | create "Theme Settings"
+wp proto-blocks fields list | validate
 ```
+
+Every command, flag, output column and exit code: [docs/cli.md](docs/cli.md).
 
 ## Admin
 
-The **Proto-Blocks** admin is a React app (Tailwind 4 + shadcn/ui, built from `src/admin/` to `assets/js/admin.js` and `assets/css/admin.css`). It has five screens: **Blocks** (dashboard, example blocks, cache), **Tailwind Settings**, **System Status**, **Preview Capture** and the **Setup Wizard**. Nothing in the admin is rendered by PHP; each screen reads and writes through REST routes under `proto-blocks/v1/admin/*`. Every route requires `manage_options` and the REST nonce. Routes that write files (marked *writes files* below) are also refused with a `403 proto_blocks_file_mods` error when `DISALLOW_FILE_MODS` or `DISALLOW_FILE_EDIT` is set:
+The **Proto-Blocks** admin is a React app (Tailwind 4 + shadcn/ui, built from `src/admin/` to `assets/js/admin.js` and `assets/css/admin.css`). Its screens are **Blocks** (dashboard, example blocks, cache), **Post Types**, **Taxonomies**, **Fields**, **Options Pages**, **Tailwind Settings**, **System Status**, **Preview Capture** and the **Setup Wizard**. Nothing in the admin is rendered by PHP; each screen reads and writes through REST routes under `proto-blocks/v1/admin/*`. Every route requires `manage_options` and the REST nonce. Routes that write files are also refused with `403 proto_blocks_file_mods` when `DISALLOW_FILE_MODS` or `DISALLOW_FILE_EDIT` is set, and with `403 proto_blocks_multisite` on multisite for users who are not network administrators.
 
-| Route | Methods | Purpose |
-|-------|---------|---------|
-| `/admin/dashboard` | GET | Stats, blocks list, example-block state |
-| `/admin/cache` | DELETE | Clear the template cache |
-| `/admin/example-blocks` | POST | Toggle the bundled example blocks |
-| `/admin/demos/install`, `/admin/demos/remove` | POST | Install or remove demo blocks in the theme (*writes files*; not used by the UI since 2.15) |
-| `/admin/tailwind` | GET | Tailwind settings and status |
-| `/admin/tailwind/settings` | POST | Save Tailwind settings |
-| `/admin/tailwind/compile` | POST | Compile Tailwind CSS (never downloads the CLI while file mods are disabled) |
-| `/admin/tailwind/cache` | DELETE | Clear the Tailwind cache |
-| `/admin/tailwind/cli` | POST | Download the Tailwind CLI binary (*writes files*) |
-| `/admin/tailwind/theme-file` | POST | Write the theme Tailwind file (*writes files*) |
-| `/admin/system` | GET, POST | System status; save the category name |
-| `/admin/previews` | GET | Preview Capture status for each block |
-| `/admin/wizard` | GET | Setup wizard state |
-| `/admin/wizard/style`, `/admin/wizard/complete` | POST | Wizard steps |
-| `/admin/wizard/demos` | POST | Install the demo blocks for the chosen style (*writes files*; not used by the UI since 2.15) |
+The content-model screens edit theme files and become read-only, with a banner, when files cannot be written: see [docs/content-model-files.md](docs/content-model-files.md#read-only-reasons). Every route, its permission and its payload: [docs/rest-api.md](docs/rest-api.md).
 
 The preview capture upload keeps its own route, `POST /preview-capture`, which also writes files and is gated the same way. Four `admin-ajax.php` actions remain: `proto_blocks_tailwind_get_compile_inputs` and `proto_blocks_tailwind_store_css` (the in-browser Tailwind compiler), `proto_blocks_preview` (block previews in the editor) and `proto_blocks_capture_render` (the page Preview Capture renders in its hidden iframe).
 
@@ -1742,6 +1548,13 @@ Proto-Blocks provides several hooks for customization:
 | `proto_blocks_category_slug` | Customize category slug | `$slug` (string) |
 | `proto_blocks_paths` | Add custom block discovery paths | `$paths` (array) |
 | `proto_blocks_discovered` | Modify discovered blocks | `$blocks` (array) |
+| `proto_blocks_modules` | Switch content-model modules off (`post_types`, `taxonomies`, `fields`, `options_pages`) | `$modules` (array of bools) |
+| `proto_blocks_schema_paths` | Add roots searched for `proto-types/`, `proto-taxonomies/`, `proto-fields/`, `proto-options/` | `$paths` (array) |
+| `proto_blocks_declaration_errors` | Add validation findings for a declaration | `$errors`, `$kind`, `$data`, `$slug` |
+| `proto_blocks_field_groups` | Modify the loaded field groups | `$groups` (array) |
+| `proto_blocks_field_stores` | Replace a field value store | `$stores` (array) |
+| `proto_blocks_repeater_max_items` | Row cap for repeaters and flexible content (default 500) | `$max`, `$name`, `$settings` |
+| `proto_blocks_protected_options` | Option names settings pages may never use | `$names` (array) |
 
 ### Register Custom Field Type
 
