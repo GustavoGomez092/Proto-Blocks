@@ -233,6 +233,33 @@ final class PageDefinitionTest extends TestCase
         self::assertSame('cadco_display_settings', self::cadco()->storageOption);
     }
 
+    public function testTrailingNewlineIsNotAccepted(): void
+    {
+        $this->assertInvalid(fn() => PageDefinition::fromArray('p', ['title' => 'P', 'capability' => "manage_options\n"], 'php'));
+        $this->assertInvalid(fn() => PageDefinition::fromArray("a\n", ['title' => 'P'], 'php'));
+        $this->assertInvalid(fn() => PageDefinition::fromArray('p', ['title' => 'P', 'fields' => [['name' => "a\n", 'type' => 'text']]], 'php'));
+        $this->assertInvalid(fn() => PageDefinition::fromArray('p', ['title' => 'P', 'storage' => ['mode' => 'array', 'option' => "default_role\n"]], 'php'));
+        $this->assertInvalid(fn() => PageDefinition::fromArray('p', ['title' => 'P', 'menu' => "options-general.php\n"], 'php'));
+        $this->assertInvalid(fn() => PageDefinition::fromArray('p', ['title' => 'P', 'icon' => "a.svg\n"], 'php'));
+        self::assertTrue(ProtectedOptions::isProtected("default_role\n"));
+    }
+
+    public function testExtendedProtectedNames(): void
+    {
+        foreach (['wp_2_user_roles', 'theme_mods_twentytwentyfive', 'sticky_posts', 'thumbnail_size_w', 'auto_update_plugins', 'widget_text', 'sidebars_widgets', 'stylesheet_root'] as $opt) {
+            self::assertTrue(ProtectedOptions::isProtected($opt), $opt);
+        }
+        self::assertFalse(ProtectedOptions::isProtected('cadco_display_settings'));
+    }
+
+    public function testUnderivableTitleWarnsAndRecordsNothing(): void
+    {
+        $GLOBALS['pb_test_doing_it_wrong'] = [];
+        proto_options_page('9 Lives');
+        self::assertCount(1, $GLOBALS['pb_test_doing_it_wrong']);
+        self::assertSame([], $GLOBALS['proto_blocks_php_options_pages']);
+    }
+
     public function testProtectedOptionsFilterCanAddNames(): void
     {
         $GLOBALS['pb_test_filters']['proto_blocks_protected_options'][] = static fn(array $l) => array_merge($l, ['my_secret']);

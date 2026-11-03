@@ -17,12 +17,12 @@ final class PageDefinition
     public const SLUG_MAX = 64;
     public const OPTION_MAX = 191;
 
-    private const SLUG_RE = '/^[a-z][a-z0-9-]*$/';
-    private const FIELD_NAME_RE = '/^[a-z][a-z0-9_]*$/';
-    private const CAPABILITY_RE = '/^[a-z][a-z0-9_]*$/';
-    private const MENU_RE = '/^[a-z0-9_.?=&-]+$/';
-    private const OPTION_RE = '/^[A-Za-z0-9_-]+$/';
-    private const ICON_RE = '#^(dashicons-[a-z0-9-]+|[A-Za-z0-9_-][A-Za-z0-9_/.-]*\.svg)$#';
+    private const SLUG_RE = '/^[a-z][a-z0-9-]*$/D';
+    private const FIELD_NAME_RE = '/^[a-z][a-z0-9_]*$/D';
+    private const CAPABILITY_RE = '/^[a-z][a-z0-9_]*$/D';
+    private const MENU_RE = '/^[a-z0-9_.?=&-]+$/D';
+    private const OPTION_RE = '/^[A-Za-z0-9_-]+$/D';
+    private const ICON_RE = '#^(dashicons-[a-z0-9-]+|[A-Za-z0-9_-][A-Za-z0-9_/.-]*\.svg)$#D';
 
     /**
      * @param list<array>             $groups
