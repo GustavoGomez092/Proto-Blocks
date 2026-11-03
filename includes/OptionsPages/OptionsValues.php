@@ -25,7 +25,13 @@ use ProtoBlocks\Security\AttributeSanitizer;
  * standalone groups whose location targets the page) are ever read or
  * written; every other submitted key is ignored. Definitions are memoised per
  * page slug; values never are, so nothing read for one user is served to
- * another.
+ * another. A field whose option name is protected is never read or written,
+ * even when a filter protected it after the page loaded.
+ *
+ * Password fields follow Phase 2: read() returns the stored value raw to
+ * anyone who holds the page capability, and an untrusted writer's password
+ * is sanitised like text (Tasks 7/9: render it as a password input and do
+ * not echo it anywhere else).
  */
 final class OptionsValues
 {
@@ -100,9 +106,35 @@ final class OptionsValues
     {
         $out = [];
         foreach ($this->fields($page) as $name => $field) {
+            // Defence in depth: a filter may have protected the name since the page loaded.
+            if (ProtectedOptions::isProtected($page->optionName($name))) {
+                continue;
+            }
             $out[$name] = $this->store->has($page, $name)
                 ? $this->store->read($page, $name)
                 : $this->defaultOf($field);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Fields this user may not write, with the reason: `unfiltered_html` for a
+     * code field, or a field holding a code sub-field, when the user lacks
+     * unfiltered_html. save() applies the same check, so the form can show
+     * these read-only and save() keeps their stored value.
+     *
+     * @return array<string, string> field name => reason
+     */
+    public function readOnly(PageDefinition $page, int $userId): array
+    {
+        $untrusted = AttributeSanitizer::shouldSanitizeForUser($userId);
+        $out = [];
+        foreach ($this->fields($page) as $name => $field) {
+            $reason = self::readOnlyReason($this->types->for($field), $field, $untrusted);
+            if ($reason !== null) {
+                $out[$name] = $reason;
+            }
         }
 
         return $out;
@@ -146,7 +178,7 @@ final class OptionsValues
                     continue;
                 }
                 $type = $this->types->for($field);
-                if ($untrusted && $type->hasUnfilteredHtml($field)) {
+                if (self::readOnlyReason($type, $field, $untrusted) !== null) {
                     $this->notices[] = ['field' => $name, 'message' => self::codeRefusal($type)];
                     continue;
                 }
@@ -408,6 +440,12 @@ final class OptionsValues
             ),
             ['status' => 403]
         );
+    }
+
+    /** The one write-trust check shared by readOnly() and save(). */
+    private static function readOnlyReason(FieldTypeInterface $type, Field $field, bool $untrusted): ?string
+    {
+        return $untrusted && $type->hasUnfilteredHtml($field) ? 'unfiltered_html' : null;
     }
 
     private static function codeRefusal(FieldTypeInterface $type): string
