@@ -1,21 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { __, sprintf } from '@wordpress/i18n';
 import { Controller, useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { TriangleAlertIcon, XIcon } from 'lucide-react';
-import { Button } from '@/admin/components/ui/button';
+import { Tabs as TabsPrimitive } from 'radix-ui';
 import { Checkbox } from '@/admin/components/ui/checkbox';
-import { Input } from '@/admin/components/ui/input';
-import { Label } from '@/admin/components/ui/label';
-import { Switch } from '@/admin/components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/admin/components/ui/tabs';
+import { interpolate } from '@/admin/lib/interpolate';
+import { cn } from '@/admin/lib/utils';
 import { compilePattern } from '@/fields/validation/conditions';
 import type { ConditionRule } from '@/fields/model/types';
 import { phpEmpty } from '@/fields/model/normalize';
 import { canonicalType, isFlexible, isObject, layoutList, nameError, slugifyName, uniqueName, type RawField } from './builder-state';
 import { ConditionBuilder } from './ConditionBuilder';
-import { settingsFor, TYPE_META, type SettingSpec } from './field-settings-spec';
+import { PRESENTATION_KEYS, settingsFor, TYPE_HELP, TYPE_META, VALIDATION_KEYS, type SettingSpec } from './field-settings-spec';
+import { BTN_ICON, CountPill, ERROR, HELP, INPUT, LABEL, MONO, PbSelect, PbSwitch, SANS, Segmented, TEXTAREA } from './pb-ui';
 
 export interface Choice {
 	slug: string;
@@ -160,13 +159,32 @@ function schemaFor(specs: SettingSpec[], siblings: RawField[]) {
 		});
 }
 
-function Help({ id, text }: { id: string; text?: string }) {
+function Help({ id, text }: { id: string; text?: ReactNode }) {
 	return text ? (
-		<p id={id} className="text-xs text-muted-foreground">
+		<p id={id} className={HELP}>
 			{text}
 		</p>
 	) : null;
 }
+
+type SettingsTab = 'general' | 'validation' | 'presentation' | 'logic';
+
+/** The design's width steps; 100 is written as no `wrapper.width`. */
+const WIDTHS = [
+	{ value: '100', label: '100%' },
+	{ value: '50', label: '50%' },
+	{ value: '33', label: '33%' },
+	{ value: '25', label: '25%' },
+];
+
+const PLACEHOLDERS: Record<string, string> = { minlength: '—', maxlength: '—', min: '—', max: '—', pattern: '^https://', 'wrapper.class': 'my-class' };
+
+/** General's order: type, label, name, default, instructions, then the type's own settings. */
+const GENERAL_ORDER = ['type', 'label', 'name', 'default_value', 'instructions'];
+const generalRank = (key: string) => {
+	const at = GENERAL_ORDER.indexOf(key);
+	return at === -1 ? GENERAL_ORDER.length : at;
+};
 
 /**
  * The selected field's settings, built from field-settings-spec: the common
@@ -184,6 +202,7 @@ export function FieldSettings({ field, siblings, savedName, choices = {}, onChan
 	const resolver = useMemo(() => zodResolver(schemaFor(specs, siblings) as never) as unknown as Resolver<Values>, [specs, siblings]);
 	const form = useForm<Values>({ defaultValues: defaults, resolver, mode: 'onChange' });
 	const { register, control, formState, watch, setValue, trigger } = form;
+	const [tab, setTab] = useState<SettingsTab>('general');
 
 	// The name follows the label for a field that is not in the file yet, until the name is typed in.
 	const [linked, setLinked] = useState(savedName === undefined && (field.name === '' || field.name === uniqueName(slugifyName(String(field.label ?? '')), siblings)));
@@ -254,32 +273,88 @@ export function FieldSettings({ field, siblings, savedName, choices = {}, onChan
 	const renamed = savedName !== undefined && typeof nameValue === 'string' && nameValue !== savedName;
 	const conditionScope = siblings;
 
+	const nameText = typeof nameValue === 'string' ? nameValue : '';
+
 	const renderControl = (spec: SettingSpec) => {
 		const name = formName(spec.key);
 		const id = `${idPrefix}-${spec.key.replace(/\./g, '-')}`;
 		const helpId = `${id}-help`;
 		const errorId = `${id}-error`;
 		const error = formState.errors[name]?.message;
-		const describedBy = [spec.help ? helpId : null, error ? errorId : null, spec.key === 'name' && renamed ? `${id}-rename` : null].filter(Boolean).join(' ') || undefined;
+		const canonical = canonicalType(type);
+		const help: ReactNode =
+			spec.key === 'name'
+				? interpolate(
+						/* translators: %s: PHP call that reads the field, e.g. get_field('subtitle') */
+						__('The meta key templates read: %s', 'proto-blocks'),
+						<code className={cn(MONO, 'text-micro text-link')}>{`get_field('${nameText}')`}</code>
+					)
+				: spec.key === 'type'
+					? canonical
+						? TYPE_HELP[canonical]
+						: undefined
+					: spec.help;
+		const describedBy = [help ? helpId : null, error ? errorId : null, spec.key === 'name' && renamed ? `${id}-rename` : null].filter(Boolean).join(' ') || undefined;
 		const common = { id, 'aria-describedby': describedBy, 'aria-invalid': error ? true : undefined, disabled: readOnly };
 		const errorNode = error ? (
-			<p id={errorId} role="alert" className="text-[13px] text-destructive">
+			<p id={errorId} role="alert" className={ERROR}>
 				{String(error)}
 			</p>
 		) : null;
+		const wide = spec.control === 'textarea' || spec.control === 'choices' || spec.key === 'pattern' || spec.key === 'instructions';
 
 		if (spec.control === 'switch') {
-			return (
-				<div key={spec.key} className="grid gap-1">
-					<div className="flex items-center gap-2">
-						<Controller
-							control={control}
-							name={name}
-							render={({ field: f }) => <Switch {...common} checked={Boolean(f.value)} onCheckedChange={(on) => f.onChange(on)} onBlur={f.onBlur} />}
-						/>
-						<Label htmlFor={id}>{spec.label}</Label>
+			const toggle = (
+				<Controller
+					control={control}
+					name={name}
+					render={({ field: f }) => <PbSwitch {...common} checked={Boolean(f.value)} onCheckedChange={(on) => f.onChange(on)} onBlur={f.onBlur} />}
+				/>
+			);
+			if (spec.key === 'required') {
+				return (
+					<div key={spec.key} className="col-span-full flex items-center justify-between gap-4 rounded-[8px] border border-solid border-border bg-background px-4 py-3.5">
+						<div className="grid gap-0.5">
+							<label htmlFor={id} className={LABEL}>
+								{spec.label}
+							</label>
+							<Help id={helpId} text={help} />
+						</div>
+						{toggle}
 					</div>
-					<Help id={helpId} text={spec.help} />
+				);
+			}
+			return (
+				<div key={spec.key} className="grid content-start gap-1.5">
+					<label htmlFor={id} className={LABEL}>
+						{spec.label}
+					</label>
+					<div className="flex min-h-[38px] items-center gap-2.5">
+						{toggle}
+						<Help id={helpId} text={help} />
+					</div>
+				</div>
+			);
+		}
+
+		if (spec.key === 'wrapper.width') {
+			const labelId = `${id}-label`;
+			return (
+				<div key={spec.key} className="grid content-start gap-1.5">
+					<span id={labelId} className={LABEL}>
+						{spec.label}
+					</span>
+					<Controller
+						control={control}
+						name={name}
+						render={({ field: f }) => {
+							const current = String(f.value ?? '').replace(/%$/, '');
+							const shown = current === '' ? '100' : current;
+							const options = WIDTHS.some((w) => w.value === shown) ? WIDTHS : [...WIDTHS, { value: shown, label: `${shown}%` }];
+							return <Segmented value={shown} options={options} labelledBy={labelId} describedBy={helpId} disabled={readOnly} onChange={(v) => f.onChange(v === '100' ? '' : v)} />;
+						}}
+					/>
+					<Help id={helpId} text={help} />
 				</div>
 			);
 		}
@@ -290,15 +365,15 @@ export function FieldSettings({ field, siblings, savedName, choices = {}, onChan
 					? (spec.options ?? [])
 					: (spec.control === 'postTypes' ? (choices.postTypes ?? []) : (choices.taxonomies ?? [])).map((c) => ({ value: c.slug, label: c.label }));
 			return (
-				<fieldset key={spec.key} className="grid gap-1.5" aria-describedby={describedBy}>
-					<legend className="mb-1 text-sm font-medium">{spec.label}</legend>
+				<fieldset key={spec.key} className="m-0 grid min-w-0 content-start gap-1.5 border-0 p-0" aria-describedby={describedBy}>
+					<legend className={cn(LABEL, 'mb-1.5 p-0')}>{spec.label}</legend>
 					<Controller
 						control={control}
 						name={name}
 						render={({ field: f }) => {
 							const selected = Array.isArray(f.value) ? f.value : [];
 							return (
-								<div className="flex flex-wrap gap-x-4 gap-y-1.5">
+								<div className="flex min-h-[38px] flex-wrap items-center gap-x-4 gap-y-1.5">
 									{options.map((o) => (
 										<div key={o.value} className="flex items-center gap-1.5">
 											<Checkbox
@@ -307,29 +382,31 @@ export function FieldSettings({ field, siblings, savedName, choices = {}, onChan
 												disabled={readOnly}
 												onCheckedChange={(on) => f.onChange(on ? [...selected, o.value] : selected.filter((s) => s !== o.value))}
 											/>
-											<Label htmlFor={`${id}-${o.value}`} className="font-normal">
+											<label htmlFor={`${id}-${o.value}`} className="text-label">
 												{o.label}
-											</Label>
+											</label>
 										</div>
 									))}
-									{options.length === 0 ? <p className="text-xs text-muted-foreground">{__('None registered.', 'proto-blocks')}</p> : null}
+									{options.length === 0 ? <p className={HELP}>{__('None registered.', 'proto-blocks')}</p> : null}
 								</div>
 							);
 						}}
 					/>
-					<Help id={helpId} text={spec.help} />
+					<Help id={helpId} text={help} />
 				</fieldset>
 			);
 		}
 
 		let input;
+		const mono = spec.key === 'name' || spec.key === 'pattern' || spec.key === 'wrapper.class';
 		if (spec.control === 'textarea' || spec.control === 'choices') {
 			input = (
 				<textarea
 					{...common}
 					{...register(name)}
-					rows={spec.control === 'choices' ? 5 : 3}
-					className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive"
+					rows={spec.control === 'choices' ? 4 : 2}
+					placeholder={spec.key === 'instructions' ? __('Shown under the label on the edit screen.', 'proto-blocks') : undefined}
+					className={cn(TEXTAREA, spec.control === 'choices' && cn(MONO, 'text-label'))}
 				/>
 			);
 		} else if (spec.control === 'select' || spec.control === 'postTypes' || spec.control === 'taxonomies') {
@@ -337,43 +414,43 @@ export function FieldSettings({ field, siblings, savedName, choices = {}, onChan
 			const current = String(defaults[name] ?? '');
 			if (spec.key === 'type' && current !== '' && !options.some((o) => o.value === current)) {
 				// An ACF alias (date_picker): keep it as written.
-				const canonical = canonicalType(current);
-				options = [{ value: current, label: `${canonical ? TYPE_META[canonical].label : current} (${current})` }, ...options];
+				const aliasOf = canonicalType(current);
+				options = [{ value: current, label: `${aliasOf ? TYPE_META[aliasOf].label : current} (${current})` }, ...options];
 			} else if (!options.some((o) => o.value === '') && spec.key !== 'type') {
 				options = [{ value: '', label: __('Default', 'proto-blocks') }, ...options];
 			}
 			input = (
-				<select
-					{...common}
-					{...register(name)}
-					className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-				>
+				<PbSelect {...common} {...register(name)}>
 					{options.map((o) => (
 						<option key={o.value} value={o.value}>
 							{o.label}
 						</option>
 					))}
-				</select>
+				</PbSelect>
 			);
 		} else {
 			input = (
-				<Input
+				<input
 					{...common}
+					type="text"
 					{...register(name, spec.key === 'name' ? { onChange: () => setLinked(false) } : undefined)}
 					inputMode={spec.control === 'number' ? 'decimal' : undefined}
-					className={spec.key === 'name' ? 'font-mono' : undefined}
+					placeholder={PLACEHOLDERS[spec.key]}
+					className={cn(INPUT, mono && cn(MONO, 'text-label'))}
 				/>
 			);
 		}
 
 		return (
-			<div key={spec.key} className="grid gap-1.5">
-				<Label htmlFor={id}>{spec.label}</Label>
+			<div key={spec.key} className={cn('grid min-w-0 content-start gap-1.5', wide && 'col-span-full')}>
+				<label htmlFor={id} className={LABEL}>
+					{spec.label}
+				</label>
 				{input}
-				<Help id={helpId} text={spec.help} />
+				<Help id={helpId} text={help} />
 				{errorNode}
 				{spec.key === 'name' && renamed ? (
-					<p id={`${id}-rename`} className="flex items-center gap-1.5 text-[13px] text-warning">
+					<p id={`${id}-rename`} className="flex items-center gap-1.5 text-[12.5px] text-warning">
 						<TriangleAlertIcon aria-hidden="true" className="size-4 shrink-0" />
 						{sprintf(
 							/* translators: %s: the field's previous name (its meta key) */
@@ -386,80 +463,108 @@ export function FieldSettings({ field, siblings, savedName, choices = {}, onChan
 		);
 	};
 
-	const typeHelp = canonicalType(type) ? TYPE_META[canonicalType(type)!].help : undefined;
+	const general = specs.filter((s) => !VALIDATION_KEYS.has(s.key) && !PRESENTATION_KEYS.has(s.key)).sort((a, b) => generalRank(a.key) - generalRank(b.key));
+	const validation = specs.filter((s) => VALIDATION_KEYS.has(s.key));
+	const presentation = specs.filter((s) => PRESENTATION_KEYS.has(s.key));
+	const typeNote = canonicalType(type) ? TYPE_META[canonicalType(type)!].help : undefined;
+	const logicCount = Array.isArray(field.conditional_logic) ? field.conditional_logic.length : 0;
+	const tabs: { value: SettingsTab; label: string; show: boolean }[] = [
+		{ value: 'general', label: __('General', 'proto-blocks'), show: true },
+		{ value: 'validation', label: __('Validation', 'proto-blocks'), show: validation.length > 0 },
+		{ value: 'presentation', label: __('Presentation', 'proto-blocks'), show: presentation.length > 0 },
+		{ value: 'logic', label: __('Conditional logic', 'proto-blocks'), show: true },
+	];
+	// Every settings panel stays mounted while hidden: react-hook-form keeps every registered control.
+	const panel = (value: SettingsTab) => ({ value, forceMount: true as const, hidden: tab !== value, className: 'outline-none' });
+	const grid = 'grid max-w-[860px] grid-cols-1 gap-x-6 gap-y-[18px] @[560px]:grid-cols-2';
 
 	return (
-		<Tabs defaultValue="settings">
-			<TabsList aria-label={__('Field settings sections', 'proto-blocks')}>
-				<TabsTrigger value="settings">{__('Settings', 'proto-blocks')}</TabsTrigger>
-				<TabsTrigger value="logic">
-					{__('Conditional logic', 'proto-blocks')}
-					{Array.isArray(field.conditional_logic) && field.conditional_logic.length > 0 ? (
-						<span className="rounded-full bg-muted px-1.5 text-xs">{field.conditional_logic.length}</span>
-					) : null}
-				</TabsTrigger>
-			</TabsList>
-			<form className="grid gap-4" onSubmit={(e) => e.preventDefault()} onBlur={() => timer.current && flushRef.current()} noValidate>
-				{/* Mounted while hidden: react-hook-form keeps every registered control. */}
-				<TabsContent value="settings" forceMount className="grid gap-4 data-[state=inactive]:hidden">
-					{specs.map(renderControl)}
-					{typeHelp ? <p className="text-xs text-muted-foreground">{typeHelp}</p> : null}
-
-					{isFlexible(field) && onLayout ? (
-						<fieldset className="grid gap-2">
-							<legend className="mb-1 text-sm font-medium">{__('Layouts', 'proto-blocks')}</legend>
-							{layoutList(field).map((layout, l) => (
-								<div key={String(layout.key ?? l)} className="flex items-end gap-2">
-									<div className="grid flex-1 gap-1">
-										<Label htmlFor={`${idPrefix}-layout-${l}-label`}>{__('Layout label', 'proto-blocks')}</Label>
-										<Input
-											id={`${idPrefix}-layout-${l}-label`}
-											defaultValue={String(layout.label ?? '')}
-											disabled={readOnly}
-											onBlur={(e) => e.target.value !== layout.label && onLayout({ type: 'updateLayout', layout: l, patch: { label: e.target.value } })}
-										/>
+		<TabsPrimitive.Root value={tab} onValueChange={(v) => setTab(v as SettingsTab)} className={cn('@container text-body text-foreground', SANS)}>
+			<TabsPrimitive.List
+				aria-label={__('Field settings sections', 'proto-blocks')}
+				className="mb-5 flex flex-wrap gap-0.5 border-0 border-b border-solid border-border"
+			>
+				{tabs
+					.filter((t) => t.show)
+					.map((t) => (
+						<TabsPrimitive.Trigger
+							key={t.value}
+							value={t.value}
+							className="-mb-px inline-flex cursor-pointer items-center gap-1.5 border-0 border-b-2 border-solid border-transparent bg-transparent px-3.5 py-3 text-body font-medium whitespace-nowrap text-muted-foreground outline-none hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring data-[state=active]:border-primary data-[state=active]:text-foreground"
+						>
+							{t.label}
+							{t.value === 'logic' ? <CountPill>{logicCount}</CountPill> : null}
+						</TabsPrimitive.Trigger>
+					))}
+			</TabsPrimitive.List>
+			<form onSubmit={(e) => e.preventDefault()} onBlur={() => timer.current && flushRef.current()} noValidate>
+				<TabsPrimitive.Content {...panel('general')}>
+					<div className={grid}>
+						{general.map(renderControl)}
+						{typeNote ? <p className={cn(HELP, 'col-span-full')}>{typeNote}</p> : null}
+						{isFlexible(field) && onLayout ? (
+							<fieldset className="col-span-full m-0 grid gap-2 border-0 p-0">
+								<legend className={cn(LABEL, 'mb-1.5 p-0')}>{__('Layouts', 'proto-blocks')}</legend>
+								{layoutList(field).map((layout, l) => (
+									<div key={String(layout.key ?? l)} className="flex items-end gap-2">
+										<div className="grid flex-1 gap-1.5">
+											<label htmlFor={`${idPrefix}-layout-${l}-label`} className={LABEL}>
+												{__('Layout label', 'proto-blocks')}
+											</label>
+											<input
+												id={`${idPrefix}-layout-${l}-label`}
+												type="text"
+												className={INPUT}
+												defaultValue={String(layout.label ?? '')}
+												disabled={readOnly}
+												onBlur={(e) => e.target.value !== layout.label && onLayout({ type: 'updateLayout', layout: l, patch: { label: e.target.value } })}
+											/>
+										</div>
+										<div className="grid flex-1 gap-1.5">
+											<label htmlFor={`${idPrefix}-layout-${l}-name`} className={LABEL}>
+												{__('Layout name', 'proto-blocks')}
+											</label>
+											<input
+												id={`${idPrefix}-layout-${l}-name`}
+												type="text"
+												className={cn(INPUT, MONO, 'text-label')}
+												defaultValue={String(layout.name ?? '')}
+												disabled={readOnly}
+												onBlur={(e) => e.target.value !== layout.name && onLayout({ type: 'updateLayout', layout: l, patch: { name: e.target.value } })}
+											/>
+										</div>
+										{readOnly ? null : (
+											<button
+												type="button"
+												className={cn(BTN_ICON, 'size-[38px]')}
+												aria-label={sprintf(/* translators: %s: layout label */ __('Remove layout %s', 'proto-blocks'), String(layout.label || layout.name || ''))}
+												onClick={() => onLayout({ type: 'removeLayout', layout: l })}
+											>
+												<XIcon aria-hidden="true" className="size-3.5" />
+											</button>
+										)}
 									</div>
-									<div className="grid flex-1 gap-1">
-										<Label htmlFor={`${idPrefix}-layout-${l}-name`}>{__('Layout name', 'proto-blocks')}</Label>
-										<Input
-											id={`${idPrefix}-layout-${l}-name`}
-											className="font-mono"
-											defaultValue={String(layout.name ?? '')}
-											disabled={readOnly}
-											onBlur={(e) => e.target.value !== layout.name && onLayout({ type: 'updateLayout', layout: l, patch: { name: e.target.value } })}
-										/>
-									</div>
-									{readOnly ? null : (
-										<Button
-											type="button"
-											variant="ghost"
-											size="icon"
-											aria-label={sprintf(/* translators: %s: layout label */ __('Remove layout %s', 'proto-blocks'), String(layout.label || layout.name || ''))}
-											onClick={() => onLayout({ type: 'removeLayout', layout: l })}
-										>
-											<XIcon aria-hidden="true" />
-										</Button>
-									)}
-								</div>
-							))}
-						</fieldset>
-					) : null}
-				</TabsContent>
-				<TabsContent value="logic">
-					<section className="grid gap-2" aria-labelledby={`${idPrefix}-logic`}>
-						<h3 id={`${idPrefix}-logic`} className="text-sm font-medium">
-							{__('Show this field if', 'proto-blocks')}
-						</h3>
-						<ConditionBuilder
-							fields={conditionScope}
-							selfKey={typeof field.key === 'string' ? field.key : undefined}
-							value={field.conditional_logic}
-							readOnly={readOnly}
-							onChange={(v: ConditionRule[][] | 0) => onChange({ conditional_logic: v })}
-						/>
-					</section>
-				</TabsContent>
+								))}
+							</fieldset>
+						) : null}
+					</div>
+				</TabsPrimitive.Content>
+				<TabsPrimitive.Content {...panel('validation')}>
+					<div className={grid}>{validation.map(renderControl)}</div>
+				</TabsPrimitive.Content>
+				<TabsPrimitive.Content {...panel('presentation')}>
+					<div className={grid}>{presentation.map(renderControl)}</div>
+				</TabsPrimitive.Content>
+				<TabsPrimitive.Content value="logic" className="outline-none">
+					<ConditionBuilder
+						fields={conditionScope}
+						selfKey={typeof field.key === 'string' ? field.key : undefined}
+						value={field.conditional_logic}
+						readOnly={readOnly}
+						onChange={(v: ConditionRule[][] | 0) => onChange({ conditional_logic: v })}
+					/>
+				</TabsPrimitive.Content>
 			</form>
-		</Tabs>
+		</TabsPrimitive.Root>
 	);
 }

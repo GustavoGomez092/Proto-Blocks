@@ -118,7 +118,7 @@ export function JsoncPane({ text, pointer, kind, index = null, readOnly = false,
 				id={id}
 				aria-invalid={syntax.length > 0 || undefined}
 				aria-describedby={`${id}-problems`}
-				className="min-h-[480px] w-full rounded-md border bg-[#0f1d2e] p-3 font-mono text-xs leading-5 whitespace-pre text-[#d6e2f0] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+				className="min-h-[480px] w-full rounded-md border bg-panel p-3 font-mono text-micro leading-5 whitespace-pre text-panel-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 				spellCheck={false}
 				autoCapitalize="off"
 				autoCorrect="off"

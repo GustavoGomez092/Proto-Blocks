@@ -52,7 +52,7 @@ describe('ConditionBuilder', () => {
 		expect(options(screen.getByRole('combobox', { name: 'Operator' }))).toEqual(['is', 'is not']);
 		expect(screen.getByRole('switch', { name: 'Value' })).toBeChecked();
 
-		await userEvent.click(screen.getByRole('button', { name: 'Add a rule group' }));
+		await userEvent.click(screen.getByRole('button', { name: 'or, another rule group' }));
 		const two = onChange.mock.lastCall[0];
 		expect(two).toHaveLength(2);
 		rerender(view(two));

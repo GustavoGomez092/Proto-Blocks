@@ -1,12 +1,12 @@
 import { useId } from 'react';
 import { __, sprintf } from '@wordpress/i18n';
 import { PlusIcon, XIcon } from 'lucide-react';
-import { Button } from '@/admin/components/ui/button';
-import { Input } from '@/admin/components/ui/input';
-import { Switch } from '@/admin/components/ui/switch';
+import { interpolate } from '@/admin/lib/interpolate';
+import { cn } from '@/admin/lib/utils';
 import type { ConditionOperator, ConditionRule } from '@/fields/model/types';
 import { compilePattern } from '@/fields/validation/conditions';
 import { canonicalType, isObject, LAYOUT_ONLY_TYPES, type RawField } from './builder-state';
+import { BTN_DASHED, BTN_ICON, BTN_LINK, ERROR, EYEBROW, HELP, INPUT, LABEL, MONO, PbSelect, PbSwitch, RULE_CARD } from './pb-ui';
 
 export interface ConditionBuilderProps {
 	/**
@@ -111,157 +111,188 @@ export function ConditionBuilder({ fields, selfKey, value, onChange, readOnly = 
 	};
 	const setRule = (g: number, r: number, rule: Rule) => emit(groups.map((group, gi) => (gi === g ? group.map((old, ri) => (ri === r ? rule : old)) : group)));
 
+	const header = (
+		<div className="flex items-center justify-between gap-4">
+			<div className="grid gap-0.5">
+				<span id={`${id}-title`} className={LABEL}>
+					{__('Show this field only when…', 'proto-blocks')}
+				</span>
+				<span className={HELP}>
+					{interpolate(
+						/* translators: %s: the word "or", emphasised */
+						__('All rules in a group must match; groups are joined with %s.', 'proto-blocks'),
+						<em>{__('or', 'proto-blocks')}</em>
+					)}
+				</span>
+			</div>
+			{candidates.length > 0 || groups.length > 0 ? (
+				<PbSwitch
+					aria-label={__('Conditional logic', 'proto-blocks')}
+					checked={groups.length > 0}
+					disabled={readOnly || (groups.length === 0 && candidates.length === 0)}
+					onCheckedChange={(on) => (on ? emit([[makeRule(candidates[0])]]) : onChange(0))}
+				/>
+			) : null}
+		</div>
+	);
+
 	if (candidates.length === 0 && groups.length === 0) {
-		return <p className="text-sm text-muted-foreground">{__('Conditions read other fields at the same level; this level has none to read yet.', 'proto-blocks')}</p>;
+		return (
+			<div className="grid max-w-[860px] gap-3">
+				{header}
+				<p className={HELP}>{__('Conditions read other fields at the same level; this level has none to read yet.', 'proto-blocks')}</p>
+			</div>
+		);
 	}
 
 	return (
-		<div className="grid gap-3">
-			{groups.length === 0 ? (
-				<p className="text-sm text-muted-foreground">{__('Off: the field is always shown.', 'proto-blocks')}</p>
-			) : null}
+		<div className="grid max-w-[860px] gap-3">
+			{header}
+			{groups.length === 0 ? <p className={HELP}>{__('Off: the field is always shown.', 'proto-blocks')}</p> : null}
 			{groups.map((group, g) => (
-				<div
-					key={g}
-					role="group"
-					aria-label={sprintf(/* translators: %d: rule group number */ __('Rule group %d', 'proto-blocks'), g + 1)}
-					className="grid gap-2 rounded-md border p-2"
-				>
-					{g > 0 ? <p className="text-xs font-medium text-muted-foreground uppercase">{__('or', 'proto-blocks')}</p> : null}
-					{group.map((rule, r) => {
-						const target = byKey.get(rule.field);
-						const ops = operatorsFor(target);
-						const choices = choicesOf(target);
-						const isBool = canonicalType(target?.type) === 'true_false';
-						const errorId = `${id}-${g}-${r}-error`;
-						const error = !target
-							? __('This rule reads a field that is not at this level, so it is never true. Pick another field.', 'proto-blocks')
-							: rule.operator === '==pattern' && compilePattern(rule.value ?? '') === null
-								? __('Enter a valid regular expression (200 bytes at most).', 'proto-blocks')
-								: null;
-						return (
-							<div key={r} className="grid gap-1">
-								<div className="flex flex-wrap items-center gap-2">
-									<span className="text-xs text-muted-foreground">{r === 0 ? __('If', 'proto-blocks') : __('and', 'proto-blocks')}</span>
-									<select
-										aria-label={__('Field', 'proto-blocks')}
-										className="h-8 rounded-md border bg-transparent px-2 text-sm"
-										value={rule.field}
-										disabled={readOnly}
-										aria-invalid={!target || undefined}
-										aria-describedby={error ? errorId : undefined}
-										onChange={(e) => setRule(g, r, makeRule(byKey.get(e.target.value), rule.operator))}
-									>
-										{!target ? <option value={rule.field}>{rule.field}</option> : null}
-										{candidates.map((f) => (
-											<option key={String(f.key)} value={String(f.key)}>
-												{String(f.label || f.name || f.key)}
-											</option>
-										))}
-									</select>
-									<select
-										aria-label={__('Operator', 'proto-blocks')}
-										className="h-8 rounded-md border bg-transparent px-2 text-sm"
-										value={rule.operator}
-										disabled={readOnly}
-										onChange={(e) => {
-											const operator = e.target.value as ConditionOperator;
-											const next: Rule = { field: rule.field, operator };
-											if (!NO_VALUE.includes(operator)) {
-												next.value = rule.value ?? defaultValue(target);
-											}
-											setRule(g, r, next);
-										}}
-									>
-										{(ops.includes(rule.operator) ? ops : [rule.operator, ...ops]).map((op) => (
-											<option key={op} value={op}>
-												{OPERATORS[op] ?? op}
-											</option>
-										))}
-									</select>
-									{NO_VALUE.includes(rule.operator) ? null : isBool ? (
-										<Switch
-											aria-label={__('Value', 'proto-blocks')}
-											checked={rule.value === '1'}
+				<div key={g} className="grid gap-3">
+					{g > 0 ? <p className={EYEBROW}>{__('or', 'proto-blocks')}</p> : null}
+					<div role="group" aria-label={sprintf(/* translators: %d: rule group number */ __('Rule group %d', 'proto-blocks'), g + 1)} className={RULE_CARD}>
+						{group.map((rule, r) => {
+							const target = byKey.get(rule.field);
+							const ops = operatorsFor(target);
+							const choices = choicesOf(target);
+							const isBool = canonicalType(target?.type) === 'true_false';
+							const errorId = `${id}-${g}-${r}-error`;
+							const error = !target
+								? __('This rule reads a field that is not at this level, so it is never true. Pick another field.', 'proto-blocks')
+								: rule.operator === '==pattern' && compilePattern(rule.value ?? '') === null
+									? __('Enter a valid regular expression (200 bytes at most).', 'proto-blocks')
+									: null;
+							return (
+								<div key={r} className="grid gap-1.5">
+									{r > 0 ? <span className={cn(EYEBROW, 'text-[10px]')}>{__('and', 'proto-blocks')}</span> : null}
+									<div className="grid grid-cols-[minmax(0,1fr)_150px_minmax(0,1fr)_32px] items-center gap-2">
+										<PbSelect
+											compact
+											aria-label={__('Field', 'proto-blocks')}
+											value={rule.field}
 											disabled={readOnly}
-											onCheckedChange={(on) => setRule(g, r, { ...rule, value: on ? '1' : '0' })}
-										/>
-									) : choices.length > 0 && rule.operator !== '==pattern' && rule.operator !== '==contains' ? (
-										<select
-											aria-label={__('Value', 'proto-blocks')}
-											className="h-8 rounded-md border bg-transparent px-2 text-sm"
-											value={rule.value ?? ''}
-											disabled={readOnly}
-											onChange={(e) => setRule(g, r, { ...rule, value: e.target.value })}
+											aria-invalid={!target || undefined}
+											aria-describedby={error ? errorId : undefined}
+											onChange={(e) => setRule(g, r, makeRule(byKey.get(e.target.value), rule.operator))}
 										>
-											{choices.map(([k, label]) => (
-												<option key={k} value={k}>
-													{label}
+											{!target ? <option value={rule.field}>{rule.field}</option> : null}
+											{candidates.map((f) => (
+												<option key={String(f.key)} value={String(f.key)}>
+													{String(f.label || f.name || f.key)}
 												</option>
 											))}
-										</select>
-									) : (
-										<Input
-											aria-label={__('Value', 'proto-blocks')}
-											className="h-8 w-48"
-											value={rule.value ?? ''}
+										</PbSelect>
+										<PbSelect
+											compact
+											aria-label={__('Operator', 'proto-blocks')}
+											value={rule.operator}
 											disabled={readOnly}
-											aria-invalid={error && target ? true : undefined}
-											aria-describedby={error ? errorId : undefined}
-											onChange={(e) => setRule(g, r, { ...rule, value: e.target.value })}
-										/>
-									)}
-									{readOnly ? null : (
-										<Button
-											type="button"
-											variant="ghost"
-											size="icon-sm"
-											aria-label={__('Remove rule', 'proto-blocks')}
-											onClick={() => emit(groups.map((grp, gi) => (gi === g ? grp.filter((_, ri) => ri !== r) : grp)))}
+											onChange={(e) => {
+												const operator = e.target.value as ConditionOperator;
+												const next: Rule = { field: rule.field, operator };
+												if (!NO_VALUE.includes(operator)) {
+													next.value = rule.value ?? defaultValue(target);
+												}
+												setRule(g, r, next);
+											}}
 										>
-											<XIcon aria-hidden="true" />
-										</Button>
-									)}
+											{(ops.includes(rule.operator) ? ops : [rule.operator, ...ops]).map((op) => (
+												<option key={op} value={op}>
+													{OPERATORS[op] ?? op}
+												</option>
+											))}
+										</PbSelect>
+										{NO_VALUE.includes(rule.operator) ? (
+											<span className="pl-1 text-label text-faint">{__('no value needed', 'proto-blocks')}</span>
+										) : isBool ? (
+											<span className="flex items-center gap-2.5 pl-1">
+												<PbSwitch
+													aria-label={__('Value', 'proto-blocks')}
+													checked={rule.value === '1'}
+													disabled={readOnly}
+													onCheckedChange={(on) => setRule(g, r, { ...rule, value: on ? '1' : '0' })}
+												/>
+												<span className="text-label text-muted-foreground">{rule.value === '1' ? __('checked', 'proto-blocks') : __('not checked', 'proto-blocks')}</span>
+											</span>
+										) : choices.length > 0 && rule.operator !== '==pattern' && rule.operator !== '==contains' ? (
+											<PbSelect
+												compact
+												aria-label={__('Value', 'proto-blocks')}
+												value={rule.value ?? ''}
+												disabled={readOnly}
+												onChange={(e) => setRule(g, r, { ...rule, value: e.target.value })}
+											>
+												{choices.map(([k, label]) => (
+													<option key={k} value={k}>
+														{label}
+													</option>
+												))}
+											</PbSelect>
+										) : (
+											<input
+												type="text"
+												aria-label={__('Value', 'proto-blocks')}
+												className={cn(INPUT, 'h-9', rule.operator === '==pattern' && cn(MONO, 'text-label'))}
+												value={rule.value ?? ''}
+												disabled={readOnly}
+												aria-invalid={error && target ? true : undefined}
+												aria-describedby={error ? errorId : undefined}
+												onChange={(e) => setRule(g, r, { ...rule, value: e.target.value })}
+											/>
+										)}
+										{readOnly ? (
+											<span />
+										) : (
+											<button
+												type="button"
+												className={cn(BTN_ICON, 'size-8 rounded-[6px]')}
+												aria-label={__('Remove rule', 'proto-blocks')}
+												onClick={() => emit(groups.map((grp, gi) => (gi === g ? grp.filter((_, ri) => ri !== r) : grp)))}
+											>
+												<XIcon aria-hidden="true" className="size-3.5" />
+											</button>
+										)}
+									</div>
+									{error ? (
+										<p id={errorId} role="alert" className={ERROR}>
+											{error}
+										</p>
+									) : null}
 								</div>
-								{error ? (
-									<p id={errorId} role="alert" className="text-[13px] text-destructive">
-										{error}
-									</p>
-								) : null}
-							</div>
-						);
-					})}
-					{readOnly || candidates.length === 0 ? null : (
-						<Button
-							type="button"
-							variant="ghost"
-							size="sm"
-							className="justify-self-start"
-							aria-label={sprintf(/* translators: %d: rule group number */ __('Add a rule to group %d', 'proto-blocks'), g + 1)}
-							onClick={() => emit(groups.map((grp, gi) => (gi === g ? [...grp, makeRule(candidates[0])] : grp)))}
-						>
-							<PlusIcon aria-hidden="true" />
-							{__('and', 'proto-blocks')}
-						</Button>
-					)}
+							);
+						})}
+						{readOnly || candidates.length === 0 ? null : (
+							<button
+								type="button"
+								className={BTN_LINK}
+								aria-label={sprintf(/* translators: %d: rule group number */ __('Add a rule to group %d', 'proto-blocks'), g + 1)}
+								onClick={() => emit(groups.map((grp, gi) => (gi === g ? [...grp, makeRule(candidates[0])] : grp)))}
+							>
+								<PlusIcon aria-hidden="true" className="size-[13px]" strokeWidth={2.5} />
+								{__('and', 'proto-blocks')}
+							</button>
+						)}
+					</div>
 				</div>
 			))}
 			{readOnly || candidates.length === 0 ? null : (
-				<div className="flex flex-wrap gap-2">
+				<div className="flex flex-wrap items-center gap-2">
 					{groups.length === 0 ? (
-						<Button type="button" variant="outline" size="sm" onClick={() => emit([[makeRule(candidates[0])]])}>
-							<PlusIcon aria-hidden="true" />
+						<button type="button" className={BTN_DASHED} onClick={() => emit([[makeRule(candidates[0])]])}>
+							<PlusIcon aria-hidden="true" className="size-[13px]" strokeWidth={2.5} />
 							{__('Add rule', 'proto-blocks')}
-						</Button>
+						</button>
 					) : (
 						<>
-							<Button type="button" variant="outline" size="sm" aria-label={__('Add a rule group', 'proto-blocks')} onClick={() => emit([...groups, [makeRule(candidates[0])]])}>
-								<PlusIcon aria-hidden="true" />
-								{__('or', 'proto-blocks')}
-							</Button>
-							<Button type="button" variant="ghost" size="sm" aria-label={__('Remove all rules', 'proto-blocks')} onClick={() => onChange(0)}>
-								{__('Remove all', 'proto-blocks')}
-							</Button>
+							<button type="button" className={BTN_DASHED} onClick={() => emit([...groups, [makeRule(candidates[0])]])}>
+								<PlusIcon aria-hidden="true" className="size-[13px]" strokeWidth={2.5} />
+								{__('or, another rule group', 'proto-blocks')}
+							</button>
+							<button type="button" className={cn(BTN_LINK, 'text-muted-foreground')} onClick={() => onChange(0)}>
+								{__('Remove all rules', 'proto-blocks')}
+							</button>
 						</>
 					)}
 				</div>
