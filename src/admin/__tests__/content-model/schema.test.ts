@@ -1,4 +1,4 @@
-import { taxonomySchema, toZod, typeSchema } from '@/admin/content-model/schema';
+import { optionsSchema, taxonomySchema, toZod, typeSchema } from '@/admin/content-model/schema';
 import type { z } from 'zod';
 
 const paths = (schema: z.ZodTypeAny, data: unknown) => {
@@ -96,4 +96,34 @@ test('inline schema keywords match SchemaCheck', () => {
 	expect(paths(schema, { a: 6 })).toEqual([['a']]);
 	expect(paths(toZod({ type: 'array', uniqueItems: true }), ['a', 'a'])).toEqual([[1]]);
 	expect(paths(toZod({ type: 'string', minLength: 2 }), '🙂🙂')).toEqual([]);
+});
+
+// Same inputs and paths as SchemaCheckTest::testFalsePropertySchemaAndLabelMarkupParity.
+const UNSAFE_KEYS = [
+	'register_meta_box_cb',
+	'meta_box_cb',
+	'meta_box_sanitize_cb',
+	'update_count_callback',
+	'rest_controller_class',
+	'autosave_rest_controller_class',
+	'revisions_rest_controller_class',
+	'_builtin',
+	'_edit_link',
+];
+
+test.each(UNSAFE_KEYS)('parity with SchemaCheck: %s names PHP code and is refused in every kind', (key) => {
+	expect(paths(typeSchema, { name: 'X', [key]: 'phpinfo' })).toEqual([[key]]);
+	expect(paths(taxonomySchema, { name: 'X', [key]: 'phpinfo' })).toEqual([[key]]);
+	expect(paths(optionsSchema, { title: 'X', [key]: 'phpinfo' })).toEqual([[key]]);
+	const result = typeSchema.safeParse({ name: 'X', [key]: 'phpinfo' });
+	expect(result.success ? '' : result.error.issues[0].message).toBe('Not allowed in a declaration file.');
+});
+
+test('parity with SchemaCheck: inline taxonomies and labels refuse code and markup', () => {
+	expect(paths(typeSchema, { name: 'X', taxonomies: [{ name: 'Kind', meta_box_cb: 'x' }] })).toEqual([['taxonomies', 0, 'meta_box_cb']]);
+	expect(paths(typeSchema, { name: 'X', labels: { menu_name: '<b>X</b>' } })).toEqual([['labels', 'menu_name']]);
+	expect(paths(taxonomySchema, { name: 'X>' })).toEqual([['name']]);
+	expect(paths(optionsSchema, { title: 'X', tabs: [{ title: '<x' }] })).toEqual([['tabs', 0, 'title']]);
+	expect(paths(typeSchema, { name: 'Q&A', labels: { menu_name: 'Shop "new" & more!' } })).toEqual([]);
+	expect(paths(typeSchema, { name: 'X', my_cb: 'phpinfo' })).toEqual([]);
 });

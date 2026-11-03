@@ -273,6 +273,34 @@ final class SchemaFilesRoutesTest extends ContentModelRoutesTestCase
         self::assertSame($next, file_get_contents($path));
     }
 
+    public function testPutRefusesKeysNamingPhpCodeForEveryKind(): void
+    {
+        $cases = [
+            ['type', 'product', '{"name": "Product", "register_meta_box_cb": "phpinfo"}', '/register_meta_box_cb', 'proto-types/product/type.jsonc'],
+            ['type', 'book', '{"name": "Book", "taxonomies": [{"name": "Genre", "meta_box_sanitize_cb": "phpinfo"}]}', '/taxonomies/0/meta_box_sanitize_cb', 'proto-types/book/type.jsonc'],
+            ['taxonomy', 'genre', '{"name": "Genre", "update_count_callback": "phpinfo"}', '/update_count_callback', 'proto-taxonomies/genre/taxonomy.jsonc'],
+            ['options', 'theme-settings', '{"title": "Theme Settings", "rest_controller_class": "WP_REST_Posts_Controller"}', '/rest_controller_class', 'proto-options/theme-settings/page.jsonc'],
+        ];
+        foreach ($cases as [$kind, $slug, $text, $path, $file]) {
+            $error = self::assertWpError('proto_blocks_schema_invalid', 400, $this->routes()->save(self::request(
+                ['kind' => $kind, 'slug' => $slug],
+                ['text' => $text, 'hash' => null, 'acknowledge' => []]
+            )));
+            self::assertSame($path, $error->get_error_data()['errors'][0]['path'], $kind);
+            self::assertFileDoesNotExist($this->root . '/' . $file);
+        }
+    }
+
+    public function testPutRefusesMarkupInLabels(): void
+    {
+        $error = self::assertWpError('proto_blocks_schema_invalid', 400, $this->routes()->save(self::request(
+            ['kind' => 'type', 'slug' => 'product'],
+            ['text' => '{"name": "Product", "labels": {"add_new_item": "<img src=x onerror=alert(1)>"}}', 'hash' => null, 'acknowledge' => []]
+        )));
+        self::assertSame('/labels/add_new_item', $error->get_error_data()['errors'][0]['path']);
+        self::assertFileDoesNotExist($this->root . '/proto-types/product/type.jsonc');
+    }
+
     // --- read ----------------------------------------------------------------
 
     public function testGetExistingFile(): void

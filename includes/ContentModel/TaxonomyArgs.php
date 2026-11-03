@@ -9,7 +9,8 @@ namespace ProtoBlocks\ContentModel;
  * args, with the same merge rules as PostTypeArgs: `labels` merge, `rewrite`
  * merges when both sides are arrays, every other declared key replaces,
  * PLUGIN_KEYS never reach WordPress, and an invalid PHP declaration yields
- * `schema_invalid` errors and is skipped.
+ * `schema_invalid` errors and is skipped. File declarations pass through
+ * UntrustedKeys first (see PostTypeArgs).
  */
 final class TaxonomyArgs
 {
@@ -27,6 +28,7 @@ final class TaxonomyArgs
         if ($issues !== []) {
             return ['objectTypes' => [], 'args' => [], 'issues' => $issues];
         }
+        [$d, $warnings] = UntrustedKeys::filter($d, '#/$defs/taxonomy');
 
         $data = $d->data;
         $name = $d->name() ?? $d->slug;
@@ -46,7 +48,7 @@ final class TaxonomyArgs
         return [
             'objectTypes' => array_values(array_unique(array_filter($postTypes, 'is_string'))),
             'args' => self::apply($args, $d),
-            'issues' => [],
+            'issues' => $warnings,
         ];
     }
 
@@ -63,8 +65,9 @@ final class TaxonomyArgs
         if ($issues !== []) {
             return ['args' => $existing, 'issues' => $issues];
         }
+        [$d, $warnings] = UntrustedKeys::filter($d, '#/$defs/taxonomy');
 
-        return ['args' => self::apply($existing, $d), 'issues' => []];
+        return ['args' => self::apply($existing, $d), 'issues' => $warnings];
     }
 
     /**
