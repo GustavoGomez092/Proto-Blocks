@@ -61,6 +61,15 @@ test( 'invalid, overlong or catastrophic regex rules are false', () => {
 	expect( one( rule( '==pattern', '^(a+)+$' ), 'a'.repeat( 5000 ) + 'b' ) ).toBe( false );
 } );
 
+test( 'catastrophic-looking patterns still run on short subjects, like the server', () => {
+	expect( one( rule( '==pattern', '^(a+)+$' ), 'aaaa' ) ).toBe( true );
+	expect( one( rule( '==pattern', '^(a+)+$' ), 'aaab' ) ).toBe( false );
+	expect( one( rule( '==pattern', '^((a+)+)+$' ), 'a'.repeat( 11 ) + 'b' ) ).toBe( false );
+	const started = Date.now();
+	expect( one( rule( '==pattern', '^((a+)+)+$' ), 'a'.repeat( 40 ) + 'b' ) ).toBe( false );
+	expect( Date.now() - started ).toBeLessThan( 500 );
+} );
+
 test( 'unknown keys and unknown operators are false', () => {
 	expect( isVisible( field( [ [ rule( '==', 'a', 'field_missing' ) ] ] ), { field_a: 'a' } ) ).toBe( false );
 	expect( one( { field: 'field_a', operator: '===' as ConditionRule[ 'operator' ], value: 'a' }, 'a' ) ).toBe( false );

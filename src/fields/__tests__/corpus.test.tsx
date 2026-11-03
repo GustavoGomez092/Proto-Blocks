@@ -32,8 +32,9 @@ function setup( c: Case ) {
 	return { fields, opts };
 }
 
-test( 'the corpus is loaded', () => {
-	expect( cases.length ).toBeGreaterThanOrEqual( 30 );
+test( 'the whole corpus runs, with exactly one server-only case', () => {
+	expect( cases ).toHaveLength( 102 );
+	expect( cases.filter( ( c ) => SERVER_ONLY.has( c.id ) ) ).toHaveLength( 1 );
 } );
 
 test.each( cases.filter( ( c ) => ! SERVER_ONLY.has( c.id ) ).map( ( c ) => [ c.id, c ] as const ) )(

@@ -39,6 +39,7 @@ export function TrueFalseInput( { field, path }: FieldInputProps ) {
 				onCheckedChange={ ( checked ) => ctl.onChange( checked ) }
 				onBlur={ ctl.onBlur }
 				aria-invalid={ a11y.invalid || undefined }
+				aria-required={ a11y.required || undefined }
 				aria-describedby={ describedBy }
 			/>
 			{ message && (

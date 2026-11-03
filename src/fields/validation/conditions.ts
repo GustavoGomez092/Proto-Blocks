@@ -14,6 +14,17 @@ export const MAX_PATTERN_LENGTH = 200;
 /** Longest subject a user pattern is run against, in bytes. */
 export const MAX_SUBJECT_LENGTH = 10000;
 
+/**
+ * Longest subject (UTF-16 units) a catastrophic-looking pattern is still run
+ * against. JS regexes have no backtrack limit or timeout, and the blow-up is
+ * exponential: measured in Node, ^(a+)+$ on 24 chars + 'b' takes ~70 ms and
+ * ^((a+)+)+$ on 18 chars ~1.8 s, so this stays where every such pattern
+ * finishes in milliseconds (^((a+)+)+$ on 12 chars: ~2 ms). Short inputs, the
+ * common case for condition controllers, therefore get the same answer as
+ * the server.
+ */
+export const CATASTROPHIC_SUBJECT_MAX = 12;
+
 const encoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
 
 function byteLength( s: string ): number {
@@ -135,7 +146,9 @@ export function compilePattern( pattern: string ): RegExp | null {
 
 /**
  * True/false for a match; null when the pattern is unusable or the engine
- * cannot run it (catastrophic backtracking is left to the server).
+ * cannot run it safely (a catastrophic-looking pattern on a longer subject
+ * is left to the server: a condition reads that as false, validation
+ * reports nothing).
  */
 export function matchesPattern( pattern: string, subject: string ): boolean | null {
 	const re = compilePattern( pattern );
@@ -145,7 +158,7 @@ export function matchesPattern( pattern: string, subject: string ): boolean | nu
 	if ( byteLength( subject ) > MAX_SUBJECT_LENGTH ) {
 		return false;
 	}
-	if ( isCatastrophicPattern( pattern ) ) {
+	if ( subject.length > CATASTROPHIC_SUBJECT_MAX && isCatastrophicPattern( pattern ) ) {
 		return null;
 	}
 	try {

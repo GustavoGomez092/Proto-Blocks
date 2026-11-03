@@ -160,3 +160,30 @@ test( 'tabs keep every panel mounted so all values submit', () => {
 	expect( present() ).not.toContain( 'hero' );
 	expect( present() ).not.toContain( 'photos' );
 } );
+
+test( 'required inputs carry aria-required; optional ones do not', () => {
+	renderBox( payload() );
+	expect( screen.getByLabelText( /Start date/ ) ).toHaveAttribute( 'aria-required', 'true' );
+	expect( screen.getByLabelText( 'Subtitle' ) ).not.toHaveAttribute( 'aria-required' );
+} );
+
+test( 'radio and checkbox groups are named by aria-labelledby, not a label pointing at a div', () => {
+	const choice = ( name: string, type: 'radio' | 'checkbox', required = false ): Record< string, unknown > => ( {
+		key: `field_${ name }`,
+		name,
+		label: name.toUpperCase(),
+		type,
+		required: required ? 1 : 0,
+		choices: { a: 'Option A', b: 'Option B' },
+	} );
+	const fields = [ choice( 'level', 'radio', true ), choice( 'tags', 'checkbox' ) ].map(
+		( f ) => normalizeField( f ) as FieldDef
+	);
+	const { container } = renderBox( payload( { fields } ) );
+	expect( screen.getByRole( 'radiogroup', { name: /LEVEL/ } ) ).toHaveAttribute( 'aria-required', 'true' );
+	expect( screen.getByRole( 'group', { name: 'TAGS' } ) ).toBeInTheDocument();
+	for ( const label of Array.from( container.querySelectorAll( 'label[for]' ) ) ) {
+		expect( document.getElementById( label.getAttribute( 'for' )! )?.tagName ).not.toBe( 'DIV' );
+	}
+	expect( screen.getAllByRole( 'radio' ) ).toHaveLength( 2 );
+} );

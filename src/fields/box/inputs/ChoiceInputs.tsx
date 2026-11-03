@@ -163,6 +163,7 @@ export function RadioInput( { field, path }: FieldInputProps ) {
 			aria-labelledby={ a11y.labelId }
 			aria-describedby={ a11y.describedBy }
 			aria-invalid={ a11y.invalid || undefined }
+			aria-required={ a11y.required || undefined }
 			className={ cn( 'flex gap-x-5 gap-y-2', vertical ? 'flex-col' : 'flex-wrap' ) }
 		>
 			{ /* Submits the key when no option is checked; a checked radio (later in the form) wins. */ }

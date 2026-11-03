@@ -27,6 +27,7 @@ import {
 	FieldA11yContext,
 	hasInput,
 	inputFor,
+	isGroupInput,
 	registerInput,
 	useBox,
 	type BoxContextValue,
@@ -45,8 +46,8 @@ for ( const type of [ 'text', 'email', 'url', 'number', 'password' ] ) {
 	registerInput( type, TextInput );
 }
 registerInput( 'textarea', TextareaInput );
-registerInput( 'select', SelectInput );
-registerInput( 'radio', RadioInput );
+registerInput( 'select', SelectInput, { group: ( f ) => f.declaredType === 'checkbox' } );
+registerInput( 'radio', RadioInput, { group: () => true } );
 registerInput( 'true_false', TrueFalseInput );
 registerInput( 'color', ColorInput );
 registerInput( 'date', DateInput );
@@ -158,10 +159,13 @@ function RowBody( { field, scope, visible }: { field: FieldDef; scope: FieldPath
 			labelId: `${ id }-label`,
 			describedBy: [ field.instructions ? helpId : '', message ? errorId : '' ].filter( Boolean ).join( ' ' ) || undefined,
 			invalid: !! message,
+			required: field.required,
 		} ),
-		[ id, helpId, errorId, field.instructions, message ]
+		[ id, helpId, errorId, field.instructions, message, field.required ]
 	);
 	const Input = inputFor( field.type );
+	// A group (radios, checkbox list) is named by aria-labelledby; a `for` would point at a div.
+	const Label = isGroupInput( field ) ? 'span' : 'label';
 
 	return (
 		<div
@@ -170,7 +174,7 @@ function RowBody( { field, scope, visible }: { field: FieldDef; scope: FieldPath
 			className={ cn( 'col-span-12', spanClass( field ), visible ? 'flex flex-col gap-1.5' : 'hidden' ) }
 		>
 			{ scope.length === 0 && visible && editable && <input type="hidden" name={ PRESENT_NAME( groupKey ) } value={ field.name } /> }
-			<label id={ a11y.labelId } htmlFor={ id } className="w-fit text-sm font-semibold text-[#1d2327]">
+			<Label id={ a11y.labelId } { ...( Label === 'label' ? { htmlFor: id } : {} ) } className="w-fit text-sm font-semibold text-[#1d2327]">
 				{ field.label || field.name }
 				{ field.required && (
 					<>
@@ -180,7 +184,7 @@ function RowBody( { field, scope, visible }: { field: FieldDef; scope: FieldPath
 						<span className="sr-only">{ __( '(required)', 'proto-blocks' ) }</span>
 					</>
 				) }
-			</label>
+			</Label>
 			{ field.instructions && (
 				<p id={ helpId } className="text-[13px] text-muted-foreground">
 					{ field.instructions }

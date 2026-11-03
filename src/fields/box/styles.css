@@ -7,6 +7,11 @@
  * As in admin.css: no preflight (it would restyle the whole editor screen),
  * utilities are !important so they win over wp-admin and editor selectors,
  * and the few base rules the components need are unlayered and scoped.
+ *
+ * scripts/postcss/scope-utilities.js (see postcss.config.js) then prefixes
+ * every utility with :where(.proto-blocks-fields, #proto-blocks-fields-portal),
+ * moves the theme variables off :root onto those roots and renames the
+ * keyframes (pb-spin, pb-pulse), so nothing here applies outside the boxes.
  */
 @layer theme, base, components, utilities;
 
@@ -14,8 +19,14 @@
 /* source(none): only the sources below are scanned. */
 @import "tailwindcss/utilities.css" layer(utilities) important source(none);
 @import "../../admin/styles/tokens.css";
+/* The box sources and only the shared components the box imports. */
 @source "../**/*.{ts,tsx}";
-@source "../../admin/components/ui/*.tsx";
+@source "../../admin/components/ui/alert.tsx";
+@source "../../admin/components/ui/badge.tsx";
+@source "../../admin/components/ui/input.tsx";
+@source "../../admin/components/ui/skeleton.tsx";
+@source "../../admin/components/ui/switch.tsx";
+@source "../../admin/components/ui/tabs.tsx";
 @source not "../**/__tests__/**";
 
 /* Light theme only (see admin.css). */

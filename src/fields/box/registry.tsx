@@ -16,11 +16,30 @@ import { dottedPath, inputName, type FieldPath } from './names';
 export type FieldInputProps = { field: FieldDef; path: FieldPath; groupKey: string; readOnly?: boolean };
 export type FieldInput = ComponentType< FieldInputProps >;
 
+export type InputOptions = {
+	/**
+	 * True when the input is a group of controls (radios, a checkbox list)
+	 * labelled through aria-labelledby; the row label then has no `for`.
+	 */
+	group?: ( field: FieldDef ) => boolean;
+};
+
 const inputs = new Map< string, FieldInput | LazyExoticComponent< FieldInput > >();
+const options = new Map< string, InputOptions >();
 
 /** Registers (or replaces) the input component for a field type. */
-export function registerInput( type: string, component: FieldInput | LazyExoticComponent< FieldInput > ): void {
+export function registerInput(
+	type: string,
+	component: FieldInput | LazyExoticComponent< FieldInput >,
+	opts: InputOptions = {}
+): void {
 	inputs.set( type, component );
+	options.set( type, opts );
+}
+
+/** Whether the field's input is a labelled group rather than one labelable control. */
+export function isGroupInput( field: FieldDef ): boolean {
+	return options.get( field.type )?.group?.( field ) ?? false;
 }
 
 export function hasInput( type: string ): boolean {
@@ -54,9 +73,15 @@ export function useBox(): BoxContextValue {
 }
 
 /** Ids and state the field row hands its input, for labels and messages. */
-export type FieldA11y = { id: string; labelId: string; describedBy: string | undefined; invalid: boolean };
+export type FieldA11y = { id: string; labelId: string; describedBy: string | undefined; invalid: boolean; required: boolean };
 
-export const FieldA11yContext = createContext< FieldA11y >( { id: '', labelId: '', describedBy: undefined, invalid: false } );
+export const FieldA11yContext = createContext< FieldA11y >( {
+	id: '',
+	labelId: '',
+	describedBy: undefined,
+	invalid: false,
+	required: false,
+} );
 
 export function useFieldA11y(): FieldA11y {
 	return useContext( FieldA11yContext );
@@ -68,6 +93,7 @@ export function useA11yProps() {
 	return {
 		id: a11y.id,
 		'aria-invalid': a11y.invalid || undefined,
+		'aria-required': a11y.required || undefined,
 		'aria-describedby': a11y.describedBy,
 	};
 }
