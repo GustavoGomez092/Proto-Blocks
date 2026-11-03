@@ -222,7 +222,7 @@ test('LabelsEditor shows generated labels as placeholders and writes only overri
 test('MenuIconField forwards its ref to the input', () => {
 	const ref = createRef<HTMLInputElement>();
 	render(<MenuIconField ref={ref} id="icon" value={undefined} onChange={() => {}} />);
-	expect(ref.current).toBe(screen.getByRole('combobox', { name: /Menu icon/ }));
+	expect(ref.current).toBe(screen.getByRole('textbox', { name: /Menu icon/ }));
 });
 
 test('MenuIconField previews a dashicon and warns about a non-https URL', async () => {
@@ -233,7 +233,7 @@ test('MenuIconField previews a dashicon and warns about a non-https URL', async 
 	}
 	render(<Harness />);
 
-	const input = screen.getByRole('combobox', { name: /Menu icon/ });
+	const input = screen.getByRole('textbox', { name: /Menu icon/ });
 	expect(input).toHaveValue('dashicons-cart');
 	expect(document.querySelector('.dashicons-cart')).not.toBeNull();
 

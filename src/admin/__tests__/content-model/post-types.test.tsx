@@ -617,7 +617,7 @@ test('a registered data: URI icon is summarised, not prefilled, and never blocks
 	const post = jest.fn(() => saved);
 	await openEdit(iconRoutes(post));
 
-	expect(screen.queryByRole('combobox', { name: /Menu icon/ })).not.toBeInTheDocument();
+	expect(screen.queryByRole('textbox', { name: /Menu icon/ })).not.toBeInTheDocument();
 	const summary = screen.getByText(/Registered icon: inline SVG \(3\.\d KB\)/);
 	expect(summary).toHaveClass('break-all');
 	expect(summary.textContent).not.toContain('AAAA');
@@ -638,7 +638,7 @@ test('Replace opens an empty icon input, and a typed value over 2048 characters 
 	await openEdit(iconRoutes(post));
 
 	await user.click(screen.getByRole('button', { name: 'Replace' }));
-	const input = screen.getByRole('combobox', { name: /Menu icon/ });
+	const input = screen.getByRole('textbox', { name: /Menu icon/ });
 	expect(input).toHaveValue('');
 	fireEvent.change(input, { target: { value: 'data:image/svg+xml;base64,' + 'B'.repeat(2100) } });
 	await user.click(screen.getByRole('button', { name: 'Save to file' }));

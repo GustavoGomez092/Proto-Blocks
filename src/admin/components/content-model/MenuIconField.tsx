@@ -1,52 +1,11 @@
 import { forwardRef, useState } from 'react';
 import { __, sprintf } from '@wordpress/i18n';
-import { ImageIcon, TriangleAlertIcon } from 'lucide-react';
+import { ImageIcon, SmilePlusIcon, TriangleAlertIcon } from 'lucide-react';
+import { DashiconPicker } from '@/admin/components/content-model/DashiconPicker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/admin/components/ui/popover';
 import { Button } from '@/admin/components/ui/button';
 import { Input } from '@/admin/components/ui/input';
 import { Label } from '@/admin/components/ui/label';
-
-/** Suggestions for the picker; any `dashicons-*` name is accepted. */
-const DASHICONS = [
-	'admin-post',
-	'admin-page',
-	'admin-media',
-	'admin-links',
-	'admin-users',
-	'admin-tools',
-	'admin-home',
-	'archive',
-	'awards',
-	'book',
-	'building',
-	'businessman',
-	'calendar-alt',
-	'camera',
-	'cart',
-	'clipboard',
-	'database',
-	'download',
-	'edit',
-	'email',
-	'format-gallery',
-	'format-quote',
-	'format-video',
-	'groups',
-	'heart',
-	'id',
-	'location',
-	'lock',
-	'megaphone',
-	'microphone',
-	'money-alt',
-	'products',
-	'portfolio',
-	'star-filled',
-	'store',
-	'tag',
-	'testimonial',
-	'tickets-alt',
-	'video-alt3',
-].map((name) => `dashicons-${name}`);
 
 const DASHICON = /^dashicons-[a-z0-9-]+$/;
 
@@ -68,7 +27,7 @@ function describeIcon(icon: string): string {
 }
 
 /**
- * `menu_icon`: a dashicon name (picked from suggestions or typed), a file in
+ * `menu_icon`: a dashicon name (picked from the visual picker or typed), a file in
  * the theme, or an https URL, with a preview. A plain http URL gets a
  * warning: an https admin would block it. Emptying it gives undefined. The
  * ref reaches the input, so react-hook-form's setFocus works.
@@ -89,7 +48,7 @@ export const MenuIconField = forwardRef<
 	const [replacing, setReplacing] = useState(false);
 	const summary = !replacing && text === '' && registered && !isPrefillableIcon(registered) ? describeIcon(registered) : null;
 	const insecure = /^http:\/\//i.test(text);
-	const listId = `${id}-dashicons`;
+	const [open, setOpen] = useState(false);
 	const hintId = `${id}-hint`;
 	const warningId = `${id}-warning`;
 
@@ -134,7 +93,6 @@ export const MenuIconField = forwardRef<
 				<Input
 					ref={ref}
 					id={id}
-					list={listId}
 					value={text}
 					disabled={disabled}
 					className="min-w-0 font-mono"
@@ -146,11 +104,25 @@ export const MenuIconField = forwardRef<
 					onChange={(event) => onChange(event.target.value === '' ? undefined : event.target.value)}
 				/>
 				)}
-				<datalist id={listId}>
-					{DASHICONS.map((name) => (
-						<option key={name} value={name} />
-					))}
-				</datalist>
+				{summary === null ? (
+					<Popover open={open} onOpenChange={setOpen}>
+						<PopoverTrigger asChild>
+							<Button type="button" variant="outline" size="sm" disabled={disabled} className="flex-none">
+								<SmilePlusIcon aria-hidden="true" />
+								{__('Choose icon', 'proto-blocks')}
+							</Button>
+						</PopoverTrigger>
+						<PopoverContent className="w-[19.5rem]">
+							<DashiconPicker
+								value={text}
+								onSelect={(name) => {
+									onChange(name);
+									setOpen(false);
+								}}
+							/>
+						</PopoverContent>
+					</Popover>
+				) : null}
 			</div>
 			<p id={summary !== null ? `${hintId}-help` : hintId} className="text-[13px] text-muted-foreground">
 				{__(
