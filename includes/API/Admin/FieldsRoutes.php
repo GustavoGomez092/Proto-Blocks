@@ -10,8 +10,7 @@ declare(strict_types=1);
 namespace ProtoBlocks\API\Admin;
 
 use ProtoBlocks\API\AdminRestController;
-use ProtoBlocks\CLI\Commands;
-use ProtoBlocks\CLI\FieldsCommand;
+use ProtoBlocks\Modules\Fields\GroupRows;
 use ProtoBlocks\ContentModel\Declaration;
 use ProtoBlocks\ContentModel\FileLoader;
 use ProtoBlocks\ContentModel\Issue;
@@ -120,7 +119,7 @@ final class FieldsRoutes extends ContentModelRoutes
         $groups = $module->index()->all();
         $issues = $module->issues();
         $skipped = $module->acf()->skipped();
-        $rows = FieldsCommand::rows($groups, $skipped);
+        $rows = GroupRows::rows($groups, $skipped);
         $acfGroups = [];
         foreach ($module->acf()->acfGroups() as $acf) {
             $acfGroups[$acf['key']] = $acf;
@@ -145,7 +144,7 @@ final class FieldsRoutes extends ContentModelRoutes
                 'location' => $acfGroups[$one['key']]['locationSummary'] ?? '',
                 'fieldCount' => self::acfFieldCount($one['key']),
                 'position' => 'normal',
-                'status' => FieldsCommand::STATUS_SKIPPED_ACF,
+                'status' => GroupRows::STATUS_SKIPPED_ACF,
                 'issues' => $own,
                 'doubleDeclared' => false,
                 'editable' => false,
@@ -158,15 +157,15 @@ final class FieldsRoutes extends ContentModelRoutes
                 continue;
             }
             $out[] = [
-                'key' => Commands::safeArg($key),
-                'title' => Commands::safeArg($acf['title']),
+                'key' => GroupRows::safeArg($key),
+                'title' => GroupRows::safeArg($acf['title']),
                 'origin' => 'acf',
                 'file' => null,
                 'source' => null,
-                'location' => Commands::safeArg($acf['locationSummary']),
+                'location' => GroupRows::safeArg($acf['locationSummary']),
                 'fieldCount' => self::acfFieldCount($key),
                 'position' => 'normal',
-                'status' => FieldsCommand::STATUS_ACTIVE,
+                'status' => GroupRows::STATUS_ACTIVE,
                 'issues' => [],
                 'doubleDeclared' => false,
                 'editable' => false,

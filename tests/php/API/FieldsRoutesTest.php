@@ -407,6 +407,36 @@ JSONC);
 
     #[RunInSeparateProcess]
     #[PreserveGlobalState(false)]
+    public function testListNeverAutoloadsCliClasses(): void
+    {
+        // The shared bootstrap stubs WP_CLI_Command, so a CLI reference would
+        // not fatal here as it does on a real admin request. Prove instead
+        // that no CLI class is ever loaded to answer the list.
+        $list = $this->routes()->list();
+        self::assertNotEmpty($list['groups']);
+        self::assertFalse(class_exists('ProtoBlocks\\CLI\\FieldsCommand', false));
+        self::assertFalse(class_exists('ProtoBlocks\\CLI\\Commands', false));
+    }
+
+    public function testNonCliSourceNeverReferencesCliNamespace(): void
+    {
+        $root = dirname(__DIR__, 3) . '/includes';
+        $offenders = [];
+        $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
+        foreach ($it as $file) {
+            $path = $file->getPathname();
+            if (substr($path, -4) !== '.php' || strpos($path, $root . '/CLI/') === 0 || $path === $root . '/Core/Plugin.php') {
+                continue;
+            }
+            if (preg_match('/ProtoBlocks\\\\CLI\\\\/', (string) file_get_contents($path))) {
+                $offenders[] = substr($path, strlen($root) + 1);
+            }
+        }
+        self::assertSame([], $offenders, 'WP_CLI_Command-dependent classes must not be referenced outside includes/CLI');
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
     public function testAcfOwnedGroupsAreListedReadOnly(): void
     {
         require __DIR__ . '/../Modules/Fields/stubs/Acf.php';

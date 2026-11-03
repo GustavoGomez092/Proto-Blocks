@@ -24,9 +24,9 @@ use WP_CLI;
  */
 final class FieldsCommand {
 
-	public const STATUS_ACTIVE       = 'active';
-	public const STATUS_UNRENDERABLE = 'unrenderable';
-	public const STATUS_SKIPPED_ACF  = 'skipped-acf';
+	public const STATUS_ACTIVE       = \ProtoBlocks\Modules\Fields\GroupRows::STATUS_ACTIVE;
+	public const STATUS_UNRENDERABLE = \ProtoBlocks\Modules\Fields\GroupRows::STATUS_UNRENDERABLE;
+	public const STATUS_SKIPPED_ACF  = \ProtoBlocks\Modules\Fields\GroupRows::STATUS_SKIPPED_ACF;
 
 	private const LIST_COLUMNS = array( 'key', 'title', 'source', 'path', 'fields', 'location', 'status' );
 
@@ -53,31 +53,7 @@ final class FieldsCommand {
 	 * @return list<array{key: string, title: string, source: string, path: string, fields: int, location: string, status: string}>
 	 */
 	public static function rows( array $groups, array $skipped ): array {
-		$rows = array();
-		foreach ( $groups as $group ) {
-			$rows[] = array(
-				'key'      => Commands::safeArg( $group->key ),
-				'title'    => Commands::safeArg( $group->title ),
-				'source'   => Commands::safeArg( $group->source ),
-				'path'     => Commands::safeArg( (string) ( $group->path ?? '' ) ),
-				'fields'   => count( $group->fields ),
-				'location' => Commands::safeArg( AcfBridge::locationSummary( $group->location->or ) ),
-				'status'   => $group->location->isRenderable() ? self::STATUS_ACTIVE : self::STATUS_UNRENDERABLE,
-			);
-		}
-		foreach ( $skipped as $one ) {
-			$rows[] = array(
-				'key'      => Commands::safeArg( $one['key'] ),
-				'title'    => Commands::safeArg( $one['title'] ),
-				'source'   => 'acf',
-				'path'     => Commands::safeArg( $one['source'] ),
-				'fields'   => 0,
-				'location' => '',
-				'status'   => self::STATUS_SKIPPED_ACF,
-			);
-		}
-
-		return $rows;
+		return \ProtoBlocks\Modules\Fields\GroupRows::rows( $groups, $skipped );
 	}
 
 	/**
