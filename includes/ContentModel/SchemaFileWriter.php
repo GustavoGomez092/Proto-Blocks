@@ -32,28 +32,55 @@ final class SchemaFileWriter
     /**
      * What the modules add to the schema check (`proto_blocks_declaration_errors`,
      * called with the kind, the decoded data and the slug): field group rules,
-     * options-page rules such as protected option names.
+     * options-page rules such as protected option names. Only errors: a
+     * finding marked `'level' => 'warning'` never refuses a write.
      *
      * @param array<string|int, mixed> $data
      * @return list<array{path: string, message: string}>
      */
     public static function declarationErrors(string $kind, array $data, string $slug): array
     {
-        $filtered = apply_filters('proto_blocks_declaration_errors', [], $kind, $data, $slug);
-
         $errors = [];
-        foreach (is_array($filtered) ? $filtered : [] as $error) {
-            if (is_array($error) && is_string($error['message'] ?? null)) {
-                $errors[] = ['path' => is_string($error['path'] ?? null) ? $error['path'] : '', 'message' => $error['message']];
-            } elseif (is_string($error) && $error !== '') {
-                $errors[] = ['path' => '', 'message' => $error];
-            } elseif ($error !== null && $error !== []) {
-                // Fail closed on a finding in a shape this method does not know.
-                $errors[] = ['path' => '', 'message' => __('A validation filter refused this declaration.', 'proto-blocks')];
+        foreach (self::declarationFindings($kind, $data, $slug) as $finding) {
+            if ($finding['level'] === Issue::ERROR) {
+                $errors[] = ['path' => $finding['path'], 'message' => $finding['message']];
             }
         }
 
         return $errors;
+    }
+
+    /**
+     * Every `proto_blocks_declaration_errors` finding with its level: an
+     * entry `{path, message}` is an error unless it says
+     * `'level' => 'warning'`; `code` is kept when given. A finding in a shape
+     * this method does not know is an error (fail closed).
+     *
+     * @param array<string|int, mixed> $data
+     * @return list<array{path: string, message: string, level: string, code: ?string}>
+     */
+    public static function declarationFindings(string $kind, array $data, string $slug): array
+    {
+        $filtered = apply_filters('proto_blocks_declaration_errors', [], $kind, $data, $slug);
+
+        $findings = [];
+        foreach (is_array($filtered) ? $filtered : [] as $error) {
+            if (is_array($error) && is_string($error['message'] ?? null)) {
+                $findings[] = [
+                    'path' => is_string($error['path'] ?? null) ? $error['path'] : '',
+                    'message' => $error['message'],
+                    'level' => ($error['level'] ?? null) === Issue::WARNING ? Issue::WARNING : Issue::ERROR,
+                    'code' => is_string($error['code'] ?? null) && $error['code'] !== '' ? $error['code'] : null,
+                ];
+            } elseif (is_string($error) && $error !== '') {
+                $findings[] = ['path' => '', 'message' => $error, 'level' => Issue::ERROR, 'code' => null];
+            } elseif ($error !== null && $error !== []) {
+                // Fail closed on a finding in a shape this method does not know.
+                $findings[] = ['path' => '', 'message' => __('A validation filter refused this declaration.', 'proto-blocks'), 'level' => Issue::ERROR, 'code' => null];
+            }
+        }
+
+        return $findings;
     }
 
     public static function hash(string $text): string

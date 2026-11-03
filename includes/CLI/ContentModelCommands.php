@@ -321,7 +321,8 @@ final class ContentModelCommands {
      * declarations arrive as the Registry's `double_declaration` warning,
      * which names both locations. Every loaded declaration also goes through
      * the `proto_blocks_declaration_errors` filter (the checks the writer runs
-     * beyond the schema); each error it returns is a `declaration_invalid` row.
+     * beyond the schema); each error it returns is a `declaration_invalid` row,
+     * each warning (`'level' => 'warning'`) a warning row under its own code.
      *
      * @param list<Issue> $moduleIssues
      * @return list<array{kind: string, slug: string, level: string, code: string, message: string, source: string}>
@@ -356,10 +357,11 @@ final class ContentModelCommands {
                 if ( null !== $declaration->parentType ) {
                     continue; // An inline taxonomy is checked with its type's data.
                 }
-                foreach ( SchemaFileWriter::declarationErrors( $kind, $declaration->data, (string) $slug ) as $error ) {
+                foreach ( SchemaFileWriter::declarationFindings( $kind, $declaration->data, (string) $slug ) as $error ) {
+                    $warning  = Issue::WARNING === $error['level'];
                     $issues[] = new Issue(
-                        Issue::ERROR,
-                        'declaration_invalid',
+                        $warning ? Issue::WARNING : Issue::ERROR,
+                        $warning ? ( $error['code'] ?? 'declaration_warning' ) : 'declaration_invalid',
                         ( '' === $error['path'] ? '/' : $error['path'] ) . ': ' . $error['message'],
                         $declaration->source,
                         (string) $slug,

@@ -73,6 +73,9 @@ abstract class ContentModelRoutesTestCase extends TestCase
             $GLOBALS[$key] = [];
         }
         unset($GLOBALS['pb_test_theme'], $GLOBALS['pb_test_current_user'], $GLOBALS['pb_test_caps'], $GLOBALS['pb_test_block_theme']);
+        // modules() boots the Fields module too: drop its process-wide state.
+        \ProtoBlocks\Modules\Fields\FieldsModule::setInstance(null);
+        \ProtoBlocks\Modules\Fields\Read\FieldReader::setShared(null);
         if ($this->root !== '') {
             @chmod($this->root, 0755);
             self::removeTree($this->root);
