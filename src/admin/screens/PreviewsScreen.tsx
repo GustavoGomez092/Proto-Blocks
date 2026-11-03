@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { __, sprintf } from '@wordpress/i18n';
+import { __, _n, sprintf } from '@wordpress/i18n';
 import {
 	CameraIcon,
-	CheckIcon,
 	CircleCheckIcon,
 	CircleXIcon,
 	ImageIcon,
@@ -16,13 +15,12 @@ import { adminGet, adminPost, ApiError } from '@/admin/api';
 import { getBootstrap } from '@/admin/bootstrap';
 import { PageHeader } from '@/admin/components/shell/PageHeader';
 import { READ_ONLY_BANNER_ID, ReadOnlyBanner } from '@/admin/components/shell/ReadOnlyBanner';
+import { Panel } from '@/admin/components/shell/Panel';
 import { ScreenError } from '@/admin/components/shell/ScreenError';
-import { Badge } from '@/admin/components/ui/badge';
 import { Button } from '@/admin/components/ui/button';
-import { Card } from '@/admin/components/ui/card';
 import { Checkbox } from '@/admin/components/ui/checkbox';
 import { Skeleton } from '@/admin/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/admin/components/ui/table';
+import { cn } from '@/admin/lib/utils';
 import { interpolate } from '@/admin/lib/interpolate';
 import { captureMany, type CaptureDeps, type CaptureRow, type RowStatus } from '@/admin/lib/capture';
 
@@ -54,7 +52,7 @@ type RunState =
 
 type LoadState = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ready'; data: PreviewsData };
 
-const code = (text: ReactNode) => <code className="font-mono text-[12.5px]">{text}</code>;
+const code = (text: ReactNode) => <code className="font-mono text-caption">{text}</code>;
 
 type Html2Canvas = typeof import('html2canvas-pro').default;
 let html2canvasModule: Promise<Html2Canvas> | null = null;
@@ -117,10 +115,17 @@ function liveText(live: Live): string {
 
 const BUSY: Live['status'][] = ['rendering', 'rasterizing', 'uploading'];
 
+/** Card media: the preview, a rasterizing overlay, or the empty "no preview" state. 16:10. */
 function Thumbnail({ block, busy }: { block: PreviewBlock; busy: boolean }) {
-	const frame = 'aspect-[16/10] w-[128px] rounded border';
 	if (busy) {
-		return <Skeleton className={`${frame} border-dashed border-input`} />;
+		return (
+			<div className="absolute inset-0 grid place-items-center bg-code">
+				<span className="grid justify-items-center gap-2 text-primary">
+					<LoaderCircleIcon aria-hidden="true" className="size-5 animate-spin motion-reduce:animate-none" />
+					<span className="text-micro font-medium">{__('Rasterizing…', 'proto-blocks')}</span>
+				</span>
+			</div>
+		);
 	}
 	if (block.previewUrl) {
 		return (
@@ -128,19 +133,17 @@ function Thumbnail({ block, busy }: { block: PreviewBlock; busy: boolean }) {
 				src={`${block.previewUrl}?v=${block.previewMtime ?? 0}`}
 				/* translators: %s: block title. */
 				alt={sprintf(__('%s preview', 'proto-blocks'), block.title)}
-				className={`${frame} border-border bg-muted object-cover object-top`}
+				className="absolute inset-0 size-full object-cover object-top"
 			/>
 		);
 	}
 	return (
-		<div
-			className={`${frame} grid place-items-center border-dashed border-input bg-muted text-[11px] text-muted-foreground`}
-		>
-			<span className="flex flex-col items-center gap-1">
-				<ImageOffIcon aria-hidden="true" className="size-4" />
-				{block.hasPreview ? __('No public URL', 'proto-blocks') : __('No preview', 'proto-blocks')}
+		<span className="grid justify-items-center gap-1.5 text-muted-foreground">
+			<ImageOffIcon aria-hidden="true" className="size-5" strokeWidth={1.75} />
+			<span className="text-micro">
+				{block.hasPreview ? __('No public URL', 'proto-blocks') : __('No preview yet', 'proto-blocks')}
 			</span>
-		</div>
+		</span>
 	);
 }
 
@@ -151,17 +154,17 @@ function LiveLine({ live }: { live?: Live }) {
 	const text = liveText(live);
 	if (live.status === 'failed') {
 		return (
-			<span className="flex items-center gap-1 text-[12px] text-destructive">
+			<span className="flex items-center gap-1 text-micro text-destructive">
 				<CircleXIcon aria-hidden="true" className="size-3" />
 				{text}
 			</span>
 		);
 	}
 	if (live.status === 'captured') {
-		return <span className="text-[12px] text-success tabular-nums">{text}</span>;
+		return <span className="text-micro text-success tabular-nums">{text}</span>;
 	}
 	return (
-		<span className="flex items-center gap-1 text-[12px] text-muted-foreground">
+		<span className="flex items-center gap-1 text-micro text-muted-foreground">
 			{BUSY.includes(live.status) ? (
 				<LoaderCircleIcon aria-hidden="true" className="size-3 animate-spin motion-reduce:animate-none" />
 			) : null}
@@ -170,21 +173,19 @@ function LiveLine({ live }: { live?: Live }) {
 	);
 }
 
+/** Run progress strip above the grid; also the polite live region for the run. */
 function RunStatus({ run }: { run: RunState }) {
 	let content: ReactNode = null;
 	if (run.phase === 'running') {
 		const current = Math.min(run.done + 1, run.total);
 		content = (
 			<>
-				<LoaderCircleIcon
-					aria-hidden="true"
-					className="size-4 animate-spin text-muted-foreground motion-reduce:animate-none"
-				/>
-				<span className="text-[13px] text-muted-foreground tabular-nums">
+				<LoaderCircleIcon aria-hidden="true" className="size-4 flex-none animate-spin text-primary motion-reduce:animate-none" />
+				<span className="text-label font-medium tabular-nums">
 					{/* translators: 1: number of the block being captured, 2: blocks in this run. */}
 					{sprintf(__('Capturing %1$d of %2$d…', 'proto-blocks'), current, run.total)}
 				</span>
-				<span aria-hidden="true" className="h-1.5 w-28 overflow-hidden rounded-full bg-muted">
+				<span aria-hidden="true" className="h-1.5 flex-1 overflow-hidden rounded-full bg-divider">
 					<span
 						className="block h-full bg-brand transition-[width]"
 						style={{ width: `${run.total ? Math.round((run.done / run.total) * 100) : 0}%` }}
@@ -194,18 +195,25 @@ function RunStatus({ run }: { run: RunState }) {
 		);
 	} else if (run.phase === 'finished') {
 		content = (
-			<span className="flex items-center gap-2 text-[13px] font-medium text-success">
+			<span className="flex items-center gap-2 text-label font-medium text-success">
 				<CircleCheckIcon aria-hidden="true" className="size-4" />
 				{/* translators: 1: blocks captured, 2: blocks that failed. */}
 				{sprintf(__('Done. %1$d captured, %2$d failed.', 'proto-blocks'), run.captured, run.failed)}
 			</span>
 		);
 	} else if (run.phase === 'empty') {
-		content = <span className="text-[13px] text-muted-foreground">{__('Nothing to capture.', 'proto-blocks')}</span>;
+		content = <span className="text-label text-muted-foreground">{__('Nothing to capture.', 'proto-blocks')}</span>;
 	}
 
 	return (
-		<div role="status" aria-live="polite" className="ml-auto flex min-w-0 items-center gap-2">
+		<div
+			role="status"
+			aria-live="polite"
+			className={cn(
+				'flex min-w-0 items-center gap-3.5 rounded-xl border bg-card px-4 py-3',
+				content ? 'mb-4' : 'sr-only'
+			)}
+		>
 			{content}
 		</div>
 	);
@@ -213,42 +221,45 @@ function RunStatus({ run }: { run: RunState }) {
 
 function EmptyState({ adminUrl }: { adminUrl: string }) {
 	return (
-		<Card className="flex flex-col items-center gap-3 rounded-lg px-6 py-12 text-center shadow-xs">
+		<Panel className="flex flex-col items-center gap-3 px-6 py-12 text-center">
 			<div
 				aria-hidden="true"
 				className="grid size-11 place-items-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-[18px]"
 			>
 				<ImageIcon />
 			</div>
-			<h2 className="text-[15px] font-semibold text-balance">{__('No blocks to capture', 'proto-blocks')}</h2>
-			<p className="max-w-[48ch] text-[13px] text-muted-foreground">
+			<h2 className="text-section font-semibold text-balance">{__('No blocks to capture', 'proto-blocks')}</h2>
+			<p className="max-w-[48ch] text-label text-muted-foreground">
 				{__('Previews appear here once your theme registers a Proto-Block.', 'proto-blocks')}
 			</p>
 			<Button variant="outline" size="sm" asChild>
 				<a href={`${adminUrl}?page=proto-blocks`}>{__('Go to Blocks', 'proto-blocks')}</a>
 			</Button>
-		</Card>
+		</Panel>
 	);
 }
 
 function LoadingState() {
 	return (
-		<Card aria-busy="true" className="gap-0 rounded-lg py-0 shadow-xs">
-			<div className="flex gap-2 border-b p-4">
-				<Skeleton className="h-8 w-36" />
-				<Skeleton className="h-8 w-36" />
-				<Skeleton className="h-8 w-28" />
-			</div>
-			<div className="grid gap-4 p-4">
-				<Skeleton className="h-20" />
-				<Skeleton className="h-20" />
-				<Skeleton className="h-20" />
-			</div>
-		</Card>
+		<div aria-busy="true" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			<Skeleton className="h-60 rounded-xl" />
+			<Skeleton className="h-60 rounded-xl" />
+			<Skeleton className="h-60 rounded-xl" />
+			<Skeleton className="h-60 rounded-xl" />
+		</div>
 	);
 }
 
-function CaptureTable({ data, fileModsAllowed }: { data: PreviewsData; fileModsAllowed: boolean }) {
+function CaptureGrid({
+	data,
+	fileModsAllowed,
+	header,
+}: {
+	data: PreviewsData;
+	fileModsAllowed: boolean;
+	/** Renders the page header (and read-only banner) with this grid's actions. */
+	header: (actions: ReactNode) => ReactNode;
+}) {
 	const [blocks, setBlocks] = useState<PreviewBlock[]>(data.blocks);
 	const [selected, setSelected] = useState<Set<string>>(() => new Set());
 	const [live, setLive] = useState<Record<string, Live>>({});
@@ -338,72 +349,67 @@ function CaptureTable({ data, fileModsAllowed }: { data: PreviewsData; fileModsA
 			return next;
 		});
 
+	const withPreviews = blocks.length - missing.length;
+
 	return (
-		<Card role="region" aria-labelledby="pb-previews-heading" className="gap-0 rounded-lg py-0 shadow-xs">
-			<h2 id="pb-previews-heading" className="sr-only">
-				{__('Block previews', 'proto-blocks')}
-			</h2>
-			<div className="sticky top-8 z-10 flex flex-wrap items-center gap-2 rounded-t-lg border-b bg-card p-4">
-				<Button
-					size="sm"
-					disabled={locked || missing.length === 0}
-					aria-describedby={describedBy}
-					onClick={() => start(missing)}
-				>
-					<CameraIcon aria-hidden="true" />
-					{__('Capture missing', 'proto-blocks')}
-					<Badge variant="secondary" className="rounded-sm py-0 tabular-nums">
-						{missing.length}
-					</Badge>
-				</Button>
-				<Button
-					size="sm"
-					variant="outline"
-					disabled={locked || selected.size === 0}
-					aria-describedby={describedBy}
-					onClick={() => start(blocks.filter((b) => selected.has(b.name)))}
-				>
-					<ListChecksIcon aria-hidden="true" />
-					{__('Capture selected', 'proto-blocks')}
-					<span className="text-muted-foreground tabular-nums">({selected.size})</span>
-				</Button>
-				<Button
-					size="sm"
-					variant="ghost"
-					disabled={locked}
-					aria-describedby={describedBy}
-					onClick={() => start(blocks)}
-				>
-					<RefreshCwIcon aria-hidden="true" />
-					{__('Recapture all', 'proto-blocks')}
-				</Button>
-				<RunStatus run={run} />
-			</div>
-			<Table className="min-w-[720px] table-fixed">
-				<TableHeader>
-					<TableRow>
-						<TableHead className="w-10 px-4">
-							<Checkbox
-								aria-label={__('Select all', 'proto-blocks')}
-								checked={allChecked ? true : someChecked ? 'indeterminate' : false}
-								onCheckedChange={(checked) => toggleAll(checked === true)}
-							/>
-						</TableHead>
-						<TableHead scope="col" className="w-[30%] text-[13px] text-muted-foreground">
-							{__('Block', 'proto-blocks')}
-						</TableHead>
-						<TableHead scope="col" className="w-[168px] text-[13px] text-muted-foreground">
-							{__('Preview', 'proto-blocks')}
-						</TableHead>
-						<TableHead scope="col" className="text-[13px] text-muted-foreground">
-							{__('Status', 'proto-blocks')}
-						</TableHead>
-						<TableHead scope="col" className="w-[130px] px-4 text-right text-[13px] text-muted-foreground">
-							{__('Action', 'proto-blocks')}
-						</TableHead>
-					</TableRow>
-				</TableHeader>
-				<TableBody>
+		<>
+			{header(
+				<>
+					<Button variant="outline" disabled={locked} aria-describedby={describedBy} onClick={() => start(blocks)}>
+						<RefreshCwIcon aria-hidden="true" />
+						{__('Recapture all', 'proto-blocks')}
+					</Button>
+					<Button
+						disabled={locked || missing.length === 0}
+						aria-describedby={describedBy}
+						onClick={() => start(missing)}
+					>
+						<CameraIcon aria-hidden="true" />
+						{sprintf(
+							/* translators: %d: number of blocks without a preview. */
+							_n('Capture %d missing', 'Capture %d missing', missing.length, 'proto-blocks'),
+							missing.length
+						)}
+					</Button>
+				</>
+			)}
+			<RunStatus run={run} />
+			<section aria-labelledby="pb-previews-heading">
+				<h2 id="pb-previews-heading" className="sr-only">
+					{__('Block previews', 'proto-blocks')}
+				</h2>
+				<div className="mb-3 flex flex-wrap items-center gap-3 text-label text-muted-foreground">
+					<label className="inline-flex cursor-pointer items-center gap-2">
+						<Checkbox
+							aria-label={__('Select all', 'proto-blocks')}
+							checked={allChecked ? true : someChecked ? 'indeterminate' : false}
+							onCheckedChange={(checked) => toggleAll(checked === true)}
+						/>
+						<span aria-hidden="true">{__('Select all', 'proto-blocks')}</span>
+					</label>
+					<span aria-hidden="true">·</span>
+					<span>
+						{sprintf(
+							/* translators: 1: number of blocks, 2: number of blocks with a preview. */
+							_n('%1$d block · %2$d with previews', '%1$d blocks · %2$d with previews', blocks.length, 'proto-blocks'),
+							blocks.length,
+							withPreviews
+						)}
+					</span>
+					<Button
+						size="sm"
+						variant="outline"
+						className="ml-auto"
+						disabled={locked || selected.size === 0}
+						aria-describedby={describedBy}
+						onClick={() => start(blocks.filter((b) => selected.has(b.name)))}
+					>
+						<ListChecksIcon aria-hidden="true" />
+						{__('Capture selected', 'proto-blocks')}
+						<span className="text-muted-foreground tabular-nums">({selected.size})</span>
+					</Button>
+				</div>
+				<ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 					{blocks.map((block) => {
 						const rowLive = live[block.name];
 						const busy = rowLive ? BUSY.includes(rowLive.status) : false;
@@ -414,59 +420,60 @@ function CaptureTable({ data, fileModsAllowed }: { data: PreviewsData; fileModsA
 							actionLabel = __('Retry', 'proto-blocks');
 							ActionIcon = RotateCwIcon;
 						}
+						const titleId = `pb-preview-${block.name}`;
 
 						return (
-							<TableRow key={block.name}>
-								<TableCell className="px-4">
-									<Checkbox
-										/* translators: %s: block title. */
-										aria-label={sprintf(__('Select %s', 'proto-blocks'), block.title)}
-										checked={selected.has(block.name)}
-										onCheckedChange={(checked) => toggle(block.name, checked === true)}
-									/>
-								</TableCell>
-								<TableCell className="whitespace-normal">
-									<div className="font-medium">{block.title}</div>
-									<div className="font-mono text-[12px] text-muted-foreground">{block.name}</div>
-								</TableCell>
-								<TableCell>
-									<Thumbnail block={block} busy={busy} />
-								</TableCell>
-								<TableCell className="whitespace-normal">
-									<div className="flex flex-col items-start gap-1">
-										{block.hasPreview ? (
-											<Badge
-												variant="outline"
-												className="rounded-sm border-transparent bg-success-soft text-success"
-											>
-												<CheckIcon aria-hidden="true" />
-												{__('Present', 'proto-blocks')}
-											</Badge>
-										) : (
-											<Badge variant="outline" className="rounded-sm text-muted-foreground">
-												{__('Missing', 'proto-blocks')}
-											</Badge>
-										)}
-										<LiveLine live={rowLive} />
+							<li key={block.name} className="min-w-0">
+								<article
+									aria-labelledby={titleId}
+									className="grid h-full overflow-hidden rounded-xl border bg-card"
+								>
+									<div className="relative grid aspect-[16/10] place-items-center border-b border-divider bg-muted">
+										<Thumbnail block={block} busy={busy} />
+										<span className="absolute top-2.5 left-2.5 grid rounded-sm bg-background">
+											<Checkbox
+												/* translators: %s: block title. */
+												aria-label={sprintf(__('Select %s', 'proto-blocks'), block.title)}
+												checked={selected.has(block.name)}
+												onCheckedChange={(checked) => toggle(block.name, checked === true)}
+											/>
+										</span>
 									</div>
-								</TableCell>
-								<TableCell className="px-4 text-right">
-									<Button
-										size="sm"
-										variant="ghost"
-										disabled={locked}
-										aria-describedby={describedBy}
-										onClick={() => start([block])}
-									>
-										<ActionIcon aria-hidden="true" />
-										{actionLabel}
-									</Button>
-								</TableCell>
-							</TableRow>
+									<div className="grid content-start gap-2.5 px-3.5 py-3">
+										<div className="grid min-w-0 gap-px">
+											<span id={titleId} className="truncate font-medium">
+												{block.title}
+											</span>
+											<code className="truncate font-mono text-micro text-muted-foreground">{block.name}</code>
+										</div>
+										<div className="flex items-start justify-between gap-2">
+											<div className="grid min-w-0 gap-0.5">
+												{block.hasPreview ? (
+													<span className="text-caption text-success">{__('Present', 'proto-blocks')}</span>
+												) : (
+													<span className="text-caption text-muted-foreground">{__('Missing', 'proto-blocks')}</span>
+												)}
+												<LiveLine live={rowLive} />
+											</div>
+											<Button
+												size="sm"
+												variant="outline"
+												className="flex-none"
+												disabled={locked}
+												aria-describedby={describedBy}
+												onClick={() => start([block])}
+											>
+												<ActionIcon aria-hidden="true" />
+												{actionLabel}
+											</Button>
+										</div>
+									</div>
+								</article>
+							</li>
 						);
 					})}
-				</TableBody>
-			</Table>
+				</ul>
+			</section>
 			{/*
 			 * Capture surface. Off-screen rather than display:none, because the
 			 * rasterizer needs layout. sandbox: allow-same-origin lets this page
@@ -485,7 +492,7 @@ function CaptureTable({ data, fileModsAllowed }: { data: PreviewsData; fileModsA
 				width={data.width}
 				style={{ position: 'fixed', left: -10000, top: 0, width: data.width, height: 800, border: 0 }}
 			/>
-		</Card>
+		</>
 	);
 }
 
@@ -507,28 +514,13 @@ export default function PreviewsScreen() {
 
 	useEffect(load, [load]);
 
-	let body: ReactNode;
-	if (state.status === 'loading') {
-		body = <LoadingState />;
-	} else if (state.status === 'error') {
-		body = (
-			<ScreenError
-				screen={__('Preview Capture', 'proto-blocks')}
-				error={state.error instanceof ApiError ? state.error : undefined}
-				onRetry={load}
-			/>
-		);
-	} else if (state.data.blocks.length === 0) {
-		body = <EmptyState adminUrl={adminUrl} />;
-	} else {
-		body = <CaptureTable data={state.data} fileModsAllowed={fileModsAllowed} />;
-	}
-
-	return (
+	const header = (actions?: ReactNode) => (
 		<>
 			<PageHeader
-				title={__('Preview Capture', 'proto-blocks')}
-				description={__("Generate inserter thumbnails from each block's live front-end render at 1280px.", 'proto-blocks')}
+				eyebrow={__('Blocks', 'proto-blocks')}
+				title={__('Preview capture', 'proto-blocks')}
+				description={__("Inserter thumbnails rendered from each block's live front end at 1280px.", 'proto-blocks')}
+				actions={actions}
 			/>
 			{fileModsAllowed ? null : (
 				<div className="pb-6">
@@ -542,6 +534,31 @@ export default function PreviewsScreen() {
 					/>
 				</div>
 			)}
+		</>
+	);
+
+	if (state.status === 'ready' && state.data.blocks.length > 0) {
+		return <CaptureGrid data={state.data} fileModsAllowed={fileModsAllowed} header={header} />;
+	}
+
+	let body: ReactNode;
+	if (state.status === 'loading') {
+		body = <LoadingState />;
+	} else if (state.status === 'error') {
+		body = (
+			<ScreenError
+				screen={__('Preview Capture', 'proto-blocks')}
+				error={state.error instanceof ApiError ? state.error : undefined}
+				onRetry={load}
+			/>
+		);
+	} else {
+		body = <EmptyState adminUrl={adminUrl} />;
+	}
+
+	return (
+		<>
+			{header()}
 			{body}
 		</>
 	);

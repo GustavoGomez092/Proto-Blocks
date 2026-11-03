@@ -94,7 +94,7 @@ test('changing the engine posts the setting and refetches', async () => {
 	});
 	renderScreen();
 
-	await user.click(await screen.findByRole('radio', { name: 'CLI binary (server)' }));
+	await user.click(await screen.findByRole('radio', { name: 'CLI binary' }));
 
 	await waitFor(() => expect(getCalls(api)).toBe(2));
 	expect(api).toHaveBeenCalledWith(
@@ -172,9 +172,9 @@ test('without shell access the CLI download is hidden and a warning shows', asyn
 	mockApi({ 'admin/tailwind': payload({ shell_available: false, engine: 'browser', cli_installed: false, cli_functional: false }) });
 	renderScreen();
 
-	expect(await screen.findByText("Shell access isn't available on this server")).toBeInTheDocument();
+	expect(await screen.findByText(/shell access is unavailable on this host/)).toBeInTheDocument();
 	expect(screen.queryByRole('button', { name: /CLI$/ })).not.toBeInTheDocument();
-	expect(screen.getByRole('radio', { name: 'CLI binary (server)' })).toBeDisabled();
+	expect(screen.getByRole('radio', { name: 'CLI binary' })).toBeDisabled();
 });
 
 test('read-only sites disable Download CLI and Create starter file', async () => {

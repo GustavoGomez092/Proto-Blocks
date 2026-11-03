@@ -2,35 +2,27 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import { __, sprintf } from '@wordpress/i18n';
 import { toast } from 'sonner';
 import {
+	CheckIcon,
 	ChevronDownIcon,
 	ChevronRightIcon,
-	CircleCheckIcon,
-	CircleXIcon,
 	DownloadIcon,
 	EraserIcon,
 	FilePlusIcon,
-	FileXIcon,
-	CheckIcon,
 	LoaderCircleIcon,
-	MonitorCheckIcon,
 	RefreshCwIcon,
-	ShieldAlertIcon,
-	ShieldXIcon,
-	TerminalIcon,
-	TriangleAlertIcon,
 } from 'lucide-react';
 import { adminDelete, adminGet, adminPost, ApiError } from '@/admin/api';
 import { getBootstrap } from '@/admin/bootstrap';
 import { ConfirmDialog } from '@/admin/components/shell/ConfirmDialog';
 import { PageHeader } from '@/admin/components/shell/PageHeader';
 import { READ_ONLY_BANNER_ID, ReadOnlyBanner } from '@/admin/components/shell/ReadOnlyBanner';
+import { Panel, SettingRow } from '@/admin/components/shell/Panel';
 import { ScreenError } from '@/admin/components/shell/ScreenError';
-import { Alert, AlertDescription, AlertTitle } from '@/admin/components/ui/alert';
+import { Eyebrow } from '@/admin/components/shell/Signals';
 import { Badge } from '@/admin/components/ui/badge';
 import { Button } from '@/admin/components/ui/button';
-import { Card } from '@/admin/components/ui/card';
 import { Label } from '@/admin/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/admin/components/ui/radio-group';
+import { RadioGroup, RadioGroupItem, SegmentedRadioItem, segmentedGroupClassName } from '@/admin/components/ui/radio-group';
 import { Skeleton } from '@/admin/components/ui/skeleton';
 import { Switch } from '@/admin/components/ui/switch';
 import { cn } from '@/admin/lib/utils';
@@ -94,8 +86,6 @@ interface BrowserCompileResult {
 type BrowserCompiler = {
 	runBrowserCompile: (deps: { ajaxUrl: string; actionPrefix: string; nonce: string }) => Promise<BrowserCompileResult>;
 };
-
-const code = (text: ReactNode) => <code className="font-mono text-[12.5px]">{text}</code>;
 
 function errorMessage(error: unknown): string | undefined {
 	return error instanceof Error && error.message ? error.message : undefined;
@@ -161,81 +151,42 @@ export function cliState(status: TailwindStatus): CliState {
 	return 'missing';
 }
 
-function CliStatus({ status }: { status: TailwindStatus }) {
-	const state = cliState(status);
-	const view: Record<CliState, { icon: ReactNode; tone: string; text: string }> = {
-		browser: {
-			icon: <MonitorCheckIcon />,
-			tone: 'text-success',
-			text: __('Browser compiler', 'proto-blocks'),
-		},
-		functional: {
-			icon: <CircleCheckIcon />,
-			tone: 'text-success',
+/** CLI / engine status for the dark compiler panel: label plus a tone for the dot. */
+function cliView(status: TailwindStatus): { tone: 'ok' | 'warn' | 'bad'; text: string } {
+	switch (cliState(status)) {
+		case 'browser':
+			return { tone: 'ok', text: __('Browser compiler', 'proto-blocks') };
+		case 'functional':
 			/* translators: %s: Tailwind CLI version, e.g. 4.1.3. */
-			text: sprintf(__('Installed · v%s', 'proto-blocks'), status.cli_version ?? ''),
-		},
-		mismatch: {
-			icon: <ShieldXIcon />,
-			tone: 'text-destructive',
-			text: __('Checksum mismatch — re-download', 'proto-blocks'),
-		},
-		unverified: {
-			icon: <ShieldAlertIcon />,
-			tone: 'text-warning',
-			text: __('No recorded checksum — re-download', 'proto-blocks'),
-		},
-		not_runnable: {
-			icon: <TriangleAlertIcon />,
-			tone: 'text-warning',
-			text: __('Installed but not runnable', 'proto-blocks'),
-		},
-		missing: {
-			icon: <CircleXIcon />,
-			tone: 'text-destructive',
-			text: __('Not installed', 'proto-blocks'),
-		},
-	};
-	const { icon, tone, text } = view[state];
-
-	return (
-		<dd className={cn('mt-1 ml-0 flex items-center justify-start gap-2 text-left font-medium [&_svg]:size-4 [&_svg]:flex-none', tone)}>
-			<span aria-hidden="true" className="contents">
-				{icon}
-			</span>
-			<span>{text}</span>
-		</dd>
-	);
+			return { tone: 'ok', text: sprintf(__('Installed · v%s', 'proto-blocks'), status.cli_version ?? '') };
+		case 'mismatch':
+			return { tone: 'bad', text: __('Checksum mismatch — re-download', 'proto-blocks') };
+		case 'unverified':
+			return { tone: 'warn', text: __('No recorded checksum — re-download', 'proto-blocks') };
+		case 'not_runnable':
+			return { tone: 'warn', text: __('Installed but not runnable', 'proto-blocks') };
+		default:
+			return { tone: 'bad', text: __('Not installed', 'proto-blocks') };
+	}
 }
 
-function SectionCard({ className, ...props }: React.ComponentProps<typeof Card> & { 'aria-labelledby': string }) {
-	return <Card role="region" className={cn('gap-0 rounded-lg py-0 shadow-xs', className)} {...props} />;
-}
+const PANEL_TONE: Record<'ok' | 'warn' | 'bad', string> = {
+	ok: 'text-brand',
+	warn: 'text-warning-border',
+	bad: 'text-[#f4a4a8]',
+};
 
-function CardHead({ id, title, description }: { id: string; title: string; description?: ReactNode }) {
-	return (
-		<div className="grid gap-1 p-5 pb-1">
-			<h2 id={id} className="text-[15px] leading-[1.3] font-semibold text-balance">
-				{title}
-			</h2>
-			{description ? <p className="text-[13px] text-muted-foreground">{description}</p> : null}
-		</div>
-	);
-}
-
-/** One radio card: the whole card is the label, the dot stays visible. */
+/** One engine choice: the whole card is the label; the radio dot sits top right. */
 function RadioCard({
 	value,
 	title,
 	help,
-	badge,
 	disabled,
 	checked,
 }: {
 	value: string;
 	title: string;
 	help: string;
-	badge?: ReactNode;
 	disabled?: boolean;
 	checked: boolean;
 }) {
@@ -244,29 +195,25 @@ function RadioCard({
 		<label
 			htmlFor={`${id}-item`}
 			className={cn(
-				'flex cursor-pointer items-start gap-3 rounded-md border bg-background p-3',
-				checked && 'border-primary ring-1 ring-primary ring-inset',
-				disabled && 'cursor-not-allowed opacity-60'
+				'grid cursor-pointer content-start gap-2 rounded-lg border bg-background p-3.5 transition-colors hover:border-input',
+				checked && 'border-primary bg-code shadow-[inset_0_0_0_1px_var(--primary)] hover:border-primary',
+				disabled && 'cursor-not-allowed bg-subtle opacity-60 hover:border-border'
 			)}
 		>
-			<RadioGroupItem
-				id={`${id}-item`}
-				value={value}
-				disabled={disabled}
-				aria-labelledby={`${id}-title`}
-				aria-describedby={`${id}-help`}
-				className="mt-0.5"
-			/>
-			<span className="grid gap-0.5">
-				<span className="flex flex-wrap items-center gap-2">
-					<span id={`${id}-title`} className="font-medium">
-						{title}
-					</span>
-					{badge}
+			<span className="flex items-center justify-between gap-3">
+				<span id={`${id}-title`} className="font-medium">
+					{title}
 				</span>
-				<span id={`${id}-help`} className="text-[13px] text-muted-foreground">
-					{help}
-				</span>
+				<RadioGroupItem
+					id={`${id}-item`}
+					value={value}
+					disabled={disabled}
+					aria-labelledby={`${id}-title`}
+					aria-describedby={`${id}-help`}
+				/>
+			</span>
+			<span id={`${id}-help`} className="text-caption text-muted-foreground">
+				{help}
 			</span>
 		</label>
 	);
@@ -284,177 +231,137 @@ function SettingsCard({
 	const { status } = data;
 	// CLI stays selectable when it is the saved value, so the choice is visible.
 	const cliUnavailable = !status.shell_available && settings.engine !== 'cli';
+	const strong = (text: ReactNode) => <strong className="font-medium text-foreground">{text}</strong>;
 
 	return (
-		<SectionCard aria-labelledby="pb-tw-settings">
-			<CardHead
-				id="pb-tw-settings"
-				title={__('Settings', 'proto-blocks')}
-				description={__('Changes save as you make them.', 'proto-blocks')}
-			/>
-			<div className="divide-y px-5">
-				<div className="flex items-start justify-between gap-6 py-5">
-					<div className="grid gap-1">
-						<Label htmlFor="pb-tw-enabled" className="text-sm font-medium">
-							{__('Enable Tailwind CSS', 'proto-blocks')}
-						</Label>
-						<p className="text-[13px] text-muted-foreground">
-							{__('Compile and load Tailwind utilities for every Proto-Block.', 'proto-blocks')}
-						</p>
-					</div>
-					<Switch
-						id="pb-tw-enabled"
-						checked={settings.enabled}
-						onCheckedChange={(enabled) => onChange({ enabled })}
-					/>
+		<Panel aria-labelledby="pb-tw-settings">
+			<div className="flex items-center justify-between gap-6 border-b px-6 py-5">
+				<div className="grid gap-0.5">
+					<h2 id="pb-tw-settings" className="text-section font-semibold">
+						{__('Tailwind CSS', 'proto-blocks')}
+					</h2>
+					<p className="text-label text-muted-foreground">
+						{__('Compile and load utilities for every Proto-Block. Changes save as you make them.', 'proto-blocks')}
+					</p>
 				</div>
+				<Switch
+					id="pb-tw-enabled"
+					aria-label={__('Enable Tailwind CSS', 'proto-blocks')}
+					checked={settings.enabled}
+					onCheckedChange={(enabled) => onChange({ enabled })}
+				/>
+			</div>
 
-				{settings.enabled ? (
-					<>
-						<div
-							role="group"
-							aria-labelledby="pb-tw-mode-label"
-							className="grid gap-3 py-5 md:grid-cols-[200px_minmax(0,1fr)] md:gap-6"
-						>
-							<div className="grid content-start gap-1">
-								<p id="pb-tw-mode-label" className="text-sm font-medium">
-									{__('Compilation Mode', 'proto-blocks')}
-								</p>
-								<p className="text-[13px] text-muted-foreground">{__('When CSS is rebuilt.', 'proto-blocks')}</p>
-							</div>
+			{settings.enabled ? (
+				<>
+					<SettingRow
+						labelId="pb-tw-mode-label"
+						label={__('Compilation mode', 'proto-blocks')}
+						help={__('When the CSS is rebuilt.', 'proto-blocks')}
+						className="border-b"
+					>
+						<div className="grid gap-2.5">
 							<RadioGroup
 								aria-labelledby="pb-tw-mode-label"
 								value={settings.mode}
 								onValueChange={(mode) => onChange({ mode: mode as Mode })}
-								className="gap-3 sm:grid-cols-2"
+								className={segmentedGroupClassName}
 							>
-								<RadioCard
-									value="cached"
-									checked={settings.mode === 'cached'}
-									title={__('Cached', 'proto-blocks')}
-									help={__('Compiled once and served from cache. Use Compile now to update. For production.', 'proto-blocks')}
-								/>
-								<RadioCard
-									value="on_reload"
-									checked={settings.mode === 'on_reload'}
-									title={__('On reload', 'proto-blocks')}
-									help={__("Recompiled on each page load while you're logged in as an admin. Development only.", 'proto-blocks')}
-								/>
+								<SegmentedRadioItem value="cached">{__('Cached', 'proto-blocks')}</SegmentedRadioItem>
+								<SegmentedRadioItem value="on_reload">{__('On reload', 'proto-blocks')}</SegmentedRadioItem>
 							</RadioGroup>
+							<p className="text-label text-muted-foreground">
+								{settings.mode === 'cached'
+									? interpolate(
+											/* translators: 1: "Compile now" (button label), 2: "On reload" (mode name). */
+											__('Compiled once and served from cache — use %1$s after changing templates. Switch to %2$s while developing; it recompiles on every admin page load.', 'proto-blocks'),
+											strong(__('Compile now', 'proto-blocks')),
+											<em>{__('On reload', 'proto-blocks')}</em>
+										)
+									: __("Recompiled on each page load while you're logged in as an admin. Development only.", 'proto-blocks')}
+							</p>
 						</div>
+					</SettingRow>
 
-						<div
-							role="group"
-							aria-labelledby="pb-tw-engine-label"
-							className="grid gap-3 py-5 md:grid-cols-[200px_minmax(0,1fr)] md:gap-6"
-						>
-							<div className="grid content-start gap-1">
-								<p id="pb-tw-engine-label" className="text-sm font-medium">
-									{__('Compile Engine', 'proto-blocks')}
-								</p>
-								<p className="text-[13px] text-muted-foreground">
-									{interpolate(
+					<SettingRow
+						labelId="pb-tw-engine-label"
+						label={__('Compile engine', 'proto-blocks')}
+						help={
+							status.shell_available
+								? interpolate(
 										/* translators: %s: compile engine name, CLI binary or Browser. */
-										__('Currently using: %s', 'proto-blocks'),
-										<strong className="text-foreground">{engineLabel(status.engine)}</strong>
-									)}
-								</p>
-							</div>
-							<div className="grid min-w-0 gap-3">
-								{status.shell_available ? null : (
-									<Alert variant="warning">
-										<TerminalIcon aria-hidden="true" />
-										<AlertTitle className="line-clamp-none">
-											{__("Shell access isn't available on this server", 'proto-blocks')}
-										</AlertTitle>
-										<AlertDescription>
-											<p>
-												{__(
-													"The CLI binary can't run here, so Automatic uses the browser compiler and Download CLI is hidden.",
-													'proto-blocks'
-												)}
-											</p>
-										</AlertDescription>
-									</Alert>
-								)}
-								<RadioGroup
-									aria-labelledby="pb-tw-engine-label"
-									value={settings.engine}
-									onValueChange={(engine) => onChange({ engine: engine as Engine })}
-									className="gap-3"
-								>
-									<RadioCard
-										value="auto"
-										checked={settings.engine === 'auto'}
-										title={__('Automatic', 'proto-blocks')}
-										badge={
-											<Badge variant="secondary" className="rounded-sm">
-												{__('Recommended', 'proto-blocks')}
-											</Badge>
-										}
-										help={__(
-											'Uses the CLI binary when the server allows shell access, otherwise the browser compiler.',
-											'proto-blocks'
-										)}
-									/>
-									<RadioCard
-										value="cli"
-										checked={settings.engine === 'cli'}
-										disabled={cliUnavailable}
-										title={__('CLI binary (server)', 'proto-blocks')}
-										help={
-											cliUnavailable
-												? __('Unavailable on this server.', 'proto-blocks')
-												: __(
-														'Fast, compiles on the server, supports JS config and plugins. Needs shell access and a downloaded binary.',
-														'proto-blocks'
-													)
-										}
-									/>
-									<RadioCard
-										value="browser"
-										checked={settings.engine === 'browser'}
-										title={__('Browser', 'proto-blocks')}
-										help={__(
-											"Works on any host. Compiles in an admin's browser with a browser-safe subset of Tailwind (no JS config or plugins).",
-											'proto-blocks'
-										)}
-									/>
-								</RadioGroup>
-							</div>
-						</div>
-
-						<div className="flex items-start justify-between gap-6 py-5">
-							<div className="grid gap-1">
-								<Label htmlFor="pb-tw-global-styles" className="text-sm font-medium">
-									{__('Disable WP Global Styles', 'proto-blocks')}
-								</Label>
-								<p className="text-[13px] text-muted-foreground">
-									{__(
-										"Stop WordPress global styles loading on the front end so they don't conflict with Tailwind.",
-										'proto-blocks'
-									)}
-								</p>
-							</div>
-							<Switch
-								id="pb-tw-global-styles"
-								checked={settings.disableGlobalStyles}
-								onCheckedChange={(disableGlobalStyles) => onChange({ disableGlobalStyles })}
+										__('Resolved to %s.', 'proto-blocks'),
+										strong(engineLabel(status.engine))
+									)
+								: interpolate(
+										/* translators: %s: compile engine name, CLI binary or Browser. */
+										__('Resolved to %s — shell access is unavailable on this host.', 'proto-blocks'),
+										strong(engineLabel(status.engine))
+									)
+						}
+						className="border-b"
+					>
+						<RadioGroup
+							aria-labelledby="pb-tw-engine-label"
+							value={settings.engine}
+							onValueChange={(engine) => onChange({ engine: engine as Engine })}
+							className="gap-2.5 sm:grid-cols-3"
+						>
+							<RadioCard
+								value="auto"
+								checked={settings.engine === 'auto'}
+								title={__('Automatic', 'proto-blocks')}
+								help={__('CLI when the server allows it, otherwise browser. Recommended.', 'proto-blocks')}
 							/>
+							<RadioCard
+								value="cli"
+								checked={settings.engine === 'cli'}
+								disabled={cliUnavailable}
+								title={__('CLI binary', 'proto-blocks')}
+								help={
+									cliUnavailable
+										? __('Unavailable on this server: it needs shell access.', 'proto-blocks')
+										: __('Fastest; supports JS config and plugins. Needs shell access.', 'proto-blocks')
+								}
+							/>
+							<RadioCard
+								value="browser"
+								checked={settings.engine === 'browser'}
+								title={__('Browser', 'proto-blocks')}
+								help={__('Works on any host. Browser-safe subset of Tailwind (no JS config).', 'proto-blocks')}
+							/>
+						</RadioGroup>
+					</SettingRow>
+
+					<div className="flex items-center justify-between gap-6 px-6 py-5">
+						<div className="grid gap-0.5">
+							<Label htmlFor="pb-tw-global-styles">{__('Disable WordPress global styles', 'proto-blocks')}</Label>
+							<p className="text-label text-muted-foreground">
+								{interpolate(
+									/* translators: %s: global-styles-inline-css (a stylesheet handle). */
+									__("Stops %s loading on the front end so it can't fight your utilities.", 'proto-blocks'),
+									<code className="font-mono text-micro">global-styles-inline-css</code>
+								)}
+							</p>
 						</div>
-					</>
-				) : (
-					<div className="py-5">
-						<p className="rounded-md bg-muted p-3 text-[13px] text-muted-foreground">
-							{__(
-								"Turn on Tailwind to choose a compile mode and engine. Your saved settings are kept while it's off.",
-								'proto-blocks'
-							)}
-						</p>
+						<Switch
+							id="pb-tw-global-styles"
+							checked={settings.disableGlobalStyles}
+							onCheckedChange={(disableGlobalStyles) => onChange({ disableGlobalStyles })}
+						/>
 					</div>
-				)}
-			</div>
-		</SectionCard>
+				</>
+			) : (
+				<div className="p-6">
+					<p className="rounded-lg bg-muted px-4 py-3 text-label text-muted-foreground">
+						{__(
+							"Turn on Tailwind to choose a compile mode and engine. Your saved settings are kept while it's off.",
+							'proto-blocks'
+						)}
+					</p>
+				</div>
+			)}
+		</Panel>
 	);
 }
 
@@ -473,93 +380,84 @@ function ThemeCard({
 	const dirWritable = config.dirWritable !== false;
 
 	return (
-		<SectionCard aria-labelledby="pb-tw-theme">
-			<CardHead
-				id="pb-tw-theme"
-				title={__('Theme Configuration', 'proto-blocks')}
-				description={interpolate(
-					/* translators: %s: @theme */
-					__(
-						'Your %s tokens are read from a CSS file in the active theme. Edit it in your theme repository; nothing is stored in the database.',
-						'proto-blocks'
-					),
-					code('@theme')
-				)}
-			/>
-			<div className="grid gap-3 p-5 pt-3">
-				<div className="flex flex-wrap items-center gap-2">
-					<span className="text-[13px] text-muted-foreground">{__('Theme file:', 'proto-blocks')}</span>
-					<code className="font-mono text-[12.5px] break-all">{config.path}</code>
-					{config.exists ? (
-						<Badge variant="outline" className="rounded-sm border-transparent bg-success-soft text-success">
-							<CheckIcon aria-hidden="true" />
-							{__('Found', 'proto-blocks')}
-						</Badge>
-					) : (
-						<Badge variant="outline" className="rounded-sm text-muted-foreground">
-							<FileXIcon aria-hidden="true" />
-							{__('Not found', 'proto-blocks')}
-						</Badge>
-					)}
-				</div>
-
+		<Panel aria-labelledby="pb-tw-theme" className="grid gap-2 px-[22px] py-[18px]">
+			<div className="flex items-center justify-between gap-3">
+				<h2 id="pb-tw-theme" className="text-label font-semibold">
+					{__('Theme configuration', 'proto-blocks')}
+				</h2>
 				{config.exists ? (
+					<Badge variant="success">
+						<CheckIcon aria-hidden="true" strokeWidth={2.5} />
+						{__('Found', 'proto-blocks')}
+					</Badge>
+				) : (
+					<Badge variant="dashed">{__('Not found', 'proto-blocks')}</Badge>
+				)}
+			</div>
+			<code className="font-mono text-micro break-all text-link">{config.path}</code>
+			<p className="text-caption text-muted-foreground">
+				{interpolate(
+					/* translators: %s: @theme */
+					__('Your %s tokens live in the theme repo; nothing is stored in the database.', 'proto-blocks'),
+					<code className="font-mono text-micro">@theme</code>
+				)}
+			</p>
+
+			{config.exists ? (
+				config.preview ? (
 					<>
-						{config.preview ? (
-							<div>
-								<Button
-									variant="ghost"
-									size="sm"
-									className="-ml-3"
-									aria-expanded={open}
-									aria-controls="pb-tw-theme-preview"
-									onClick={() => setOpen((value) => !value)}
-								>
-									{open ? <ChevronDownIcon aria-hidden="true" /> : <ChevronRightIcon aria-hidden="true" />}
-									{open ? __('Hide file contents', 'proto-blocks') : __('Show file contents', 'proto-blocks')}
-								</Button>
-							</div>
-						) : null}
+						<div>
+							<Button
+								variant="link"
+								className="text-label"
+								aria-expanded={open}
+								aria-controls="pb-tw-theme-preview"
+								onClick={() => setOpen((value) => !value)}
+							>
+								{open ? <ChevronDownIcon aria-hidden="true" /> : <ChevronRightIcon aria-hidden="true" />}
+								{open ? __('Hide file contents', 'proto-blocks') : __('Show file contents', 'proto-blocks')}
+							</Button>
+						</div>
 						{open ? (
 							<pre
 								id="pb-tw-theme-preview"
-								className="max-h-72 overflow-auto rounded-md border bg-[#0f1d2e] p-4 font-mono text-[12.5px] leading-relaxed text-[#e6edf5]"
+								className="max-h-72 overflow-auto rounded-lg bg-panel p-4 font-mono text-micro leading-relaxed text-panel-foreground"
 							>
 								{config.preview}
 							</pre>
 						) : null}
 					</>
-				) : (
-					<>
-						<p className="text-[13px] text-muted-foreground">
-							{dirWritable
-								? __('Create a minimal starter file in your theme, then edit the tokens in your repository.', 'proto-blocks')
-								: __('The theme folder is not writable, so add the file through your theme repository.', 'proto-blocks')}
-						</p>
-						<div>
-							<Button
-								variant="outline"
-								size="sm"
-								disabled={!fileModsAllowed || !dirWritable || busy}
-								aria-describedby={fileModsAllowed ? undefined : READ_ONLY_BANNER_ID}
-								onClick={onCreate}
-							>
-								<FilePlusIcon aria-hidden="true" />
-								{__('Create starter file', 'proto-blocks')}
-							</Button>
-						</div>
-					</>
-				)}
+				) : null
+			) : (
+				<>
+					<p className="text-caption text-muted-foreground">
+						{dirWritable
+							? __('Create a minimal starter file in your theme, then edit the tokens in your repository.', 'proto-blocks')
+							: __('The theme folder is not writable, so add the file through your theme repository.', 'proto-blocks')}
+					</p>
+					<div>
+						<Button
+							variant="outline"
+							size="sm"
+							disabled={!fileModsAllowed || !dirWritable || busy}
+							aria-describedby={fileModsAllowed ? undefined : READ_ONLY_BANNER_ID}
+							onClick={onCreate}
+						>
+							<FilePlusIcon aria-hidden="true" />
+							{__('Create starter file', 'proto-blocks')}
+						</Button>
+					</div>
+				</>
+			)}
 
-				<p className="text-[13px] text-muted-foreground">
-					{interpolate(
-						/* translators: %s: proto_blocks_theme_css_path */
-						__('Override the path with the %s filter.', 'proto-blocks'),
-						code('proto_blocks_theme_css_path')
-					)}
-				</p>
-			</div>
-		</SectionCard>
+			<p className="text-micro text-muted-foreground">
+				{interpolate(
+					/* translators: %s: proto_blocks_theme_css_path */
+					__('Override the path with the %s filter.', 'proto-blocks'),
+					<code className="font-mono text-micro">proto_blocks_theme_css_path</code>
+				)}
+			</p>
+		</Panel>
 	);
 }
 
@@ -570,7 +468,6 @@ function StatusCard({
 	fileModsAllowed,
 	onCompile,
 	onDownload,
-	onClear,
 }: {
 	data: TailwindData;
 	busy: boolean;
@@ -578,13 +475,14 @@ function StatusCard({
 	fileModsAllowed: boolean;
 	onCompile: () => void;
 	onDownload: () => void;
-	onClear: () => void;
 }) {
 	const { status } = data;
 	const state = cliState(status);
+	const view = cliView(status);
 	const needsCli = status.engine === 'cli' && !status.cli_functional;
-	const tile = 'rounded-md bg-muted p-3';
-	const overline = 'text-[11px] font-medium tracking-wider text-muted-foreground uppercase';
+	const themeFile = data.config.path.split('/').pop() || data.config.path;
+	const row = 'flex justify-between gap-3 text-label';
+	const term = 'text-faint';
 
 	let downloadLabel: string = __('Re-download CLI', 'proto-blocks');
 	if (status.cli_functional) {
@@ -594,87 +492,91 @@ function StatusCard({
 	}
 
 	return (
-		<SectionCard aria-labelledby="pb-tw-status">
-			<CardHead id="pb-tw-status" title={__('Compiler status', 'proto-blocks')} />
-			<div className="grid gap-3 p-5 pt-3">
-				<dl className="grid gap-3">
-					<div className={tile}>
-						<dt className={overline}>{__('CLI Status', 'proto-blocks')}</dt>
-						<CliStatus status={status} />
-					</div>
-					<div className="grid grid-cols-2 gap-3">
-						<div className={tile}>
-							<dt className={overline}>{__('Last Compiled', 'proto-blocks')}</dt>
-							<dd className="mt-1 font-medium tabular-nums">{lastCompiledLabel(data.cssSize === 0 ? null : data.settings.lastCompiled)}</dd>
-						</div>
-						<div className={tile}>
-							<dt className={overline}>{__('CSS Size', 'proto-blocks')}</dt>
-							<dd className="mt-1 font-medium tabular-nums">{data.cssSizeFormatted}</dd>
-						</div>
-					</div>
-				</dl>
-
-				<Button
-					className="w-full"
-					disabled={busy || needsCli}
-					aria-describedby={needsCli ? 'pb-tw-compile-help' : undefined}
-					onClick={onCompile}
-				>
-					{compiling ? (
-						<>
-							<LoaderCircleIcon aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
-							{__('Compiling…', 'proto-blocks')}
-						</>
-					) : (
-						<>
-							<RefreshCwIcon aria-hidden="true" />
-							{__('Compile now', 'proto-blocks')}
-						</>
-					)}
-				</Button>
-				{needsCli ? (
-					<p id="pb-tw-compile-help" className="-mt-1 text-[13px] text-muted-foreground">
-						{__('Download a working CLI first.', 'proto-blocks')}
-					</p>
-				) : null}
-
-				<div className={cn('grid gap-2', status.shell_available && state !== 'browser' ? 'grid-cols-2' : 'grid-cols-1')}>
-					{status.shell_available && state !== 'browser' ? (
-						<Button
-							variant="outline"
-							size="sm"
-							disabled={busy || !fileModsAllowed}
-							aria-describedby={fileModsAllowed ? undefined : READ_ONLY_BANNER_ID}
-							onClick={onDownload}
-						>
-							<DownloadIcon aria-hidden="true" />
-							{downloadLabel}
-						</Button>
-					) : null}
-					<Button
-						variant="outline"
-						size="sm"
-						className="border-destructive/40 text-destructive hover:bg-destructive-soft hover:text-destructive"
-						disabled={busy}
-						onClick={onClear}
-					>
-						<EraserIcon aria-hidden="true" />
-						{__('Clear cache', 'proto-blocks')}
-					</Button>
-				</div>
+		<section
+			aria-labelledby="pb-tw-status"
+			className="grid gap-4 rounded-xl bg-panel px-[22px] py-5 text-panel-foreground"
+		>
+			<div className="flex items-center justify-between gap-3">
+				<h2 id="pb-tw-status">
+					<Eyebrow tone="panel">{__('Compiler', 'proto-blocks')}</Eyebrow>
+				</h2>
+				<span className={cn('inline-flex items-center gap-1.5 text-caption', PANEL_TONE[needsCli ? 'bad' : status.needs_recompilation ? 'warn' : view.tone])}>
+					<span aria-hidden="true" className="size-[7px] rounded-full bg-current" />
+					{needsCli
+						? __('Needs the CLI', 'proto-blocks')
+						: status.needs_recompilation
+							? __('Out of date', 'proto-blocks')
+							: __('Ready', 'proto-blocks')}
+				</span>
 			</div>
-		</SectionCard>
+			<dl className="grid gap-3">
+				<div className={row}>
+					<dt className={term}>{__('Engine', 'proto-blocks')}</dt>
+					<dd className={cn('text-right', view.tone === 'ok' ? undefined : PANEL_TONE[view.tone])}>{view.text}</dd>
+				</div>
+				<div className={row}>
+					<dt className={term}>{__('Last compiled', 'proto-blocks')}</dt>
+					<dd className="tabular-nums">{lastCompiledLabel(data.cssSize === 0 ? null : data.settings.lastCompiled)}</dd>
+				</div>
+				<div className={row}>
+					<dt className={term}>{__('Output', 'proto-blocks')}</dt>
+					<dd className="font-mono text-caption tabular-nums">{data.cssSizeFormatted}</dd>
+				</div>
+				<div className={row}>
+					<dt className={term}>{__('Theme tokens', 'proto-blocks')}</dt>
+					<dd className="truncate font-mono text-caption">{data.config.exists ? themeFile : '—'}</dd>
+				</div>
+			</dl>
+
+			<Button
+				className="w-full bg-brand font-semibold text-panel hover:bg-[#6fd8d1] hover:text-panel focus-visible:outline-offset-[3px]"
+				disabled={busy || needsCli}
+				aria-describedby={needsCli ? 'pb-tw-compile-help' : undefined}
+				onClick={onCompile}
+			>
+				{compiling ? (
+					<>
+						<LoaderCircleIcon aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
+						{__('Compiling…', 'proto-blocks')}
+					</>
+				) : (
+					<>
+						<RefreshCwIcon aria-hidden="true" />
+						{__('Compile now', 'proto-blocks')}
+					</>
+				)}
+			</Button>
+			{needsCli ? (
+				<p id="pb-tw-compile-help" className="-mt-2 text-label text-faint">
+					{__('Download a working CLI first.', 'proto-blocks')}
+				</p>
+			) : null}
+
+			{status.shell_available && state !== 'browser' ? (
+				<Button
+					variant="outline"
+					size="sm"
+					className="w-full border-panel-line bg-transparent text-panel-foreground hover:border-faint hover:bg-white/5 hover:text-panel-foreground"
+					disabled={busy || !fileModsAllowed}
+					aria-describedby={fileModsAllowed ? undefined : READ_ONLY_BANNER_ID}
+					onClick={onDownload}
+				>
+					<DownloadIcon aria-hidden="true" />
+					{downloadLabel}
+				</Button>
+			) : null}
+		</section>
 	);
 }
 
 function LoadingState() {
 	return (
 		<div aria-busy="true" className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-			<div className="grid gap-6">
-				<Skeleton className="h-80 rounded-lg" />
-				<Skeleton className="h-40 rounded-lg" />
+			<Skeleton className="h-[480px] rounded-xl" />
+			<div className="grid gap-4">
+				<Skeleton className="h-64 rounded-xl" />
+				<Skeleton className="h-36 rounded-xl" />
 			</div>
-			<Skeleton className="h-64 rounded-lg" />
 		</div>
 	);
 }
@@ -724,7 +626,7 @@ export default function TailwindScreen() {
 	if (state.status === 'loading') {
 		return (
 			<>
-				<Header />
+				<Header actions={null} />
 				<LoadingState />
 			</>
 		);
@@ -732,7 +634,7 @@ export default function TailwindScreen() {
 	if (state.status === 'error') {
 		return (
 			<>
-				<Header />
+				<Header actions={null} />
 				<ScreenError
 					screen={__('Tailwind Settings', 'proto-blocks')}
 					error={state.error instanceof ApiError ? state.error : undefined}
@@ -844,7 +746,16 @@ export default function TailwindScreen() {
 
 	return (
 		<>
-			<Header />
+			<Header
+				actions={
+					settings.enabled ? (
+						<Button variant="outline" disabled={busy !== null} onClick={() => setConfirmClear(true)}>
+							<EraserIcon aria-hidden="true" />
+							{__('Clear cache', 'proto-blocks')}
+						</Button>
+					) : null
+				}
+			/>
 			{fileModsAllowed ? null : (
 				<div className="pb-6">
 					<ReadOnlyBanner
@@ -858,16 +769,8 @@ export default function TailwindScreen() {
 			)}
 			{settings.enabled ? (
 				<div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-					<div className="grid min-w-0 gap-6">
-						<SettingsCard data={data} settings={settings} onChange={(patch) => void changeSettings(patch)} />
-						<ThemeCard
-							config={data.config}
-							fileModsAllowed={fileModsAllowed}
-							busy={busy !== null}
-							onCreate={() => void createThemeFile()}
-						/>
-					</div>
-					<aside className="grid min-w-0 gap-6 lg:sticky lg:top-10" aria-label={__('Compiler', 'proto-blocks')}>
+					<SettingsCard data={data} settings={settings} onChange={(patch) => void changeSettings(patch)} />
+					<aside className="grid min-w-0 gap-4 lg:sticky lg:top-10" aria-label={__('Compiler', 'proto-blocks')}>
 						<StatusCard
 							data={data}
 							busy={busy !== null}
@@ -875,7 +778,12 @@ export default function TailwindScreen() {
 							fileModsAllowed={fileModsAllowed}
 							onCompile={() => void compile()}
 							onDownload={() => void downloadCli()}
-							onClear={() => setConfirmClear(true)}
+						/>
+						<ThemeCard
+							config={data.config}
+							fileModsAllowed={fileModsAllowed}
+							busy={busy !== null}
+							onCreate={() => void createThemeFile()}
 						/>
 					</aside>
 				</div>
@@ -897,11 +805,13 @@ export default function TailwindScreen() {
 	);
 }
 
-function Header() {
+function Header({ actions }: { actions: ReactNode }) {
 	return (
 		<PageHeader
-			title={__('Tailwind Settings', 'proto-blocks')}
-			description={__('Compile Tailwind utility classes for your blocks without a Node.js build step.', 'proto-blocks')}
+			eyebrow={__('Styling', 'proto-blocks')}
+			title={__('Tailwind', 'proto-blocks')}
+			description={__('Compile utility classes for your blocks without a Node.js build step.', 'proto-blocks')}
+			actions={actions}
 		/>
 	);
 }

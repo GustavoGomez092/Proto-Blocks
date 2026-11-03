@@ -35,8 +35,8 @@ function callsTo(api: jest.Mock, url: string) {
 }
 
 async function goToStyleStep(user: ReturnType<typeof userEvent.setup>) {
-	await screen.findByRole('heading', { name: 'Welcome to Proto Blocks' });
-	await user.click(screen.getByRole('button', { name: /Get Started/ }));
+	await screen.findByRole('heading', { name: 'Gutenberg blocks from PHP templates.' });
+	await user.click(screen.getByRole('button', { name: /Get started/ }));
 	await screen.findByRole('heading', { name: 'Choose your style' });
 }
 
@@ -45,21 +45,21 @@ test('starts on Welcome and Get Started moves to the style step', async () => {
 	mockApi({ 'admin/wizard': payload() });
 	renderScreen();
 
-	expect(await screen.findByRole('heading', { name: 'Welcome to Proto Blocks' })).toBeInTheDocument();
+	expect(await screen.findByRole('heading', { name: 'Gutenberg blocks from PHP templates.' })).toBeInTheDocument();
 	expect(screen.getByRole('list', { name: 'Setup progress' })).toBeInTheDocument();
 
-	await user.click(screen.getByRole('button', { name: /Get Started/ }));
+	await user.click(screen.getByRole('button', { name: /Get started/ }));
 
 	expect(await screen.findByRole('heading', { name: 'Choose your style' })).toBeInTheDocument();
 });
 
-test('the progress indicator has three steps: Welcome, Style, Finish', async () => {
+test('the progress indicator has three steps: Welcome, Styling, Finish', async () => {
 	mockApi({ 'admin/wizard': payload() });
 	renderScreen();
 
 	const progress = await screen.findByRole('list', { name: 'Setup progress' });
 	const steps = within(progress).getAllByRole('listitem');
-	expect(steps.map((step) => step.textContent)).toEqual(['1Welcome', '2Style', '3Finish']);
+	expect(steps.map((step) => step.textContent)).toEqual(['1WelcomeWhat Proto-Blocks does', '2StylingVanilla CSS or Tailwind', '3FinishReview and go']);
 	expect(steps[0]).toHaveAttribute('aria-current', 'step');
 });
 
@@ -124,7 +124,7 @@ test('Back returns to the previous step', async () => {
 
 	await user.click(screen.getByRole('button', { name: /Back/ }));
 
-	expect(await screen.findByRole('heading', { name: 'Welcome to Proto Blocks' })).toBeInTheDocument();
+	expect(await screen.findByRole('heading', { name: 'Gutenberg blocks from PHP templates.' })).toBeInTheDocument();
 });
 
 test('Go to Dashboard completes the wizard and follows the redirect', async () => {
@@ -140,6 +140,21 @@ test('Go to Dashboard completes the wizard and follows the redirect', async () =
 	await user.click(await screen.findByRole('button', { name: /Go to Dashboard/ }));
 
 	await waitFor(() => expect(navigate).toHaveBeenCalledWith('https://example.test/wp-admin/admin.php?page=proto-blocks'));
+	expect(callsTo(api, 'admin/wizard/complete')).toHaveLength(1);
+});
+
+test('Skip setup completes the wizard from the first step', async () => {
+	const user = userEvent.setup();
+	const api = mockApi({
+		'GET admin/wizard': payload(),
+		'POST admin/wizard/complete': { redirect: 'https://example.test/wp-admin/admin.php?page=proto-blocks' },
+	});
+	renderScreen();
+
+	await user.click(await screen.findByRole('button', { name: 'Skip setup' }));
+
+	await waitFor(() => expect(navigate).toHaveBeenCalledWith('https://example.test/wp-admin/admin.php?page=proto-blocks'));
+	expect(callsTo(api, 'admin/wizard/style')).toHaveLength(0);
 	expect(callsTo(api, 'admin/wizard/complete')).toHaveLength(1);
 });
 

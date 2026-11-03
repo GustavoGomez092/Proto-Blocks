@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import {
 	ArrowLeftIcon,
 	ArrowRightIcon,
@@ -14,14 +14,15 @@ import { toast } from 'sonner';
 import { adminGet, adminPost, ApiError } from '@/admin/api';
 import { LogoMark } from '@/admin/components/shell/PageHeader';
 import { ScreenError } from '@/admin/components/shell/ScreenError';
+import { Eyebrow } from '@/admin/components/shell/Signals';
 import { Badge } from '@/admin/components/ui/badge';
 import { Button } from '@/admin/components/ui/button';
-import { Card } from '@/admin/components/ui/card';
 import { Input } from '@/admin/components/ui/input';
 import { Label } from '@/admin/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/admin/components/ui/radio-group';
 import { Skeleton } from '@/admin/components/ui/skeleton';
 import { cn } from '@/admin/lib/utils';
+import { interpolate } from '@/admin/lib/interpolate';
 import { navigate } from '@/admin/lib/navigate';
 
 type Style = 'vanilla' | 'tailwind';
@@ -48,9 +49,20 @@ function stepLabel(step: StepNumber): string {
 		case 1:
 			return __('Welcome', 'proto-blocks');
 		case 2:
-			return __('Style', 'proto-blocks');
+			return __('Styling', 'proto-blocks');
 		default:
 			return __('Finish', 'proto-blocks');
+	}
+}
+
+function stepHint(step: StepNumber): string {
+	switch (step) {
+		case 1:
+			return __('What Proto-Blocks does', 'proto-blocks');
+		case 2:
+			return __('Vanilla CSS or Tailwind', 'proto-blocks');
+		default:
+			return __('Review and go', 'proto-blocks');
 	}
 }
 
@@ -60,7 +72,7 @@ function styleLabel(style: Style): string {
 
 function StepIndicator({ current }: { current: StepNumber }) {
 	return (
-		<ol className="mb-6 flex flex-wrap items-center gap-2" aria-label={__('Setup progress', 'proto-blocks')}>
+		<ol className="grid gap-1" aria-label={__('Setup progress', 'proto-blocks')}>
 			{STEPS.map((step) => {
 				const done = step < current;
 				const active = step === current;
@@ -69,21 +81,29 @@ function StepIndicator({ current }: { current: StepNumber }) {
 						key={step}
 						aria-current={active ? 'step' : undefined}
 						className={cn(
-							'flex items-center gap-2 text-[13px]',
-							active ? 'font-semibold text-foreground' : done ? 'text-foreground' : 'text-muted-foreground'
+							'flex items-center gap-3 rounded-lg px-3 py-2.5',
+							active ? 'bg-white/[.06] text-panel-foreground' : 'text-faint'
 						)}
 					>
 						<span
 							aria-hidden="true"
 							className={cn(
-								'grid size-6 place-items-center rounded-full text-xs tabular-nums',
-								done || active ? 'bg-primary text-primary-foreground' : 'border bg-card text-muted-foreground'
+								'grid size-6 flex-none place-items-center rounded-full text-micro tabular-nums',
+								active
+									? 'bg-brand font-semibold text-panel'
+									: done
+										? 'bg-brand/20 text-brand'
+										: 'border border-panel-line'
 							)}
 						>
-							{done ? <CheckIcon className="size-3.5" /> : step}
+							{done ? <CheckIcon className="size-3.5" strokeWidth={2.5} /> : step}
 						</span>
-						{stepLabel(step)}
-						{step < STEPS.length ? <span aria-hidden="true" className="mr-1 h-px w-6 bg-border" /> : null}
+						<span className="grid">
+							<span className={cn('font-medium', active ? 'text-panel-foreground' : 'text-input')}>
+								{stepLabel(step)}
+							</span>
+							<span className="text-micro text-faint">{stepHint(step)}</span>
+						</span>
 					</li>
 				);
 			})}
@@ -101,61 +121,85 @@ function StepTitle({ children, className }: { children: ReactNode; className?: s
 		<h1
 			ref={ref}
 			tabIndex={-1}
-			className={cn('text-[22px] leading-tight font-semibold tracking-tight outline-none', className)}
+			className={cn('text-[28px] leading-[1.15] font-semibold tracking-[-0.02em] text-balance outline-none', className)}
 		>
 			{children}
 		</h1>
 	);
 }
 
-function Welcome({ onNext }: { onNext: () => void }) {
+/** "Step 1 of 3" overline above each step title. */
+function StepKicker({ step }: { step: StepNumber }) {
+	return (
+		<Eyebrow tone="brand">
+			{sprintf(
+				/* translators: 1: current step number, 2: number of steps. */
+				__('Step %1$d of %2$d', 'proto-blocks'),
+				step,
+				STEPS.length
+			)}
+		</Eyebrow>
+	);
+}
+
+const mono = (text: ReactNode) => <code className="font-mono text-[13px] text-link">{text}</code>;
+
+function Welcome({ onNext, onSkip, skipping }: { onNext: () => void; onSkip: () => void; skipping: boolean }) {
 	const points = [
 		{
 			icon: <FileCodeIcon aria-hidden="true" />,
 			title: __('PHP templates', 'proto-blocks'),
-			text: __('Write blocks with familiar PHP and HTML.', 'proto-blocks'),
+			text: __('Familiar PHP and HTML; fields bind to markup with data attributes.', 'proto-blocks'),
 		},
 		{
 			icon: <ZapIcon aria-hidden="true" />,
-			title: __('No build step', 'proto-blocks'),
-			text: __('Blocks work as soon as the files are in your theme.', 'proto-blocks'),
+			title: __('Live as soon as the files exist', 'proto-blocks'),
+			text: __('Templates compile and cache on first render.', 'proto-blocks'),
 		},
 		{
 			icon: <PaletteIcon aria-hidden="true" />,
-			title: __('Flexible styling', 'proto-blocks'),
-			text: __('Use vanilla CSS or Tailwind.', 'proto-blocks'),
+			title: __('Vanilla CSS or Tailwind', 'proto-blocks'),
+			text: __('Tailwind compiles in the browser or via CLI — no Node on the server.', 'proto-blocks'),
 		},
 	];
 
 	return (
-		<>
-			<StepTitle>{__('Welcome to Proto Blocks', 'proto-blocks')}</StepTitle>
-			<p className="mt-2 max-w-[56ch] text-sm text-muted-foreground">
-				{__(
-					'Build Gutenberg blocks from PHP templates instead of React. This takes about a minute, and you can change everything later.',
-					'proto-blocks'
-				)}
-			</p>
-			<ul className="mt-6 grid gap-3">
+		<div className="grid content-start gap-7">
+			<div className="grid gap-2.5">
+				<StepKicker step={1} />
+				<StepTitle>{__('Gutenberg blocks from PHP templates.', 'proto-blocks')}</StepTitle>
+				<p className="max-w-[52ch] text-muted-foreground">
+					{interpolate(
+						/* translators: 1: block.json, 2: template.php */
+						__("No React, no build step. Describe a block in %1$s, write its markup in %2$s, and it's in the inserter.", 'proto-blocks'),
+						mono('block.json'),
+						mono('template.php')
+					)}
+				</p>
+			</div>
+			<ul className="grid gap-3.5">
 				{points.map((point) => (
-					<li key={point.title} className="flex gap-3">
-						<div className="grid size-9 flex-none place-items-center rounded-lg bg-accent text-primary [&_svg]:size-4">
+					<li key={point.title} className="flex gap-3.5">
+						<div className="grid size-9 flex-none place-items-center rounded-lg bg-brand-soft text-brand-ink [&_svg]:size-4">
 							{point.icon}
 						</div>
 						<div>
-							<p className="text-sm font-medium">{point.title}</p>
-							<p className="text-[13px] text-muted-foreground">{point.text}</p>
+							<p className="font-medium">{point.title}</p>
+							<p className="text-label text-muted-foreground">{point.text}</p>
 						</div>
 					</li>
 				))}
 			</ul>
-			<div className="mt-8 flex justify-end">
-				<Button onClick={onNext}>
-					{__('Get Started', 'proto-blocks')}
+			<div className="flex items-center justify-between pt-2">
+				<Button variant="ghost" className="-ml-2.5 px-2.5 text-label text-muted-foreground" disabled={skipping} onClick={onSkip}>
+					{__('Skip setup', 'proto-blocks')}
+				</Button>
+				<Button size="lg" onClick={onNext}>
+					{__('Get started', 'proto-blocks')}
 					<ArrowRightIcon aria-hidden="true" />
 				</Button>
 			</div>
-		</>
+		</div>
 	);
 }
 
@@ -193,8 +237,11 @@ function ChooseStyle({
 
 	return (
 		<>
-			<StepTitle className="text-[18px]">{__('Choose your style', 'proto-blocks')}</StepTitle>
-			<p className="mt-1 text-[13px] text-muted-foreground">
+			<div className="grid gap-2.5">
+				<StepKicker step={2} />
+				<StepTitle>{__('Choose your style', 'proto-blocks')}</StepTitle>
+			</div>
+			<p className="mt-2.5 text-muted-foreground">
 				{__('How your blocks are styled. You can change this later.', 'proto-blocks')}
 			</p>
 			<RadioGroup
@@ -210,8 +257,8 @@ function ChooseStyle({
 							key={option.value}
 							htmlFor={id}
 							className={cn(
-								'flex cursor-pointer flex-col gap-2 rounded-lg border p-4 transition-colors hover:bg-accent/40',
-								style === option.value && 'border-primary bg-accent/40'
+								'flex cursor-pointer flex-col gap-2 rounded-lg border bg-background p-3.5 transition-colors hover:border-input',
+								style === option.value && 'border-primary bg-code shadow-[inset_0_0_0_1px_var(--primary)] hover:border-primary'
 							)}
 						>
 							<span className="flex w-full items-center gap-3">
@@ -219,17 +266,17 @@ function ChooseStyle({
 								<span className="text-sm font-medium">{option.label}</span>
 							</span>
 							{option.badge ? (
-								<Badge variant="secondary" className="ml-7 h-auto w-fit rounded-sm whitespace-normal">
+								<Badge variant="brand" className="ml-7 h-auto w-fit whitespace-normal">
 									{option.badge}
 								</Badge>
 							) : null}
-							<span className="pl-7 text-[13px] text-muted-foreground">{option.help}</span>
+							<span className="pl-7 text-caption text-muted-foreground">{option.help}</span>
 						</label>
 					);
 				})}
 			</RadioGroup>
 			<div className="mt-6 grid gap-2">
-				<Label htmlFor="pb-wizard-category" className="text-sm font-medium">
+				<Label htmlFor="pb-wizard-category">
 					{__('Block category name', 'proto-blocks')}{' '}
 					<span className="font-normal text-muted-foreground">{__('(optional)', 'proto-blocks')}</span>
 				</Label>
@@ -243,20 +290,20 @@ function ChooseStyle({
 					aria-describedby={tooLong ? 'pb-wizard-category-error pb-wizard-category-hint' : 'pb-wizard-category-hint'}
 				/>
 				{tooLong ? (
-					<p id="pb-wizard-category-error" className="text-[13px] text-destructive">
+					<p id="pb-wizard-category-error" className="text-label text-destructive">
 						{__('Use 100 characters or fewer.', 'proto-blocks')}
 					</p>
 				) : null}
-				<p id="pb-wizard-category-hint" className="text-[13px] text-muted-foreground">
+				<p id="pb-wizard-category-hint" className="text-label text-muted-foreground">
 					{__('The heading your blocks sit under in the block inserter.', 'proto-blocks')}
 				</p>
 			</div>
 			<div className="mt-8 flex justify-between">
-				<Button variant="ghost" onClick={onBack} disabled={saving}>
+				<Button variant="ghost" className="-ml-2.5 px-2.5 text-muted-foreground" onClick={onBack} disabled={saving}>
 					<ArrowLeftIcon aria-hidden="true" />
 					{__('Back', 'proto-blocks')}
 				</Button>
-				<Button onClick={onNext} disabled={saving || tooLong}>
+				<Button size="lg" onClick={onNext} disabled={saving || tooLong}>
 					{saving ? (
 						<>
 							<LoaderCircleIcon aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
@@ -292,44 +339,43 @@ function Finish({
 		rows.push({
 			label: __('Tailwind Integration', 'proto-blocks'),
 			value: data.tailwindEnabled ? (
-				<Badge variant="outline" className="rounded-sm border-transparent bg-success-soft text-success">
-					{__('Enabled', 'proto-blocks')}
-				</Badge>
+				<Badge variant="success">{__('Enabled', 'proto-blocks')}</Badge>
 			) : (
-				<Badge variant="outline" className="rounded-sm">
-					{__('Disabled', 'proto-blocks')}
-				</Badge>
+				<Badge variant="dashed">{__('Disabled', 'proto-blocks')}</Badge>
 			),
 		});
 	}
 
 	return (
 		<>
-			<div className="flex items-center gap-3">
-				<div
-					aria-hidden="true"
-					className="grid size-9 flex-none place-items-center rounded-lg bg-success-soft text-success [&_svg]:size-4"
-				>
-					<PartyPopperIcon />
+			<div className="grid gap-2.5">
+				<StepKicker step={3} />
+				<div className="flex items-center gap-3">
+					<div
+						aria-hidden="true"
+						className="grid size-9 flex-none place-items-center rounded-lg bg-success-soft text-success [&_svg]:size-4"
+					>
+						<PartyPopperIcon />
+					</div>
+					<StepTitle>{__('Proto Blocks is ready', 'proto-blocks')}</StepTitle>
 				</div>
-				<StepTitle className="text-[18px]">{__('Proto Blocks is ready', 'proto-blocks')}</StepTitle>
 			</div>
-			<h2 className="mt-6 mb-2 text-sm font-medium">{__('Setup Summary', 'proto-blocks')}</h2>
-			<dl className="divide-y rounded-md border text-sm">
+			<h2 className="mt-7 mb-2 text-label font-medium">{__('Setup Summary', 'proto-blocks')}</h2>
+			<dl className="divide-y divide-divider rounded-lg border">
 				{rows.map((row) => (
-					<div key={row.label} className="flex items-baseline justify-between gap-4 px-4 py-2.5">
-						<dt className="text-muted-foreground">{row.label}</dt>
+					<div key={row.label} className="flex items-baseline justify-between gap-4 px-4 py-3">
+						<dt className="text-label text-muted-foreground">{row.label}</dt>
 						<dd className="font-medium">{row.value}</dd>
 					</div>
 				))}
 			</dl>
 			{data.style === 'vanilla' && data.tailwindEnabled ? (
-				<p className="mt-3 text-[13px] text-muted-foreground">
+				<p className="mt-3 text-label text-muted-foreground">
 					{__('Tailwind stays enabled; turn it off in Tailwind Settings if you no longer need it.', 'proto-blocks')}
 				</p>
 			) : null}
 			<div className="mt-8 flex justify-end">
-				<Button onClick={onComplete} disabled={completing}>
+				<Button size="lg" onClick={onComplete} disabled={completing}>
 					{completing ? (
 						<LoaderCircleIcon aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
 					) : null}
@@ -343,10 +389,14 @@ function Finish({
 
 function LoadingState() {
 	return (
-		<div aria-busy="true" className="mx-auto grid max-w-[640px] gap-3 pt-8">
-			<Skeleton className="h-6 w-56" />
-			<Skeleton className="h-4 w-full" />
-			<Skeleton className="h-24 w-full" />
+		<div aria-busy="true" className="mx-auto grid max-w-[960px] pt-12 md:grid-cols-[320px_minmax(0,1fr)]">
+			<Skeleton className="h-[420px] rounded-3xl md:rounded-r-none" />
+			<div className="grid content-start gap-3 rounded-r-3xl border bg-card p-11">
+				<Skeleton className="h-3 w-24" />
+				<Skeleton className="h-8 w-80" />
+				<Skeleton className="h-4 w-full" />
+				<Skeleton className="h-24 w-full" />
+			</div>
 		</div>
 	);
 }
@@ -420,7 +470,7 @@ export default function WizardScreen() {
 	let body: ReactNode;
 	switch (step) {
 		case 1:
-			body = <Welcome onNext={() => setStep(2)} />;
+			body = <Welcome onNext={() => setStep(2)} onSkip={complete} skipping={completing} />;
 			break;
 		case 2:
 			body = (
@@ -446,15 +496,29 @@ export default function WizardScreen() {
 	}
 
 	return (
-		<div className="mx-auto max-w-[640px] pt-8">
-			<div className="mb-6 flex justify-center">
-				<LogoMark />
-			</div>
-			<Card className="gap-0 rounded-lg p-8 shadow-xs">
-				<StepIndicator current={step} />
+		<div className="pt-12 pb-[72px]">
+			<div className="mx-auto grid max-w-[960px] overflow-hidden rounded-3xl border bg-card md:grid-cols-[320px_minmax(0,1fr)]">
+				<div className="flex flex-col gap-8 bg-panel px-7 py-8 text-panel-foreground">
+					<div className="flex items-center gap-3">
+						<LogoMark size={36} />
+						<div className="grid">
+							<span className="font-semibold">{__('Proto-Blocks', 'proto-blocks')}</span>
+							<span className="font-mono text-[11px] text-faint">{__('Setup · about a minute', 'proto-blocks')}</span>
+						</div>
+					</div>
+					<StepIndicator current={step} />
+					<pre aria-hidden="true" className="mt-auto hidden font-mono text-micro leading-[1.7] text-faint md:block">
+						<span className="text-input">your-theme/</span>
+						{'proto-blocks/\n  '}
+						<span className="text-brand">hero/</span>
+						{'\n    block.json\n    template.php'}
+					</pre>
+				</div>
 				{/* key remounts the step so its title takes focus */}
-				<div key={step}>{body}</div>
-			</Card>
+				<div key={step} className="min-w-0 px-6 py-8 md:px-11 md:py-10">
+					{body}
+				</div>
+			</div>
 		</div>
 	);
 }
