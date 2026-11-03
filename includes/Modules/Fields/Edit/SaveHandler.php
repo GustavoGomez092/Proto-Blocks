@@ -70,6 +70,9 @@ final class SaveHandler
 
     private const CONTAINERS = ['repeater', 'flexible_content', 'group'];
 
+    /** The flexible row layout key the field box posts; stored rows use `layout`. */
+    private const CLIENT_LAYOUT_KEY = '_layout';
+
     /** Paths kept in the error map of one save. */
     public const MAX_ERRORS = 500;
 
@@ -406,6 +409,12 @@ final class SaveHandler
                     $layouts[$layout['name']] = $layout['subFields'];
                 }
                 foreach ($rows as $i => $row) {
+                    if (is_array($row) && array_key_exists(self::CLIENT_LAYOUT_KEY, $row)) {
+                        // The box posts the layout as `_layout` (src/fields/box/names.ts LAYOUT_KEY).
+                        $row['layout'] = $row[self::CLIENT_LAYOUT_KEY];
+                        unset($row[self::CLIENT_LAYOUT_KEY]);
+                        $rows[$i] = $row;
+                    }
                     $name = is_array($row) ? ($row['layout'] ?? null) : null;
                     if (is_string($name) && isset($layouts[$name])) {
                         $rows[$i] = $this->prepareRow($layouts[$name], $row);

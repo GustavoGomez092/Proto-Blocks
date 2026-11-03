@@ -1,0 +1,14 @@
+{
+  // Theme-wide settings: top-level menu, two tabs and one child page.
+  "title": "Theme Settings",
+  "menu": "top",
+  "icon": "dashicons-admin-generic",
+  "autoload": false,
+  "tabs": [
+    { "title": "General", "fields": [ { "name": "phone", "label": "Phone", "type": "text" } ] },
+    { "title": "Tracking", "fields": [ { "name": "head_scripts", "label": "Head scripts", "type": "code" } ] },
+  ],
+  "children": [
+    { "slug": "footer", "title": "Footer", "fields": [ { "name": "copyright", "type": "text" } ] },
+  ],
+}

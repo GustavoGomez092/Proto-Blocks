@@ -73,3 +73,6 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Check field box bundle size
+        run: node scripts/check-fields-bundle-size.mjs

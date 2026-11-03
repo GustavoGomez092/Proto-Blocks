@@ -15,10 +15,14 @@ use ProtoBlocks\Modules\Fields\Definition\FieldGroup;
 use ProtoBlocks\Modules\Fields\Definition\GroupNormalizer;
 use ProtoBlocks\Modules\Fields\Definition\GroupValidator;
 use ProtoBlocks\Modules\Fields\Definition\Report;
+use ProtoBlocks\Modules\Fields\Edit\BoxPayload;
 use ProtoBlocks\Modules\Fields\Edit\ChoiceResolver;
 use ProtoBlocks\Modules\Fields\Edit\EditRoutes;
 use ProtoBlocks\Modules\Fields\Edit\ErrorStore;
+use ProtoBlocks\Modules\Fields\Edit\MetaBoxes;
 use ProtoBlocks\Modules\Fields\Edit\SaveHandler;
+use ProtoBlocks\Modules\Fields\Edit\TermForms;
+use ProtoBlocks\Modules\Fields\Edit\UserForms;
 use ProtoBlocks\Modules\Fields\Read\Aliases;
 use ProtoBlocks\Modules\Fields\Read\FieldReader;
 use ProtoBlocks\Modules\Fields\Registry\GroupIndex;
@@ -94,6 +98,10 @@ final class FieldsModule implements ModuleInterface
     private ?ErrorStore $errorStore = null;
     private ?SaveHandler $saveHandler = null;
     private ?EditRoutes $editRoutes = null;
+    private ?BoxPayload $boxPayload = null;
+    private ?MetaBoxes $metaBoxes = null;
+    private ?TermForms $termForms = null;
+    private ?UserForms $userForms = null;
     private AcfBridge $acf;
 
     /** @var list<Issue> filled when the index loads */
@@ -207,8 +215,9 @@ final class FieldsModule implements ModuleInterface
      * Sets the shared reader behind proto_field(), the bindings source
      * (`init` 10), meta registration (`init` 20), the ACF aliases
      * (`after_setup_theme` 100), the ACF-skip notice (admin only), the
-     * declaration errors filter, the post/term/user save path (SaveHandler)
-     * and the edit-time REST routes (EditRoutes). Idempotent; reads no file.
+     * declaration errors filter, the post/term/user save path (SaveHandler),
+     * the edit-time REST routes (EditRoutes) and the field boxes (MetaBoxes,
+     * TermForms, UserForms). Idempotent; reads no file.
      *
      * Why after_setup_theme 100 for the aliases: modules boot on
      * `after_setup_theme` 1, after `plugins_loaded` has fired, so a
@@ -244,6 +253,15 @@ final class FieldsModule implements ModuleInterface
         add_action('personal_options_update', [$this->saveHandler(), 'saveUser'], 10, 1);
         add_action('edit_user_profile_update', [$this->saveHandler(), 'saveUser'], 10, 1);
         add_action('rest_api_init', [$this->editRoutes(), 'registerRoutes']);
+        // Field boxes: post meta boxes, term forms (hooked per taxonomy on
+        // the term screens only: load-edit-tags.php / load-term.php, so the
+        // group index never loads for heartbeat or admin-ajax), user forms.
+        add_action('add_meta_boxes', [$this->metaBoxes(), 'addMetaBoxes'], 10, 2);
+        add_action('admin_enqueue_scripts', [$this->metaBoxes(), 'enqueue']);
+        add_action('admin_footer', [MetaBoxes::class, 'printPortal']);
+        add_action('load-edit-tags.php', [$this->termForms(), 'register']);
+        add_action('load-term.php', [$this->termForms(), 'register']);
+        $this->userForms()->register();
     }
 
     /**
@@ -357,6 +375,26 @@ final class FieldsModule implements ModuleInterface
     public function editRoutes(): EditRoutes
     {
         return $this->editRoutes ??= new EditRoutes($this->index(), $this->errorStore());
+    }
+
+    public function boxPayload(): BoxPayload
+    {
+        return $this->boxPayload ??= new BoxPayload($this->types(), $this->reader(), $this->errorStore(), $this->choices());
+    }
+
+    public function metaBoxes(): MetaBoxes
+    {
+        return $this->metaBoxes ??= new MetaBoxes($this->index(), $this->boxPayload());
+    }
+
+    public function termForms(): TermForms
+    {
+        return $this->termForms ??= new TermForms($this->index(), $this->boxPayload());
+    }
+
+    public function userForms(): UserForms
+    {
+        return $this->userForms ??= new UserForms($this->index(), $this->boxPayload(), $this->types(), $this->choices());
     }
 
     public function acf(): AcfBridge
