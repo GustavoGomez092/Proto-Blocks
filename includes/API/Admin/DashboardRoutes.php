@@ -116,7 +116,11 @@ final class DashboardRoutes
         // Block registration depends on this value; clear cached templates so the change takes effect.
         Plugin::getInstance()->getCache()->clear();
 
-        return $this->page()->dashboardData();
+        // Rescan before building the response, or it lists the old blocks.
+        $page = $this->page();
+        $page->refreshDiscovery();
+
+        return $page->dashboardData();
     }
 
     /**

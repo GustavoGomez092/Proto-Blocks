@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace ProtoBlocks\Admin;
 
 use ProtoBlocks\API\AdminRestController;
+use ProtoBlocks\Blocks\Discovery;
 use ProtoBlocks\Template\Cache;
 use ProtoBlocks\Core\Plugin;
 use ProtoBlocks\Tailwind\Manager as TailwindManager;
@@ -30,11 +31,34 @@ class AdminPage
     private Cache $cache;
 
     /**
+     * Block discovery; Plugin's when none is injected (tests inject one).
+     */
+    private ?Discovery $discovery;
+
+    /**
      * Constructor
      */
-    public function __construct(Cache $cache)
+    public function __construct(Cache $cache, ?Discovery $discovery = null)
     {
         $this->cache = $cache;
+        $this->discovery = $discovery;
+    }
+
+    /**
+     * Forget discovered blocks so the next read rescans the block folders.
+     * Call it after anything that adds or removes blocks (demo install or
+     * remove, the Example Blocks switch) and before building a response
+     * from dashboardData(), or the response describes the old registry.
+     */
+    public function refreshDiscovery(): void
+    {
+        delete_transient('proto_blocks_discovered');
+        $this->discovery()->refresh();
+    }
+
+    private function discovery(): Discovery
+    {
+        return $this->discovery ?? Plugin::getInstance()->getDiscovery();
     }
 
     /**
@@ -113,7 +137,7 @@ class AdminPage
      */
     public function dashboardData(): array
     {
-        $blocks = Plugin::getInstance()->getDiscovery()->getBlockInfo();
+        $blocks = $this->discovery()->getBlockInfo();
         $stats = $this->cache->getStats();
         $root = defined('ABSPATH') ? (string) \ABSPATH : '';
 
@@ -520,8 +544,8 @@ class AdminPage
             }
         }
 
-        // Clear the block discovery cache so new blocks are found
-        delete_transient('proto_blocks_discovered');
+        // Rescan so the new blocks are found (and listed in this response).
+        $this->refreshDiscovery();
 
         return $installed_count;
     }
@@ -590,8 +614,8 @@ class AdminPage
             }
         }
 
-        // Clear the block discovery cache
-        delete_transient('proto_blocks_discovered');
+        // Rescan so the removed blocks drop out (of this response too).
+        $this->refreshDiscovery();
 
         return $removed_count;
     }

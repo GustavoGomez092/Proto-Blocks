@@ -67,7 +67,7 @@ class Discovery
         }
 
         // Example blocks (if enabled)
-        if (PROTO_BLOCKS_EXAMPLE_BLOCKS) {
+        if (self::exampleBlocksEnabled()) {
             $paths[] = PROTO_BLOCKS_DIR . 'examples';
         }
 
@@ -75,6 +75,22 @@ class Discovery
         $paths = apply_filters('proto_blocks_paths', $paths);
 
         return array_unique($paths);
+    }
+
+    /**
+     * Whether the bundled example blocks are discovered. The wp-config.php
+     * constant wins when set there; otherwise the option is read live rather
+     * than through PROTO_BLOCKS_EXAMPLE_BLOCKS, which is fixed at plugin
+     * load, so the request that flips the Example Blocks switch already
+     * sees the new state after refresh().
+     */
+    public static function exampleBlocksEnabled(): bool
+    {
+        if (defined('PROTO_BLOCKS_EXAMPLE_BLOCKS_FROM_CONFIG') && \PROTO_BLOCKS_EXAMPLE_BLOCKS_FROM_CONFIG) {
+            return defined('PROTO_BLOCKS_EXAMPLE_BLOCKS') && (bool) \PROTO_BLOCKS_EXAMPLE_BLOCKS;
+        }
+
+        return (bool) get_option('proto_blocks_example_blocks', false);
     }
 
     /**
