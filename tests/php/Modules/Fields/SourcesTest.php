@@ -215,6 +215,113 @@ final class SourcesTest extends TestCase
         $this->assertStringStartsWith($child, $files->files()['shared']['path']);
     }
 
+    public function testBrokenChildFileDoesNotLetTheParentGroupBackIn(): void
+    {
+        // The parent declares a code field; the child re-typed it as text, but its file is broken.
+        $this->put('proto-fields/embeds/group.json', (string) json_encode(self::group('group_embeds', 'embed', ['fields' => [['key' => 'f_embed', 'name' => 'embed', 'type' => 'code']]])));
+        $this->put('proto-fields/kept/group.json', (string) json_encode(self::group('group_kept')));
+        $child = $this->tmp . '/child';
+        mkdir($child . '/proto-fields/embeds', 0777, true);
+        file_put_contents($child . '/proto-fields/embeds/group.jsonc', '{ "key": "group_embeds", ');
+
+        $files = self::files([$this->tmp . '/theme', $child]);
+        $this->assertSame(['group_kept'], self::keys($files->all()), 'neither the broken child nor the parent loads');
+        $codes = self::codes($files->errors()->errors);
+        $this->assertContains('invalid_jsonc', $codes);
+        $this->assertContains('broken_override', $codes);
+        $override = array_values(array_filter($files->errors()->errors, static fn(array $e): bool => $e['code'] === 'broken_override'))[0];
+        $this->assertStringEndsWith('/child/proto-fields/embeds/group.jsonc', $override['path']);
+        $this->assertStringContainsString('was NOT loaded', $override['message']);
+        $this->assertSame(['embeds' => $child . '/proto-fields/embeds/group.jsonc'], $files->broken());
+    }
+
+    public function testRefusedChildFolderDropsTheParentFile(): void
+    {
+        $this->put('proto-fields/embeds/group.json', (string) json_encode(self::group('group_embeds')));
+        $outside = $this->tmp . '/outside';
+        mkdir($outside);
+        $child = $this->tmp . '/child';
+        mkdir($child . '/proto-fields', 0777, true);
+        symlink($outside, $child . '/proto-fields/embeds');
+
+        $files = self::files([$this->tmp . '/theme', $child]);
+        $this->assertSame([], $files->all());
+        $this->assertSame(['path_outside_root', 'broken_override'], self::codes($files->errors()->errors));
+    }
+
+    public function testRefusedChildProtoFieldsFolderDropsEveryParentFile(): void
+    {
+        $this->put('proto-fields/a/group.json', (string) json_encode(self::group('group_a')));
+        $outside = $this->tmp . '/elsewhere';
+        mkdir($outside);
+        $child = $this->tmp . '/child';
+        mkdir($child);
+        symlink($outside, $child . '/proto-fields');
+
+        $files = self::files([$this->tmp . '/theme', $child]);
+        $this->assertSame([], $files->all());
+        $this->assertSame(['path_outside_root', 'broken_override'], self::codes($files->errors()->errors));
+    }
+
+    public function testLaterGoodFileStillWinsOverAnEarlierBrokenOne(): void
+    {
+        $this->put('proto-fields/x/group.json', '{ broken');
+        $child = $this->tmp . '/child';
+        mkdir($child . '/proto-fields/x', 0777, true);
+        file_put_contents($child . '/proto-fields/x/group.json', (string) json_encode(self::group('group_x')));
+
+        $files = self::files([$this->tmp . '/theme', $child]);
+        $this->assertSame(['group_x'], self::keys($files->all()));
+        $this->assertSame([], $files->broken());
+        $this->assertNotContains('broken_override', self::codes($files->errors()->errors));
+    }
+
+    public function testBothExtensionsWarns(): void
+    {
+        $this->put('proto-fields/both/group.json', (string) json_encode(self::group('group_json')));
+        $this->put('proto-fields/both/group.jsonc', (string) json_encode(self::group('group_jsonc')));
+
+        $files = self::files([$this->tmp . '/theme']);
+        $this->assertSame(['both_extensions'], self::codes($files->errors()->warnings));
+    }
+
+    public function testBrokenFileWarnsThatALowerRankedGroupMayBeInEffect(): void
+    {
+        PhpGroups::add('event', self::group('group_same'), 'functions.php:2');
+        $this->put('proto-fields/same/group.jsonc', '{ "key": "group_same", ');
+        $module = new FieldsModule(fn(): array => [$this->tmp . '/theme'], [self::class, 'decode']);
+        do_action('init');
+
+        $this->assertSame(['group_same'], self::keys($module->index()->all()));
+        $warnings = array_values(array_filter($module->report()->warnings, static fn(array $w): bool => $w['code'] === 'lower_rank_in_effect'));
+        $this->assertCount(1, $warnings);
+        $this->assertStringContainsString('proto-fields/same/group.jsonc', $warnings[0]['message']);
+    }
+
+    public function testBuildDoesNotRecurse(): void
+    {
+        PhpGroups::add('event', self::group('group_php'), 'functions.php:3');
+        $calls = 0;
+        $module = null;
+        $module = new FieldsModule(function () use (&$module, &$calls): array {
+            $calls++;
+            // A filter or decoder reading a field while the sources load.
+            $this->assertSame([], $module->index()->all());
+            return [];
+        }, [self::class, 'decode']);
+        do_action('init');
+
+        $this->assertSame(['group_php'], self::keys($module->index()->all()));
+        $this->assertSame(1, $calls);
+    }
+
+    public function testListRootMustEndTheFile(): void
+    {
+        $this->assertSame([['key' => 'g']], FieldsModule::decodeFile("// export\n[ { \"key\": \"g\" } ] // done"));
+        $this->expectException(\ProtoBlocks\ContentModel\JsoncException::class);
+        FieldsModule::decodeFile('[ { "key": "g" } ], "x": 1');
+    }
+
     public function testFileIsNeverIncluded(): void
     {
         $this->put('proto-fields/php/group.json', '<?php $GLOBALS["pb_included"] = true; ?>');

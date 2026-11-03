@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\ContentModel;
 
+use ProtoBlocks\API\Admin\ContentModelRoutes;
+
 /**
  * The admin notice for a slug declared both in a file and in PHP: names both
  * locations, on Proto-Blocks screens only, to users who can manage options.
+ * Paths are shown theme- or site-relative, as the REST routes show them,
+ * never absolute.
  */
 final class DoubleDeclarationNotice
 {
@@ -41,8 +45,8 @@ final class DoubleDeclarationNotice
             $lines[] = sprintf(
                 $format,
                 esc_html($double['slug']),
-                '<code>' . esc_html($double['file']) . '</code>',
-                '<code>' . esc_html($double['php']) . '</code>'
+                '<code>' . esc_html(ContentModelRoutes::displayPath($double['file'])) . '</code>',
+                '<code>' . esc_html(ContentModelRoutes::displayPath($double['php'])) . '</code>'
             );
         }
 

@@ -1348,20 +1348,42 @@ The modules can be switched off with the `proto_blocks_modules` filter:
 add_filter('proto_blocks_modules', fn ($modules) => ['taxonomies' => false] + $modules);
 ```
 
+### Slugs
+
+A slug (the folder name, or the one derived from the name) must match `^[a-z][a-z0-9_-]*$`: lowercase letters, digits, `_` and `-`, starting with a letter. Post type slugs are at most 20 characters and taxonomy slugs at most 32 (WordPress' own limits). WordPress' reserved query terms (`author`, `name`, `type`, `year`, …) and core's internal types and taxonomies (`revision`, `nav_menu_item`, `wp_template`, `wp_theme`, …) are refused. `post`, `page` and `attachment` (types) and `category` and `post_tag` (taxonomies) are allowed only as overrides. The REST routes check the same rule, case-sensitively.
+
+### REST routes
+
+The screens use these routes in the `proto-blocks/v1` namespace. Every route requires `manage_options` and the REST nonce, and no response contains an absolute path.
+
+| Route | Methods | Purpose |
+|-------|---------|---------|
+| `/admin/types` | GET | Every post type on the site, tagged by origin |
+| `/admin/types/<slug>` | GET | One post type: list item, effective args, content count |
+| `/admin/types/<slug>/scaffold` | POST | Write `single-<slug>.html` / `archive-<slug>.html` block templates (*writes files*) |
+| `/admin/taxonomies` | GET | Every taxonomy, tagged by origin, with its attached post types and inline parent type |
+| `/admin/taxonomies/<slug>` | GET | One taxonomy: list item, effective args, attached types, term count |
+| `/admin/schema-files/<kind>/<slug>` | GET | The declaration file (`kind` is `type` or `taxonomy`): text, hash, parsed data, whether it can be written |
+| `/admin/schema-files/<kind>/<slug>` | POST, PUT, PATCH | Save the file: `{text, hash, acknowledge}`; schema-checked before writing, `409` on a stale hash or an unconfirmed guardrail (*writes files*) |
+| `/admin/schema-files/<kind>/<slug>` | DELETE | Delete the declaration file; `confirm=<slug>` is required when content exists (*writes files*) |
+
+When `DISALLOW_FILE_MODS` or `DISALLOW_FILE_EDIT` is set, the screens become read-only (a banner explains why, and the save, delete, create and scaffold controls are disabled), and every route marked *writes files* refuses the request with `403 proto_blocks_file_mods`. The read routes keep working.
+
 ### WP-CLI
 
 ```bash
 wp proto-blocks type list
 wp proto-blocks type create "Case Study" [--slug=<slug>] [--plural=<plural>] [--json]
 wp proto-blocks type scaffold book [--taxonomies]     # block templates, never overwrites
-wp proto-blocks type validate
-wp proto-blocks type rename book novel [--migrate]    # --migrate moves existing posts
+wp proto-blocks type validate [<slug>]
+wp proto-blocks type rename book novel --yes [--migrate]    # --migrate moves existing posts
 wp proto-blocks taxonomy list
 wp proto-blocks taxonomy create Genre [--slug=<slug>] [--plural=<plural>] [--json]
-wp proto-blocks taxonomy rename genre category-genre [--migrate]
+wp proto-blocks taxonomy validate [<slug>]
+wp proto-blocks taxonomy rename genre category-genre --yes [--migrate]
 ```
 
-`wp proto-blocks validate` reports blocks and declarations together.
+`rename` without `--yes` only prints the plan (the file move and how many posts or terms are affected) and exits with an error; nothing changes. `wp proto-blocks validate` reports blocks and declarations together.
 
 ## WP-CLI Commands
 

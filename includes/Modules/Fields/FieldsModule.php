@@ -47,6 +47,18 @@ use ProtoBlocks\Modules\ModuleInterface;
  * Same group `key` from two sources: the file wins (a proto-fields file over
  * a type/taxonomy file over PHP), with a `duplicate_group_key` warning naming
  * both. A key Advanced Custom Fields already registers is skipped (AcfBridge).
+ * A broken or refused proto-fields file never lets a parent theme's file of
+ * the same slug back in (GroupFiles `broken_override`); since its key is
+ * unknown, a `lower_rank_in_effect` warning says a PHP or type/taxonomy group
+ * with that key may be in effect instead.
+ *
+ * Re-typing a field from `text` (or any type) to `code` makes values stored
+ * under the old type come back raw: `code` is returned as stored, whoever
+ * wrote it (see CodeType).
+ *
+ * instance() is what other code uses: the manager registers either the
+ * booted module or, when the module is off, disabled(), whose index is empty
+ * and whose services are never hooked.
  */
 final class FieldsModule implements ModuleInterface
 {
@@ -62,6 +74,8 @@ final class FieldsModule implements ModuleInterface
     private readonly ?\Closure $declarations;
 
     private bool $booted = false;
+    private bool $disabled = false;
+    private bool $building = false;
     private ?GroupIndex $index = null;
     private ?TypeRegistry $types = null;
     /** @var array<string, Store>|null */
@@ -90,10 +104,32 @@ final class FieldsModule implements ModuleInterface
         $this->acf = new AcfBridge();
     }
 
-    /** The module the manager booted, else one wired to the plugin's content model. */
+    /**
+     * The module the manager registered at boot (a disabled() one when the
+     * module is off). Before the manager boots: one wired to the plugin's
+     * content model.
+     */
     public static function instance(): self
     {
         return self::$instance ??= self::wired();
+    }
+
+    /**
+     * The stand-in for a module turned off by `proto_blocks_modules`: no
+     * sources, an empty index, boot() and registerMeta() do nothing, and no
+     * trust callback is ever hooked.
+     */
+    public static function disabled(): self
+    {
+        $module = new self();
+        $module->disabled = true;
+
+        return $module;
+    }
+
+    public function isEnabled(): bool
+    {
+        return !$this->disabled;
     }
 
     /** The manager registers the module it boots; tests reset with null. */
@@ -133,8 +169,13 @@ final class FieldsModule implements ModuleInterface
         if (str_starts_with($text, "\xEF\xBB\xBF")) {
             $text = substr($text, 3);
         }
-        if (!str_starts_with(ltrim(Jsonc::strip($text)), '[')) {
+        $stripped = trim(Jsonc::strip($text));
+        if (!str_starts_with($stripped, '[')) {
             return Jsonc::decode($text);
+        }
+        if (!str_ends_with($stripped, ']')) {
+            // `[ ... ], "x": 1` would otherwise become a valid wrapped object.
+            throw new JsoncException('A field group list must end with "]".', 1, 1);
         }
         // Jsonc::decode() wants an object root: wrap the list on the same
         // first line (line numbers stay right) and close it on a new line (a
@@ -167,7 +208,7 @@ final class FieldsModule implements ModuleInterface
      */
     public function boot(): void
     {
-        if ($this->booted) {
+        if ($this->booted || $this->disabled) {
             return;
         }
         $this->booted = true;
@@ -188,7 +229,7 @@ final class FieldsModule implements ModuleInterface
 
     public function index(): GroupIndex
     {
-        return $this->index ??= new GroupIndex(fn(): ?array => $this->build());
+        return $this->index ??= $this->disabled ? new GroupIndex([]) : new GroupIndex(fn(): ?array => $this->build());
     }
 
     public function reader(): FieldReader
@@ -235,6 +276,9 @@ final class FieldsModule implements ModuleInterface
     /** Hooked on `init` 20. */
     public function registerMeta(): void
     {
+        if ($this->disabled) {
+            return;
+        }
         $this->metaRegistrar()->register();
     }
 
@@ -366,15 +410,28 @@ final class FieldsModule implements ModuleInterface
     }
 
     /**
-     * Loads every source once init has reached priority 10; null before.
+     * Loads every source once init has reached priority 10; null before, and
+     * null for a call made while the sources load (a filter or decoder that
+     * reads a field must not recurse into the build).
      *
      * @return list<FieldGroup>|null
      */
     private function build(): ?array
     {
-        if (!self::initReached()) {
+        if ($this->building || !self::initReached()) {
             return null;
         }
+        $this->building = true;
+        try {
+            return $this->load();
+        } finally {
+            $this->building = false;
+        }
+    }
+
+    /** @return list<FieldGroup> */
+    private function load(): array
+    {
         $issues = [];
         /** @var list<array{group: FieldGroup, rank: int, label: string}> $entries */
         $entries = [];
@@ -400,12 +457,31 @@ final class FieldsModule implements ModuleInterface
 
         if ($this->roots !== null && $this->decode !== null) {
             $files = new GroupFiles($this->roots, $this->decode);
-            foreach ($files->errors()->errors as $e) {
-                $slug = preg_match('/[\/\\\\]group\.jsonc?\z/D', $e['path']) === 1 ? basename(dirname($e['path'])) : basename($e['path']);
-                $issues[] = new Issue(Issue::ERROR, $e['code'], $e['message'], $e['path'], $slug, 'field-group');
+            $discovery = $files->errors();
+            foreach ([Issue::ERROR => $discovery->errors, Issue::WARNING => $discovery->warnings] as $level => $found) {
+                foreach ($found as $e) {
+                    $slug = preg_match('/[\/\\\\]group\.jsonc?\z/D', $e['path']) === 1 ? basename(dirname($e['path'])) : basename($e['path']);
+                    $issues[] = new Issue($level, $e['code'], $e['message'], $e['path'], $slug, 'field-group');
+                }
             }
+            $broken = $files->broken();
             foreach ($files->files() as $file) {
-                self::issuesFrom(self::declarationFindings('field-group', $file['data'], $file['slug']), $file['path'], $file['slug'], 'field-group', $issues);
+                $findings = self::declarationFindings('field-group', $file['data'], $file['slug']);
+                self::issuesFrom($findings, $file['path'], $file['slug'], 'field-group', $issues);
+                foreach ($findings as $finding) {
+                    if (($finding['level'] ?? null) !== 'warning') {
+                        $broken[$file['slug']] = $file['path']; // a group of it may have been dropped
+                        break;
+                    }
+                }
+            }
+            $lowerRank = array_filter($entries, static fn(array $e): bool => $e['rank'] < 2) !== [];
+            foreach ($lowerRank ? $broken : [] as $slug => $path) {
+                $issues[] = new Issue(Issue::WARNING, 'lower_rank_in_effect', sprintf(
+                    /* translators: %s: broken file */
+                    __('%s is broken or invalid; if it declared the key of a group from PHP or from a post type or taxonomy file, that group is in effect instead.', 'proto-blocks'),
+                    $path
+                ), $path, (string) $slug, 'field-group');
             }
             foreach ($files->all() as $group) {
                 $entries[] = ['group' => $group, 'rank' => 2, 'label' => (string) $group->path];

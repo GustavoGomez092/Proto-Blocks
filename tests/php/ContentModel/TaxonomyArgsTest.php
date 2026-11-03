@@ -48,6 +48,17 @@ final class TaxonomyArgsTest extends TestCase
         $this->assertArrayNotHasKey('post_types', $built['args']);
     }
 
+    public function testLabelsFollowHierarchical(): void
+    {
+        $flat = TaxonomyArgs::build(self::decl(['name' => 'Genre']))['args']['labels'];
+        $this->assertSame('Separate genres with commas', $flat['separate_items_with_commas']);
+        $this->assertArrayNotHasKey('parent_item', $flat);
+
+        $tree = TaxonomyArgs::build(self::decl(['name' => 'Genre', 'hierarchical' => true]))['args']['labels'];
+        $this->assertSame('Parent Genre', $tree['parent_item']);
+        $this->assertArrayNotHasKey('separate_items_with_commas', $tree);
+    }
+
     public function testDeclaredKeysMergeAndPassThrough(): void
     {
         $args = TaxonomyArgs::build(self::decl([

@@ -43,25 +43,17 @@ export interface TaxonomyDetail {
 	content: { count: number };
 }
 
-/**
- * The type a taxonomy is declared inside, or null for a standalone file or a
- * registration without a declaration. An inline taxonomy's `source` is its
- * type's file (`.../proto-types/<type>/type.jsonc`).
- */
-export function inlineParent(source: string | null): string | null {
-	const match = source ? /(?:^|\/)([^/]+)\/type\.jsonc?$/.exec(source) : null;
-	return match ? match[1] : null;
-}
-
 /** Link to a type's edit screen on the Post Types screen. */
 export function postTypeUrl(type: string): string {
 	return `${getBootstrap().adminUrl}?page=proto-blocks-post-types&type=${encodeURIComponent(type)}`;
 }
 
-export function EditInPostTypeLink({ type }: { type: string }) {
+export function EditInPostTypeLink({ type, title }: { type: string; title?: string }) {
 	return (
 		<Button asChild variant="outline" size="sm">
-			<a href={postTypeUrl(type)}>{__('Edit in post type', 'proto-blocks')}</a>
+			<a href={postTypeUrl(type)} title={title}>
+				{__('Edit in post type', 'proto-blocks')}
+			</a>
 		</Button>
 	);
 }
@@ -77,21 +69,8 @@ export function TaxonomyList({
 	onNew: () => void;
 }) {
 	const { fileModsAllowed } = getBootstrap();
+	// One request: every list item carries its object types and inline parent.
 	const list = useAsync(() => adminGet<ListResult>('admin/taxonomies'), []);
-	const [attached, setAttached] = useState<Record<string, string[]>>({});
-
-	// The list carries no object types; each taxonomy's detail does.
-	useEffect(() => {
-		let live = true;
-		for (const item of list.data?.items ?? []) {
-			adminGet<TaxonomyDetail>(`admin/taxonomies/${item.slug}`)
-				.then((detail) => live && setAttached((current) => ({ ...current, [item.slug]: detail.objectTypes })))
-				.catch(() => {});
-		}
-		return () => {
-			live = false;
-		};
-	}, [list.data]);
 
 	const header = (canAdd: boolean) => (
 		<PageHeader
@@ -165,7 +144,7 @@ export function TaxonomyList({
 						</TableHeader>
 						<TableBody>
 							{items.map((item) => {
-								const parent = inlineParent(item.source);
+								const parent = item.parentType ?? null;
 								return (
 									<TableRow key={item.slug}>
 										<TableCell className="font-medium">{item.label}</TableCell>
@@ -177,7 +156,7 @@ export function TaxonomyList({
 										</TableCell>
 										<TableCell>
 											<span className="flex flex-wrap gap-1">
-												{(attached[item.slug] ?? []).map((type) => (
+												{(item.objectTypes ?? []).map((type) => (
 													<Badge key={type} variant="secondary">
 														{typeLabel(type)}
 													</Badge>
@@ -192,7 +171,7 @@ export function TaxonomyList({
 										</TableCell>
 										<TableCell className="text-end">
 											{parent ? (
-												<EditInPostTypeLink type={parent} />
+												<EditInPostTypeLink type={parent} title={item.readOnlyMessage ?? undefined} />
 											) : (
 												<Button asChild variant="outline" size="sm">
 													<a
