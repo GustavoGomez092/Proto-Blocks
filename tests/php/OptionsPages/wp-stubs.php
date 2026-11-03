@@ -28,12 +28,6 @@ if (!function_exists('add_submenu_page')) {
         return 'hook_' . $slug;
     }
 }
-if (!function_exists('_doing_it_wrong')) {
-    function _doing_it_wrong($fn, $message, $version)
-    {
-        $GLOBALS['pb_test_doing_it_wrong'][] = [$fn, $message, $version];
-    }
-}
 if (!class_exists('PbTestWpDie')) {
     class PbTestWpDie extends \RuntimeException
     {
