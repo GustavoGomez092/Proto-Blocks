@@ -2,14 +2,13 @@
 
 declare(strict_types=1);
 
-// Hook, registration, rewrite and screen stand-ins for the content-model and
-// Modules tests. Every stub is guarded so the first definition wins (PHPUnit
-// loads all test files into one process); each has the same shape as its
-// siblings elsewhere in tests/php. apply_filters(), get_option() and
-// update_option() come from tests/php/bootstrap.php and are not redefined.
+// Registration, rewrite and screen stand-ins for the content-model and
+// Modules tests. The hook recorder (add_action/add_filter into
+// pb_test_hooks), apply_filters(), users and capabilities, options and
+// add_post_type_support() are shared and live in tests/php/bootstrap.php; do
+// not copy them here. Every stub is guarded so a real WordPress wins.
 //
 // Globals read or written here:
-//   pb_test_hooks[$hook][]                 ['callback', 'priority', 'args'] per add_action/add_filter
 //   pb_test_registered['post_type'][$slug] args passed to register_post_type()
 //   pb_test_registered['taxonomy'][$slug]  ['object_types' => ..., 'args' => ...]
 //   pb_test_post_types[$slug]              registered post type objects (seed one to mark it registered)
@@ -21,21 +20,6 @@ declare(strict_types=1);
 //   pb_test_is_admin                       is_admin() value (default false)
 //   pb_test_customize_preview              is_customize_preview() value (default false)
 //   pb_test_screen                         get_current_screen() value (object with ->id, or null)
-//   pb_test_caps[$userId]                  capabilities of a user, read by current_user_can()
-
-if (!function_exists('add_filter')) {
-    function add_filter($hook, $callback, $priority = 10, $accepted_args = 1)
-    {
-        $GLOBALS['pb_test_hooks'][$hook][] = ['callback' => $callback, 'priority' => (int) $priority, 'args' => (int) $accepted_args];
-        return true;
-    }
-}
-if (!function_exists('add_action')) {
-    function add_action($hook, $callback, $priority = 10, $accepted_args = 1)
-    {
-        return add_filter($hook, $callback, $priority, $accepted_args);
-    }
-}
 
 if (!function_exists('register_post_type')) {
     /** Applies register_post_type_args like WordPress, records the args, stores an object. */
@@ -71,14 +55,6 @@ if (!function_exists('get_all_post_type_supports')) {
     function get_all_post_type_supports($post_type)
     {
         return $GLOBALS['pb_test_supports'][$post_type] ?? [];
-    }
-}
-if (!function_exists('add_post_type_support')) {
-    function add_post_type_support($post_type, $feature, ...$args)
-    {
-        foreach ((array) $feature as $one) {
-            $GLOBALS['pb_test_supports'][$post_type][$one] = $args === [] ? true : $args;
-        }
     }
 }
 if (!function_exists('remove_post_type_support')) {
@@ -155,18 +131,5 @@ if (!function_exists('get_current_screen')) {
     function get_current_screen()
     {
         return $GLOBALS['pb_test_screen'] ?? null;
-    }
-}
-// Same shape as tests/php/Admin/wp-stubs.php.
-if (!function_exists('get_current_user_id')) {
-    function get_current_user_id(): int
-    {
-        return (int) ($GLOBALS['pb_test_current_user'] ?? $GLOBALS['pb_test_user'] ?? 1);
-    }
-}
-if (!function_exists('current_user_can')) {
-    function current_user_can($capability, ...$args): bool
-    {
-        return in_array($capability, $GLOBALS['pb_test_caps'][get_current_user_id()] ?? [], true);
     }
 }

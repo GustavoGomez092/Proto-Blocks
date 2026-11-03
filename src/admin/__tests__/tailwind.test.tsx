@@ -72,7 +72,7 @@ afterEach(() => {
 });
 
 test.each([
-	['browser engine', { engine: 'browser', cli_installed: false, cli_functional: false, cli_trust_state: 'missing' }, 'Browser engine (CLI not used)'],
+	['browser engine', { engine: 'browser', cli_installed: false, cli_functional: false, cli_trust_state: 'missing' }, 'Browser compiler'],
 	['functional', {}, 'Installed · v4.1.3'],
 	['checksum mismatch', { cli_functional: false, cli_trusted: false, cli_trust_state: 'mismatch', cli_version: null }, 'Checksum mismatch — re-download'],
 	['unverified', { cli_functional: false, cli_trusted: false, cli_trust_state: 'unverified', cli_version: null }, 'No recorded checksum — re-download'],

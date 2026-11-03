@@ -11,13 +11,6 @@ use ProtoBlocks\Modules\Fields\Types\TypeRegistry;
 
 require_once __DIR__ . '/wp-stubs.php';
 
-if (!defined('ABSPATH')) {
-    define('ABSPATH', __DIR__ . '/');
-}
-if (!function_exists('proto_blocks_sanitize_color')) {
-    require_once __DIR__ . '/../../../../includes/helpers.php';
-}
-
 final class ScalarTypesTest extends TestCase
 {
     private static function field(string $type, array $settings = []): Field

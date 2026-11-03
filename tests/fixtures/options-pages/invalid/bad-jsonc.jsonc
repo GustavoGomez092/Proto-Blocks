@@ -1,0 +1,6 @@
+{
+  // A missing comma after "menu": the file cannot be parsed.
+  "title": "Broken",
+  "menu": "top"
+  "fields": []
+}

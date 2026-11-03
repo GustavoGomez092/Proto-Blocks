@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { __ } from '@wordpress/i18n';
 import {
 	AlertDialog,
@@ -18,6 +18,10 @@ import {
  * Controlled: Cancel and Escape call onCancel (an overlay click does nothing,
  * as Radix AlertDialog does not dismiss on outside clicks); Confirm calls
  * only onConfirm, and the parent sets `open` false when it is done.
+ *
+ * The screens open it from state, not through an AlertDialogTrigger, so Radix
+ * has no trigger to return focus to. The element focused when it opened (the
+ * button that asked for confirmation) is remembered and refocused on close.
  */
 export function ConfirmDialog({
 	open,
@@ -39,6 +43,16 @@ export function ConfirmDialog({
 	/** Extra content under the description (a list of names, a warning). */
 	children?: ReactNode;
 }) {
+	const opener = useRef<HTMLElement | null>(null);
+
+	// Layout effect: runs before Radix moves focus into the dialog.
+	useLayoutEffect(() => {
+		if (open) {
+			const active = document.activeElement;
+			opener.current = active instanceof HTMLElement && active !== document.body ? active : null;
+		}
+	}, [open]);
+
 	return (
 		<AlertDialog
 			open={open}
@@ -48,7 +62,16 @@ export function ConfirmDialog({
 				}
 			}}
 		>
-			<AlertDialogContent>
+			<AlertDialogContent
+				onCloseAutoFocus={(event) => {
+					const target = opener.current;
+					opener.current = null;
+					if (target && target.isConnected) {
+						event.preventDefault();
+						target.focus();
+					}
+				}}
+			>
 				<AlertDialogHeader>
 					<AlertDialogTitle className="text-[17px] text-balance">{title}</AlertDialogTitle>
 					{description ? <AlertDialogDescription>{description}</AlertDialogDescription> : null}

@@ -16,7 +16,6 @@ use ProtoBlocks\Tests\ContentModel\SafeFileTest;
 
 require_once __DIR__ . '/wp-stubs.php';
 require_once __DIR__ . '/wp-cli-stub.php';
-require_once __DIR__ . '/../ContentModel/stubs/theme.php';
 require_once __DIR__ . '/../ContentModel/SafeFileTest.php';
 require_once __DIR__ . '/../../../includes/content-model.php';
 

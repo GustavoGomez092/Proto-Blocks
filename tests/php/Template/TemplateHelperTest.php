@@ -9,17 +9,8 @@ use ProtoBlocks\Modules\Fields\Read\FieldReader;
 use ProtoBlocks\Template\TemplateHelper;
 use ProtoBlocks\Tests\Modules\Fields\FieldReaderTest;
 
-require_once __DIR__ . '/../Modules/Fields/wp-stubs.php';
-require_once __DIR__ . '/../Fields/wp-stubs.php';
 require_once __DIR__ . '/../Modules/Fields/stubs/Structured.php';
 require_once __DIR__ . '/../Modules/Fields/stubs/Read.php';
-
-if (!defined('ABSPATH')) {
-    define('ABSPATH', __DIR__ . '/');
-}
-if (!function_exists('proto_blocks_sanitize_color')) {
-    require_once __DIR__ . '/../../../includes/helpers.php';
-}
 
 final class TemplateHelperTest extends TestCase
 {

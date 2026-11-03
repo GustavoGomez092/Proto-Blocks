@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Tests\Tailwind;
 
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 use ProtoBlocks\Tailwind\BinaryManager;
 
@@ -157,5 +159,25 @@ final class BinaryManagerTest extends TestCase
             array_values(array_diff(scandir($seenCwd) ?: [], ['.', '..'])),
             'the scratch directory must be empty so a stray scan finds nothing'
         );
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function test_download_is_refused_when_file_mods_are_disabled(): void
+    {
+        define('DISALLOW_FILE_MODS', true);
+
+        $bm = $this->trustedManager();
+
+        foreach ([false, true] as $force) {
+            $result = $bm->download($force);
+
+            $this->assertFalse($result['success']);
+            $this->assertStringContainsString('File modifications are disabled', $result['message']);
+        }
+
+        // Refused before any network call or write: the bin dir stays empty.
+        $this->assertSame([], array_values(array_diff(scandir($this->binDir) ?: [], ['.', '..'])));
+        $this->assertFalse($bm->isInstalled());
     }
 }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ProtoBlocks\ContentModel;
 
 /**
- * Collects proto_post_type() / proto_taxonomy() calls made by the theme.
+ * Collects proto_post_type() / proto_taxonomy() / proto_options_page() calls made by the theme.
  *
  * Declarations are accepted until seal() (called when post types register at
  * `init` priority 9); a later call is ignored with a `declared_too_late` warning.
@@ -21,14 +21,14 @@ final class PhpDeclarations
     private static bool $sealed = false;
 
     /**
-     * @param string               $kind   Declaration::TYPE or Declaration::TAXONOMY
-     * @param string               $name   Human singular name.
+     * @param string               $kind   Declaration::TYPE, Declaration::TAXONOMY or Declaration::OPTIONS
+     * @param string               $name   Human singular name (the page title for an options page).
      * @param array<string, mixed> $args   Any key a declaration file accepts.
      * @param string               $source "<file>:<line>" of the call.
      */
     public static function add(string $kind, string $name, array $args, string $source): void
     {
-        if ($kind !== Declaration::TYPE && $kind !== Declaration::TAXONOMY) {
+        if (!in_array($kind, [Declaration::TYPE, Declaration::TAXONOMY, Declaration::OPTIONS], true)) {
             throw new \InvalidArgumentException("Unknown declaration kind \"$kind\".");
         }
 
@@ -49,8 +49,7 @@ final class PhpDeclarations
             return;
         }
 
-        $max = $kind === Declaration::TYPE ? Slug::TYPE_MAX : Slug::TAXONOMY_MAX;
-        $slug = $args['slug'] ?? Slug::fromName($name, $max);
+        $slug = $args['slug'] ?? Slug::fromName($name, Slug::max($kind));
         $slug = is_string($slug) ? $slug : '';
 
         $slugError = Slug::error($slug, $kind);
@@ -66,8 +65,10 @@ final class PhpDeclarations
             return;
         }
 
-        $data = ['name' => $name] + $args;
-        $data['name'] = $name;
+        // An options page is named by its `title`, like its page.jsonc.
+        $nameKey = $kind === Declaration::OPTIONS ? 'title' : 'name';
+        $data = [$nameKey => $name] + $args;
+        $data[$nameKey] = $name;
 
         $previous = self::$declarations[$kind][$slug] ?? null;
         if ($previous !== null) {
@@ -95,7 +96,7 @@ final class PhpDeclarations
      */
     public static function all(): array
     {
-        return self::$declarations + [Declaration::TYPE => [], Declaration::TAXONOMY => []];
+        return self::$declarations + [Declaration::TYPE => [], Declaration::TAXONOMY => [], Declaration::OPTIONS => []];
     }
 
     /** @return list<Issue> */

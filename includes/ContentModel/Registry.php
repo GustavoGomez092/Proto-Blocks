@@ -38,6 +38,16 @@ final class Registry
         return $this->state()['declarations'][Declaration::TAXONOMY];
     }
 
+    /**
+     * Every declaration of $kind ('type', 'taxonomy' or 'options'), by slug.
+     *
+     * @return array<string, Declaration>
+     */
+    public function all(string $kind): array
+    {
+        return $this->state()['declarations'][$kind] ?? [];
+    }
+
     public function get(string $kind, string $slug): ?Declaration
     {
         return $this->state()['declarations'][$kind][$slug] ?? null;
@@ -83,7 +93,7 @@ final class Registry
         $doubles = [];
 
         $merged = [];
-        foreach ([Declaration::TYPE, Declaration::TAXONOMY] as $kind) {
+        foreach (array_keys(FileLoader::FOLDERS) as $kind) {
             $merged[$kind] = $php[$kind] ?? [];
             foreach ($files[$kind] ?? [] as $slug => $file) {
                 $phpDeclaration = $merged[$kind][$slug] ?? null;

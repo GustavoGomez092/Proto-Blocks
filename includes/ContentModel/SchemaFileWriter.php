@@ -29,6 +29,33 @@ final class SchemaFileWriter
         $this->roots = array_values(array_filter($writableRoots, 'is_string'));
     }
 
+    /**
+     * What the modules add to the schema check (`proto_blocks_declaration_errors`,
+     * called with the kind, the decoded data and the slug): field group rules,
+     * options-page rules such as protected option names.
+     *
+     * @param array<string|int, mixed> $data
+     * @return list<array{path: string, message: string}>
+     */
+    public static function declarationErrors(string $kind, array $data, string $slug): array
+    {
+        $filtered = apply_filters('proto_blocks_declaration_errors', [], $kind, $data, $slug);
+
+        $errors = [];
+        foreach (is_array($filtered) ? $filtered : [] as $error) {
+            if (is_array($error) && is_string($error['message'] ?? null)) {
+                $errors[] = ['path' => is_string($error['path'] ?? null) ? $error['path'] : '', 'message' => $error['message']];
+            } elseif (is_string($error) && $error !== '') {
+                $errors[] = ['path' => '', 'message' => $error];
+            } elseif ($error !== null && $error !== []) {
+                // Fail closed on a finding in a shape this method does not know.
+                $errors[] = ['path' => '', 'message' => __('A validation filter refused this declaration.', 'proto-blocks')];
+            }
+        }
+
+        return $errors;
+    }
+
     public static function hash(string $text): string
     {
         return hash('sha256', $text);
@@ -95,6 +122,9 @@ final class SchemaFileWriter
         }
 
         $errors = SchemaCheck::validate($data, SchemaCheck::schema(), '#/$defs/' . $kind);
+        if ($errors === []) {
+            $errors = self::declarationErrors($kind, $data, $slug);
+        }
         if ($errors !== []) {
             throw new WriteException(
                 'schema_invalid',

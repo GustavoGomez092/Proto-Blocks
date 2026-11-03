@@ -91,6 +91,50 @@ final class AdminPageDemoCopyTest extends TestCase
         self::assertTrue(AdminPage::isDemoCopy($installed, $shipped));
     }
 
+    public function testCapturedPreviewImageDoesNotMarkADemoAsModified(): void
+    {
+        $files = ['template.php' => '<?php echo 1;', 'block.json' => '{}'];
+        $shipped = $this->makeBlock('examples/hero', $files);
+        $installed = $this->makeBlock('theme/hero', $files);
+        // As writeDemoMarker() records it at install time.
+        file_put_contents(
+            $installed . '/' . AdminPage::DEMO_MARKER,
+            json_encode(['files' => AdminPage::directoryManifest($installed)])
+        );
+
+        // Preview Capture then writes the inserter preview into the folder.
+        file_put_contents($installed . '/preview.png', "\x89PNG fake");
+        file_put_contents($installed . '/PREVIEW.JPG', 'jpeg');
+
+        self::assertArrayNotHasKey('preview.png', AdminPage::directoryManifest($installed));
+        self::assertTrue(AdminPage::isDemoCopy($installed, $shipped), 'marker comparison');
+
+        // Without the marker the shipped comparison ignores it too.
+        unlink($installed . '/' . AdminPage::DEMO_MARKER);
+        self::assertTrue(AdminPage::isDemoCopy($installed, $shipped), 'shipped comparison');
+
+        // A marker written before the exclusion that listed a preview still matches.
+        file_put_contents(
+            $installed . '/' . AdminPage::DEMO_MARKER,
+            json_encode(['files' => AdminPage::directoryManifest($installed) + ['preview.webp' => 'abc']])
+        );
+        self::assertTrue(AdminPage::isDemoCopy($installed, $shipped), 'legacy marker');
+
+        // Only the top-level preview is generated output; a nested one is code.
+        file_put_contents($installed . '/assets-preview.png', 'x');
+        self::assertFalse(AdminPage::isDemoCopy($installed, $shipped));
+    }
+
+    public function testIsPreviewImage(): void
+    {
+        foreach (['preview.png', 'preview.jpg', 'preview.jpeg', 'preview.webp', 'Preview.PNG'] as $name) {
+            self::assertTrue(AdminPage::isPreviewImage($name), $name);
+        }
+        foreach (['preview.gif', 'assets/preview.png', 'my-preview.png', 'preview.png.php'] as $name) {
+            self::assertFalse(AdminPage::isPreviewImage($name), $name);
+        }
+    }
+
     public function testMarkerDoesNotLaunderAnEditedCopy(): void
     {
         $installed = $this->makeBlock('theme/hero', ['template.php' => '<?php echo "v1";']);

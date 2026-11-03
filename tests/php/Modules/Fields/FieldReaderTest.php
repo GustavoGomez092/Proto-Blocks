@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Tests\Modules\Fields;
 
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 use ProtoBlocks\Modules\Fields\Definition\FieldGroup;
 use ProtoBlocks\Modules\Fields\Definition\GroupNormalizer;
@@ -18,16 +20,8 @@ use ProtoBlocks\Modules\Fields\Storage\UserMetaStore;
 use ProtoBlocks\Modules\Fields\Types\TypeRegistry;
 
 require_once __DIR__ . '/wp-stubs.php';
-require_once __DIR__ . '/../../Fields/wp-stubs.php';
 require_once __DIR__ . '/stubs/Structured.php';
 require_once __DIR__ . '/stubs/Read.php';
-
-if (!defined('ABSPATH')) {
-    define('ABSPATH', __DIR__ . '/');
-}
-if (!function_exists('proto_blocks_sanitize_color')) {
-    require_once __DIR__ . '/../../../../includes/helpers.php';
-}
 
 final class FieldReaderTest extends TestCase
 {
@@ -326,6 +320,35 @@ final class FieldReaderTest extends TestCase
 
         $GLOBALS['pb_test_in_the_loop'] = false;
         $this->assertNull(self::reader()->get('subtitle'));
+    }
+
+    /** WP_User::__isset() falls through to user meta: a `post_type` meta key must not make the user a post. */
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function testWpUserIsResolvedByClassNotByShape(): void
+    {
+        require __DIR__ . '/stubs/WpUserMagic.php';
+        $user = new \WP_User(3, ['post_type' => 'event', 'term_id' => 5, 'taxonomy' => 'product_cat']);
+        $this->assertTrue(isset($user->post_type), 'the stub mimics core\'s meta fall-through');
+
+        $ref = ContextResolver::resolve($user);
+        $this->assertSame(ObjectRef::USER, $ref?->kind);
+        $this->assertSame(3, $ref?->id);
+        $this->assertSame('&lt;u&gt;user&lt;/u&gt;', self::reader()->get('bio', $user));
+        $this->assertNull(self::reader()->get('subtitle', $user));
+
+        $GLOBALS['pb_test_queried_object'] = $user;
+        $this->assertSame(ObjectRef::USER, ContextResolver::resolve(null)?->kind);
+    }
+
+    public function testOnlyStdClassIsDuckTyped(): void
+    {
+        $other = new class () {
+            public int $ID = 10;
+            public string $post_type = 'event';
+        };
+        $this->assertNull(ContextResolver::resolve($other));
+        $this->assertSame(ObjectRef::POST, ContextResolver::resolve((object) ['ID' => 10, 'post_type' => 'event'])?->kind);
     }
 
     public function testContextGrammarIsStrict(): void

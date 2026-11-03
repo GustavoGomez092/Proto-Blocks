@@ -9,7 +9,6 @@ use ProtoBlocks\ContentModel\Declaration;
 use ProtoBlocks\ContentModel\FileLoader;
 use ProtoBlocks\ContentModel\Issue;
 
-require_once __DIR__ . '/stubs/theme.php';
 
 final class FileLoaderTest extends TestCase
 {

@@ -8,9 +8,11 @@ declare(strict_types=1);
  * file itself. Later tasks that need a stub not listed here add their own
  * tests/php/Modules/Fields/stubs/<Area>.php rather than editing this file.
  *
- * Every stub is guarded, so a real WordPress or a stub defined earlier (the
- * bootstrap, or another suite's wp-stubs.php) wins. State lives in globals
- * that tests set up and reset:
+ * Shared stubs (hooks, users and capabilities, nonces, JSON, transients,
+ * options, sanitisers, get_bloginfo) live in tests/php/bootstrap.php with
+ * one shape for every directory; do not copy them here. Every stub is
+ * guarded, so a real WordPress wins. State lives in globals that tests set
+ * up and reset (the shared ones are documented in the bootstrap too):
  *
  *   pb_test_caps[$userId]         list of capabilities (shared with Security stubs)
  *   pb_test_current_user          acting user id
@@ -48,22 +50,6 @@ if (!function_exists('pb_test_obj')) {
             return $value;
         }
         return is_array($value) ? (object) $value : null;
-    }
-}
-
-// ---------------------------------------------------------------- hooks
-
-if (!function_exists('add_filter')) {
-    function add_filter($hook, $callback, $priority = 10, $accepted_args = 1)
-    {
-        $GLOBALS['pb_test_hooks'][$hook][] = ['callback' => $callback, 'priority' => (int) $priority, 'args' => (int) $accepted_args];
-        return true;
-    }
-}
-if (!function_exists('add_action')) {
-    function add_action($hook, $callback, $priority = 10, $accepted_args = 1)
-    {
-        return add_filter($hook, $callback, $priority, $accepted_args);
     }
 }
 
@@ -291,28 +277,8 @@ if (!function_exists('delete_user_meta')) {
     }
 }
 
-// ---------------------------------------------------------------- options
+// ---------------------------------------------------------------- users
 
-if (!function_exists('update_option')) {
-    /** Records the autoload flag in pb_test_autoload[$name]. */
-    function update_option($option, $value, $autoload = null)
-    {
-        $GLOBALS['pb_test_options'][$option] = $value;
-        if ($autoload !== null) {
-            $GLOBALS['pb_test_autoload'][$option] = $autoload;
-        }
-        return true;
-    }
-}
-
-// ---------------------------------------------------------------- users and capabilities
-
-if (!function_exists('current_user_can')) {
-    function current_user_can($capability, ...$args)
-    {
-        return in_array($capability, $GLOBALS['pb_test_caps'][get_current_user_id()] ?? [], true);
-    }
-}
 if (!function_exists('is_user_logged_in')) {
     function is_user_logged_in()
     {
@@ -387,14 +353,6 @@ if (!function_exists('post_type_supports')) {
     function post_type_supports($post_type, $feature)
     {
         return isset($GLOBALS['pb_test_supports'][$post_type][$feature]);
-    }
-}
-if (!function_exists('add_post_type_support')) {
-    function add_post_type_support($post_type, $feature, ...$args)
-    {
-        foreach ((array) $feature as $f) {
-            $GLOBALS['pb_test_supports'][$post_type][$f] = $args === [] ? true : $args;
-        }
     }
 }
 if (!function_exists('use_block_editor_for_post')) {
@@ -477,21 +435,8 @@ if (!function_exists('wp_get_attachment_metadata')) {
     }
 }
 
-// ---------------------------------------------------------------- nonces, JSON, transients
+// ---------------------------------------------------------------- nonces
 
-if (!function_exists('wp_create_nonce')) {
-    function wp_create_nonce($action = -1)
-    {
-        return 'nonce:' . $action;
-    }
-}
-if (!function_exists('wp_verify_nonce')) {
-    /** Valid nonce for $action is the string "nonce:<action>". */
-    function wp_verify_nonce($nonce, $action = -1)
-    {
-        return $nonce === 'nonce:' . $action ? 1 : false;
-    }
-}
 if (!function_exists('wp_nonce_field')) {
     function wp_nonce_field($action = -1, $name = '_wpnonce', $referer = true, $display = true)
     {
@@ -500,33 +445,6 @@ if (!function_exists('wp_nonce_field')) {
             echo $field;
         }
         return $field;
-    }
-}
-if (!function_exists('wp_json_encode')) {
-    function wp_json_encode($data, $options = 0, $depth = 512)
-    {
-        return json_encode($data, $options, $depth);
-    }
-}
-if (!function_exists('set_transient')) {
-    function set_transient($transient, $value, $expiration = 0)
-    {
-        $GLOBALS['pb_test_transients'][$transient] = ['value' => $value, 'expiration' => (int) $expiration];
-        return true;
-    }
-}
-if (!function_exists('get_transient')) {
-    function get_transient($transient)
-    {
-        return $GLOBALS['pb_test_transients'][$transient]['value'] ?? false;
-    }
-}
-if (!function_exists('delete_transient')) {
-    function delete_transient($transient)
-    {
-        $had = isset($GLOBALS['pb_test_transients'][$transient]);
-        unset($GLOBALS['pb_test_transients'][$transient]);
-        return $had;
     }
 }
 
@@ -545,49 +463,9 @@ if (!function_exists('register_block_bindings_source')) {
         return true;
     }
 }
-if (!function_exists('get_bloginfo')) {
-    function get_bloginfo($show = '', $filter = 'raw')
-    {
-        $defaults = ['version' => '6.5', 'name' => 'Test site', 'charset' => 'UTF-8', 'language' => 'en-US'];
-        return (string) ($GLOBALS['pb_test_bloginfo'][$show] ?? $defaults[$show] ?? '');
-    }
-}
 
-// ---------------------------------------------------------------- sanitisers
+// ---------------------------------------------------------------- numbers
 
-if (!function_exists('sanitize_hex_color')) {
-    function sanitize_hex_color($color)
-    {
-        if ('' === $color) {
-            return '';
-        }
-        return preg_match('|^#([A-Fa-f0-9]{3}){1,2}$|', (string) $color) ? $color : null;
-    }
-}
-if (!function_exists('sanitize_textarea_field')) {
-    /** Like sanitize_text_field() but keeps line breaks and inner whitespace. */
-    function sanitize_textarea_field($str)
-    {
-        if (is_array($str) || is_object($str)) {
-            return '';
-        }
-        $str = (string) preg_replace('@<(script|style)[^>]*?>.*?</\\1>@si', '', (string) $str);
-        return trim(strip_tags($str));
-    }
-}
-if (!function_exists('is_email')) {
-    function is_email($email, $deprecated = false)
-    {
-        return filter_var((string) $email, FILTER_VALIDATE_EMAIL) !== false ? (string) $email : false;
-    }
-}
-if (!function_exists('sanitize_email')) {
-    function sanitize_email($email)
-    {
-        $email = (string) preg_replace("/[^a-zA-Z0-9!#$%&'*+\\/=?^_`{|}~.@-]/", '', trim((string) $email));
-        return is_email($email) ? $email : '';
-    }
-}
 if (!function_exists('absint')) {
     function absint($maybeint)
     {

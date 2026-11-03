@@ -1,15 +1,27 @@
 # Changelog
 
-## Unreleased — admin rebuild
+## Unreleased
 
-### Changed
+### Admin rebuild
+
+#### Changed
 - **Admin rebuilt in React + Tailwind 4 + shadcn/ui.** The Blocks, Tailwind
-  Settings, System Status, Block Previews and Setup Wizard screens are one
+  Settings, System Status, Preview Capture and Setup Wizard screens are one
   React app (`assets/js/admin.js`, `assets/css/admin.css`); no admin screen is
   rendered by PHP any more.
 - **PHP 8.1 is now required** (`Requires PHP: 8.1`).
+- Demo block installation removed from the admin UI (code retained). The
+  Blocks screen keeps the Example Blocks switch; the setup wizard is now
+  Welcome, Choose your style, Finish.
+- File-writing admin routes (`demos/install`, `demos/remove`,
+  `tailwind/cli`, `tailwind/theme-file`, `wizard/demos`) and
+  `POST /preview-capture` answer `403 proto_blocks_file_mods` when
+  `DISALLOW_FILE_MODS` or `DISALLOW_FILE_EDIT` is set, and the Tailwind CLI
+  is never downloaded in that state (including from `tailwind/compile`).
+- Admin utility classes are scoped to the admin app root, so they no longer
+  match core or third-party markup on Proto-Blocks screens.
 
-### Added
+#### Added
 - REST routes under `proto-blocks/v1/admin/*`: `dashboard`, `cache`,
   `example-blocks`, `demos/install`, `demos/remove`, `tailwind`,
   `tailwind/settings`, `tailwind/compile`, `tailwind/cache`, `tailwind/cli`,
@@ -17,19 +29,21 @@
   `wizard/demos`, `wizard/complete`.
 - E2E harness (wp-env + Playwright): `npm run test:e2e`.
 
-### Removed
+#### Removed
 - Tailwind v3 (the frozen `assets/css/admin-legacy.css` build) and the Google
   Fonts and Material Icons admin stylesheets.
-- Per-control `admin-ajax.php` actions. Only
+- Per-control `admin-ajax.php` actions. Four remain:
   `proto_blocks_tailwind_get_compile_inputs` and
-  `proto_blocks_tailwind_store_css` remain, for the in-browser Tailwind compiler.
+  `proto_blocks_tailwind_store_css` (the in-browser Tailwind compiler),
+  `proto_blocks_preview` (editor block previews) and
+  `proto_blocks_capture_render` (the Preview Capture iframe).
 - `Plugin::getTailwindAdminSettings()` and the PHP page renderers
   (`AdminPage::renderSettingsPage`, `SetupWizard::renderWizard`,
   `PreviewCapture::renderAdminUi`, `Tailwind\AdminSettings::render`).
 
-## Unreleased — security hardening
+### Security hardening
 
-### Security
+#### Security
 - **Renderer XSS (high).** `Renderer::render()` ran `html_entity_decode()`
   over every block's finished HTML, undoing the `esc_html()`/`esc_attr()`
   templates had applied. Any block echoing visitor input (for example
@@ -92,7 +106,7 @@
   README gains an "Escaping in templates" reference.
 - **CI.** GitHub Actions pinned to commit SHAs, minimal `permissions`.
 
-### Removed
+#### Removed
 - The never-mounted admin React app (`assets/js/admin.js`) is no longer built
   or enqueued.
 

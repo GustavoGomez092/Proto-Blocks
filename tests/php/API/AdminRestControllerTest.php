@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Tests\API;
 
-// Security stubs first: this file sorts before the other API tests, and the
-// first definition of a stub wins for the whole run (Security's esc_url_raw
-// actually sanitises; the Admin one passes URLs through).
+// Shared stubs come from tests/php/bootstrap.php; these add the kses
+// allowlist and the script/inline-script stand-ins.
 require_once __DIR__ . '/../Security/wp-stubs.php';
 require_once __DIR__ . '/../Admin/wp-stubs.php';
 
@@ -14,6 +13,7 @@ use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 use ProtoBlocks\Admin\AdminPage;
+use ProtoBlocks\Admin\PreviewCapture;
 use ProtoBlocks\API\Admin\DashboardRoutes;
 use ProtoBlocks\API\Admin\SystemRoutes;
 use ProtoBlocks\API\AdminRestController;
@@ -59,7 +59,7 @@ final class AdminRestControllerTest extends TestCase
 
     #[RunInSeparateProcess]
     #[PreserveGlobalState(false)]
-    public function testWritePermissionFalseWhenFileModsDisabled(): void
+    public function testWritePermissionReturnsFileModsErrorWhenDisabled(): void
     {
         $GLOBALS['pb_test_current_user'] = 1;
         $GLOBALS['pb_test_caps'] = [1 => ['manage_options']];
@@ -68,7 +68,44 @@ final class AdminRestControllerTest extends TestCase
         $controller = new AdminRestController();
 
         self::assertTrue($controller->permission());
+        // A WP_Error from the permission callback is what the client sees,
+        // so it gets proto_blocks_file_mods rather than rest_forbidden.
+        $result = $controller->writePermission();
+        self::assertInstanceOf(\WP_Error::class, $result);
+        self::assertSame('proto_blocks_file_mods', $result->get_error_code());
+        self::assertSame(403, $result->get_error_data()['status']);
+
+        // A missing capability still answers plain false (rest_forbidden).
+        $GLOBALS['pb_test_caps'] = [1 => ['edit_posts']];
         self::assertFalse($controller->writePermission());
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function testPreviewCaptureRestPermissionReturnsFileModsErrorWhenDisabled(): void
+    {
+        $GLOBALS['pb_test_current_user'] = 1;
+        $GLOBALS['pb_test_caps'] = [1 => ['manage_options']];
+        define('DISALLOW_FILE_MODS', true);
+
+        $capture = new PreviewCapture();
+
+        $result = $capture->restPermission();
+        self::assertInstanceOf(\WP_Error::class, $result);
+        self::assertSame('proto_blocks_file_mods', $result->get_error_code());
+        self::assertSame(403, $result->get_error_data()['status']);
+
+        $GLOBALS['pb_test_caps'] = [1 => []];
+        self::assertFalse($capture->restPermission());
+    }
+
+    public function testWritePermissionTrueWithCapabilityAndFileMods(): void
+    {
+        if (!AdminPage::fileModsAllowed()) {
+            self::markTestSkipped('File mods are disabled in this process.');
+        }
+        self::assertTrue((new AdminRestController())->writePermission());
+        self::assertTrue((new PreviewCapture())->restPermission());
     }
 
     public function testFileModsErrorShape(): void

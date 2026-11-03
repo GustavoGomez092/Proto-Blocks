@@ -14,11 +14,18 @@ use ProtoBlocks\Modules\Fields\Types\TypeRegistry;
  * Escaping is type-driven (FieldTypeInterface::escape(), which nested types
  * apply to every sub-field): text and dates through esc_html, url through
  * esc_url, wysiwyg through wp_kses_post, media arrays with escaped URLs,
- * colour through the colour sanitiser, code as stored (only users with
- * unfiltered_html can write it). It applies to every stored value whoever
- * wrote it, so a trusted administrator's `javascript:` URL or a value written
- * before the plugin existed is escaped all the same. Results depend on the
- * viewer for some types (relationship, taxonomy), so they are never cached.
+ * colour through the colour sanitiser. It applies to every stored value
+ * whoever wrote it, so a trusted administrator's `javascript:` URL or a value
+ * written before the plugin existed is escaped all the same.
+ *
+ * Exception: `code` values are returned EXACTLY AS STORED. The write gate
+ * (unfiltered_html) covers values saved through the plugin only; a meta row
+ * of the same name written before the plugin existed or by other code comes
+ * back raw too, because nothing checks a value's provenance at read time.
+ * With $raw = true nothing is escaped; that is the caller's job.
+ *
+ * Results depend on the viewer for some types (relationship, taxonomy), so
+ * they are never cached.
  */
 final class Escaper
 {

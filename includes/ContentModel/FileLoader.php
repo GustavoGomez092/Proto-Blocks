@@ -7,17 +7,17 @@ namespace ProtoBlocks\ContentModel;
 /**
  * Discovers declaration files under the schema roots.
  *
- * Files are data: only `type.jsonc`/`type.json` (resp. `taxonomy.*`) are read,
+ * Files are data: only `type.jsonc`/`type.json` (resp. `taxonomy.*`, `page.*`) are read,
  * never included or executed. A broken file is reported and skipped; every
  * other declaration still loads.
  */
 final class FileLoader
 {
     public const MAX_BYTES = 262144;
-    public const FOLDERS = ['type' => 'proto-types', 'taxonomy' => 'proto-taxonomies'];
-    public const BASENAMES = ['type' => 'type', 'taxonomy' => 'taxonomy'];
+    public const FOLDERS = ['type' => 'proto-types', 'taxonomy' => 'proto-taxonomies', 'options' => 'proto-options'];
+    public const BASENAMES = ['type' => 'type', 'taxonomy' => 'taxonomy', 'options' => 'page'];
 
-    private const SCHEMA_REFS = ['type' => '#/$defs/type', 'taxonomy' => '#/$defs/taxonomy'];
+    private const SCHEMA_REFS = ['type' => '#/$defs/type', 'taxonomy' => '#/$defs/taxonomy', 'options' => '#/$defs/options'];
 
     /**
      * @param list<string> $roots Searched in order; a later root replaces an earlier one's slug.
@@ -25,7 +25,7 @@ final class FileLoader
      */
     public function load(array $roots): array
     {
-        $declarations = [Declaration::TYPE => [], Declaration::TAXONOMY => []];
+        $declarations = array_fill_keys(array_keys(self::FOLDERS), []);
         $issues = [];
 
         foreach ($roots as $root) {
@@ -205,15 +205,22 @@ final class FileLoader
      */
     public static function slugMessage(string $code, string $slug, string $kind): string
     {
-        $max = $kind === Declaration::TYPE ? Slug::TYPE_MAX : Slug::TAXONOMY_MAX;
+        $max = Slug::max($kind);
+        $options = $kind === Declaration::OPTIONS;
 
         return match ($code) {
-            /* translators: %s: slug */
-            'reserved' => sprintf(__('The slug "%s" is reserved by WordPress.', 'proto-blocks'), $slug),
+            'reserved' => $options
+                /* translators: %s: slug */
+                ? sprintf(__('The page slug "%s" is reserved by WordPress or Proto-Blocks.', 'proto-blocks'), $slug)
+                /* translators: %s: slug */
+                : sprintf(__('The slug "%s" is reserved by WordPress.', 'proto-blocks'), $slug),
             /* translators: 1: slug, 2: maximum length */
             'length' => sprintf(__('The slug "%1$s" is longer than %2$d characters.', 'proto-blocks'), $slug, $max),
-            /* translators: %s: slug */
-            default => sprintf(__('The slug "%s" must start with a lowercase letter and use only a-z, 0-9, "_" and "-".', 'proto-blocks'), $slug),
+            default => $options
+                /* translators: %s: slug */
+                ? sprintf(__('The page slug "%s" must start with a lowercase letter and use only a-z, 0-9 and "-".', 'proto-blocks'), $slug)
+                /* translators: %s: slug */
+                : sprintf(__('The slug "%s" must start with a lowercase letter and use only a-z, 0-9, "_" and "-".', 'proto-blocks'), $slug),
         };
     }
 }

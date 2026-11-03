@@ -1,0 +1,6 @@
+{
+  // "table" is not a storage mode.
+  "title": "Unknown Mode",
+  "storage": { "mode": "table" },
+  "fields": [],
+}

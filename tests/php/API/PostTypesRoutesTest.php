@@ -158,6 +158,19 @@ final class PostTypesRoutesTest extends ContentModelRoutesTestCase
         $this->assertNoAbsolutePaths($result);
     }
 
+    public function testDetailCarriesTheRegisteredSupports(): void
+    {
+        // WP_Post_Type::add_supports() unsets $supports on the object, so the
+        // detail must read the features from get_all_post_type_supports().
+        $this->seedCorePost();
+        unset($GLOBALS['pb_test_post_types']['post']->supports);
+        $GLOBALS['pb_test_supports']['post'] = ['title' => true, 'editor' => true, 'thumbnail' => true, 'excerpt' => true, 'comments' => true];
+
+        $result = $this->routes()->show(new \WP_REST_Request(['slug' => 'post']));
+
+        self::assertSame(['title', 'editor', 'thumbnail', 'excerpt', 'comments'], $result['effective']['supports']);
+    }
+
     public function testDetailUnknownAndInvalid(): void
     {
         self::assertWpError('proto_blocks_not_found', 404, $this->routes()->show(new \WP_REST_Request(['slug' => 'nothing'])));

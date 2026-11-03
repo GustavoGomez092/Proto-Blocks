@@ -19,7 +19,7 @@ use WP_REST_Request;
 /**
  * GET admin/dashboard, POST admin/example-blocks (writes an option only) and
  * POST admin/demos/install|remove (write theme files, so they sit behind
- * the write permission).
+ * the write permission). The demos routes are not exposed in the UI since 2.15.
  */
 final class DashboardRoutes
 {
@@ -116,7 +116,11 @@ final class DashboardRoutes
         // Block registration depends on this value; clear cached templates so the change takes effect.
         Plugin::getInstance()->getCache()->clear();
 
-        return $this->page()->dashboardData();
+        // Rescan before building the response, or it lists the old blocks.
+        $page = $this->page();
+        $page->refreshDiscovery();
+
+        return $page->dashboardData();
     }
 
     /**

@@ -22,10 +22,10 @@ use WP_Error;
 use WP_REST_Request;
 
 /**
- * schema-files/<kind>/<slug>: the boundary between the admin UI and the
- * theme's JSONC declaration files. Every write goes through
- * SchemaFileWriter (validation, confinement to the theme roots, hash check,
- * atomic swap); this class adds the slug check, the content guardrails and
+ * schema-files/<kind>/<slug> (kind `type`, `taxonomy` or `options`): the
+ * boundary between the admin UI and the theme's JSONC declaration files.
+ * Every write goes through SchemaFileWriter (validation, confinement to the
+ * theme roots, hash check, atomic swap); this class adds the slug check, the content guardrails and
  * the typed-slug confirmation for deletes.
  *
  * - GET schema-files/<kind>/<slug> (permission), query `name?` → FileResult
@@ -48,7 +48,8 @@ final class SchemaFilesRoutes extends ContentModelRoutes
 
     public function registerRoutes(string $namespace, callable $permission, callable $writePermission): void
     {
-        register_rest_route($namespace, '/schema-files/(?P<kind>type|taxonomy)/(?P<slug>[a-z][a-z0-9_-]{0,31})', [
+        // The pattern only bounds the characters; slugError() applies each kind's own grammar and length.
+        register_rest_route($namespace, '/schema-files/(?P<kind>type|taxonomy|options)/(?P<slug>[a-z][a-z0-9_-]{0,63})', [
             [
                 'methods' => 'GET',
                 'callback' => [$this, 'get'],
@@ -287,6 +288,12 @@ final class SchemaFilesRoutes extends ContentModelRoutes
             }
         }
 
+        // An options page is named by its title.
+        $title = $declaration?->kind === Declaration::OPTIONS ? ($declaration->data['title'] ?? null) : null;
+        if (is_string($title) && $title !== '') {
+            return $title;
+        }
+
         return $declaration?->name() ?? ucwords(str_replace(['-', '_'], ' ', $slug));
     }
 
@@ -302,6 +309,9 @@ final class SchemaFilesRoutes extends ContentModelRoutes
         }
         $data = self::decode($text);
         if ($data === null || SchemaCheck::validate($data, SchemaCheck::schema(), '#/$defs/' . $kind) !== []) {
+            return null;
+        }
+        if (SchemaFileWriter::declarationErrors($kind, $data, $slug) !== []) {
             return null;
         }
         if (array_key_exists('slug', $data) && $data['slug'] !== $slug) {
