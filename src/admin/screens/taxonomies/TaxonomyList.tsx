@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import { PlusIcon } from 'lucide-react';
 import { adminGet } from '@/admin/api';
 import { getBootstrap, getWriteReason } from '@/admin/bootstrap';
 import { IssueList } from '@/admin/components/content-model/IssueList';
+import { EmptyCallout, NameCell, ValuePill } from '@/admin/components/content-model/Layout';
 import { OriginBadge } from '@/admin/components/content-model/OriginBadge';
+import { Panel } from '@/admin/components/shell/Panel';
 import { PageHeader } from '@/admin/components/shell/PageHeader';
 import { ReadOnlyBanner } from '@/admin/components/shell/ReadOnlyBanner';
 import { ScreenError } from '@/admin/components/shell/ScreenError';
-import { Badge } from '@/admin/components/ui/badge';
 import { Button } from '@/admin/components/ui/button';
-import { Card } from '@/admin/components/ui/card';
 import { Skeleton } from '@/admin/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/admin/components/ui/table';
 import type { ListItem, ListResult } from '@/admin/content-model/types';
@@ -75,6 +75,7 @@ export function TaxonomyList({
 	const header = (canAdd: boolean) => (
 		<PageHeader
 			title={__('Taxonomies', 'proto-blocks')}
+			eyebrow={__('Content model', 'proto-blocks')}
 			description={__('Ways to group content, like categories and tags.', 'proto-blocks')}
 			actions={
 				canAdd ? (
@@ -89,7 +90,7 @@ export function TaxonomyList({
 
 	if (list.error) {
 		return (
-			<div className="grid gap-6">
+			<div className="grid gap-6 [&>header]:mb-0">
 				{header(false)}
 				<ScreenError screen={__('Taxonomies', 'proto-blocks')} error={list.error} onRetry={list.reload} />
 			</div>
@@ -97,46 +98,65 @@ export function TaxonomyList({
 	}
 	if (!list.data) {
 		return (
-			<div className="grid gap-6">
+			<div className="grid gap-6 [&>header]:mb-0">
 				{header(false)}
-				<Skeleton className="h-40 w-full" />
+				<Skeleton className="h-40 w-full rounded-xl" />
 			</div>
 		);
 	}
 	if (!list.data.moduleEnabled) {
 		return (
-			<div className="grid gap-6">
+			<div className="grid gap-6 [&>header]:mb-0">
 				{header(false)}
-				<Card className="px-6 py-8 text-center text-[13px] text-muted-foreground">
+				<Panel className="p-6 text-label text-muted-foreground">
 					{__('The Taxonomies module is disabled by the proto_blocks_modules filter.', 'proto-blocks')}
-				</Card>
+				</Panel>
 			</div>
 		);
 	}
 
 	const typeLabel = (slug: string) => types.find((type) => type.slug === slug)?.label ?? slug;
 	const { items, issues } = list.data;
+	const canAdd = writeReason === null && list.data.createTarget.writable;
+	const own = items.filter((item) => item.origin === 'file' || item.origin === 'php');
+	const firstOwnType = types.find((type) => type.origin === 'file' || type.origin === 'php');
 
 	return (
-		<div className="grid gap-6">
+		<div className="grid gap-6 [&>header]:mb-0">
 			{header(true)}
 			{writeReason !== null ? <ReadOnlyBanner reason={writeReason} /> : null}
 			<IssueList issues={issues} />
-			{items.length === 0 ? (
-				<Card className="px-6 py-8 text-center text-[13px] text-muted-foreground">
-					{__('No taxonomies yet. Group your content by topic, industry or format.', 'proto-blocks')}
-				</Card>
-			) : (
-				<Card className="gap-0 overflow-hidden rounded-lg py-0 shadow-xs">
+			{own.length === 0 ? (
+				<EmptyCallout
+					icon={<PlusIcon />}
+					title={__('No taxonomies of your own yet', 'proto-blocks')}
+					action={
+						canAdd ? (
+							<Button variant="outline" size="sm" onClick={onNew}>
+								{__('Add taxonomy', 'proto-blocks')}
+							</Button>
+						) : null
+					}
+				>
+					{firstOwnType
+						? sprintf(
+								/* translators: %s: plural name of a post type, e.g. Events. */
+								__('Group %s by topic or industry — or declare one in PHP:', 'proto-blocks'),
+								firstOwnType.label
+							)
+						: __('Group your content by topic, industry or format — or declare one in PHP:', 'proto-blocks')}{' '}
+					<code className="font-mono text-micro text-link">{`proto_taxonomy('Topic', '${firstOwnType?.slug ?? 'post'}');`}</code>
+				</EmptyCallout>
+			) : null}
+			{items.length > 0 ? (
+				<Panel className="overflow-hidden">
 					<Table>
 						<TableHeader>
 							<TableRow>
-								<TableHead>{__('Name', 'proto-blocks')}</TableHead>
-								<TableHead>{__('Slug', 'proto-blocks')}</TableHead>
+								<TableHead>{__('Taxonomy', 'proto-blocks')}</TableHead>
 								<TableHead>{__('Origin', 'proto-blocks')}</TableHead>
 								<TableHead>{__('Attached to', 'proto-blocks')}</TableHead>
 								<TableHead className="text-end">{__('Terms', 'proto-blocks')}</TableHead>
-								<TableHead>{__('Source', 'proto-blocks')}</TableHead>
 								<TableHead className="text-end">
 									<span className="sr-only">{__('Actions', 'proto-blocks')}</span>
 								</TableHead>
@@ -145,43 +165,39 @@ export function TaxonomyList({
 						<TableBody>
 							{items.map((item) => {
 								const parent = item.parentType ?? null;
+								const owned = item.origin === 'file' || item.origin === 'php';
 								return (
 									<TableRow key={item.slug}>
-										<TableCell className="font-medium">{item.label}</TableCell>
 										<TableCell>
-											<code className="font-mono text-[12.5px]">{item.slug}</code>
+											<NameCell label={item.label} slug={item.slug} />
 										</TableCell>
 										<TableCell>
 											<OriginBadge origin={item.origin} label={item.originLabel} double={item.double} />
 										</TableCell>
-										<TableCell>
+										<TableCell className="whitespace-normal">
 											<span className="flex flex-wrap gap-1">
 												{(item.objectTypes ?? []).map((type) => (
-													<Badge key={type} variant="secondary">
-														{typeLabel(type)}
-													</Badge>
+													<ValuePill key={type}>{typeLabel(type)}</ValuePill>
 												))}
 											</span>
 										</TableCell>
 										<TableCell className="text-end tabular-nums" data-testid="count">
 											{item.count}
 										</TableCell>
-										<TableCell className="max-w-[280px] whitespace-normal">
-											{item.source ? <code className="font-mono text-[12.5px] break-all">{item.source}</code> : <span className="text-muted-foreground">—</span>}
-										</TableCell>
 										<TableCell className="text-end">
 											{parent ? (
 												<EditInPostTypeLink type={parent} title={item.readOnlyMessage ?? undefined} />
 											) : (
-												<Button asChild variant="outline" size="sm">
+												<Button asChild variant={owned ? 'outline' : 'ghost'} size="sm">
 													<a
 														href={`?page=proto-blocks-taxonomies&taxonomy=${encodeURIComponent(item.slug)}`}
+														title={item.source ?? undefined}
 														onClick={(event) => {
 															event.preventDefault();
 															onOpen(item.slug);
 														}}
 													>
-														{item.origin === 'file' || item.origin === 'php' ? __('Edit', 'proto-blocks') : __('Override', 'proto-blocks')}
+														{owned ? __('Edit', 'proto-blocks') : __('Override', 'proto-blocks')}
 													</a>
 												</Button>
 											)}
@@ -191,8 +207,8 @@ export function TaxonomyList({
 							})}
 						</TableBody>
 					</Table>
-				</Card>
-			)}
+				</Panel>
+			) : null}
 		</div>
 	);
 }

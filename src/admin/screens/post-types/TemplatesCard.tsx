@@ -4,7 +4,7 @@ import { FileCheck2Icon, FilePlus2Icon, LayoutTemplateIcon } from 'lucide-react'
 import { toast } from 'sonner';
 import { adminPost, ApiError } from '@/admin/api';
 import { Button } from '@/admin/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/admin/components/ui/card';
+import { FormPanel, FormSection } from '@/admin/components/content-model/Layout';
 import { Checkbox } from '@/admin/components/ui/checkbox';
 import { Label } from '@/admin/components/ui/label';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/admin/components/ui/tooltip';
@@ -82,16 +82,14 @@ export function TemplatesCard({
 	);
 
 	return (
-		<Card className="shadow-xs" id="pt-templates">
-			<CardHeader>
-				<CardTitle role="heading" aria-level={2}>{__('Templates', 'proto-blocks')}</CardTitle>
-				<CardDescription>
-					{__('Create starter block templates in your theme. Existing files are never overwritten.', 'proto-blocks')}
-				</CardDescription>
-			</CardHeader>
-			<CardContent className="grid gap-4">
+		<FormPanel>
+			<FormSection
+				id="pt-templates"
+				title={__('Templates', 'proto-blocks')}
+				description={__('Create starter block templates in your theme. Existing files are never overwritten.', 'proto-blocks')}
+			>
 				{templates.length > 0 ? (
-					<ul className="grid gap-1.5 text-sm">
+					<ul className="grid gap-1.5 text-body">
 						{templates.map((template) => (
 							<li key={template.name} className="flex items-center gap-2">
 								{template.exists ? (
@@ -99,8 +97,8 @@ export function TemplatesCard({
 								) : (
 									<FilePlus2Icon aria-hidden="true" className="size-4 text-muted-foreground" />
 								)}
-								<code className="font-mono text-[12.5px]">{template.name}</code>
-								<span className="text-[13px] text-muted-foreground">
+								<code className="font-mono text-caption">{template.name}</code>
+								<span className="text-label text-muted-foreground">
 									{template.exists ? __('exists · will skip', 'proto-blocks') : __('missing', 'proto-blocks')}
 								</span>
 							</li>
@@ -114,7 +112,7 @@ export function TemplatesCard({
 						disabled={disabled}
 						onCheckedChange={(next) => setTaxonomies(next === true)}
 					/>
-					<Label htmlFor={checkboxId} className="text-sm font-normal">
+					<Label htmlFor={checkboxId} className="font-normal">
 						{__('Also taxonomy templates', 'proto-blocks')}
 					</Label>
 				</div>
@@ -133,12 +131,12 @@ export function TemplatesCard({
 						button
 					)}
 					{!blockTheme ? (
-						<p id={helpId} className="text-[13px] text-muted-foreground">
+						<p id={helpId} className="text-label text-muted-foreground">
 							{classic}
 						</p>
 					) : null}
 				</div>
-			</CardContent>
-		</Card>
+			</FormSection>
+		</FormPanel>
 	);
 }
