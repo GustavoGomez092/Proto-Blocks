@@ -354,9 +354,10 @@ JS;
         );
 
         // Enqueue admin Tailwind CSS
+        // legacy PHP screens; removed in the admin cleanup task
         wp_enqueue_style(
             'proto-blocks-admin',
-            PROTO_BLOCKS_URL . 'assets/css/admin.css',
+            PROTO_BLOCKS_URL . 'assets/css/admin-legacy.css',
             ['proto-blocks-admin-fonts', 'proto-blocks-admin-icons'],
             PROTO_BLOCKS_VERSION
         );
