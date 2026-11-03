@@ -35,6 +35,8 @@ import {
 	type RawGroup,
 } from './builder-state';
 import { FieldSettings, type Choice } from './FieldSettings';
+import { GroupSettings } from './GroupSettings';
+import { LocationBuilder, readLocation } from './LocationBuilder';
 import { FieldTree, rowId } from './FieldTree';
 import { putSchemaFile, type SchemaKind } from './schema-files';
 
@@ -267,6 +269,9 @@ export function Builder({ group: groupKey, onBack, onCreated }: BuilderProps) {
 	}
 
 	const fields = (Array.isArray(draft.group.fields) ? draft.group.fields : []).filter(isObject);
+	// A group inside a type or taxonomy file is shown on that object: its file sets the location.
+	const owner = file && file.kind !== 'field-group' ? (file.kind === 'type' ? detail?.postTypes : detail?.taxonomies)?.find((c) => c.slug === file.slug) : undefined;
+	const implied = file && file.kind !== 'field-group' ? (owner?.label ?? file.slug) : undefined;
 	const title = typeof draft.group.title === 'string' ? draft.group.title : '';
 	const fileSlug = slug ?? sanitizeSlug(title);
 	const slugError = file === null && groupKey === null && !NEW_SLUG.test(fileSlug) ? __('Use 1 to 32 lowercase letters, digits, "-" or "_", starting with a letter.', 'proto-blocks') : null;
@@ -403,10 +408,22 @@ export function Builder({ group: groupKey, onBack, onCreated }: BuilderProps) {
 				</Alert>
 			) : null}
 
-			<Card className="grid gap-4 px-6 py-5 shadow-xs sm:grid-cols-2">
-				<div className="grid gap-1.5">
-					<Label htmlFor="pb-group-title">{__('Group title', 'proto-blocks')}</Label>
-					<Input id="pb-group-title" value={title} disabled={readOnly} onChange={(e) => dispatch({ type: 'group', patch: { title: e.target.value } })} />
+			<Card className="grid gap-4 px-6 py-5 shadow-xs">
+				<h2 className="text-sm font-semibold">{__('Group settings', 'proto-blocks')}</h2>
+				<div className="grid gap-6 lg:grid-cols-2">
+					<GroupSettings group={draft.group} dispatch={dispatch} readOnly={readOnly} />
+					<section className="grid content-start gap-2" aria-labelledby="pb-group-location">
+						<h3 id="pb-group-location" className="text-sm font-medium">
+							{__('Location', 'proto-blocks')}
+						</h3>
+						<LocationBuilder
+							value={readLocation(draft.group.location)}
+							choices={detail ?? {}}
+							implied={implied}
+							readOnly={readOnly}
+							onChange={(location) => dispatch({ type: 'group', patch: { location } })}
+						/>
+					</section>
 				</div>
 				{file === null && groupKey === null ? (
 					<div className="grid gap-1.5">
