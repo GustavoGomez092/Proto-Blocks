@@ -88,7 +88,7 @@ describe('Builder save flow', () => {
 		});
 		await open({ 'POST admin/fields/validate': validate });
 		await userEvent.click(screen.getByRole('button', { name: 'JSONC' }));
-		const pane = screen.getByRole('textbox', { name: 'JSONC' });
+		const pane = screen.getByRole('textbox', { name: 'File text' });
 		expect((pane as HTMLTextAreaElement).value).toBe(TEXT);
 
 		fireEvent.change(pane, { target: { value: '[\n  {\n    ]\n]' } });
@@ -103,10 +103,37 @@ describe('Builder save flow', () => {
 		mockBootstrap({ screen: 'fields' });
 		await open({ 'POST admin/fields/validate': { errors: [], warnings: [] } });
 		await userEvent.click(screen.getByRole('button', { name: 'JSONC' }));
-		fireEvent.change(screen.getByRole('textbox', { name: 'JSONC' }), { target: { value: TEXT.replace('"Event details"', '"Talks"') } });
+		fireEvent.change(screen.getByRole('textbox', { name: 'File text' }), { target: { value: TEXT.replace('"Event details"', '"Talks"') } });
 		expect(await screen.findByText('Valid')).toBeInTheDocument();
 		await userEvent.click(screen.getByRole('button', { name: 'Builder' }));
 		expect(screen.getByRole('textbox', { name: 'Group title' })).toHaveValue('Talks');
+	});
+
+	it('reports a group missing from valid text, blocks Save and the builder, and drops the stale group', async () => {
+		mockBootstrap({ screen: 'fields' });
+		await open({ 'POST admin/fields/validate': { errors: [], warnings: [] } });
+		await userEvent.click(screen.getByRole('button', { name: 'JSONC' }));
+		fireEvent.change(screen.getByRole('textbox', { name: 'File text' }), { target: { value: '[]\n' } });
+		expect(screen.getByText('Group not found at [0]')).toBeInTheDocument();
+		expect(saveButton()).toBeDisabled();
+		expect(screen.getByRole('button', { name: 'Builder' })).toBeDisabled();
+		expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Untitled field group');
+
+		fireEvent.change(screen.getByRole('textbox', { name: 'File text' }), { target: { value: TEXT } });
+		expect(screen.queryByText('Group not found at [0]')).toBeNull();
+		expect(screen.getByRole('button', { name: 'Builder' })).toBeEnabled();
+	});
+
+	it('stays in the JSONC view when the save is refused', async () => {
+		mockBootstrap({ screen: 'fields' });
+		const saved = jest.fn(() => {
+			throw { code: 'proto_blocks_invalid_declaration', message: 'Invalid.', data: { status: 400, errors: [{ path: '[0].fields[1].name', message: 'Bad name.' }] } };
+		});
+		await open({ 'POST admin/schema-files/field-group/acf-export': saved, 'POST admin/fields/validate': { errors: [], warnings: [] } });
+		await userEvent.click(screen.getByRole('button', { name: 'JSONC' }));
+		await userEvent.click(saveButton());
+		expect(await screen.findByText('Bad name.')).toBeInTheDocument();
+		expect(screen.getByRole('textbox', { name: 'File text' })).toBeInTheDocument();
 	});
 
 	it('lists the PUT errors with their paths and keeps the unsaved state', async () => {
@@ -182,7 +209,7 @@ describe('Builder save flow', () => {
 		expect(saveButton()).toBeDisabled();
 		expect(screen.getByRole('button', { name: 'Add field' })).toBeDisabled();
 		await userEvent.click(screen.getByRole('button', { name: 'JSONC' }));
-		expect(screen.getByRole('textbox', { name: 'JSONC' })).toHaveAttribute('readonly');
+		expect(screen.getByRole('textbox', { name: 'File text' })).toHaveAttribute('readonly');
 	});
 
 	it('opens an ACF-registered group read-only', async () => {
@@ -245,7 +272,10 @@ describe('New field group dialog', () => {
 		render(<Builder group={null} onBack={() => {}} />);
 		await userEvent.type(screen.getByRole('textbox', { name: 'Title' }), 'Speaker');
 		await userEvent.click(screen.getByRole('button', { name: 'Create field group' }));
-		expect(await screen.findByText('proto-fields/speaker/group.jsonc already exists. Pick another file name.')).toBeInTheDocument();
+		const taken = await screen.findByText('proto-fields/speaker/group.jsonc already exists. Pick another file name.');
+		const slug = screen.getByRole('textbox', { name: 'File name' });
+		expect(slug).toHaveAttribute('aria-invalid', 'true');
+		expect(slug.getAttribute('aria-describedby')).toContain(taken.id);
 		expect(requests().some((r) => r.method === 'POST')).toBe(false);
 	});
 

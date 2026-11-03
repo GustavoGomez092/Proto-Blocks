@@ -69,6 +69,25 @@ describe('LocationBuilder', () => {
 		expect(onChange).toHaveBeenLastCalledWith([[{ param: 'post_taxonomy', operator: '==', value: 'category:newss' }]]);
 	});
 
+	it('flags an empty term and a non-numeric post ID inline', () => {
+		render(
+			<LocationBuilder
+				value={[
+					[{ param: 'post_taxonomy', operator: '==', value: 'category:' }],
+					[{ param: 'post', operator: '==', value: 'abc' }],
+				]}
+				choices={CHOICES}
+				onChange={jest.fn()}
+			/>
+		);
+		const term = screen.getByRole('textbox', { name: 'Term slug' });
+		expect(term).toHaveAttribute('aria-invalid', 'true');
+		expect(term).toHaveAccessibleDescription('Enter the term slug; the rule never matches without one.');
+		const id = screen.getByRole('textbox', { name: 'Value' });
+		expect(id).toHaveAttribute('aria-invalid', 'true');
+		expect(id).toHaveAccessibleDescription('Enter a post ID (digits only); the rule never matches otherwise.');
+	});
+
 	it('adds a first rule and flags a group that mixes object kinds', async () => {
 		const onChange = jest.fn();
 		const { rerender } = render(<LocationBuilder value={[]} choices={CHOICES} onChange={onChange} />);

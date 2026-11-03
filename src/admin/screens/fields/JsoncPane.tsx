@@ -116,7 +116,6 @@ export function JsoncPane({ text, pointer, kind, index = null, readOnly = false,
 			</div>
 			<textarea
 				id={id}
-				aria-label={__('JSONC', 'proto-blocks')}
 				aria-invalid={syntax.length > 0 || undefined}
 				aria-describedby={`${id}-problems`}
 				className="min-h-[480px] w-full rounded-md border bg-[#0f1d2e] p-3 font-mono text-xs leading-5 whitespace-pre text-[#d6e2f0] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -128,9 +127,9 @@ export function JsoncPane({ text, pointer, kind, index = null, readOnly = false,
 				value={text}
 				onChange={(e) => onChange(e.target.value)}
 			/>
-			<div id={`${id}-problems`} className="grid gap-1 text-[13px]">
+			<div id={`${id}-problems`} aria-live="polite" className="grid gap-1 text-[13px]">
 				{syntax.map((p, i) => (
-					<p key={`s${i}`} role="alert" className="text-destructive">
+					<p key={`s${i}`} className="text-destructive">
 						{sprintf(/* translators: 1: line number, 2: column number */ __('Line %1$d, column %2$d', 'proto-blocks'), p.line, p.column)}
 						{`: ${p.message}`}
 					</p>

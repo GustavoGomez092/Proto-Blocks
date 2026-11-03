@@ -156,6 +156,11 @@ function discarded(current: Draft): Draft {
 	return { ...current, text: current.saved, group: isObject(at) ? at : current.group };
 }
 
+/** A group pointer as written in error paths: `[0]`, `fields[1]`, `/` for the whole file. */
+function pointerLabel(pointer: (string | number)[]): string {
+	return pointer.map((p, i) => (typeof p === 'number' ? `[${p}]` : i === 0 ? p : `.${p}`)).join('') || '/';
+}
+
 /** A line comment cannot hold a line break: one would let the title write JSON. */
 function commentSafe(text: string): string {
 	return text.replace(/[\r\n\u2028\u2029]+/g, ' ');
@@ -279,9 +284,12 @@ function NewGroupDialog({ onCancel, onCreated }: NewGroupDialogProps) {
 								id={slugId}
 								className="font-mono"
 								value={slug}
-								aria-invalid={slugError ? true : undefined}
-								aria-describedby={slugError ? `${slugId}-error` : undefined}
-								onChange={(e) => setSlugText(e.target.value)}
+								aria-invalid={slugError || serverError ? true : undefined}
+								aria-describedby={[slugError ? `${slugId}-error` : '', serverError ? `${slugId}-server` : ''].filter(Boolean).join(' ') || undefined}
+								onChange={(e) => {
+									setSlugText(e.target.value);
+									setServerError(null);
+								}}
 							/>
 							{slugError ? (
 								<p id={`${slugId}-error`} role="alert" className="text-[13px] text-destructive">
@@ -307,7 +315,7 @@ function NewGroupDialog({ onCancel, onCreated }: NewGroupDialogProps) {
 						</div>
 					)}
 					{serverError ? (
-						<p role="alert" className="text-[13px] text-destructive">
+						<p id={`${slugId}-server`} role="alert" className="text-[13px] text-destructive">
 							{serverError}
 						</p>
 					) : null}
@@ -453,6 +461,8 @@ export function Builder({ group: groupKey, onBack, onCreated }: BuilderProps) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [draft?.group, selected]);
 	const syntaxErrors = useMemo(() => (draft ? jsoncErrors(draft.text, draft.pointer) : []), [draft]);
+	const groupMissing = draft !== null && syntaxErrors.length === 0 && !isObject(valueAt(draft.text, draft.pointer));
+	const textBlocked = syntaxErrors.length > 0 || groupMissing;
 
 	const back = (
 		<Button variant="outline" onClick={() => (dirty ? setLeaving(true) : onBack())}>
@@ -502,8 +512,8 @@ export function Builder({ group: groupKey, onBack, onCreated }: BuilderProps) {
 	const showProblems = (list: Problem[]) => {
 		setProblems(list);
 		const first = list.find((p) => p.key);
-		if (first?.key) {
-			setView('builder');
+		// In the JSONC view the list is the answer; the builder selection waits for the user.
+		if (first?.key && view === 'builder') {
 			setSelected(first.key);
 			focusRef.current = first.setting === 'name' || first.setting === 'label' ? settingId(first.key, first.setting) : `pb-row-${first.key}`;
 		}
@@ -516,7 +526,7 @@ export function Builder({ group: groupKey, onBack, onCreated }: BuilderProps) {
 
 	const save = async (acknowledge: string[] = []) => {
 		const current = draftRef.current;
-		if (!current || !file || readOnly || jsoncErrors(current.text, current.pointer).length > 0) {
+		if (!current || !file || readOnly || jsoncErrors(current.text, current.pointer).length > 0 || !isObject(valueAt(current.text, current.pointer))) {
 			return;
 		}
 		const invalid = validateGroup(current.group);
@@ -562,7 +572,8 @@ export function Builder({ group: groupKey, onBack, onCreated }: BuilderProps) {
 			return;
 		}
 		const at = jsoncErrors(text, current.pointer).length === 0 ? valueAt(text, current.pointer) : undefined;
-		setDraft({ ...current, text, group: isObject(at) ? at : current.group });
+		// No group at the pointer (or no parse): the builder holds nothing rather than a stale copy.
+		setDraft({ ...current, text, group: isObject(at) ? at : {} });
 	};
 
 	const addField = (type: string) => {
@@ -595,7 +606,7 @@ export function Builder({ group: groupKey, onBack, onCreated }: BuilderProps) {
 	};
 
 	const selectedLabel = selectedField ? String(selectedField.label || selectedField.name || '') : '';
-	const blockedSave = readOnly || saving || syntaxErrors.length > 0;
+	const blockedSave = readOnly || saving || textBlocked;
 
 	return (
 		<div className="grid gap-6">
@@ -610,8 +621,8 @@ export function Builder({ group: groupKey, onBack, onCreated }: BuilderProps) {
 								size="sm"
 								variant={view === 'builder' ? 'secondary' : 'ghost'}
 								aria-pressed={view === 'builder'}
-								disabled={syntaxErrors.length > 0}
-								title={syntaxErrors.length > 0 ? __('Fix the file text first.', 'proto-blocks') : undefined}
+								disabled={textBlocked}
+								title={textBlocked ? __('Fix the file text first.', 'proto-blocks') : undefined}
 								onClick={() => setView('builder')}
 							>
 								<ListTreeIcon aria-hidden="true" />
@@ -675,7 +686,12 @@ export function Builder({ group: groupKey, onBack, onCreated }: BuilderProps) {
 			) : null}
 
 			{view === 'jsonc' ? (
-				<Card className="px-6 py-5 shadow-xs">
+				<Card className="grid gap-3 px-6 py-5 shadow-xs">
+					{groupMissing ? (
+						<p role="status" className="text-[13px] text-destructive">
+							{sprintf(/* translators: %s: where the group should be in the file, e.g. "[0]" or "fields[1]" */ __('Group not found at %s', 'proto-blocks'), pointerLabel(draft.pointer))}
+						</p>
+					) : null}
 					<JsoncPane
 						text={draft.text}
 						pointer={draft.pointer}

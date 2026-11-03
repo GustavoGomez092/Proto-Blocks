@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { __, sprintf } from '@wordpress/i18n';
 import { PlusIcon, TriangleAlertIcon, XIcon } from 'lucide-react';
 import { Button } from '@/admin/components/ui/button';
@@ -114,6 +115,9 @@ export function readLocation(raw: unknown): LocationRule[][] {
 	);
 }
 
+/** LocationMatcher's post ID grammar. */
+const POST_ID = /^[1-9][0-9]{0,18}$/;
+
 const SELECT = 'h-8 rounded-md border bg-transparent px-2 text-sm';
 
 /**
@@ -122,6 +126,7 @@ const SELECT = 'h-8 rounded-md border bg-transparent px-2 text-sm';
  * is already in the file is shown locked, with only a remove button.
  */
 export function LocationBuilder({ value, choices, onChange, implied, readOnly = false }: LocationBuilderProps) {
+	const uid = useId();
 	if (implied !== undefined) {
 		return (
 			<p className="rounded-md border bg-muted px-3 py-2 text-sm">
@@ -133,6 +138,13 @@ export function LocationBuilder({ value, choices, onChange, implied, readOnly = 
 	const emit = (next: LocationRule[][]) => onChange(next.filter((g) => g.length > 0));
 	const setRule = (g: number, r: number, rule: LocationRule) => emit(value.map((grp, gi) => (gi === g ? grp.map((old, ri) => (ri === r ? rule : old)) : grp)));
 	const removeRule = (g: number, r: number) => emit(value.map((grp, gi) => (gi === g ? grp.filter((_, ri) => ri !== r) : grp)));
+
+	const hintId = (g: number, r: number) => `${uid}-${g}-${r}`;
+	const hint = (g: number, r: number, text: string) => (
+		<p id={`${hintId(g, r)}-hint`} className="basis-full text-[13px] text-destructive">
+			{text}
+		</p>
+	);
 
 	const valueControl = (rule: LocationRule, g: number, r: number) => {
 		if (rule.param === 'post_taxonomy') {
@@ -156,26 +168,36 @@ export function LocationBuilder({ value, choices, onChange, implied, readOnly = 
 						))}
 					</select>
 					<Input
+						id={hintId(g, r)}
 						aria-label={__('Term slug', 'proto-blocks')}
 						className="h-8 w-40 font-mono"
 						value={term}
 						disabled={readOnly}
+						aria-invalid={term === '' || undefined}
+						aria-describedby={term === '' ? `${hintId(g, r)}-hint` : undefined}
 						onChange={(e) => setRule(g, r, { ...rule, value: `${tax}:${e.target.value}` })}
 					/>
+					{term === '' ? hint(g, r, __('Enter the term slug; the rule never matches without one.', 'proto-blocks')) : null}
 				</>
 			);
 		}
 		const list = valueChoices(rule.param, choices);
 		if (list === null) {
+			const invalid = !POST_ID.test(rule.value);
 			return (
-				<Input
-					aria-label={__('Value', 'proto-blocks')}
-					className="h-8 w-32 font-mono"
-					inputMode="numeric"
-					value={rule.value}
-					disabled={readOnly}
-					onChange={(e) => setRule(g, r, { ...rule, value: e.target.value })}
-				/>
+				<>
+					<Input
+						aria-label={__('Value', 'proto-blocks')}
+						className="h-8 w-32 font-mono"
+						inputMode="numeric"
+						value={rule.value}
+						disabled={readOnly}
+						aria-invalid={invalid || undefined}
+						aria-describedby={invalid ? `${hintId(g, r)}-hint` : undefined}
+						onChange={(e) => setRule(g, r, { ...rule, value: e.target.value })}
+					/>
+					{invalid ? hint(g, r, __('Enter a post ID (digits only); the rule never matches otherwise.', 'proto-blocks')) : null}
+				</>
 			);
 		}
 		return (
