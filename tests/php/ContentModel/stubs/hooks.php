@@ -13,7 +13,7 @@ declare(strict_types=1);
 //   pb_test_registered['taxonomy'][$slug]  ['object_types' => ..., 'args' => ...]
 //   pb_test_post_types[$slug]              registered post type objects (seed one to mark it registered)
 //   pb_test_taxonomies[$slug]              registered taxonomy objects
-//   pb_test_supports[$slug][$feature]      post type supports
+//   pb_test_supports[$slug][$feature]      post type supports (register_post_type() adds its `supports`)
 //   pb_test_tax_links[]                    [taxonomy, object type] from register_taxonomy_for_object_type()
 //   pb_test_flushes                        flush_rewrite_rules() call count
 //   pb_test_stylesheet                     get_stylesheet() value (default 'theme')
@@ -27,6 +27,13 @@ if (!function_exists('register_post_type')) {
     {
         $args = apply_filters('register_post_type_args', (array) $args, $post_type);
         $GLOBALS['pb_test_registered']['post_type'][$post_type] = $args;
+        // Like WP_Post_Type::add_supports(): the declared list, or title + editor unless `supports` is false.
+        $supports = $args['supports'] ?? [];
+        if (is_array($supports) && $supports !== []) {
+            add_post_type_support($post_type, $supports);
+        } elseif ($supports !== false) {
+            add_post_type_support($post_type, ['title', 'editor']);
+        }
         $object = (object) ($args + ['_builtin' => false, 'labels' => []]);
         $object->name = $post_type;
         $GLOBALS['pb_test_post_types'][$post_type] = $object;

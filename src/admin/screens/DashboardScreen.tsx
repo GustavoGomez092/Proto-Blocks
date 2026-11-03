@@ -260,19 +260,33 @@ function ClearCache({ cachedTemplates, onData }: { cachedTemplates: number; onDa
 		<>
 			<div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-muted-foreground">
 				<p>{__('Clear the template cache to force every block to recompile. Useful while developing.', 'proto-blocks')}</p>
-				<Button variant="outline" size="sm" disabled={clearing} onClick={() => setOpen(true)}>
+				<Button
+					variant="outline"
+					size="sm"
+					disabled={clearing || cachedTemplates === 0}
+					onClick={() => setOpen(true)}
+				>
 					<EraserIcon aria-hidden="true" />
 					{__('Clear cache', 'proto-blocks')}
 				</Button>
 			</div>
 			<ConfirmDialog
 				open={open}
-				title={sprintf(
-					/* translators: %d: number of cached templates */
-					_n('Clear %d cached template?', 'Clear %d cached templates?', cachedTemplates, 'proto-blocks'),
-					cachedTemplates
-				)}
-				description={__('Templates are compiled again the next time each block renders.', 'proto-blocks')}
+				title={
+					cachedTemplates === 0
+						? __('No cached templates to clear.', 'proto-blocks')
+						: sprintf(
+								/* translators: %d: number of cached templates */
+								_n('Clear %d cached template?', 'Clear %d cached templates?', cachedTemplates, 'proto-blocks'),
+								cachedTemplates
+							)
+				}
+				confirmDisabled={cachedTemplates === 0}
+				description={
+					cachedTemplates === 0
+						? undefined
+						: __('Templates are compiled again the next time each block renders.', 'proto-blocks')
+				}
 				confirmLabel={clearing ? __('Clearing…', 'proto-blocks') : __('Clear cache', 'proto-blocks')}
 				onConfirm={clear}
 				onCancel={() => {

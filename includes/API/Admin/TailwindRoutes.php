@@ -325,6 +325,7 @@ CSS;
                 'preview' => (string) $config['preview'],
                 'dirWritable' => is_dir(dirname($themeFile)) && is_writable(dirname($themeFile)),
             ],
+            'cssSize' => $manager->getCache()->getSize(),
             'cssSizeFormatted' => $manager->getCache()->getFormattedSize(),
         ];
     }

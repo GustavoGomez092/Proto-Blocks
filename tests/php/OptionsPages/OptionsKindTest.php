@@ -102,7 +102,7 @@ final class OptionsKindTest extends ContentModelRoutesTestCase
 
         $pattern = null;
         foreach ($GLOBALS['pb_test_routes'] as $entry) {
-            if (str_starts_with(ltrim((string) $entry['route'], '/'), 'schema-files/')) {
+            if (str_starts_with(ltrim((string) $entry['route'], '/'), 'admin/schema-files/')) {
                 $pattern = ltrim((string) $entry['route'], '/');
             }
         }
@@ -110,14 +110,14 @@ final class OptionsKindTest extends ContentModelRoutesTestCase
         // WordPress matches routes case-insensitively, anchored at both ends.
         $match = static fn (string $path): bool => preg_match('@^' . $pattern . '$@i', $path) === 1;
 
-        self::assertTrue($match('schema-files/options/theme-settings'));
-        self::assertTrue($match('schema-files/options/' . str_repeat('a', 64)));
-        self::assertTrue($match('schema-files/type/product'));
-        self::assertTrue($match('schema-files/taxonomy/genre'));
+        self::assertTrue($match('admin/schema-files/options/theme-settings'));
+        self::assertTrue($match('admin/schema-files/options/' . str_repeat('a', 64)));
+        self::assertTrue($match('admin/schema-files/type/product'));
+        self::assertTrue($match('admin/schema-files/taxonomy/genre'));
         foreach (['options/../x', 'options/a/b', 'options/', 'options/.x', 'options/%2e%2e', 'option/x', 'plugin/x'] as $path) {
-            self::assertFalse($match('schema-files/' . $path), $path);
+            self::assertFalse($match('admin/schema-files/' . $path), $path);
         }
-        self::assertFalse($match('schema-files/options/' . str_repeat('a', 65)));
+        self::assertFalse($match('admin/schema-files/options/' . str_repeat('a', 65)));
 
         // `A` passes the case-insensitive pattern; the handler refuses it before any path is built.
         $routes = $this->routes();

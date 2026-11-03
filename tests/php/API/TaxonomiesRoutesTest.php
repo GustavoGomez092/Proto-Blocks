@@ -44,14 +44,45 @@ final class TaxonomiesRoutesTest extends ContentModelRoutesTestCase
         $brand = $items['brand'];
         self::assertSame('file', $brand['origin']);
         self::assertStringEndsWith('proto-types/product/type.jsonc', $brand['source']);
-        self::assertTrue($brand['editable']);
-        self::assertNull($brand['readOnlyReason']);
+        // Edited through the type's file, never on its own screen.
+        self::assertFalse($brand['editable']);
+        self::assertSame('inline', $brand['readOnlyReason']);
+        self::assertSame('Declared inline in proto-types/product/type.jsonc; edit it there.', $brand['readOnlyMessage']);
+        self::assertSame('product', $brand['parentType']);
+        self::assertSame(['product'], $brand['objectTypes']);
         self::assertSame(4, $brand['count']);
         self::assertSame('Brands', $brand['label']);
 
-        self::assertStringEndsWith('proto-taxonomies/genre/taxonomy.jsonc', $items['genre']['source']);
-        self::assertTrue($items['genre']['editable']);
+        $genre = $items['genre'];
+        self::assertStringEndsWith('proto-taxonomies/genre/taxonomy.jsonc', $genre['source']);
+        self::assertTrue($genre['editable']);
+        self::assertNull($genre['readOnlyReason']);
+        self::assertNull($genre['readOnlyMessage']);
+        self::assertNull($genre['parentType']);
+        self::assertSame(['product'], $genre['objectTypes']);
         $this->assertNoAbsolutePaths($result);
+    }
+
+    public function testEveryListItemCarriesObjectTypesAndParentType(): void
+    {
+        $GLOBALS['pb_test_taxonomies']['category'] = (object) [
+            'name' => 'category', 'label' => 'Categories', '_builtin' => true, 'show_ui' => true, 'object_type' => ['post', 'page', 'post'],
+        ];
+        $GLOBALS['pb_test_taxonomies']['loose'] = (object) ['name' => 'loose', 'label' => 'Loose', 'show_ui' => true];
+        $this->write('proto-taxonomies/genre/taxonomy.jsonc', '{"name": "Genre"}');
+
+        $items = self::bySlug($this->routes()->index());
+
+        foreach ($items as $slug => $item) {
+            self::assertArrayHasKey('objectTypes', $item, $slug);
+            self::assertArrayHasKey('parentType', $item, $slug);
+            self::assertArrayHasKey('readOnlyMessage', $item, $slug);
+        }
+        self::assertSame(['post', 'page'], $items['category']['objectTypes']);
+        self::assertSame([], $items['loose']['objectTypes']);
+        self::assertSame([], $items['genre']['objectTypes']);
+        self::assertNull($items['category']['parentType']);
+        self::assertNull($items['category']['readOnlyMessage']);
     }
 
     public function testFilterRootDeclarationIsReadOnly(): void
@@ -107,6 +138,7 @@ final class TaxonomiesRoutesTest extends ContentModelRoutesTestCase
         self::assertSame(['item', 'effective', 'objectTypes', 'content'], array_keys($result));
         self::assertSame('genre', $result['item']['slug']);
         self::assertSame(['book'], $result['objectTypes']);
+        self::assertSame(['book'], $result['item']['objectTypes']);
         self::assertSame(['count' => 9], $result['content']);
         self::assertSame('Genres', $result['effective']['labels']['name']);
         $this->assertNoAbsolutePaths($result);

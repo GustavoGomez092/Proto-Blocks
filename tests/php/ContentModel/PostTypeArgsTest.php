@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Tests\ContentModel;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ProtoBlocks\ContentModel\Declaration;
 use ProtoBlocks\ContentModel\Issue;
 use ProtoBlocks\ContentModel\MenuIcon;
 use ProtoBlocks\ContentModel\PostTypeArgs;
+use ProtoBlocks\ContentModel\UntrustedKeys;
 
 require_once __DIR__ . '/../CLI/wp-stubs.php';
 
@@ -237,5 +239,93 @@ final class PostTypeArgsTest extends TestCase
         $this->assertSame([], $built['issues']);
         $this->assertSame('shop', $built['args']['has_archive']);
         $this->assertFalse($built['args']['delete_with_user']);
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function unsafeKeys(): iterable
+    {
+        foreach (UntrustedKeys::UNSAFE_KEYS as $key) {
+            yield $key => [$key];
+        }
+    }
+
+    #[DataProvider('unsafeKeys')]
+    public function testFileDeclarationDropsUnsafeKeyWithWarning(string $key): void
+    {
+        $data = ['name' => 'Product', $key => 'phpinfo'];
+        $results = [
+            'build' => self::build($data),
+            'override' => PostTypeArgs::override(['public' => true], self::decl($data, 'post'), sys_get_temp_dir(), self::THEME_URL),
+        ];
+
+        foreach ($results as $mode => $result) {
+            $this->assertArrayNotHasKey($key, $result['args'], $mode);
+            $this->assertSame(['unsafe_key'], array_map(static fn (Issue $i): string => $i->code, $result['issues']), $mode);
+            $this->assertSame(Issue::WARNING, $result['issues'][0]->level);
+            $this->assertStringContainsString('"' . $key . '"', $result['issues'][0]->message);
+            $this->assertSame(Declaration::TYPE, $result['issues'][0]->kind);
+        }
+        $this->assertTrue($results['override']['args']['public']);
+        $this->assertSame('Products', $results['build']['args']['labels']['name'], 'the rest of the declaration still registers');
+    }
+
+    #[DataProvider('unsafeKeys')]
+    public function testPhpDeclarationKeepsUnsafeKey(string $key): void
+    {
+        $callback = static function (): void {
+        };
+        $built = self::build(['name' => 'Product', $key => $callback], 'product', Declaration::ORIGIN_PHP);
+        $this->assertSame([], $built['issues']);
+        $this->assertSame($callback, $built['args'][$key]);
+
+        $override = PostTypeArgs::override([], self::decl([$key => 'My_Class'], 'post', Declaration::ORIGIN_PHP), '/x', self::THEME_URL);
+        $this->assertSame([], $override['issues']);
+        $this->assertSame('My_Class', $override['args'][$key]);
+    }
+
+    public function testFileDeclarationDropsUnknownKeyNamingCallable(): void
+    {
+        $built = self::build([
+            'name' => 'Product',
+            'my_callback' => 'strlen',
+            'my_static' => 'ProtoBlocks\ContentModel\PostTypeArgs::build',
+            'my_pair' => ['\ProtoBlocks\ContentModel\PostTypeArgs', 'build'],
+            'my_flag' => 'not_a_function_pb_test',
+            'delete_with_user' => false,
+        ]);
+
+        foreach (['my_callback', 'my_static', 'my_pair'] as $key) {
+            $this->assertArrayNotHasKey($key, $built['args'], $key);
+        }
+        $this->assertSame('not_a_function_pb_test', $built['args']['my_flag']);
+        $this->assertFalse($built['args']['delete_with_user']);
+        $this->assertSame(['unsafe_key', 'unsafe_key', 'unsafe_key'], array_map(static fn (Issue $i): string => $i->code, $built['issues']));
+    }
+
+    public function testFileDeclarationDropsMarkupInLabels(): void
+    {
+        $built = self::build([
+            'name' => 'Product <x>',
+            'labels' => ['add_new_item' => '<img src=x onerror=alert(1)>', 'menu_name' => 'Shop'],
+        ]);
+
+        $labels = $built['args']['labels'];
+        $this->assertSame('Shop', $labels['menu_name']);
+        $this->assertSame('Add New Product x', $labels['add_new_item'], 'the generated label replaces the dropped one');
+        foreach ($labels as $key => $label) {
+            $this->assertFalse(is_string($label) && UntrustedKeys::hasMarkup($label), (string) $key);
+        }
+        $codes = array_map(static fn (Issue $i): string => $i->code, $built['issues']);
+        $this->assertSame(['unsafe_label', 'unsafe_label'], $codes);
+        $this->assertSame(Issue::WARNING, $built['issues'][0]->level);
+        $this->assertStringContainsString('"name"', $built['issues'][0]->message);
+        $this->assertStringContainsString('"labels.add_new_item"', $built['issues'][1]->message);
+    }
+
+    public function testPhpDeclarationKeepsLabelText(): void
+    {
+        $built = self::build(['name' => 'Product', 'labels' => ['menu_name' => 'Shop <b>new</b>']], 'product', Declaration::ORIGIN_PHP);
+        $this->assertSame([], $built['issues']);
+        $this->assertSame('Shop <b>new</b>', $built['args']['labels']['menu_name']);
     }
 }

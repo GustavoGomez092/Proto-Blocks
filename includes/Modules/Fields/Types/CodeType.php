@@ -10,7 +10,9 @@ use ProtoBlocks\Modules\Fields\Definition\Field;
  * Raw HTML/script. Only users with unfiltered_html may write it, so for an
  * untrusted user sanitize() refuses (null) and the caller keeps the previous
  * value. A stored value can only have been written by a trusted user, which is
- * why escape() leaves it as is.
+ * why escape() leaves it as is. Exception: re-typing a field from `text` (or
+ * any other type) to `code` makes the values stored under the old type,
+ * written by anyone, come back raw.
  */
 final class CodeType implements FieldTypeInterface
 {

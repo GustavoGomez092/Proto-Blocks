@@ -67,6 +67,9 @@ final class Manager
             $this->fields = FieldsModule::wired($this->registry);
             FieldsModule::setInstance($this->fields);
             $this->fields->boot();
+        } else {
+            // FieldsModule::instance() must not hand out a live module.
+            FieldsModule::setInstance(FieldsModule::disabled());
         }
         if ($this->postTypes !== null || $this->taxonomies !== null) {
             // After the modules' own wp_loaded work (pending overrides resolve at 10).

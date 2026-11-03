@@ -97,6 +97,24 @@ final class ContentModelCommandsTest extends TestCase
         $this->assertNull(ContentModelCommands::normalizeSlug(str_repeat('a', 33), 'taxonomy'));
     }
 
+    // ---- scaffoldArchive -----------------------------------------------------
+
+    public function testScaffoldArchiveFollowsTheRegisteredType(): void
+    {
+        // An override of core `post` that does not mention has_archive: no archive.
+        $this->assertFalse(ContentModelCommands::scaffoldArchive(['supports' => ['title']], (object) ['name' => 'post', 'has_archive' => false]));
+        // The registered value wins over the file (it already includes the file's).
+        $this->assertFalse(ContentModelCommands::scaffoldArchive(['has_archive' => true], (object) ['has_archive' => false]));
+        $this->assertTrue(ContentModelCommands::scaffoldArchive([], (object) ['has_archive' => 'books']));
+    }
+
+    public function testScaffoldArchiveFallsBackToTheFileThenThePluginDefault(): void
+    {
+        $this->assertFalse(ContentModelCommands::scaffoldArchive(['has_archive' => false], null));
+        $this->assertTrue(ContentModelCommands::scaffoldArchive(['has_archive' => 'books'], null));
+        $this->assertTrue(ContentModelCommands::scaffoldArchive([], null));
+    }
+
     // ---- createDeclaration ---------------------------------------------------
 
     public function testCreateWritesTheCommentedTemplate(): void
@@ -347,5 +365,47 @@ final class ContentModelCommandsTest extends TestCase
         $this->assertDirectoryDoesNotExist($this->root . '/proto-types/study');
         $this->assertFileExists($oldDir . '/type.jsonc');
         $this->assertNull($this->registry()->get('type', 'study'));
+    }
+
+    // ---- write gate (same as the REST routes) -------------------------------
+
+    /** The writer the commands build for themselves. */
+    private function commandWriter(): SchemaFileWriter
+    {
+        $GLOBALS['pb_test_theme'] = ['template' => $this->root, 'stylesheet' => $this->root];
+
+        return (new \ReflectionMethod(ContentModelCommands::class, 'writer'))->invoke(new ContentModelCommands());
+    }
+
+    public function testCommandWriterOnMultisiteNeedsSuperAdmin(): void
+    {
+        if (defined('DISALLOW_FILE_MODS') || defined('DISALLOW_FILE_EDIT')) {
+            $this->markTestSkipped('File mods are disabled in this process.');
+        }
+        try {
+            $this->assertNull($this->commandWriter()->target('type', 'book', null)['reason']);
+
+            $GLOBALS['pb_test_multisite'] = true;
+            $GLOBALS['pb_test_current_user'] = 0;
+            $this->assertSame('file_mods', $this->commandWriter()->target('type', 'book', null)['reason']);
+
+            // `wp --user=<super admin>`.
+            $GLOBALS['pb_test_current_user'] = 7;
+            $GLOBALS['pb_test_super_admins'] = [7];
+            $this->assertNull($this->commandWriter()->target('type', 'book', null)['reason']);
+        } finally {
+            unset($GLOBALS['pb_test_multisite'], $GLOBALS['pb_test_super_admins'], $GLOBALS['pb_test_current_user'], $GLOBALS['pb_test_theme']);
+        }
+    }
+
+    #[\PHPUnit\Framework\Attributes\RunInSeparateProcess]
+    #[\PHPUnit\Framework\Attributes\PreserveGlobalState(false)]
+    public function testCommandWriterHonoursDisallowFileEdit(): void
+    {
+        define('DISALLOW_FILE_EDIT', true);
+
+        $this->assertSame('file_mods', $this->commandWriter()->target('type', 'book', null)['reason']);
+        $this->assertWriteError('file_mods', 403, fn () => $this->commandWriter()->write('type', 'book', '{"name": "Book"}', null, null));
+        $this->assertFileDoesNotExist($this->root . '/proto-types/book/type.jsonc');
     }
 }
