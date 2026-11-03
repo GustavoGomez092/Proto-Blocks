@@ -97,7 +97,7 @@ function GroupForm({ payload }: { payload: OptionsGroupPayload }) {
 		<div className="grid gap-5">
 			{payload.fields.length > 0 && (
 				<div className="proto-blocks-fields">
-					<FieldsForm payload={payload} />
+					<FieldsForm payload={payload} outcome="not-saved" />
 				</div>
 			)}
 			{hidden.map((f) => (

@@ -3,7 +3,8 @@
   "phpVersion": "8.1",
   "plugins": ["."],
   "mappings": {
-    "wp-content/pb-e2e-fixtures": "./tests/e2e/fixtures"
+    "wp-content/pb-e2e-fixtures": "./tests/e2e/fixtures",
+    "wp-content/mu-plugins/proto-classic-editor.php": "./tests/e2e/fixtures/mu-plugins/proto-classic-editor.php"
   },
   "port": 8888,
   "env": {
