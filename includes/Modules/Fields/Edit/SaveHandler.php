@@ -28,10 +28,12 @@ use ProtoBlocks\Security\AttributeSanitizer;
  *   $_POST[PRESENT][<group key>][]         every rendered, editable top-level field
  *
  * Who may save: a valid nonce plus `edit_post` / `edit_term` / `edit_user` for
- * the object; the posted object id (`post_ID`, `tag_ID`, `user_id`), when the
- * form carries one, must be the object being saved, so a second save_post in
- * the same request (another plugin inserting a post) never receives this
- * form's values. The public registration form (logged out, during
+ * the object, and the form marker (OBJECT_FIELD) naming that object; core's
+ * own form fields must agree with it (`post_ID`; `taxonomy` and, when editing,
+ * `tag_ID`; `user_id` on profile forms). A `new` marker is honoured once per
+ * request. So a second save_post, a created_term or a user_register fired
+ * while another form is saved never receives that form's values. The public
+ * registration form (logged out, during
  * `user_register`) needs the nonce only and saves only groups whose location
  * names `user_form == register` (or `all`) explicitly; user 0 is untrusted, so
  * every value is sanitised and code is refused.
@@ -54,10 +56,25 @@ final class SaveHandler
 {
     public const NONCE_ACTION = 'proto_fields_save';
     public const NONCE_FIELD = '_proto_fields_nonce';
+    /**
+     * The form marker every field box prints: `post:<id>`, `term:<id>:<taxonomy>`,
+     * `term:new:<taxonomy>` (add-term form), `user:<id>` (profile forms) or
+     * `user:new` (add-user and registration forms). A save hook acts only on
+     * the object its form names, so a term or user created while ANOTHER form
+     * is being saved (a tag typed into the post form, a user created by a
+     * plugin during save_post) never receives that form's values.
+     */
+    public const OBJECT_FIELD = 'proto_fields_object';
     public const INPUT = 'proto_fields';
     public const PRESENT = 'proto_fields_present';
 
     private const CONTAINERS = ['repeater', 'flexible_content', 'group'];
+
+    /** Paths kept in the error map of one save. */
+    public const MAX_ERRORS = 500;
+
+    /** @var array<string, true> kinds whose `new` marker was used in this request */
+    private array $claimedNew = [];
 
     /**
      * @param array<string, Store> $stores kind (ObjectRef::POST, ...) => store
@@ -82,7 +99,7 @@ final class SaveHandler
         if (($post->post_type ?? '') === 'revision' || wp_is_post_revision($postId) !== false || wp_is_post_autosave($postId) !== false) {
             return;
         }
-        if (!self::nonceOk() || !self::postedIdIs('post_ID', $postId) || !current_user_can('edit_post', $postId)) {
+        if (!self::nonceOk() || self::marker() !== 'post:' . $postId || !self::postedIdIs('post_ID', $postId) || !current_user_can('edit_post', $postId)) {
             return;
         }
         $ref = ObjectRef::post($postId);
@@ -99,7 +116,22 @@ final class SaveHandler
         if ($termId <= 0 || $taxonomy === '' || !self::nonceOk()) {
             return;
         }
-        if (!self::postedIdIs('tag_ID', $termId) || !self::postedStringIs('taxonomy', $taxonomy) || !current_user_can('edit_term', $termId)) {
+        if (!self::postedStringIs('taxonomy', $taxonomy)) {
+            return;
+        }
+        $marker = self::marker();
+        if ($marker === 'term:' . $termId . ':' . $taxonomy) {
+            if (!self::postedIdIs('tag_ID', $termId)) {
+                return; // the edit form always posts tag_ID
+            }
+        } elseif ($marker === 'term:new:' . $taxonomy) {
+            if (array_key_exists('tag_ID', $_POST) || !$this->claimNew('term')) {
+                return; // the add form has no tag_ID; only the first term created in the request
+            }
+        } else {
+            return;
+        }
+        if (!current_user_can('edit_term', $termId)) {
             return;
         }
 
@@ -114,6 +146,14 @@ final class SaveHandler
         }
         $registering = did_action('user_register') > 0;
         $groups = $this->index->all();
+        $marker = self::marker();
+        if ($marker === 'user:new') {
+            if (!$registering || !$this->claimNew('user')) {
+                return; // add-user and registration forms save only the user they create
+            }
+        } elseif ($marker !== 'user:' . $userId || !is_user_logged_in() || !self::postedIdIs('user_id', $userId)) {
+            return; // profile forms name their user and post user_id
+        }
 
         if (!is_user_logged_in()) {
             // Only the public registration form saves without a logged-in user.
@@ -123,7 +163,7 @@ final class SaveHandler
             $ctx = $this->userContext($userId, 'register');
             $groups = array_values(array_filter($groups, static fn(FieldGroup $g): bool => self::namesRegisterForm($g, $ctx)));
         } else {
-            if (!self::postedIdIs('user_id', $userId) || !current_user_can('edit_user', $userId)) {
+            if (!current_user_can('edit_user', $userId)) {
                 return;
             }
             $ctx = $this->userContext($userId, $registering ? 'add' : 'edit');
@@ -233,6 +273,9 @@ final class SaveHandler
             }
         }
 
+        if (count($out['errors']) > self::MAX_ERRORS) {
+            $out['errors'] = array_slice($out['errors'], 0, self::MAX_ERRORS, true);
+        }
         $this->errors->put($ref, get_current_user_id(), $out['errors'], $submittedForErrors);
 
         return $out;
@@ -262,21 +305,37 @@ final class SaveHandler
         return is_string($nonce) && $nonce !== '' && wp_verify_nonce(wp_unslash($nonce), self::NONCE_ACTION) !== false;
     }
 
-    /** True when the form does not post $key, or posts exactly $id. */
+    /** The form posts $key, and it is exactly $id. */
     private static function postedIdIs(string $key, int $id): bool
     {
-        if (!array_key_exists($key, $_POST)) {
-            return $key !== 'post_ID'; // every post form (classic and the block editor's meta-box request) sends post_ID
-        }
-        $posted = $_POST[$key];
+        $posted = $_POST[$key] ?? null;
 
         return is_scalar($posted) && preg_match('/^[1-9][0-9]{0,18}\z/D', (string) $posted) === 1 && (int) $posted === $id;
     }
 
-    /** True when the form does not post $key, or posts exactly $value. */
+    /** The form posts $key, and it is exactly $value. */
     private static function postedStringIs(string $key, string $value): bool
     {
-        return !array_key_exists($key, $_POST) || (is_string($_POST[$key]) && wp_unslash($_POST[$key]) === $value);
+        return isset($_POST[$key]) && is_string($_POST[$key]) && wp_unslash($_POST[$key]) === $value;
+    }
+
+    /** The posted form marker, or '' when absent or malformed. */
+    private static function marker(): string
+    {
+        $marker = $_POST[self::OBJECT_FIELD] ?? null;
+
+        return is_string($marker) ? wp_unslash($marker) : '';
+    }
+
+    /** A `new` marker names one object: the first one created in this request. */
+    private function claimNew(string $kind): bool
+    {
+        if (isset($this->claimedNew[$kind])) {
+            return false;
+        }
+        $this->claimedNew[$kind] = true;
+
+        return true;
     }
 
     /** @return array<string, true> */
@@ -399,8 +458,8 @@ final class SaveHandler
         if (!in_array($f->type, self::CONTAINERS, true)) {
             return null;
         }
-        $budget = RepeaterType::rowBudget($f);
-        if ($budget <= 0 || self::rows($f, $value) <= $budget) {
+        $budget = RepeaterType::rowBudget($f); // 0 means no rows at all (fail closed), as in maxRows()
+        if (self::rows($f, $value) <= $budget) {
             return null;
         }
 
