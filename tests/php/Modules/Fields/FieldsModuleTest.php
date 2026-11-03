@@ -277,4 +277,23 @@ final class FieldsModuleTest extends TestCase
         FieldsModule::setInstance($module);
         $this->assertSame($module, FieldsModule::instance());
     }
+
+    public function testSaveHooks(): void
+    {
+        $module = self::module();
+        $module->boot();
+        $save = $module->saveHandler();
+
+        $this->assertSame(10, has_action('save_post', [$save, 'savePost']));
+        $this->assertSame(2, self::hooks('save_post')[0]['args']);
+        $this->assertSame(10, has_action('created_term', [$save, 'saveTerm']));
+        $this->assertSame(10, has_action('edited_term', [$save, 'saveTerm']));
+        $this->assertSame(3, self::hooks('edited_term')[0]['args']);
+        foreach (['user_register', 'personal_options_update', 'edit_user_profile_update'] as $hook) {
+            $this->assertSame(10, has_action($hook, [$save, 'saveUser']), $hook);
+            $this->assertSame(1, self::hooks($hook)[0]['args'], $hook);
+        }
+        $this->assertSame(10, has_action('rest_api_init', [$module->editRoutes(), 'registerRoutes']));
+        $this->assertSame($save, $module->saveHandler());
+    }
 }

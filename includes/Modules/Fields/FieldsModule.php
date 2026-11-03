@@ -13,6 +13,10 @@ use ProtoBlocks\Modules\Fields\Bindings\FieldBindingSource;
 use ProtoBlocks\Modules\Fields\Definition\FieldGroup;
 use ProtoBlocks\Modules\Fields\Definition\GroupNormalizer;
 use ProtoBlocks\Modules\Fields\Definition\Report;
+use ProtoBlocks\Modules\Fields\Edit\ChoiceResolver;
+use ProtoBlocks\Modules\Fields\Edit\EditRoutes;
+use ProtoBlocks\Modules\Fields\Edit\ErrorStore;
+use ProtoBlocks\Modules\Fields\Edit\SaveHandler;
 use ProtoBlocks\Modules\Fields\Read\Aliases;
 use ProtoBlocks\Modules\Fields\Read\FieldReader;
 use ProtoBlocks\Modules\Fields\Registry\GroupIndex;
@@ -70,6 +74,10 @@ final class FieldsModule implements ModuleInterface
     private ?TrustCallbacks $trust = null;
     private ?MetaRegistrar $registrar = null;
     private ?FieldBindingSource $bindings = null;
+    private ?ChoiceResolver $choices = null;
+    private ?ErrorStore $errorStore = null;
+    private ?SaveHandler $saveHandler = null;
+    private ?EditRoutes $editRoutes = null;
     private AcfBridge $acf;
 
     /** @var list<Issue> filled when the index loads */
@@ -155,8 +163,9 @@ final class FieldsModule implements ModuleInterface
     /**
      * Sets the shared reader behind proto_field(), the bindings source
      * (`init` 10), meta registration (`init` 20), the ACF aliases
-     * (`after_setup_theme` 100), the ACF-skip notice (admin only) and the
-     * declaration errors filter. Idempotent; reads no file.
+     * (`after_setup_theme` 100), the ACF-skip notice (admin only), the
+     * declaration errors filter, the post/term/user save path (SaveHandler)
+     * and the edit-time REST routes (EditRoutes). Idempotent; reads no file.
      *
      * Why after_setup_theme 100 for the aliases: modules boot on
      * `after_setup_theme` 1, after `plugins_loaded` has fired, so a
@@ -184,6 +193,13 @@ final class FieldsModule implements ModuleInterface
             add_action('admin_notices', [$this, 'renderNotices']);
         }
         add_filter('proto_blocks_declaration_errors', [$this, 'declarationErrors'], 10, 4);
+        add_action('save_post', [$this->saveHandler(), 'savePost'], 10, 2);
+        add_action('created_term', [$this->saveHandler(), 'saveTerm'], 10, 3);
+        add_action('edited_term', [$this->saveHandler(), 'saveTerm'], 10, 3);
+        add_action('user_register', [$this->saveHandler(), 'saveUser'], 10, 1);
+        add_action('personal_options_update', [$this->saveHandler(), 'saveUser'], 10, 1);
+        add_action('edit_user_profile_update', [$this->saveHandler(), 'saveUser'], 10, 1);
+        add_action('rest_api_init', [$this->editRoutes(), 'registerRoutes']);
     }
 
     public function index(): GroupIndex
@@ -225,6 +241,29 @@ final class FieldsModule implements ModuleInterface
     public function bindings(): FieldBindingSource
     {
         return $this->bindings ??= new FieldBindingSource($this->reader(), $this->index());
+    }
+
+    /** optionsSource choices through the block controls' options providers (resolved on first use). */
+    public function choices(): ChoiceResolver
+    {
+        return $this->choices ??= new ChoiceResolver(
+            static fn(string $source, array $args): array => \ProtoBlocks\Core\Plugin::getInstance()->getOptionsProviders()->resolve($source, $args)
+        );
+    }
+
+    public function errorStore(): ErrorStore
+    {
+        return $this->errorStore ??= new ErrorStore();
+    }
+
+    public function saveHandler(): SaveHandler
+    {
+        return $this->saveHandler ??= new SaveHandler($this->index(), $this->types(), $this->stores(), $this->errorStore(), $this->choices(), $this->trust());
+    }
+
+    public function editRoutes(): EditRoutes
+    {
+        return $this->editRoutes ??= new EditRoutes($this->index(), $this->errorStore());
     }
 
     public function acf(): AcfBridge
