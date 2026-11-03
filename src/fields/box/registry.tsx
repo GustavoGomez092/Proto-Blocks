@@ -1,17 +1,33 @@
 /**
  * The field box's input registry and the contexts inputs read.
  *
- * FieldsForm registers the scalar inputs; later phases add theirs with
- * registerInput() (media, relational and nested inputs, possibly as
- * React.lazy components; FieldsForm renders them inside Suspense).
+ * FieldsForm registers the scalar inputs; this module registers the media,
+ * relational and nested ones (at the bottom). Their heavy parts (the
+ * relationship and gallery pickers, the rich text editor) are lazy chunks
+ * the inputs request on first use; FieldsForm renders inputs inside Suspense.
  * A type with no registered input renders a note and is never marked
  * present, so its stored value is kept on save.
  */
-import { createContext, useContext, type ChangeEvent, type ComponentType, type FocusEvent, type LazyExoticComponent } from 'react';
+import {
+	createContext,
+	useContext,
+	useMemo,
+	type ChangeEvent,
+	type ComponentType,
+	type FocusEvent,
+	type LazyExoticComponent,
+} from 'react';
 import { __ } from '@wordpress/i18n';
 import type { Control } from 'react-hook-form';
 import type { BoxPayload, FieldDef } from '../model/types';
 import { dottedPath, inputName, type FieldPath } from './names';
+import { FileInput, GalleryInput, ImageInput, VideoInput } from './inputs/MediaInputs';
+import { isTaxonomyGroup, TaxonomyInput } from './inputs/TaxonomyInput';
+import { RelationshipInput } from './inputs/RelationshipInput';
+import { WysiwygInput } from './inputs/WysiwygInput';
+import { GroupInput } from './inputs/GroupInput';
+import { RepeaterInput } from './inputs/RepeaterInput';
+import { FlexibleInput } from './inputs/FlexibleInput';
 
 export type FieldInputProps = { field: FieldDef; path: FieldPath; groupKey: string; readOnly?: boolean };
 export type FieldInput = ComponentType< FieldInputProps >;
@@ -24,8 +40,23 @@ export type InputOptions = {
 	group?: ( field: FieldDef ) => boolean;
 };
 
-const inputs = new Map< string, FieldInput | LazyExoticComponent< FieldInput > >();
-const options = new Map< string, InputOptions >();
+type Store = {
+	inputs: Map< string, FieldInput | LazyExoticComponent< FieldInput > >;
+	options: Map< string, InputOptions >;
+};
+
+/**
+ * The registry's maps, created on first use. A function declaration is
+ * hoisted, so FieldsForm can register its inputs even while this module is
+ * still being evaluated: the nested inputs imported above import FieldsForm
+ * back (for FieldList), which makes the modules a cycle, and either one may
+ * be loaded first.
+ */
+function store(): Store {
+	const holder = store as unknown as { maps?: Store };
+	holder.maps ??= { inputs: new Map(), options: new Map() };
+	return holder.maps;
+}
 
 /** Registers (or replaces) the input component for a field type. */
 export function registerInput(
@@ -33,17 +64,17 @@ export function registerInput(
 	component: FieldInput | LazyExoticComponent< FieldInput >,
 	opts: InputOptions = {}
 ): void {
-	inputs.set( type, component );
-	options.set( type, opts );
+	store().inputs.set( type, component );
+	store().options.set( type, opts );
 }
 
 /** Whether the field's input is a labelled group rather than one labelable control. */
 export function isGroupInput( field: FieldDef ): boolean {
-	return options.get( field.type )?.group?.( field ) ?? false;
+	return store().options.get( field.type )?.group?.( field ) ?? false;
 }
 
 export function hasInput( type: string ): boolean {
-	return inputs.has( type );
+	return store().inputs.has( type );
 }
 
 function UnsupportedInput() {
@@ -51,7 +82,7 @@ function UnsupportedInput() {
 }
 
 export function inputFor( type: string ): FieldInput | LazyExoticComponent< FieldInput > {
-	return inputs.get( type ) ?? UnsupportedInput;
+	return store().inputs.get( type ) ?? UnsupportedInput;
 }
 
 /* ---------- contexts ---------- */
@@ -125,3 +156,39 @@ export function useRegisteredInput( path: FieldPath, sub: ( string | number )[] 
 
 /** Associates a control with no form owner, so browser constraint validation can never block the post form. */
 export const DETACHED_FORM = 'proto-blocks-fields-detached';
+
+/**
+ * The server's pre-resolved display data for the input at `path` (media
+ * URLs, post titles, terms: BoxPayload `display`), keyed by the dotted path,
+ * so an image inside a repeater row reads `display['agenda.0.photo']`.
+ */
+export function useDisplay( path: FieldPath ): unknown {
+	const { payload } = useBox();
+	const key = dottedPath( path );
+	return useMemo( () => {
+		const display = payload.display;
+		return display && typeof display === 'object' && Object.prototype.hasOwnProperty.call( display, key )
+			? ( display as Record< string, unknown > )[ key ]
+			: undefined;
+	}, [ payload.display, key ] );
+}
+
+/** The hidden input that submits an empty list or nested field's key, so clearing it is saved. */
+export function EmptyMarker( { name }: { name: string } ) {
+	return <input type="hidden" name={ name } value="" />;
+}
+
+/* ---------- media, relational and nested inputs ---------- */
+
+const always = () => true;
+
+registerInput( 'image', ImageInput );
+registerInput( 'file', FileInput );
+registerInput( 'video', VideoInput );
+registerInput( 'gallery', GalleryInput, { group: always } );
+registerInput( 'taxonomy', TaxonomyInput, { group: isTaxonomyGroup } );
+registerInput( 'relationship', RelationshipInput, { group: always } );
+registerInput( 'wysiwyg', WysiwygInput );
+registerInput( 'group', GroupInput, { group: always } );
+registerInput( 'repeater', RepeaterInput, { group: always } );
+registerInput( 'flexible_content', FlexibleInput, { group: always } );
