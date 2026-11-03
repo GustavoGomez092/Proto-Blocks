@@ -207,7 +207,10 @@ describe('Builder save flow', () => {
 		await open();
 		expect(screen.getByText('File modifications are disabled on this site')).toBeInTheDocument();
 		expect(saveButton()).toBeDisabled();
-		expect(screen.getByRole('button', { name: 'Add field' })).toBeDisabled();
+		for (const add of screen.getAllByRole('button', { name: 'Add field' })) {
+			expect(add).toBeDisabled();
+		}
+		expect(screen.getByRole('textbox', { name: 'Group title' })).toHaveAttribute('readonly');
 		await userEvent.click(screen.getByRole('button', { name: 'JSONC' }));
 		expect(screen.getByRole('textbox', { name: 'File text' })).toHaveAttribute('readonly');
 	});

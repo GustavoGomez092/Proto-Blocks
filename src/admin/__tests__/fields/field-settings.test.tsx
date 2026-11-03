@@ -89,6 +89,8 @@ describe('FieldSettings', () => {
 
 	it('writes numbers as numbers and removes them when cleared', async () => {
 		const onChange = settings({ key: 'field_n', label: 'Count', name: 'count', type: 'number', min: 1 });
+		expect(screen.queryByRole('textbox', { name: 'Minimum' })).toBeNull();
+		await userEvent.click(screen.getByRole('tab', { name: 'Validation' }));
 		const min = screen.getByRole('textbox', { name: 'Minimum' });
 		await userEvent.clear(min);
 		await waitFor(() => expect(onChange).toHaveBeenLastCalledWith({ min: undefined }));
@@ -124,7 +126,7 @@ describe('ConditionBuilder', () => {
 		await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Operator' }), '!=empty');
 		expect(onChange).toHaveBeenLastCalledWith([[{ field: 'field_s', operator: '!=empty' }]]);
 
-		await userEvent.click(screen.getByRole('button', { name: 'Add a rule group' }));
+		await userEvent.click(screen.getByRole('button', { name: 'or, another rule group' }));
 		expect(onChange).toHaveBeenLastCalledWith([...next, [{ field: 'field_b', operator: '==', value: '1' }]]);
 		await userEvent.click(screen.getByRole('button', { name: 'Remove all rules' }));
 		expect(onChange).toHaveBeenLastCalledWith(0);
@@ -139,8 +141,14 @@ describe('AddFieldMenu', () => {
 		for (const heading of ['Basic', 'Content', 'Choice', 'Relational', 'Layout']) {
 			expect(within(dialog).getByRole('group', { name: heading })).toBeInTheDocument();
 		}
-		expect(within(dialog).getByRole('button', { name: /^Date date / })).toHaveTextContent('Also accepts date_picker');
-		await userEvent.type(within(dialog).getByRole('searchbox', { name: 'Search field types' }), 'repeat');
+		expect(within(dialog).getByRole('button', { name: 'Date ISO stored' })).toBeInTheDocument();
+		expect(dialog).toHaveTextContent('Also accepts ACF type names');
+		const search = within(dialog).getByRole('searchbox', { name: 'Search field types' });
+		// The ACF alias finds the canonical type.
+		await userEvent.type(search, 'date_picker');
+		expect(within(dialog).getAllByRole('button').map((b) => b.textContent)).toEqual(['DateISO stored']);
+		await userEvent.clear(search);
+		await userEvent.type(search, 'repeat');
 		expect(within(dialog).getAllByRole('button', { name: /Repeater/ })).toHaveLength(1);
 		expect(within(dialog).queryByRole('button', { name: /^Text\b/ })).not.toBeInTheDocument();
 		await userEvent.click(within(dialog).getByRole('button', { name: /Repeater/ }));
@@ -188,6 +196,16 @@ describe('Builder', () => {
 		return (apiFetch as unknown as jest.Mock).mock.calls.map(([options]) => ({ url: options.url, method: options.method, data: options.data }));
 	}
 
+	/** The draft's file text, read in the JSONC view (then back to the builder). */
+	async function fileText(): Promise<string> {
+		await userEvent.click(screen.getByRole('button', { name: 'JSONC' }));
+		const text = (screen.getByRole('textbox', { name: 'File text' }) as HTMLTextAreaElement).value;
+		await userEvent.click(screen.getByRole('button', { name: 'Builder' }));
+		return text;
+	}
+
+	const edited = () => waitFor(() => expect(screen.getByRole('button', { name: 'Discard changes' })).toBeEnabled());
+
 	it('loads the group, writes edits into the JSONC text and saves exactly the previewed text with the loaded hash', async () => {
 		mockBootstrap({ screen: 'fields' });
 		const saved = jest.fn(() => ({ path: 'proto-fields/events/group.jsonc', hash: 'hash-2', created: false }));
@@ -196,16 +214,17 @@ describe('Builder', () => {
 
 		await userEvent.click(await screen.findByRole('button', { name: 'Field 1 of 1, Colour, Select' }));
 		await userEvent.type(screen.getByRole('textbox', { name: 'Choices' }), 'red : Red');
-		const preview = screen.getByLabelText('JSONC preview');
-		await waitFor(() => expect(preview.textContent).toContain('"red": "Red"'));
-		expect(preview.textContent).toContain('// Keep in box order.');
+		await edited();
+		const preview = await fileText();
+		expect(preview).toContain('"red": "Red"');
+		expect(preview).toContain('// Keep in box order.');
 
 		await userEvent.click(screen.getByRole('button', { name: 'Save to file' }));
 		await waitFor(() => expect(saved).toHaveBeenCalled());
 		const post = requests().find((r) => r.method === 'POST');
 		expect(requests()[0]).toEqual({ url: `${ROOT}admin/fields/group_events`, method: 'GET', data: undefined });
 		expect(post?.url).toBe(`${ROOT}admin/schema-files/field-group/events`);
-		expect(post?.data).toEqual({ text: preview.textContent, hash: 'hash-1', acknowledge: [] });
+		expect(post?.data).toEqual({ text: preview, hash: 'hash-1', acknowledge: [] });
 		const written = parse((post?.data as { text: string }).text);
 		expect(written.fields[0]).toEqual({ key: 'field_a', label: 'Colour', name: 'colour', type: 'select', choices: { red: 'Red' }, 'aria-label': '' });
 	});
@@ -233,10 +252,12 @@ describe('Builder', () => {
 		render(<Builder group="group_events" onBack={() => {}} />);
 		await userEvent.click(await screen.findByRole('button', { name: 'Field 1 of 1, Colour, Select' }));
 		await userEvent.type(screen.getByRole('textbox', { name: 'Label' }), 's');
-		await waitFor(() => expect(screen.getByLabelText('JSONC preview').textContent).toContain('"Colours"'));
+		await edited();
+		expect(await fileText()).toContain('"Colours"');
 		await userEvent.click(screen.getByRole('button', { name: 'Save to file' }));
 		await userEvent.click(await screen.findByRole('button', { name: 'Reload file' }));
-		await waitFor(() => expect(screen.getByLabelText('JSONC preview').textContent).toBe(text));
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Discard changes' })).toBeDisabled());
+		expect(await fileText()).toBe(text);
 		expect(saved).toHaveBeenCalledTimes(1);
 		expect(requests().filter((r) => r.method === 'GET')).toHaveLength(2);
 	});
@@ -258,11 +279,11 @@ describe('Builder', () => {
 		await userEvent.click(await screen.findByRole('button', { name: 'Field 1 of 1, Colour, Select' }));
 		await userEvent.click(screen.getByRole('button', { name: 'Save to file' }));
 		await userEvent.type(screen.getByRole('textbox', { name: 'Label' }), 's');
-		const preview = screen.getByLabelText('JSONC preview');
-		await waitFor(() => expect(preview.textContent).toContain('"Colours"'));
+		// The row shows the draft: the edit is in it while the save is still in flight.
+		expect(await screen.findByRole('button', { name: 'Field 1 of 1, Colours, Select' })).toBeInTheDocument();
 		finish({ path: 'proto-fields/events/group.jsonc', hash: 'hash-2', created: false });
 		await waitFor(() => expect(screen.getByRole('button', { name: 'Save to file' })).toBeEnabled());
-		expect(preview.textContent).toContain('"Colours"');
+		expect(await fileText()).toContain('"Colours"');
 		await userEvent.click(screen.getByRole('button', { name: 'Save to file' }));
 		await waitFor(() => expect(hashes).toEqual(['hash-1', 'hash-2']));
 		expect(parse(requests().filter((r) => r.method === 'POST')[1].data.text).fields[0].label).toBe('Colours');
@@ -287,11 +308,13 @@ describe('Builder', () => {
 		mockBootstrap({ screen: 'fields' });
 		mockApi({ 'admin/fields/group_events': detail() });
 		render(<Builder group="group_events" onBack={() => {}} />);
-		await userEvent.click(await screen.findByRole('button', { name: 'Add field' }));
+		await screen.findByRole('textbox', { name: 'Group title' });
+		await userEvent.click(screen.getAllByRole('button', { name: 'Add field' })[0]);
 		await userEvent.click(within(screen.getByRole('dialog', { name: 'Add field' })).getByRole('button', { name: /^Number/ }));
-		expect(await screen.findByRole('complementary', { name: 'Field settings: New field' })).toBeInTheDocument();
+		expect(await screen.findByRole('region', { name: 'Field settings: New field' })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Field 2 of 2, New field, Number' })).toHaveAttribute('aria-expanded', 'true');
 		expect(screen.getByRole('textbox', { name: 'Label' })).toHaveFocus();
-		const written = parse(screen.getByLabelText('JSONC preview').textContent ?? '');
+		const written = parse(await fileText());
 		expect(written.fields[1]).toMatchObject({ label: 'New field', name: 'new_field', type: 'number' });
 	});
 });

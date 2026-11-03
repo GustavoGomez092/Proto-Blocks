@@ -148,6 +148,9 @@ function LoadingRows() {
 	);
 }
 
+/** What a delete needs to know about a group: the list row, or the builder's detail. */
+export type DeletableGroup = Pick<GroupRow, 'key' | 'title' | 'file'>;
+
 /**
  * A proto-fields file's root when it is a list (an ACF export), else [].
  * parseJsonc wants an object root, so the list is read as `{"groups": <list>}`.
@@ -159,7 +162,7 @@ function parseListRoot(text: string): unknown[] {
 }
 
 /** The group's position in its declaration file's `fields` (or list root), checked against the key. */
-function groupIndex(data: unknown, row: GroupRow): number {
+function groupIndex(data: unknown, row: DeletableGroup): number {
 	const groups = Array.isArray(data) ? data : (data as Record<string, unknown> | null)?.fields;
 	if (!Array.isArray(groups)) {
 		return -1;
@@ -175,7 +178,7 @@ function groupIndex(data: unknown, row: GroupRow): number {
 }
 
 /** Titles (or keys) of the other groups in a list of raw groups. */
-function siblingNames(data: unknown, row: GroupRow): string[] {
+function siblingNames(data: unknown, row: DeletableGroup): string[] {
 	if (!Array.isArray(data)) {
 		return [];
 	}
@@ -192,7 +195,7 @@ function siblingNames(data: unknown, row: GroupRow): string[] {
  * read with; the dialog names the groups that stay. A guardrail answer
  * (stored values) asks once more.
  */
-function DeleteGroupDialog({ row, onCancel, onDone }: { row: GroupRow; onCancel: () => void; onDone: () => void }) {
+export function DeleteGroupDialog({ row, onCancel, onDone }: { row: DeletableGroup; onCancel: () => void; onDone: () => void }) {
 	const file = row.file as GroupFileRef;
 	/** A proto-fields list file: whether others share it is known once it is read. */
 	const sharedCandidate = file.kind === 'field-group' && file.index !== undefined;
