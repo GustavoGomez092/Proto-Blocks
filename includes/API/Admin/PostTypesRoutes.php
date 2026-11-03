@@ -76,6 +76,11 @@ final class PostTypesRoutes extends ContentModelRoutes
         }
 
         $effective = self::effective(Declaration::TYPE, $object, $declaration);
+        if ($object !== null && is_array($effective)) {
+            // WP_Post_Type::add_supports() unsets $supports on the object;
+            // the registered features live in the global supports map.
+            $effective['supports'] = array_keys(get_all_post_type_supports($slug));
+        }
         $content = $this->guardrails()->contentFor(Declaration::TYPE, $slug, $declaration?->data);
 
         try {
