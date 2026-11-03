@@ -251,6 +251,7 @@ final class OptionsPagesRoutes
     private function createTarget(): array
     {
         $target = $this->writer()->target(Declaration::OPTIONS, self::PROBE_SLUG, null);
+        // The path is <root>/proto-options/<slug>/page.jsonc: two levels up is the kind folder.
 
         return [
             'path' => $target['path'] === '' ? '' : ContentModelRoutes::displayPath(dirname($target['path'], 2)),

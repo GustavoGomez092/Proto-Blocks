@@ -243,7 +243,7 @@ final class OptionsPagesRoutesTest extends ContentModelRoutesTestCase
         ];
         $GLOBALS['pb_test_transients'][ExternalMenus::TRANSIENT] = ['value' => [
             'pages' => [],
-            'parents' => [['slug' => 'edit.php?post_type=product', 'title' => 'Products']],
+            'parents' => [['slug' => 'edit.php?post_type=product', 'title' => 'Products', 'capability' => 'manage_options']],
         ], 'expiration' => 3600];
 
         $result = $this->routes()->show(new \WP_REST_Request(['slug' => 'cadco-display-settings']));
@@ -387,6 +387,61 @@ final class OptionsPagesRoutesTest extends ContentModelRoutesTestCase
 
         self::assertNotContains('theme-settings', $slugs);
         self::assertContains('tools.php', $slugs);
+    }
+
+    public function testCapturedMenuIsNarrowedPerViewer(): void
+    {
+        $GLOBALS['menu'] = [
+            ['Shop', 'manage_woocommerce', 'woocommerce', '', 'menu-top'],
+            ['Tools', 'manage_options', 'tools.php', '', 'menu-top'],
+        ];
+        $GLOBALS['submenu'] = ['woocommerce' => [['Orders', 'manage_woocommerce', 'wc-orders']]];
+        $external = new ExternalMenus();
+        $_GET['page'] = ExternalMenus::SCREEN;
+        $external->capture();
+
+        // manage_options only (the fixture user): the WooCommerce entries are hidden everywhere.
+        $got = $external->get();
+        self::assertSame(['tools.php'], array_column($got['pages'], 'slug'));
+        self::assertSame(['tools.php'], array_column($got['parents'], 'slug'));
+        self::assertSame(['tools.php'], array_column($this->routes(true, $external)->index()['external'], 'slug'));
+        $detailParents = array_column($this->routes(true, $external)->show(new \WP_REST_Request(['slug' => 'theme-settings']))['parents'], 'slug');
+        self::assertNotContains('woocommerce', $detailParents);
+        self::assertStringNotContainsString('manage_woocommerce', (string) json_encode($got));
+
+        $GLOBALS['pb_test_caps'][1][] = 'manage_woocommerce';
+        $got = $external->get();
+        self::assertSame(['woocommerce', 'tools.php'], array_column($got['parents'], 'slug'));
+        self::assertContains('wc-orders', array_column($got['pages'], 'slug'));
+        $detailParents = array_column($this->routes(true, $external)->show(new \WP_REST_Request(['slug' => 'theme-settings']))['parents'], 'slug');
+        self::assertContains('woocommerce', $detailParents);
+    }
+
+    public function testUnresolvableCallbackIsUnknownOrigin(): void
+    {
+        $GLOBALS['menu'] = [['Mystery', 'manage_options', 'mystery', '', 'menu-top']];
+        $external = new ExternalMenus();
+        $_GET['page'] = ExternalMenus::SCREEN;
+        $external->capture();
+
+        $row = $external->get()['pages'][0];
+        self::assertSame('unknown', $row['origin']);
+        self::assertSame('Unknown', $row['originLabel']);
+    }
+
+    public function testCacheIsDroppedWhenPluginsOrThemeChange(): void
+    {
+        (new ExternalMenus())->boot();
+
+        foreach (['admin_menu', 'activated_plugin', 'deactivated_plugin', 'switch_theme'] as $hook) {
+            self::assertNotEmpty($GLOBALS['pb_test_hooks'][$hook] ?? [], $hook);
+        }
+        foreach (['activated_plugin', 'deactivated_plugin', 'switch_theme'] as $hook) {
+            $GLOBALS['pb_test_transients'][ExternalMenus::TRANSIENT] = ['value' => ['pages' => [], 'parents' => []], 'expiration' => 3600];
+            $entry = end($GLOBALS['pb_test_hooks'][$hook]);
+            ($entry['callback'])('acme/acme.php');
+            self::assertArrayNotHasKey(ExternalMenus::TRANSIENT, $GLOBALS['pb_test_transients'], $hook);
+        }
     }
 
     public function testStoredGarbageIsIgnored(): void

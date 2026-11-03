@@ -43,6 +43,16 @@ final class ExternalMenus
     public function boot(): void
     {
         add_action('admin_menu', [$this, 'capture'], PHP_INT_MAX);
+        // The menu changes with the active plugins and theme.
+        add_action('activated_plugin', [$this, 'forget']);
+        add_action('deactivated_plugin', [$this, 'forget']);
+        add_action('switch_theme', [$this, 'forget']);
+    }
+
+    /** Drop the cached menu. */
+    public function forget(): void
+    {
+        delete_transient(self::TRANSIENT);
     }
 
     /**
@@ -70,9 +80,10 @@ final class ExternalMenus
             if ($title === '') {
                 $title = $slug;
             }
-            $parents[] = ['slug' => $slug, 'title' => $title];
+            $capability = is_string($entry[1] ?? null) ? $entry[1] : '';
+            $parents[] = ['slug' => $slug, 'title' => $title, 'capability' => $capability];
 
-            $row = $this->row($slug, $title, 'top', null);
+            $row = $this->row($slug, $title, 'top', null, $capability);
             if ($row !== null) {
                 $pages[] = $row;
             }
@@ -83,7 +94,7 @@ final class ExternalMenus
                     continue;
                 }
                 $childTitle = self::title($child[0] ?? '');
-                $row = $this->row($child[2], $childTitle === '' ? $child[2] : $childTitle, $slug, $slug);
+                $row = $this->row($child[2], $childTitle === '' ? $child[2] : $childTitle, $slug, $slug, is_string($child[1] ?? null) ? $child[1] : '');
                 if ($row !== null) {
                     $pages[] = $row;
                 }
@@ -94,6 +105,10 @@ final class ExternalMenus
     }
 
     /**
+     * The captured menu as seen by the admin who opened the screen (WordPress
+     * had already dropped what that admin cannot use), narrowed here to what
+     * the current viewer may use. An entry with no capability is hidden.
+     *
      * @return array{pages: list<array{slug: string, title: string, parent: string, origin: string, originLabel: string}>, parents: list<array{slug: string, title: string}>}
      */
     public function get(): array
@@ -105,7 +120,8 @@ final class ExternalMenus
         }
         foreach ($stored['pages'] ?? [] as $row) {
             if (is_array($row) && is_string($row['slug'] ?? null) && is_string($row['title'] ?? null) && is_string($row['parent'] ?? null)
-                && in_array($row['origin'] ?? null, ['core', 'plugin', 'theme'], true) && is_string($row['originLabel'] ?? null)) {
+                && in_array($row['origin'] ?? null, ['core', 'plugin', 'theme', 'unknown'], true) && is_string($row['originLabel'] ?? null)
+                && is_string($row['capability'] ?? null) && self::canSee($row['capability'])) {
                 $out['pages'][] = [
                     'slug' => $row['slug'],
                     'title' => $row['title'],
@@ -116,7 +132,8 @@ final class ExternalMenus
             }
         }
         foreach ($stored['parents'] ?? [] as $row) {
-            if (is_array($row) && is_string($row['slug'] ?? null) && is_string($row['title'] ?? null)) {
+            if (is_array($row) && is_string($row['slug'] ?? null) && is_string($row['title'] ?? null)
+                && is_string($row['capability'] ?? null) && self::canSee($row['capability'])) {
                 $out['parents'][] = ['slug' => $row['slug'], 'title' => $row['title']];
             }
         }
@@ -127,9 +144,9 @@ final class ExternalMenus
     /**
      * One page, or null for a page Proto-Blocks registered itself.
      *
-     * @return array{slug: string, title: string, parent: string, origin: string, originLabel: string}|null
+     * @return array{slug: string, title: string, parent: string, origin: string, originLabel: string, capability: string}|null
      */
-    private function row(string $slug, string $title, string $parent, ?string $parentSlug): ?array
+    private function row(string $slug, string $title, string $parent, ?string $parentSlug, string $capability): ?array
     {
         $origin = $this->originOf($slug, $parentSlug);
         if ($origin === null) {
@@ -137,7 +154,7 @@ final class ExternalMenus
         }
         [$type, $label] = $origin;
 
-        return ['slug' => $slug, 'title' => $title, 'parent' => $parent, 'origin' => $type, 'originLabel' => $label];
+        return ['slug' => $slug, 'title' => $title, 'parent' => $parent, 'origin' => $type, 'originLabel' => $label, 'capability' => $capability];
     }
 
     /**
@@ -149,7 +166,7 @@ final class ExternalMenus
         $file = $this->callbackFile($slug, $parentSlug);
         if ($file === null) {
             // File-based screens (options-general.php, edit.php...) have no callback.
-            return str_ends_with(strtok($slug, '?') ?: $slug, '.php') ? $core : ['plugin', __('Unknown', 'proto-blocks')];
+            return str_ends_with(strtok($slug, '?') ?: $slug, '.php') ? $core : ['unknown', __('Unknown', 'proto-blocks')];
         }
 
         $dirs = $this->dirs ?? [
@@ -167,7 +184,7 @@ final class ExternalMenus
             'plugin' => ['plugin', sprintf(__('Plugin: %s', 'proto-blocks'), $name)],
             /* translators: %s: theme folder name */
             'theme' => ['theme', sprintf(__('Theme: %s', 'proto-blocks'), $name)],
-            default => ['plugin', __('Unknown', 'proto-blocks')],
+            default => ['unknown', __('Unknown', 'proto-blocks')],
         };
     }
 
@@ -220,6 +237,11 @@ final class ExternalMenus
         $dirs = $GLOBALS['wp_theme_directories'] ?? (function_exists('get_theme_root') ? [get_theme_root()] : []);
 
         return is_array($dirs) ? array_values(array_filter($dirs, 'is_string')) : [];
+    }
+
+    private static function canSee(string $capability): bool
+    {
+        return $capability !== '' && current_user_can($capability);
     }
 
     /** @param array<int|string, mixed> $entry */
