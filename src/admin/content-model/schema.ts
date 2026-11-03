@@ -227,3 +227,6 @@ export const typeSchema = toZod({ $ref: '#/$defs/type' }, ROOT);
 
 /** A taxonomy declaration file, standalone or inline in a type's `taxonomies`. */
 export const taxonomySchema = toZod({ $ref: '#/$defs/taxonomy' }, ROOT);
+
+/** An options page declaration file (proto-options/<slug>/page.jsonc). */
+export const optionsSchema = toZod({ $ref: '#/$defs/options' }, ROOT);

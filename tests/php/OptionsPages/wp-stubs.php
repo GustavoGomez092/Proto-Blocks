@@ -10,6 +10,12 @@ declare(strict_types=1);
  * real WordPress always takes precedence.
  */
 
+// Phase 1's content-model stand-ins first (registration, rewrite, screen), so
+// one process sees one emulation whichever directory loads first.
+if (is_file(__DIR__ . '/../ContentModel/stubs/hooks.php')) {
+    require_once __DIR__ . '/../ContentModel/stubs/hooks.php';
+}
+
 $GLOBALS['menu'] = $GLOBALS['menu'] ?? [];
 $GLOBALS['submenu'] = $GLOBALS['submenu'] ?? [];
 $GLOBALS['admin_page_hooks'] = $GLOBALS['admin_page_hooks'] ?? ($GLOBALS['pb_test_parent_menus'] ?? []);

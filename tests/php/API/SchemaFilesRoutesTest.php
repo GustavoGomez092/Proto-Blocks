@@ -20,7 +20,7 @@ use ProtoBlocks\ContentModel\SchemaFileWriter;
  */
 final class SchemaFilesRoutesTest extends ContentModelRoutesTestCase
 {
-    private const ROUTE = 'schema-files/(?P<kind>type|taxonomy)/(?P<slug>[a-z][a-z0-9_-]{0,31})';
+    private const ROUTE = 'schema-files/(?P<kind>type|taxonomy|options)/(?P<slug>[a-z][a-z0-9_-]{0,63})';
 
     private function routes(bool $fileMods = true): SchemaFilesRoutes
     {

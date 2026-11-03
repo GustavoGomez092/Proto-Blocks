@@ -56,4 +56,4 @@ export interface Guardrail {
 	detail: string[];
 }
 
-export type Kind = 'type' | 'taxonomy';
+export type Kind = 'type' | 'taxonomy' | 'options';

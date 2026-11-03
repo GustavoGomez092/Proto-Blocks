@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ProtoBlocks\Tests\OptionsPages;
 
 use PHPUnit\Framework\TestCase;
+use ProtoBlocks\ContentModel\PhpDeclarations;
 use ProtoBlocks\OptionsPages\InvalidDeclaration;
 use ProtoBlocks\OptionsPages\PageDefinition;
 use ProtoBlocks\OptionsPages\ProtectedOptions;
@@ -17,7 +18,12 @@ final class PageDefinitionTest extends TestCase
     protected function setUp(): void
     {
         $GLOBALS['pb_test_filters'] = [];
-        $GLOBALS['proto_blocks_php_options_pages'] = [];
+        PhpDeclarations::reset();
+    }
+
+    protected function tearDown(): void
+    {
+        PhpDeclarations::reset();
     }
 
     /** Strip // and /* comments and trailing commas outside strings. */
@@ -257,7 +263,8 @@ final class PageDefinitionTest extends TestCase
         $GLOBALS['pb_test_doing_it_wrong'] = [];
         proto_options_page('9 Lives');
         self::assertCount(1, $GLOBALS['pb_test_doing_it_wrong']);
-        self::assertSame([], $GLOBALS['proto_blocks_php_options_pages']);
+        self::assertSame([], PhpDeclarations::all()['options']);
+        self::assertSame([], PhpDeclarations::issues());
     }
 
     public function testProtectedOptionsFilterCanAddNames(): void
@@ -290,9 +297,10 @@ final class PageDefinitionTest extends TestCase
     {
         $line = __LINE__ + 1;
         proto_options_page('Theme Settings', ['menu' => 'themes.php']);
-        $rec = $GLOBALS['proto_blocks_php_options_pages']['theme-settings'];
-        self::assertSame('Theme Settings', $rec['data']['title']);
-        self::assertSame('themes.php', $rec['data']['menu']);
-        self::assertStringEndsWith('PageDefinitionTest.php:' . $line, $rec['source']);
+        $rec = PhpDeclarations::all()['options']['theme-settings'];
+        self::assertSame('Theme Settings', $rec->data['title']);
+        self::assertSame('themes.php', $rec->data['menu']);
+        self::assertSame('php', $rec->origin);
+        self::assertStringEndsWith('PageDefinitionTest.php:' . $line, $rec->source);
     }
 }

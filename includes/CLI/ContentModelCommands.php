@@ -319,14 +319,16 @@ final class ContentModelCommands {
     /**
      * One row per distinct issue of the Registry and the modules. Double
      * declarations arrive as the Registry's `double_declaration` warning,
-     * which names both locations.
+     * which names both locations. Every loaded declaration also goes through
+     * the `proto_blocks_declaration_errors` filter (the checks the writer runs
+     * beyond the schema); each error it returns is a `declaration_invalid` row.
      *
      * @param list<Issue> $moduleIssues
      * @return list<array{kind: string, slug: string, level: string, code: string, message: string, source: string}>
      */
     public static function validationRows( Registry $registry, array $moduleIssues ): array {
         $rows = array();
-        foreach ( array( ...$registry->issues(), ...$moduleIssues ) as $issue ) {
+        foreach ( array( ...$registry->issues(), ...self::declarationIssues( $registry ), ...$moduleIssues ) as $issue ) {
             $row = array(
                 'kind'    => $issue->kind ?? '',
                 'slug'    => $issue->slug ?? '',
@@ -340,6 +342,34 @@ final class ContentModelCommands {
         }
 
         return array_values( $rows );
+    }
+
+    /**
+     * `proto_blocks_declaration_errors` findings for every standalone declaration in $registry.
+     *
+     * @return list<Issue>
+     */
+    private static function declarationIssues( Registry $registry ): array {
+        $issues = array();
+        foreach ( array_keys( FileLoader::FOLDERS ) as $kind ) {
+            foreach ( $registry->all( $kind ) as $slug => $declaration ) {
+                if ( null !== $declaration->parentType ) {
+                    continue; // An inline taxonomy is checked with its type's data.
+                }
+                foreach ( SchemaFileWriter::declarationErrors( $kind, $declaration->data, (string) $slug ) as $error ) {
+                    $issues[] = new Issue(
+                        Issue::ERROR,
+                        'declaration_invalid',
+                        ( '' === $error['path'] ? '/' : $error['path'] ) . ': ' . $error['message'],
+                        $declaration->source,
+                        (string) $slug,
+                        $kind
+                    );
+                }
+            }
+        }
+
+        return $issues;
     }
 
     /**

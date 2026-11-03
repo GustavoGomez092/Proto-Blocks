@@ -5,18 +5,19 @@ declare(strict_types=1);
 namespace ProtoBlocks\ContentModel;
 
 /**
- * One declared post type or taxonomy, from a JSONC file or a PHP call.
+ * One declared post type, taxonomy or options page, from a JSONC file or a PHP call.
  */
 final class Declaration
 {
     public const TYPE = 'type';
     public const TAXONOMY = 'taxonomy';
+    public const OPTIONS = 'options';
 
     public const ORIGIN_FILE = 'file';
     public const ORIGIN_PHP = 'php';
 
     /**
-     * @param string               $kind       self::TYPE or self::TAXONOMY
+     * @param string               $kind       self::TYPE, self::TAXONOMY or self::OPTIONS
      * @param array<string, mixed> $data       Declaration data as written (no defaults applied).
      * @param string               $origin     'file' or 'php'
      * @param string               $source     Absolute file path, or "<file>:<line>" of the PHP call.
