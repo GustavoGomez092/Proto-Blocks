@@ -727,6 +727,16 @@ if (!function_exists('_doing_it_wrong')) {
 if (!defined('ABSPATH')) {
     define('ABSPATH', __DIR__ . '/');
 }
+// Defined once, here, so no test file's load order decides it. It sits in a
+// dedicated folder like a real install's, never directly in the temp dir:
+// dirname(WP_CONTENT_DIR) is the site root display base
+// (ContentModelRoutes::displayPath), and a content dir directly in the temp
+// dir would make the whole temp dir the "site", so every temp-dir fixture
+// path would display relative to it. (macOS hid this: its temp dir is a
+// symlink, so realpath'd fixtures never matched the unresolved base.)
+if (!defined('WP_CONTENT_DIR')) {
+    define('WP_CONTENT_DIR', sys_get_temp_dir() . '/pb-test-site/wp-content');
+}
 if (!function_exists('proto_blocks_sanitize_color')) {
     require_once __DIR__ . '/../../includes/helpers.php';
 }

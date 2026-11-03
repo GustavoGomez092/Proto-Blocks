@@ -60,6 +60,10 @@ final class DoubleDeclarationNoticeTest extends TestCase
 
         $this->assertStringContainsString('<code>acme/proto-types/product/type.jsonc</code>', $output);
         $this->assertStringContainsString('<code>acme/functions.php:12</code>', $output);
+        // No temp-dir fragment either, absolute or relative (Linux once showed
+        // "pb-notice-…/themes/acme/…" when the temp dir counted as the site root).
+        $this->assertStringNotContainsString('pb-notice-', $output);
+        $this->assertStringNotContainsString('<code>/', $output);
         $this->assertStringNotContainsString($tmp, $output);
     }
 
