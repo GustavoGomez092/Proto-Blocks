@@ -2,46 +2,12 @@ const defaultConfig = require('@wordpress/scripts/config/webpack.config');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const path = require('path');
 
-/**
- * A CSS-only entry still makes webpack emit an (empty) `<name>.js` and the
- * matching `<name>.asset.php`. Nothing enqueues them, so drop them from the
- * compilation after every other plugin has had its turn.
- */
-class DropEmptyScriptsPlugin {
-    constructor(names) {
-        this.names = names;
-    }
-
-    apply(compiler) {
-        const { Compilation } = compiler.webpack;
-        compiler.hooks.thisCompilation.tap('DropEmptyScriptsPlugin', (compilation) => {
-            compilation.hooks.processAssets.tap(
-                {
-                    name: 'DropEmptyScriptsPlugin',
-                    stage: Compilation.PROCESS_ASSETS_STAGE_REPORT,
-                },
-                () => {
-                    for (const name of this.names) {
-                        for (const asset of [`${name}.js`, `${name}.asset.php`]) {
-                            if (compilation.getAsset(asset)) {
-                                compilation.deleteAsset(asset);
-                            }
-                        }
-                    }
-                }
-            );
-        });
-    }
-}
-
 module.exports = {
     ...defaultConfig,
     entry: {
         editor: path.resolve(__dirname, 'src/editor/index.tsx'),
-        // The Proto-Blocks admin screens are PHP-rendered; the former React
-        // admin app never had a mount node and was removed. This entry only
-        // builds the stylesheet those screens enqueue (assets/css/admin.css).
-        admin: path.resolve(__dirname, 'src/admin/admin.css'),
+        // React admin app; also emits assets/css/admin.css from its import.
+        admin: path.resolve(__dirname, 'src/admin/index.tsx'),
         'tailwind-compiler': path.resolve(__dirname, 'src/tailwind/compiler.ts'),
     },
     output: {
@@ -89,33 +55,16 @@ module.exports = {
             // The browser Tailwind v4 engine imports the bundled v4 CSS files
             // (theme/preflight/utilities/index) as raw source strings, which it
             // feeds to compile() at runtime. These must NOT go through
-            // css-loader/PostCSS — emit their literal text instead. The v4
-            // engine is installed under the `tailwindcss-v4` npm alias so it
-            // does not collide with the project's existing Tailwind v3 PostCSS
-            // pipeline (see package.json).
+            // css-loader/PostCSS — emit their literal text instead.
             {
-                test: /[\\/]node_modules[\\/]tailwindcss-v4[\\/].*\.css$/,
+                test: /[\\/]node_modules[\\/]tailwindcss[\\/].*\.css$/,
                 type: 'asset/source',
             },
-            // CSS processing with PostCSS and Tailwind (v3, project styles).
+            // Project styles: PostCSS with Tailwind 4 (see postcss.config.js).
             {
                 test: /\.css$/,
-                exclude: /[\\/]node_modules[\\/]tailwindcss-v4[\\/]/,
-                use: [
-                    MiniCssExtractPlugin.loader,
-                    'css-loader',
-                    {
-                        loader: 'postcss-loader',
-                        options: {
-                            postcssOptions: {
-                                plugins: [
-                                    require('tailwindcss'),
-                                    require('autoprefixer'),
-                                ],
-                            },
-                        },
-                    },
-                ],
+                exclude: /[\\/]node_modules[\\/]tailwindcss[\\/]/,
+                use: [MiniCssExtractPlugin.loader, 'css-loader', 'postcss-loader'],
             },
         ],
     },
@@ -130,6 +79,5 @@ module.exports = {
         new MiniCssExtractPlugin({
             filename: '../css/[name].css',
         }),
-        new DropEmptyScriptsPlugin(['admin']),
     ],
 };

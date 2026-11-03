@@ -27,17 +27,15 @@
  *   - `builder.build(candidates)` returns the compiled CSS string.
  */
 
-import { compile } from 'tailwindcss-v4';
+import { compile } from 'tailwindcss';
 import initLightning, { transform as lightningTransform, Features } from 'lightningcss-wasm';
 
-// The Tailwind v4 engine is installed under the `tailwindcss-v4` npm alias
-// (package.json) so it does not collide with the project's existing Tailwind v3
-// PostCSS build. Raw CSS shipped inside that package is imported as source
+// Raw CSS shipped inside the `tailwindcss` package is imported as source
 // strings (webpack `type: 'asset/source'`) and fed to compile() at runtime.
-import indexCss from 'tailwindcss-v4/index.css';
-import themeCss from 'tailwindcss-v4/theme.css';
-import preflightCss from 'tailwindcss-v4/preflight.css';
-import utilitiesCss from 'tailwindcss-v4/utilities.css';
+import indexCss from 'tailwindcss/index.css';
+import themeCss from 'tailwindcss/theme.css';
+import preflightCss from 'tailwindcss/preflight.css';
+import utilitiesCss from 'tailwindcss/utilities.css';
 
 /**
  * Map of the bundled Tailwind stylesheet specifiers to their raw contents.

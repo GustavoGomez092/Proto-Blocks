@@ -16,8 +16,8 @@ module.exports = (api) => {
             [
                 '@babel/preset-react',
                 {
-                    // Use classic JSX runtime (React.createElement)
-                    runtime: 'classic',
+                    // Matches tsconfig `"jsx": "react-jsx"`.
+                    runtime: 'automatic',
                 },
             ],
         ],

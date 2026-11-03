@@ -1,0 +1,120 @@
+/*
+ * Proto-Blocks admin stylesheet (Tailwind 4 + shadcn/ui).
+ *
+ * Tailwind's preflight is deliberately NOT imported: it would restyle the
+ * whole wp-admin screen. Utilities are emitted with !important so they win
+ * over core admin selectors, and the few base rules the components rely on
+ * are scoped to the app root and its portal container below. Those base
+ * rules are deliberately unlayered: any layered rule loses to wp-admin's
+ * unlayered CSS regardless of specificity.
+ */
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+/* source(none) turns off automatic detection; only the admin app is scanned. */
+@import "tailwindcss/utilities.css" layer(utilities) important source(none);
+@source "../**/*.{ts,tsx}";
+@source not "../**/__tests__/**";
+
+#proto-blocks-admin,
+#proto-blocks-admin-portal {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+/* The slice of preflight the components rely on, scoped to the app (unlayered). */
+#proto-blocks-admin,
+#proto-blocks-admin-portal {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--foreground);
+}
+
+#proto-blocks-admin *,
+#proto-blocks-admin ::before,
+#proto-blocks-admin ::after,
+#proto-blocks-admin-portal *,
+#proto-blocks-admin-portal ::before,
+#proto-blocks-admin-portal ::after {
+  box-sizing: border-box;
+  border-style: solid;
+  border-width: 0;
+  border-color: var(--border);
+}
+
+#proto-blocks-admin :is(p, h1, h2, h3, h4, h5, h6, ul, ol, li),
+#proto-blocks-admin-portal :is(p, h1, h2, h3, h4, h5, h6, ul, ol, li) {
+  margin: 0;
+  padding: 0;
+}
+
+#proto-blocks-admin :is(h1, h2, h3, h4, h5, h6),
+#proto-blocks-admin-portal :is(h1, h2, h3, h4, h5, h6) {
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
+#proto-blocks-admin :is(ul, ol),
+#proto-blocks-admin-portal :is(ul, ol) {
+  list-style: none;
+}
+
+#proto-blocks-admin button,
+#proto-blocks-admin-portal button {
+  background-color: transparent;
+  padding: 0;
+  border: 0;
+  font: inherit;
+  color: inherit;
+}
+
+#proto-blocks-admin a,
+#proto-blocks-admin-portal a {
+  color: inherit;
+  text-decoration: inherit;
+}
