@@ -23,6 +23,8 @@
 @source "../**/*.{ts,tsx}";
 @source "../../admin/components/ui/alert.tsx";
 @source "../../admin/components/ui/badge.tsx";
+@source "../../admin/components/ui/button.tsx";
+@source "../../admin/components/ui/dialog.tsx";
 @source "../../admin/components/ui/input.tsx";
 @source "../../admin/components/ui/skeleton.tsx";
 @source "../../admin/components/ui/switch.tsx";

@@ -23,7 +23,7 @@ final class AdminApp
 {
     public const MOUNT_ID = 'proto-blocks-admin';
     public const PORTAL_ID = 'proto-blocks-admin-portal';
-    public const SCREENS = ['dashboard', 'tailwind', 'system', 'previews', 'wizard', 'post-types', 'taxonomies', 'fields'];
+    public const SCREENS = ['dashboard', 'tailwind', 'system', 'previews', 'wizard', 'post-types', 'taxonomies', 'fields', 'options-page'];
 
     /** Script handle of the built admin app. */
     public const SCRIPT_HANDLE = 'proto-blocks-admin';
@@ -137,13 +137,14 @@ final class AdminApp
 
     /**
      * Print the mount and portal nodes and the bootstrap data. Prints
-     * nothing for users without manage_options.
+     * nothing for users without $capability (manage_options unless the
+     * screen names its own, as a settings page does).
      *
      * @throws InvalidArgumentException When $screen is not one of SCREENS.
      */
-    public function renderScreen(string $screen): void
+    public function renderScreen(string $screen, string $capability = 'manage_options'): void
     {
-        if (!current_user_can('manage_options')) {
+        if (!current_user_can($capability)) {
             return;
         }
 

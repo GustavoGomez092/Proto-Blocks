@@ -88,6 +88,25 @@
 - On multisite only network administrators can write declaration files
   (`403 proto_blocks_multisite`).
 
+### Phase 3: settings pages
+
+#### Added
+- **Settings pages from one line of PHP or a JSONC file.**
+  `proto_options_page('Theme Settings', [...])` or
+  `proto-options/<slug>/page.jsonc`: top-level or under any menu, tabs, child
+  pages, the page's own capability (default `manage_options`). Values are
+  stored per field as `<page_slug>_<field_name>`, or in one array option with
+  `storage: { mode: "array", option: "..." }`; protected core options are
+  refused.
+- `proto_field('x', 'option:<page_slug>')` reads page values in either
+  storage mode.
+- REST route `proto-blocks/v1/options/<slug>` (GET/POST) gated on the page
+  capability.
+- `options_pages` key in the `proto_blocks_modules` filter; settings pages
+  keep working with the Fields module off.
+- `wp proto-blocks validate` reports settings-page findings
+  (`shared_storage`, schema errors, skipped fields; menu warnings such as unknown capabilities appear only in the admin).
+
 ### Security hardening
 
 #### Security

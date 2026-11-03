@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\OptionsPages;
 
+use ProtoBlocks\ContentModel\Slug;
+
 /**
  * Registers settings pages in the WordPress admin menu. Capabilities are passed
  * to WordPress verbatim: an unknown one is kept and surfaced as a warning
@@ -42,7 +44,10 @@ final class MenuRegistrar
 
         $declared = [];
         foreach ($pages as $page) {
-            $declared[$page->slug] = $page;
+            // A child (OptionsPagesRegistry::all() lists it too) registers with its parent.
+            if ($page->parentSlug === null) {
+                $declared[$page->slug] = $page;
+            }
         }
 
         // Break cycles: only pages that sit ON a cycle register top-level;
@@ -73,6 +78,10 @@ final class MenuRegistrar
             }
             $this->registerOne($page, $forceTop, $declared);
             foreach ($page->children as $child) {
+                // Same skips as OptionsPagesRegistry: a reserved compound slug, or one a page already uses.
+                if (Slug::error($child->slug, OptionsPagesRegistry::KIND) !== null || isset($declared[$child->slug])) {
+                    continue;
+                }
                 $this->registerChild($child, $page, $declared, $topLevel);
             }
         };
