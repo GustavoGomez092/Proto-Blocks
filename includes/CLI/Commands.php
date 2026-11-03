@@ -395,7 +395,7 @@ class Commands extends WP_CLI_Command {
         $rows   = [];
         if ( $with_model ) {
             $plugin = Plugin::getInstance();
-            $rows   = ContentModelCommands::validationRows( $plugin->getContentModel(), $plugin->getModules()->issues() );
+            $rows   = ContentModelCommands::validationRows( $plugin->getContentModel(), array( ...$plugin->getModules()->issues(), ...( $plugin->getModules()->optionsPages()?->issues() ?? [] ) ) );
         }
 
         $has_errors = ContentModelCommands::hasErrors( $rows );

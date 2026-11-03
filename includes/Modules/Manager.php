@@ -26,8 +26,7 @@ final class Manager
 {
     public const FILTER = 'proto_blocks_modules';
 
-    /** Phase 3 adds 'options_pages'. */
-    public const DEFAULTS = ['post_types' => true, 'taxonomies' => true, 'fields' => true];
+    public const DEFAULTS = ['post_types' => true, 'taxonomies' => true, 'fields' => true, 'options_pages' => true];
 
     /** @var array<string, bool> */
     private array $states = self::DEFAULTS;
@@ -35,6 +34,7 @@ final class Manager
     private ?PostTypes $postTypes = null;
     private ?Taxonomies $taxonomies = null;
     private ?FieldsModule $fields = null;
+    private ?OptionsPages $optionsPages = null;
     private ?OriginTracker $originTracker = null;
     private bool $booted = false;
 
@@ -62,6 +62,12 @@ final class Manager
         if ($this->states['taxonomies']) {
             $this->taxonomies = new Taxonomies($this->registry);
             $this->taxonomies->boot();
+        }
+        if ($this->states['options_pages']) {
+            // Before the Fields module: its boot() takes the stores map, which
+            // the options bridge filters.
+            $this->optionsPages = new OptionsPages($this->registry, $this);
+            $this->optionsPages->boot();
         }
         if ($this->states['fields']) {
             $this->fields = FieldsModule::wired($this->registry);
@@ -114,6 +120,12 @@ final class Manager
         return $this->fields;
     }
 
+    /** Null when the module is disabled. */
+    public function optionsPages(): ?OptionsPages
+    {
+        return $this->optionsPages;
+    }
+
     /** Null on requests that do not show origins (see OriginTracker::wanted()). */
     public function originTracker(): ?OriginTracker
     {
@@ -153,16 +165,22 @@ final class Manager
      * Seal PHP declarations and make sure the registry reflects every one of
      * them (it may have been built at `init` 0, before a later
      * proto_post_type() call). Idempotent; called at `init` 9 and again at the
-     * start of each module's register().
+     * start of each module's register(). Without $kind it seals post types
+     * and taxonomies; the options module seals Declaration::OPTIONS on
+     * `admin_menu`.
      *
      * @internal Shared by the modules.
+     * @return bool whether the registry was invalidated
      */
-    public static function sealDeclarations(Registry $registry): void
+    public static function sealDeclarations(Registry $registry, ?string $kind = null): bool
     {
-        PhpDeclarations::seal();
+        PhpDeclarations::seal($kind);
         if (!self::reflectsPhpDeclarations($registry)) {
             $registry->invalidate();
+            return true;
         }
+
+        return false;
     }
 
     /** @internal Shared by the modules. */

@@ -95,7 +95,7 @@ final class ManagerTest extends TestCase
         $manager = new Manager($this->registry());
         $manager->boot();
 
-        $this->assertSame(['post_types' => true, 'taxonomies' => false, 'fields' => true], $manager->states());
+        $this->assertSame(['post_types' => true, 'taxonomies' => false, 'fields' => true, 'options_pages' => true], $manager->states());
         $this->assertFalse($manager->isEnabled('unknown'));
         $this->assertNull($manager->taxonomies());
     }
@@ -190,7 +190,9 @@ final class ManagerTest extends TestCase
             }
         }
         $this->assertSame([], $GLOBALS['pb_test_bindings'] ?? [], 'no bindings source');
-        $this->assertArrayNotHasKey('proto_blocks_declaration_errors', $GLOBALS['pb_test_hooks']);
+        foreach ($GLOBALS['pb_test_hooks']['proto_blocks_declaration_errors'] ?? [] as $entry) {
+            $this->assertInstanceOf(\ProtoBlocks\Modules\OptionsPages::class, $entry['callback'][0], 'only the options pages module checks declarations');
+        }
         $this->assertArrayNotHasKey('after_setup_theme', $GLOBALS['pb_test_hooks']);
         $this->assertInstanceOf(PostTypes::class, $manager->postTypes(), 'post types still boot');
 
