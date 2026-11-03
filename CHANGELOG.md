@@ -80,6 +80,14 @@
   in-WordPress parity check against two live sites' hand-written
   registrations, visual baselines for both screens).
 
+#### Security
+- Declaration files can no longer name PHP callbacks or classes
+  (`register_meta_box_cb`, `rest_controller_class`, ...); such keys are
+  stripped with a warning when loading and refused when saving.
+- Labels in declaration files may not contain `<` or `>`.
+- On multisite only network administrators can write declaration files
+  (`403 proto_blocks_multisite`).
+
 ### Security hardening
 
 #### Security
