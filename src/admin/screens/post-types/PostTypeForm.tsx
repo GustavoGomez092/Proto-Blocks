@@ -79,6 +79,16 @@ function defined(value: unknown): unknown {
 	return value;
 }
 
+const PREVIEW_LIMIT = 200;
+
+/** JSON.stringify replacer: a long string (an inline SVG icon) shows its start and size, not its bytes. */
+function previewReplacer(_key: string, value: unknown): unknown {
+	if (typeof value === 'string' && value.length > PREVIEW_LIMIT) {
+		return `${value.slice(0, 40)}…(${(value.length / 1024).toFixed(1)} KB)`;
+	}
+	return value;
+}
+
 const zod = zodResolver(typeSchema as never) as unknown as Resolver<Values>;
 const resolver: Resolver<Values> = (values, context, options) => zod(defined(values) as Values, context, options);
 
@@ -608,7 +618,7 @@ function JsoncPanel({
 			<pre
 				tabIndex={0}
 				aria-label={__('File text that Save to file writes', 'proto-blocks')}
-				className="max-h-[70vh] overflow-auto bg-[#0f1d2e] p-4 font-mono text-[12.5px] leading-relaxed text-[#d6e2f0]"
+				className="max-h-[70vh] max-w-full overflow-auto whitespace-pre-wrap break-all bg-[#0f1d2e] p-4 font-mono text-[12.5px] leading-relaxed text-[#d6e2f0]"
 			>
 				{text}
 			</pre>
@@ -1223,9 +1233,9 @@ function TypeForm({
 					<pre
 						tabIndex={0}
 						aria-label={__('Effective settings', 'proto-blocks')}
-						className="max-h-[360px] overflow-auto rounded-md bg-muted p-3 font-mono text-[12px]"
+						className="max-h-[360px] max-w-full overflow-x-auto overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-muted p-3 font-mono text-[12px]"
 					>
-						{JSON.stringify(effective, null, 2)}
+						{JSON.stringify(effective, previewReplacer, 2)}
 					</pre>
 				</CardContent>
 			</Card>
