@@ -1,0 +1,11 @@
+{
+  // Shop notices: a top-level page behind manage_woocommerce, so a shop
+  // manager without unfiltered_html saves the banner but not the snippet.
+  "title": "Shop Notices",
+  "menu": "top",
+  "capability": "manage_woocommerce",
+  "fields": [
+    { "name": "banner", "label": "Banner", "type": "text" },
+    { "name": "tracking_snippet", "label": "Tracking snippet", "type": "code" },
+  ],
+}
