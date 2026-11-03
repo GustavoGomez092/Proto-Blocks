@@ -41,3 +41,17 @@ These add admin menu items on every screen, so full-page admin baselines include
 The Fields module's `sanitize_option` trust callback strips markup for writers
 without `unfiltered_html` (WP-CLI's default user 0), so the spec seeds option values
 with `wp eval --user=admin`.
+
+The Fields specs (`fields-boxes`, `fields-frontend`, `fields-perf`) activate the
+`pb-e2e-fields` block child theme (`tests/e2e/fixtures/themes/pb-e2e-fields`, listed under
+`themes` in `.wp-env.json` so it is mounted into `wp-content/themes`; after changing it run
+`npm run wp-env start -- --update`) in `beforeAll` and restore the previous theme in
+`afterAll`. The theme declares an `event` type, the realistic ACF export
+(`proto-fields/acf-export`, a byte-for-byte copy of `tests/fixtures/fields/acf-export-realistic.json`),
+the 50-field `perf` group, a term group (`category`), a user group, an `event-card` block and a
+`single-event` template with a Block Bindings paragraph. The classic-editor runs toggle the
+`proto_test_classic_editor` option (mu-plugin `proto-classic-editor.php`). Users `author1` and
+`contributor1` are created per run and deleted afterwards. `fields-perf` prints the measured numbers
+(mount time, keystroke p95/max) and records them as test annotations; budgets: mount <= 600 ms,
+keystroke p95 <= 50 ms and max <= 100 ms, no picker chunk before the relationship "Add" button is used.
+The Fields baselines (`fields-box-*`, `fields-term-form`) are macOS (`-chromium-darwin`).

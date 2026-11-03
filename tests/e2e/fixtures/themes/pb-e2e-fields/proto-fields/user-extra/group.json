@@ -1,0 +1,8 @@
+{
+  "key": "group_pb_e2e_user_extra",
+  "title": "User extra",
+  "location": [[{ "param": "user_role", "operator": "==", "value": "all" }]],
+  "fields": [
+    { "key": "field_pb_e2e_user_note", "label": "User note", "name": "user_note", "type": "text" }
+  ]
+}

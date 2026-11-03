@@ -1,0 +1,415 @@
+{
+    "key": "group_perf50",
+    "title": "Performance (50 fields)",
+    "location": [
+        [
+            {
+                "param": "post_type",
+                "operator": "==",
+                "value": "post"
+            }
+        ]
+    ],
+    "position": "normal",
+    "style": "default",
+    "fields": [
+        {
+            "key": "field_perf_f01",
+            "label": "Field 1",
+            "name": "f01",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f02",
+            "label": "Field 2",
+            "name": "f02",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f03",
+            "label": "Field 3",
+            "name": "f03",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f04",
+            "label": "Field 4",
+            "name": "f04",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f05",
+            "label": "Field 5",
+            "name": "f05",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f06",
+            "label": "Field 6",
+            "name": "f06",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f07",
+            "label": "Field 7",
+            "name": "f07",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f08",
+            "label": "Field 8",
+            "name": "f08",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f09",
+            "label": "Field 9",
+            "name": "f09",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f10",
+            "label": "Field 10",
+            "name": "f10",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f11",
+            "label": "Field 11",
+            "name": "f11",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f12",
+            "label": "Field 12",
+            "name": "f12",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f13",
+            "label": "Field 13",
+            "name": "f13",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f14",
+            "label": "Field 14",
+            "name": "f14",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f15",
+            "label": "Field 15",
+            "name": "f15",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f16",
+            "label": "Field 16",
+            "name": "f16",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f17",
+            "label": "Field 17",
+            "name": "f17",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f18",
+            "label": "Field 18",
+            "name": "f18",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f19",
+            "label": "Field 19",
+            "name": "f19",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f20",
+            "label": "Field 20",
+            "name": "f20",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f21",
+            "label": "Field 21",
+            "name": "f21",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f22",
+            "label": "Field 22",
+            "name": "f22",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f23",
+            "label": "Field 23",
+            "name": "f23",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f24",
+            "label": "Field 24",
+            "name": "f24",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f25",
+            "label": "Field 25",
+            "name": "f25",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f26",
+            "label": "Field 26",
+            "name": "f26",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f27",
+            "label": "Field 27",
+            "name": "f27",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f28",
+            "label": "Field 28",
+            "name": "f28",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f29",
+            "label": "Field 29",
+            "name": "f29",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f30",
+            "label": "Field 30",
+            "name": "f30",
+            "type": "text"
+        },
+        {
+            "key": "field_perf_f31",
+            "label": "Field 31",
+            "name": "f31",
+            "type": "select",
+            "choices": {
+                "a": "Option A",
+                "b": "Option B",
+                "c": "Option C"
+            }
+        },
+        {
+            "key": "field_perf_f32",
+            "label": "Field 32",
+            "name": "f32",
+            "type": "select",
+            "choices": {
+                "a": "Option A",
+                "b": "Option B",
+                "c": "Option C"
+            }
+        },
+        {
+            "key": "field_perf_f33",
+            "label": "Field 33",
+            "name": "f33",
+            "type": "select",
+            "choices": {
+                "a": "Option A",
+                "b": "Option B",
+                "c": "Option C"
+            }
+        },
+        {
+            "key": "field_perf_f34",
+            "label": "Field 34",
+            "name": "f34",
+            "type": "select",
+            "choices": {
+                "a": "Option A",
+                "b": "Option B",
+                "c": "Option C"
+            }
+        },
+        {
+            "key": "field_perf_f35",
+            "label": "Field 35",
+            "name": "f35",
+            "type": "select",
+            "choices": {
+                "a": "Option A",
+                "b": "Option B",
+                "c": "Option C"
+            }
+        },
+        {
+            "key": "field_perf_f36",
+            "label": "Field 36",
+            "name": "f36",
+            "type": "select",
+            "choices": {
+                "a": "Option A",
+                "b": "Option B",
+                "c": "Option C"
+            }
+        },
+        {
+            "key": "field_perf_f37",
+            "label": "Field 37",
+            "name": "f37",
+            "type": "true_false",
+            "ui": 1
+        },
+        {
+            "key": "field_perf_f38",
+            "label": "Field 38",
+            "name": "f38",
+            "type": "true_false",
+            "ui": 1
+        },
+        {
+            "key": "field_perf_f39",
+            "label": "Field 39",
+            "name": "f39",
+            "type": "true_false",
+            "ui": 1
+        },
+        {
+            "key": "field_perf_f40",
+            "label": "Field 40",
+            "name": "f40",
+            "type": "true_false",
+            "ui": 1
+        },
+        {
+            "key": "field_perf_f41",
+            "label": "Field 41",
+            "name": "f41",
+            "type": "number",
+            "min": 0,
+            "max": 1000
+        },
+        {
+            "key": "field_perf_f42",
+            "label": "Field 42",
+            "name": "f42",
+            "type": "number",
+            "min": 0,
+            "max": 1000
+        },
+        {
+            "key": "field_perf_f43",
+            "label": "Field 43",
+            "name": "f43",
+            "type": "textarea"
+        },
+        {
+            "key": "field_perf_f44",
+            "label": "Field 44",
+            "name": "f44",
+            "type": "wysiwyg"
+        },
+        {
+            "key": "field_perf_f45",
+            "label": "Field 45",
+            "name": "f45",
+            "type": "image",
+            "return_format": "array"
+        },
+        {
+            "key": "field_perf_f46",
+            "label": "Field 46",
+            "name": "f46",
+            "type": "gallery"
+        },
+        {
+            "key": "field_perf_f47",
+            "label": "Field 47",
+            "name": "f47",
+            "type": "relationship",
+            "post_type": [
+                "post"
+            ]
+        },
+        {
+            "key": "field_perf_f48",
+            "label": "Field 48",
+            "name": "f48",
+            "type": "date_picker",
+            "display_format": "d/m/Y",
+            "return_format": "Y-m-d"
+        },
+        {
+            "key": "field_perf_f49",
+            "label": "Field 49",
+            "name": "f49",
+            "type": "repeater",
+            "sub_fields": [
+                {
+                    "key": "field_perf_r_title",
+                    "label": "Title",
+                    "name": "title",
+                    "type": "text"
+                },
+                {
+                    "key": "field_perf_r_count",
+                    "label": "Count",
+                    "name": "count",
+                    "type": "number"
+                },
+                {
+                    "key": "field_perf_r_done",
+                    "label": "Done",
+                    "name": "done",
+                    "type": "true_false"
+                }
+            ]
+        },
+        {
+            "key": "field_perf_f50",
+            "label": "Field 50",
+            "name": "f50",
+            "type": "flexible_content",
+            "layouts": [
+                {
+                    "key": "layout_perf_text",
+                    "name": "text",
+                    "label": "Text",
+                    "sub_fields": [
+                        {
+                            "key": "field_perf_l_body",
+                            "label": "Body",
+                            "name": "body",
+                            "type": "textarea"
+                        }
+                    ]
+                },
+                {
+                    "key": "layout_perf_cta",
+                    "name": "cta",
+                    "label": "Call to action",
+                    "sub_fields": [
+                        {
+                            "key": "field_perf_l_label",
+                            "label": "Label",
+                            "name": "label",
+                            "type": "text"
+                        },
+                        {
+                            "key": "field_perf_l_url",
+                            "label": "URL",
+                            "name": "url",
+                            "type": "url"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

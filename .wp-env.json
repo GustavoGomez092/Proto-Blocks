@@ -2,6 +2,7 @@
   "core": null,
   "phpVersion": "8.1",
   "plugins": ["."],
+  "themes": ["./tests/e2e/fixtures/themes/pb-e2e-fields"],
   "mappings": {
     "wp-content/pb-e2e-fixtures": "./tests/e2e/fixtures",
     "wp-content/mu-plugins": "./tests/e2e/fixtures/mu-plugins",
