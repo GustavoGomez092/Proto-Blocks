@@ -16,6 +16,9 @@ use ProtoBlocks\Modules\Fields\Definition\Field;
  */
 final class ConditionEvaluator
 {
+    /** Types whose value is an attachment/object id (or list of ids): 0 and '0' mean nothing chosen. */
+    public const ID_TYPES = ['image', 'file', 'video', 'gallery', 'relationship', 'post_object', 'page_link', 'taxonomy', 'user'];
+
     /** Longest user pattern accepted; longer ones never compile (ReDoS guard). */
     public const MAX_PATTERN_LENGTH = 200;
 
@@ -24,8 +27,9 @@ final class ConditionEvaluator
 
     /**
      * @param array<string, mixed> $siblingValuesByKey field key => submitted value, for the fields sharing a scope with $field
+     * @param array<string, string> $typesByKey field key => field type, for the same fields
      */
-    public static function visible(Field $field, array $siblingValuesByKey): bool
+    public static function visible(Field $field, array $siblingValuesByKey, array $typesByKey = []): bool
     {
         if ($field->conditions === []) {
             return true;
@@ -35,7 +39,7 @@ final class ConditionEvaluator
             foreach ($group as $rule) {
                 $key = (string) ($rule['field'] ?? '');
                 if (!array_key_exists($key, $siblingValuesByKey)
-                    || !self::rule((string) ($rule['operator'] ?? ''), $siblingValuesByKey[$key], $rule['value'] ?? null)) {
+                    || !self::rule((string) ($rule['operator'] ?? ''), $siblingValuesByKey[$key], $rule['value'] ?? null, $typesByKey[$key] ?? null)) {
                     $all = false;
                     break;
                 }
@@ -47,7 +51,7 @@ final class ConditionEvaluator
         return false;
     }
 
-    public static function rule(string $operator, mixed $actual, mixed $expected): bool
+    public static function rule(string $operator, mixed $actual, mixed $expected, ?string $type = null): bool
     {
         switch ($operator) {
             case '==':
@@ -64,9 +68,9 @@ final class ConditionEvaluator
                 }
                 return str_contains(self::str($actual), $needle);
             case '==empty':
-                return self::isEmpty($actual);
+                return self::isEmpty($actual, $type);
             case '!=empty':
-                return !self::isEmpty($actual);
+                return !self::isEmpty($actual, $type);
             case '==pattern':
                 return !is_array($actual) && self::matches(self::str($expected), self::str($actual)) === true;
             default:
@@ -74,9 +78,15 @@ final class ConditionEvaluator
         }
     }
 
-    /** Empty means null, '', [], or false (a link array without a url counts too). */
-    public static function isEmpty(mixed $v): bool
+    /**
+     * Empty means null, '', [], or false (a link array without a url counts too).
+     * For id-based types (ID_TYPES) a stored 0 or '0' is empty too; a number 0 is not.
+     */
+    public static function isEmpty(mixed $v, ?string $type = null): bool
     {
+        if ($type !== null && in_array($type, self::ID_TYPES, true) && ($v === 0 || $v === '0')) {
+            return true;
+        }
         if ($v === null || $v === '' || $v === false || $v === []) {
             return true;
         }

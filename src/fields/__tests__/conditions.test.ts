@@ -1,4 +1,4 @@
-import { isVisible } from '../validation/conditions';
+import { isEmpty, isVisible } from '../validation/conditions';
 import type { ConditionRule, FieldDef } from '../model/types';
 
 function field( conditions: ConditionRule[][] ): FieldDef {
@@ -84,4 +84,19 @@ test( 'OR of AND groups', () => {
 	expect( isVisible( f, { field_a: 'a', field_b: 'c' } ) ).toBe( false );
 	expect( isVisible( f, { field_a: 'z', field_b: 'c' } ) ).toBe( true );
 	expect( isVisible( field( [ [] ] ), {} ) ).toBe( false );
+} );
+
+test( 'id-based types treat 0 and "0" as empty; number and text do not', () => {
+	expect( isEmpty( 0, 'image' ) ).toBe( true );
+	expect( isEmpty( '0', 'file' ) ).toBe( true );
+	expect( isEmpty( 0, 'video' ) ).toBe( true );
+	expect( isEmpty( [], 'relationship' ) ).toBe( true );
+	expect( isEmpty( '0', 'taxonomy' ) ).toBe( true );
+	expect( isEmpty( 12, 'image' ) ).toBe( false );
+	expect( isEmpty( 0, 'number' ) ).toBe( false );
+	expect( isEmpty( '0', 'text' ) ).toBe( false );
+	expect( isEmpty( 0 ) ).toBe( false );
+	const f = field( [ [ rule( '!=empty' ) ] ] );
+	expect( isVisible( f, { field_a: 0 }, { field_a: 'image' } ) ).toBe( false );
+	expect( isVisible( f, { field_a: 0 }, { field_a: 'number' } ) ).toBe( true );
 } );

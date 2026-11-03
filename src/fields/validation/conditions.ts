@@ -59,8 +59,19 @@ export function phpStr( v: unknown ): string {
 	return typeof v === 'string' || typeof v === 'number' ? String( v ) : '';
 }
 
-/** Empty means null, '', [], or false (a link without a url counts too). */
-export function isEmpty( v: unknown ): boolean {
+/** Types whose value is an attachment/object id (or list of ids): 0 and '0' mean nothing chosen. */
+export const ID_TYPES: ReadonlySet< string > = new Set( [
+	'image', 'file', 'video', 'gallery', 'relationship', 'post_object', 'page_link', 'taxonomy', 'user',
+] );
+
+/**
+ * Empty means null, '', [], or false (a link without a url counts too). For
+ * id-based types a stored 0 or '0' is empty too; a number 0 is not.
+ */
+export function isEmpty( v: unknown, type?: string | null ): boolean {
+	if ( type && ID_TYPES.has( type ) && ( v === 0 || v === '0' ) ) {
+		return true;
+	}
 	if ( v === null || v === undefined || v === '' || v === false ) {
 		return true;
 	}
@@ -177,7 +188,7 @@ function equals( actual: unknown, expected: unknown ): boolean {
 	return isObject( actual ) ? inList( e, actual ) : phpStr( actual ) === e;
 }
 
-export function ruleMatches( operator: string, actual: unknown, expected: unknown ): boolean {
+export function ruleMatches( operator: string, actual: unknown, expected: unknown, type?: string | null ): boolean {
 	switch ( operator ) {
 		case '==':
 			return equals( actual, expected );
@@ -191,9 +202,9 @@ export function ruleMatches( operator: string, actual: unknown, expected: unknow
 			return isObject( actual ) ? inList( needle, actual ) : phpStr( actual ).includes( needle );
 		}
 		case '==empty':
-			return isEmpty( actual );
+			return isEmpty( actual, type );
 		case '!=empty':
-			return ! isEmpty( actual );
+			return ! isEmpty( actual, type );
 		case '==pattern':
 			return ! isObject( actual ) && matchesPattern( phpStr( expected ), phpStr( actual ) ) === true;
 		default:
@@ -204,8 +215,13 @@ export function ruleMatches( operator: string, actual: unknown, expected: unknow
 /**
  * @param siblingsByKey field key => raw value, for the fields sharing a scope
  *   with `field` (no chaining: a hidden controller still reports its value)
+ * @param typesByKey field key => field type, for the same fields
  */
-export function isVisible( field: FieldDef, siblingsByKey: Record< string, unknown > ): boolean {
+export function isVisible(
+	field: FieldDef,
+	siblingsByKey: Record< string, unknown >,
+	typesByKey: Record< string, string > = {}
+): boolean {
 	if ( field.conditions.length === 0 ) {
 		return true;
 	}
@@ -215,7 +231,7 @@ export function isVisible( field: FieldDef, siblingsByKey: Record< string, unkno
 			group.every(
 				( rule: ConditionRule ) =>
 					Object.prototype.hasOwnProperty.call( siblingsByKey, String( rule.field ?? '' ) ) &&
-					ruleMatches( String( rule.operator ?? '' ), siblingsByKey[ String( rule.field ) ], rule.value ?? null )
+					ruleMatches( String( rule.operator ?? '' ), siblingsByKey[ String( rule.field ) ], rule.value ?? null, typesByKey[ String( rule.field ) ] )
 			)
 	);
 }

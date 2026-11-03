@@ -398,10 +398,7 @@ test.describe( 'Field-group builder', () => {
 			const photoBox = await photo.boundingBox();
 			const linksBox = await links.boundingBox();
 			expect( photoBox!.y ).toBeLessThan( linksBox!.y );
-			// TODO(fields): an image field with no image stores 0 (ImageType::emptyValue),
-			// which ConditionEvaluator/conditions.ts do not treat as empty, so Company
-			// is visible before a photo is chosen. Restore
-			// `await expect( box.getByLabel( 'Company' ) ).toBeHidden();` once 0 counts as empty.
+			await expect( box.getByLabel( 'Company' ) ).toBeHidden();
 
 			await box.getByRole( 'button', { name: 'Select image' } ).click();
 			const frame = page.locator( '.media-modal' );
