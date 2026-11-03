@@ -201,7 +201,8 @@ test.describe( 'Options Pages screen', () => {
 			.selectOption( 'options-general.php' );
 		await page
 			.getByRole( 'combobox', { name: 'Who can use this page' } )
-			.fill( 'manage_options' );
+			.click();
+		await page.getByRole( 'option', { name: 'manage_options', exact: true } ).click();
 
 		await page.getByRole( 'button', { name: 'Add tab' } ).click();
 		await page.getByRole( 'textbox', { name: 'Tab title' } ).fill( 'Main' );
@@ -234,7 +235,8 @@ test.describe( 'Options Pages screen', () => {
 		const capability = page.getByRole( 'combobox', {
 			name: 'Who can use this page',
 		} );
-		await capability.fill( 'edit_posts' );
+		await capability.click();
+		await page.getByRole( 'option', { name: 'edit_posts', exact: true } ).click();
 		await page.getByRole( 'button', { name: 'Save', exact: true } ).click();
 		await expect( page.getByText( /^Saved to / ) ).toBeVisible();
 		const edited = pageFile();

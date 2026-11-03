@@ -382,6 +382,7 @@ test.describe( 'Field boxes', () => {
 				clip: ( await page.locator( '#col-left' ).boundingBox() ) ?? undefined,
 				mask: [
 					page.locator( '#adminmenuwrap' ),
+					page.locator( '#wpadminbar' ),
 					page.locator( '#tag-name' ),
 					page.locator( '#tag-slug' ),
 				],
