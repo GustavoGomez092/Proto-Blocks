@@ -12,15 +12,15 @@ import { SCREENS, screenLabel } from '@/admin/screens';
 function ScreenSkeleton() {
 	return (
 		<div aria-busy="true" className="grid gap-6">
-			<div className="flex items-center gap-3 pt-3 pb-6">
-				<Skeleton className="size-9" />
-				<Skeleton className="h-6 w-48" />
+			<div className="flex items-center gap-4 border-b pt-6 pb-5">
+				<Skeleton className="size-11 rounded-[10px]" />
+				<div className="grid gap-2">
+					<Skeleton className="h-3 w-32" />
+					<Skeleton className="h-6 w-48" />
+				</div>
 			</div>
-			<div className="grid gap-4 sm:grid-cols-3">
-				<Skeleton className="h-28" />
-				<Skeleton className="h-28" />
-				<Skeleton className="h-28" />
-			</div>
+			<Skeleton className="h-24 rounded-xl" />
+			<Skeleton className="h-64 rounded-xl" />
 		</div>
 	);
 }

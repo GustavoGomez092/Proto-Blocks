@@ -1,35 +1,38 @@
 import type { ReactNode } from 'react';
-import { Card } from '@/admin/components/ui/card';
+import { cn } from '@/admin/lib/utils';
 
-/** One figure with a label, an optional hint and an optional 36px icon tile. */
+/**
+ * One figure in a status strip: 12.5px label, 30/600 tabular value and an
+ * inline muted hint. Unboxed; the strip (a Panel with a grid and dividers)
+ * draws the frame. `icon` is kept for API compatibility and shown muted.
+ */
 export function StatCard({
 	label,
 	value,
 	hint,
 	icon,
+	className,
 }: {
 	label: string;
 	value: ReactNode;
 	hint?: ReactNode;
 	icon?: ReactNode;
+	className?: string;
 }) {
 	return (
-		<Card className="gap-0 p-5 shadow-xs">
-			<div className="flex items-start justify-between gap-4">
-				<div className="grid min-w-0 gap-1.5">
-					<p className="text-[13px] text-muted-foreground">{label}</p>
-					<p className="text-[28px] leading-none font-semibold tabular-nums">{value}</p>
-					{hint ? <p className="truncate text-[13px] text-muted-foreground">{hint}</p> : null}
-				</div>
+		<div className={cn('min-w-0 px-6 py-[18px]', className)}>
+			<div className="flex items-center gap-2 text-caption text-muted-foreground">
 				{icon ? (
-					<div
-						aria-hidden="true"
-						className="grid size-9 flex-none place-items-center rounded-lg bg-secondary text-primary [&_svg]:size-[18px]"
-					>
+					<span aria-hidden="true" className="contents [&_svg]:size-3.5 [&_svg]:text-faint">
 						{icon}
-					</div>
+					</span>
 				) : null}
+				<p>{label}</p>
 			</div>
-		</Card>
+			<div className="mt-1 flex min-w-0 items-baseline gap-2.5">
+				<p className="text-stat font-semibold tabular-nums">{value}</p>
+				{hint ? <p className="truncate text-label text-muted-foreground">{hint}</p> : null}
+			</div>
+		</div>
 	);
 }

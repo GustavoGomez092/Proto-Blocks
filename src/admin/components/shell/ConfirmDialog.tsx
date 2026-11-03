@@ -151,7 +151,7 @@ export function ConfirmDialog({
 				}}
 			>
 				<AlertDialogHeader>
-					<AlertDialogTitle className="text-[17px] text-balance">{title}</AlertDialogTitle>
+					<AlertDialogTitle className="text-balance">{title}</AlertDialogTitle>
 					{description ? <AlertDialogDescription>{description}</AlertDialogDescription> : null}
 				</AlertDialogHeader>
 				{children}
