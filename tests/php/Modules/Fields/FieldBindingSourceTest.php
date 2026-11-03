@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Tests\Modules\Fields;
 
-use PHPUnit\Framework\TestCase;
 use ProtoBlocks\Modules\Fields\Bindings\FieldBindingSource;
 use ProtoBlocks\Modules\Fields\Definition\GroupNormalizer;
 use ProtoBlocks\Modules\Fields\Read\FieldReader;
@@ -19,7 +18,7 @@ use ProtoBlocks\Modules\Fields\Types\TypeRegistry;
 require_once __DIR__ . '/FieldReaderTest.php';
 require_once __DIR__ . '/stubs/Bindings.php';
 
-final class FieldBindingSourceTest extends TestCase
+final class FieldBindingSourceTest extends FieldsTestCase
 {
     private const VISITOR = 0;
     private const ADMIN = 1;
@@ -27,6 +26,7 @@ final class FieldBindingSourceTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
         FieldReaderTest::seed();
         foreach (['pb_test_bindings', 'pb_test_password_required', 'pb_test_hidden_taxonomies'] as $g) {
             $GLOBALS[$g] = [];
@@ -53,13 +53,6 @@ final class FieldBindingSourceTest extends TestCase
             'internal' => 'staff only',
             'nested' => ['deep' => 'deep value'],
         ];
-    }
-
-    protected function tearDown(): void
-    {
-        unset($GLOBALS['pb_test_public_types']);
-        $GLOBALS['pb_test_current_user'] = 0;
-        unset($GLOBALS['pb_test_caps'][self::READER], $GLOBALS['pb_test_caps'][self::ADMIN]);
     }
 
     private function source(): FieldBindingSource
