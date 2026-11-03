@@ -109,16 +109,16 @@ export function DashiconPicker({ value, onSelect }: { value: string; onSelect: (
 					}
 				}}
 			/>
-			<p className="text-[13px] text-muted-foreground" aria-live="polite">
+			<p className="text-label text-muted-foreground" aria-live="polite">
 				{sprintf(_n('%d icon', '%d icons', flat.length, 'proto-blocks'), flat.length)}
 			</p>
 			<div ref={gridRef} className="max-h-72 overflow-y-auto pr-1">
 				{flat.length === 0 ? (
-					<p className="py-6 text-center text-sm text-muted-foreground">{__('No icons match.', 'proto-blocks')}</p>
+					<p className="py-6 text-center text-body text-muted-foreground">{__('No icons match.', 'proto-blocks')}</p>
 				) : (
 					groups.map((group) => (
 						<section key={group.label} aria-label={group.label} className="mb-2">
-							<h3 className="mb-1 text-xs font-medium text-muted-foreground">{group.label}</h3>
+							<h3 className="mb-1.5 font-mono text-eyebrow font-medium text-muted-foreground uppercase">{group.label}</h3>
 							<div className="grid grid-cols-8 gap-0.5">
 								{group.names.map((name) => (
 									<button

@@ -17,7 +17,7 @@ import { Label } from '@/admin/components/ui/label';
 import { interpolate } from '@/admin/lib/interpolate';
 import type { Kind } from '@/admin/content-model/types';
 
-const code = (text: ReactNode) => <code className="font-mono text-[12.5px]">{text}</code>;
+const code = (text: ReactNode) => <code className="font-mono text-caption">{text}</code>;
 
 /**
  * Confirms deleting a declaration file (design guide 2.5). It names the path
@@ -107,10 +107,10 @@ export function DeleteDeclarationDialog({
 					<div className="mb-1 grid size-10 place-items-center rounded-lg bg-destructive-soft text-destructive">
 						<Trash2Icon aria-hidden="true" className="size-5" />
 					</div>
-					<AlertDialogTitle className="text-[17px] text-balance">{title}</AlertDialogTitle>
+					<AlertDialogTitle className="text-balance">{title}</AlertDialogTitle>
 					<AlertDialogDescription>{body}</AlertDialogDescription>
 				</AlertDialogHeader>
-				<ul className="list-disc ps-5 text-sm">
+				<ul className="list-disc ps-5 text-body">
 					<li>{items}</li>
 					{terms.map(([taxonomy, count]) => (
 						<li key={taxonomy}>
@@ -124,7 +124,7 @@ export function DeleteDeclarationDialog({
 					))}
 				</ul>
 				<div className="grid gap-2">
-					<Label htmlFor={inputId} className="text-sm font-normal">
+					<Label htmlFor={inputId} className="font-normal">
 						{interpolate(
 							/* translators: %s: the slug to type. */
 							__('Type %s to confirm', 'proto-blocks'),

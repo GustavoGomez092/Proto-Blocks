@@ -43,14 +43,14 @@ export function GuardrailDialog({
 					<div className="mb-1 grid size-10 place-items-center rounded-lg bg-warning-soft text-warning">
 						<TriangleAlertIcon aria-hidden="true" className="size-5" />
 					</div>
-					<AlertDialogTitle className="text-[17px] text-balance">
+					<AlertDialogTitle className="text-balance">
 						{__('Save changes that affect existing content?', 'proto-blocks')}
 					</AlertDialogTitle>
 					<AlertDialogDescription>
 						{__('Nothing is deleted, but existing content changes how it shows in the editor.', 'proto-blocks')}
 					</AlertDialogDescription>
 				</AlertDialogHeader>
-				<ul className="list-disc ps-5 text-sm">
+				<ul className="list-disc ps-5 text-body">
 					{guardrails.map((guardrail, i) => (
 						<li key={`${guardrail.code}-${i}`}>{guardrail.message}</li>
 					))}

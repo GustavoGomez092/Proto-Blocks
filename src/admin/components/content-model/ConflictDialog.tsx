@@ -14,7 +14,7 @@ import {
 import { Button } from '@/admin/components/ui/button';
 import { interpolate } from '@/admin/lib/interpolate';
 
-const code = (text: ReactNode) => <code className="font-mono text-[12.5px] break-all">{text}</code>;
+const code = (text: ReactNode) => <code className="font-mono text-caption break-all">{text}</code>;
 
 /**
  * Shown when a save resolves `conflict`: the file changed on disk since it
@@ -48,7 +48,7 @@ export function ConflictDialog({
 					<div className="mb-1 grid size-10 place-items-center rounded-lg bg-warning-soft text-warning">
 						<GitCompareIcon aria-hidden="true" className="size-5" />
 					</div>
-					<AlertDialogTitle className="text-[17px] text-balance">{__('The file changed on disk.', 'proto-blocks')}</AlertDialogTitle>
+					<AlertDialogTitle className="text-balance">{__('The file changed on disk.', 'proto-blocks')}</AlertDialogTitle>
 					<AlertDialogDescription>
 						{interpolate(
 							/* translators: %s: path of the declaration file. */

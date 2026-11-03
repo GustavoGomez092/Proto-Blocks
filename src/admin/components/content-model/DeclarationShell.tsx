@@ -2,13 +2,15 @@ import type { ReactNode } from 'react';
 import { __ } from '@wordpress/i18n';
 import { PageHeader } from '@/admin/components/shell/PageHeader';
 import { ReadOnlyBanner } from '@/admin/components/shell/ReadOnlyBanner';
+import { themeRelative } from './Layout';
 import type { ListItem } from '@/admin/content-model/types';
 
 /**
- * Frame of a declaration edit screen: PageHeader with the file path and the
- * actions, the Phase 0 read-only banner when the file can't be written, then
- * the form. `file_mods`, `multisite` and `not_writable` get the banner; other reasons
- * (outside the theme, not a Proto-Blocks file) are explained by the screen.
+ * Frame of a declaration edit screen: PageHeader with the back link, the file
+ * path and the actions, the Phase 0 read-only banner when the file can't be
+ * written, then the form. `file_mods`, `multisite` and `not_writable` get the
+ * banner; other reasons (outside the theme, not a Proto-Blocks file) are
+ * explained by the screen.
  */
 export function DeclarationShell({
 	title,
@@ -16,6 +18,7 @@ export function DeclarationShell({
 	path,
 	children,
 	actions,
+	back,
 }: {
 	title: string;
 	readOnlyReason: ListItem['readOnlyReason'];
@@ -23,6 +26,8 @@ export function DeclarationShell({
 	path: string;
 	children: ReactNode;
 	actions?: ReactNode;
+	/** The "← All post types" link above the title. */
+	back?: { label: string; onClick: () => void };
 }) {
 	const description = __(
 		"You can browse everything, but changes can't be saved. Ask your developer to edit the files in the theme, or to allow file changes on this environment.",
@@ -30,10 +35,12 @@ export function DeclarationShell({
 	);
 
 	return (
-		<div className="grid gap-6">
+		<div className="grid gap-6 [&>header]:mb-0">
 			<PageHeader
 				title={title}
-				description={path ? <code className="font-mono text-[12.5px] break-all">{path}</code> : undefined}
+				back={back}
+				eyebrow={back ? undefined : __('Content model', 'proto-blocks')}
+				description={path ? <code className="font-mono text-caption break-all text-link" title={path}>{themeRelative(path)}</code> : undefined}
 				actions={actions}
 			/>
 			{readOnlyReason === 'file_mods' ? <ReadOnlyBanner reason="file_mods" description={description} /> : null}
