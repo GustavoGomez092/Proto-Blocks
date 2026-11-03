@@ -362,6 +362,18 @@ test('a network error keeps every edit and the guard', async () => {
 	expect(leavePrompts()).toBe(true);
 });
 
+test('focusing fields without changing them is not an unsaved change', async () => {
+	const user = userEvent.setup();
+	renderPage(cadco());
+
+	await user.tab(); // the switch
+	expect(screen.getByRole('switch', { name: 'Hide child products' })).toHaveFocus();
+	await user.tab(); // the radio group
+	await user.tab();
+
+	expect(leavePrompts()).toBe(false);
+});
+
 test('toggling a switch counts as an unsaved change', async () => {
 	const user = userEvent.setup();
 	renderPage(cadco());
