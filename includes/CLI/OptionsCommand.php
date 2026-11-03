@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\CLI;
 
+use ProtoBlocks\API\AdminRestController;
 use ProtoBlocks\ContentModel\Declaration;
 use ProtoBlocks\ContentModel\FileLoader;
 use ProtoBlocks\ContentModel\Jsonc;
@@ -199,6 +200,6 @@ final class OptionsCommand
 
     private function writer(): SchemaFileWriter
     {
-        return $this->writer ??= new SchemaFileWriter(SchemaPaths::writableRoots(), !defined('DISALLOW_FILE_MODS') || !DISALLOW_FILE_MODS);
+        return $this->writer ??= new SchemaFileWriter(SchemaPaths::writableRoots(), AdminRestController::fileWritesAllowed());
     }
 }

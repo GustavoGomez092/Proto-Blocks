@@ -5,14 +5,23 @@
   "$defs": {
     "labels": {
       "type": "object",
-      "additionalProperties": { "type": "string" }
+      "additionalProperties": { "type": "string", "pattern": "^[^<>]*$" }
     },
     "type": {
       "type": "object",
       "properties": {
         "$schema": { "type": "string" },
-        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
-        "plural": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "register_meta_box_cb": false,
+        "meta_box_cb": false,
+        "meta_box_sanitize_cb": false,
+        "update_count_callback": false,
+        "rest_controller_class": false,
+        "autosave_rest_controller_class": false,
+        "revisions_rest_controller_class": false,
+        "_builtin": false,
+        "_edit_link": false,
+        "name": { "type": "string", "minLength": 1, "maxLength": 100, "pattern": "^[^<>]*$" },
+        "plural": { "type": "string", "minLength": 1, "maxLength": 100, "pattern": "^[^<>]*$" },
         "slug": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,19}$" },
         "labels": { "$ref": "#/$defs/labels" },
         "public": { "type": "boolean" },
@@ -77,8 +86,17 @@
       "type": "object",
       "properties": {
         "$schema": { "type": "string" },
-        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
-        "plural": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "register_meta_box_cb": false,
+        "meta_box_cb": false,
+        "meta_box_sanitize_cb": false,
+        "update_count_callback": false,
+        "rest_controller_class": false,
+        "autosave_rest_controller_class": false,
+        "revisions_rest_controller_class": false,
+        "_builtin": false,
+        "_edit_link": false,
+        "name": { "type": "string", "minLength": 1, "maxLength": 100, "pattern": "^[^<>]*$" },
+        "plural": { "type": "string", "minLength": 1, "maxLength": 100, "pattern": "^[^<>]*$" },
         "slug": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,31}$" },
         "labels": { "$ref": "#/$defs/labels" },
         "post_types": { "type": "array", "items": { "type": "string" } },
@@ -128,7 +146,7 @@
       "items": {
         "type": "object",
         "properties": {
-          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "title": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^<>]*$" },
           "fields": { "$ref": "#/$defs/optionsFields" }
         },
         "required": ["title"]
@@ -138,14 +156,23 @@
       "type": "object",
       "properties": {
         "$schema": { "type": "string" },
-        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "register_meta_box_cb": false,
+        "meta_box_cb": false,
+        "meta_box_sanitize_cb": false,
+        "update_count_callback": false,
+        "rest_controller_class": false,
+        "autosave_rest_controller_class": false,
+        "revisions_rest_controller_class": false,
+        "_builtin": false,
+        "_edit_link": false,
+        "title": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^<>]*$" },
         "slug": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
         "menu": { "type": "string", "pattern": "^[a-z0-9_.?=&-]+$" },
         "capability": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
         "icon": { "type": "string", "maxLength": 2048 },
         "position": { "type": "integer" },
-        "menu_title": { "type": "string" },
-        "menuTitle": { "type": "string" },
+        "menu_title": { "type": "string", "pattern": "^[^<>]*$" },
+        "menuTitle": { "type": "string", "pattern": "^[^<>]*$" },
         "autoload": { "type": "boolean" },
         "storage": { "$ref": "#/$defs/optionsStorage" },
         "fields": { "$ref": "#/$defs/optionsFields" },
@@ -156,7 +183,7 @@
             "type": "object",
             "properties": {
               "slug": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
-              "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+              "title": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^<>]*$" },
               "capability": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
               "fields": { "$ref": "#/$defs/optionsFields" },
               "tabs": { "$ref": "#/$defs/optionsTabs" },

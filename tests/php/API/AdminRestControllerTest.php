@@ -99,6 +99,53 @@ final class AdminRestControllerTest extends TestCase
         self::assertFalse($capture->restPermission());
     }
 
+    public function testMultisiteWritesNeedSuperAdmin(): void
+    {
+        if (!AdminPage::fileModsAllowed()) {
+            self::markTestSkipped('File mods are disabled in this process.');
+        }
+        $controller = new AdminRestController();
+        try {
+            $GLOBALS['pb_test_multisite'] = true;
+            $GLOBALS['pb_test_super_admins'] = [];
+
+            // A sub-site Administrator: reads yes, theme file writes no.
+            self::assertTrue($controller->permission());
+            self::assertFalse($controller->writePermission());
+            self::assertFalse(AdminRestController::canWriteCode());
+            self::assertFalse(AdminRestController::fileWritesAllowed());
+
+            $GLOBALS['pb_test_super_admins'] = [1];
+            self::assertTrue($controller->writePermission());
+            self::assertTrue(AdminRestController::fileWritesAllowed());
+
+            // A super admin still needs manage_options on the site (the read gate).
+            $GLOBALS['pb_test_caps'] = [1 => []];
+            self::assertFalse($controller->writePermission());
+
+            // Single site: manage_options is enough.
+            $GLOBALS['pb_test_caps'] = [1 => ['manage_options']];
+            $GLOBALS['pb_test_multisite'] = false;
+            $GLOBALS['pb_test_super_admins'] = [];
+            self::assertTrue($controller->writePermission());
+            self::assertTrue(AdminRestController::canWriteCode());
+        } finally {
+            unset($GLOBALS['pb_test_multisite'], $GLOBALS['pb_test_super_admins']);
+        }
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function testFileWritesAllowedHonoursDisallowFileEdit(): void
+    {
+        $GLOBALS['pb_test_current_user'] = 1;
+        $GLOBALS['pb_test_caps'] = [1 => ['manage_options']];
+        define('DISALLOW_FILE_EDIT', true);
+
+        self::assertTrue(AdminRestController::canWriteCode());
+        self::assertFalse(AdminRestController::fileWritesAllowed());
+    }
+
     public function testWritePermissionTrueWithCapabilityAndFileMods(): void
     {
         if (!AdminPage::fileModsAllowed()) {

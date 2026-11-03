@@ -31,6 +31,10 @@ final class MetaRegistrarTest extends TestCase
 
     protected function tearDown(): void
     {
+        // Leave no registered meta / hooks behind for tests that assert a clean slate.
+        foreach (['pb_test_filters', 'pb_test_hooks', 'pb_test_meta_reg', 'pb_test_supports', 'pb_test_meta', 'pb_test_posts', 'pb_test_object_terms', 'pb_test_terms', 'pb_test_users'] as $g) {
+            $GLOBALS[$g] = [];
+        }
         unset($GLOBALS['wp_version']);
         $GLOBALS['pb_test_current_user'] = 0;
         $GLOBALS['pb_test_caps'] = [];

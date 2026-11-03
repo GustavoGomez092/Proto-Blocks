@@ -10,7 +10,6 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\API\Admin;
 
-use ProtoBlocks\Admin\AdminPage;
 use ProtoBlocks\API\AdminRestController;
 use ProtoBlocks\ContentModel\Declaration;
 use ProtoBlocks\ContentModel\FileLoader;
@@ -73,14 +72,15 @@ abstract class ContentModelRoutes
 
     protected function writer(): SchemaFileWriter
     {
-        return $this->writer ??= new SchemaFileWriter(SchemaPaths::writableRoots(), AdminPage::fileModsAllowed());
+        return $this->writer ??= new SchemaFileWriter(SchemaPaths::writableRoots(), AdminRestController::fileWritesAllowed());
     }
 
     protected function guardrails(): Guardrails
     {
         return $this->guardrails ??= new Guardrails(
             static fn (string $type): int => self::countPosts($type),
-            static fn (string $taxonomy): int => self::countTerms($taxonomy)
+            static fn (string $taxonomy): int => self::countTerms($taxonomy),
+            static fn (string $type): ?array => post_type_exists($type) ? array_keys(get_all_post_type_supports($type)) : null
         );
     }
 
@@ -90,7 +90,7 @@ abstract class ContentModelRoutes
             (string) get_stylesheet_directory(),
             (string) get_template_directory(),
             (bool) wp_is_block_theme(),
-            AdminPage::fileModsAllowed()
+            AdminRestController::fileWritesAllowed()
         );
     }
 

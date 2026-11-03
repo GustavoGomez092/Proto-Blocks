@@ -134,7 +134,7 @@ export function CreatePostTypeDialog({
 		}
 		setBusy(true);
 		setServerError(null);
-		const path = `schema-files/type/${slug}`;
+		const path = `admin/schema-files/type/${slug}`;
 		try {
 			const template = await adminGet<FileResult>(`${path}?name=${encodeURIComponent(name.trim())}`);
 			if (template.exists) {
