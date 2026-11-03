@@ -39,6 +39,11 @@
  * GroupSettings — title, position, style, menu order, options autoload.
  *   Props: group (raw), dispatch(action) (emits `{type: 'group', patch}`), readOnly?.
  *
+ * JsoncPane — the whole file as editable text (no code-editor dependency).
+ *   Props: text, pointer, kind, index?, readOnly?, onChange(text). Parse
+ *   errors show as "Line l, column c"; POST admin/fields/validate runs
+ *   debounced 400 ms. `jsoncErrors(text, pointer)` is the same check.
+ *
  * Builder — the whole Fields-screen builder for one group key (or a new group).
  */
 export { FieldTree, rowId, type FieldTreeProps } from '@/admin/screens/fields/FieldTree';
@@ -47,6 +52,7 @@ export { AddFieldMenu, type AddFieldMenuProps } from '@/admin/screens/fields/Add
 export { ConditionBuilder, type ConditionBuilderProps } from '@/admin/screens/fields/ConditionBuilder';
 export { LocationBuilder, readLocation, type LocationBuilderProps, type LocationChoices, type LocationRule } from '@/admin/screens/fields/LocationBuilder';
 export { GroupSettings, type GroupSettingsProps } from '@/admin/screens/fields/GroupSettings';
+export { JsoncPane, jsoncErrors, type JsoncPaneProps, type JsoncProblem } from '@/admin/screens/fields/JsoncPane';
 export { Builder, type BuilderProps, type FieldGroupDetail } from '@/admin/screens/fields/Builder';
 export {
 	reduce,

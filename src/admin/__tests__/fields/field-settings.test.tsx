@@ -272,11 +272,12 @@ describe('Builder', () => {
 		mockBootstrap({ screen: 'fields' });
 		mockApi({});
 		render(<Builder group={null} onBack={() => {}} />);
+		await userEvent.type(screen.getByRole('textbox', { name: 'Title' }), 'New field group');
 		const slug = screen.getByRole('textbox', { name: 'File name' });
 		expect(slug).toHaveValue('new-field-group');
 		await userEvent.clear(slug);
 		await userEvent.type(slug, 'Bad Slug');
-		await userEvent.click(screen.getByRole('button', { name: 'Save to file' }));
+		await userEvent.click(screen.getByRole('button', { name: 'Create field group' }));
 		expect(slug).toHaveFocus();
 		expect(slug).toHaveAttribute('aria-invalid', 'true');
 		expect(requests()).toHaveLength(0);
