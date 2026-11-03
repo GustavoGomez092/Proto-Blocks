@@ -1,0 +1,1 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 20 20" onload="alert(1)"><script>alert(2)</script><foreignObject><div>x</div></foreignObject><path onclick="y()" d="M0 0h10v10z"/><use xlink:href="javascript:alert(3)"/></svg>
