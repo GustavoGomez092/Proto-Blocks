@@ -68,7 +68,7 @@ function routes(count = 5, extra: Record<string, unknown> = {}) {
 			items: [item({ slug: 'book', label: 'Book' }), item({ slug: 'resource', label: 'Resource' })],
 			issues: [],
 		},
-		'schema-files/taxonomy/media-type': {
+		'admin/schema-files/taxonomy/media-type': {
 			exists: true,
 			path: FILE_PATH,
 			text: FILE_TEXT,
@@ -179,7 +179,7 @@ test('creating Media Type posts the file with name and post_types', async () => 
 	const user = userEvent.setup();
 	const api = mockApi(
 		routes(0, {
-			'schema-files/taxonomy/media-type?name=Media%20Type': {
+			'admin/schema-files/taxonomy/media-type?name=Media%20Type': {
 				exists: false,
 				path: FILE_PATH,
 				text: '{\n  "name": "Media Type"\n}\n',
@@ -188,7 +188,7 @@ test('creating Media Type posts the file with name and post_types', async () => 
 				writable: true,
 				reason: null,
 			},
-			'POST schema-files/taxonomy/media-type': { path: FILE_PATH, hash: 'h2', created: true, warnings: [] },
+			'POST admin/schema-files/taxonomy/media-type': { path: FILE_PATH, hash: 'h2', created: true, warnings: [] },
 		})
 	);
 	open('&new=1');
@@ -198,8 +198,8 @@ test('creating Media Type posts the file with name and post_types', async () => 
 	await user.click(await screen.findByRole('checkbox', { name: /Resource/ }));
 	await user.click(screen.getByRole('button', { name: 'Save to file' }));
 
-	await waitFor(() => expect(posted(api, 'schema-files/taxonomy/media-type')).toHaveLength(1));
-	const body = posted(api, 'schema-files/taxonomy/media-type')[0].data!;
+	await waitFor(() => expect(posted(api, 'admin/schema-files/taxonomy/media-type')).toHaveLength(1));
+	const body = posted(api, 'admin/schema-files/taxonomy/media-type')[0].data!;
 	expect(body.hash).toBeNull();
 	expect(parseJsonc(body.text).data).toEqual({ name: 'Media Type', post_types: ['resource'] });
 	expect(body.text).toContain('"name": "Media Type"');
@@ -220,7 +220,7 @@ test('a taxonomy with terms locks the slug and shows the count', async () => {
 
 test('deleting a taxonomy with terms needs the slug typed, then sends confirm', async () => {
 	const user = userEvent.setup();
-	const api = mockApi(routes(5, { 'DELETE schema-files/taxonomy/media-type?confirm=media-type': { deleted: true } }));
+	const api = mockApi(routes(5, { 'DELETE admin/schema-files/taxonomy/media-type?confirm=media-type': { deleted: true } }));
 	open('&taxonomy=media-type');
 
 	await user.click(await screen.findByRole('button', { name: /^Delete/ }));
@@ -231,7 +231,7 @@ test('deleting a taxonomy with terms needs the slug typed, then sends confirm', 
 	await user.click(confirm);
 
 	await waitFor(() =>
-		expect(calls(api).some((o) => o.method === 'DELETE' && o.url.endsWith('schema-files/taxonomy/media-type?confirm=media-type'))).toBe(true)
+		expect(calls(api).some((o) => o.method === 'DELETE' && o.url.endsWith('admin/schema-files/taxonomy/media-type?confirm=media-type'))).toBe(true)
 	);
 });
 
@@ -256,7 +256,7 @@ test('a 409 conflict opens the conflict dialog and Reload refetches the file', a
 	const user = userEvent.setup();
 	const api = mockApi(
 		routes(0, {
-			'POST schema-files/taxonomy/media-type': () => {
+			'POST admin/schema-files/taxonomy/media-type': () => {
 				throw { code: 'proto_blocks_conflict', message: 'changed', data: { status: 409 } };
 			},
 		})
@@ -267,7 +267,7 @@ test('a 409 conflict opens the conflict dialog and Reload refetches the file', a
 	await user.click(screen.getByRole('button', { name: 'Save to file' }));
 
 	expect(await screen.findByText('The file changed on disk.')).toBeInTheDocument();
-	const loads = () => calls(api).filter((o) => o.method !== 'POST' && o.url.endsWith('schema-files/taxonomy/media-type')).length;
+	const loads = () => calls(api).filter((o) => o.method !== 'POST' && o.url.endsWith('admin/schema-files/taxonomy/media-type')).length;
 	const before = loads();
 	await user.click(screen.getByRole('button', { name: 'Reload file' }));
 	await waitFor(() => expect(loads()).toBe(before + 1));
@@ -275,14 +275,14 @@ test('a 409 conflict opens the conflict dialog and Reload refetches the file', a
 
 test('saving writes only the changed keys and keeps comments', async () => {
 	const user = userEvent.setup();
-	const api = mockApi(routes(0, { 'POST schema-files/taxonomy/media-type': { path: FILE_PATH, hash: 'h2', created: false, warnings: [] } }));
+	const api = mockApi(routes(0, { 'POST admin/schema-files/taxonomy/media-type': { path: FILE_PATH, hash: 'h2', created: false, warnings: [] } }));
 	open('&taxonomy=media-type');
 
 	await user.click(await screen.findByLabelText('Show as a column in admin lists'));
 	await user.click(screen.getByRole('button', { name: 'Save to file' }));
 
-	await waitFor(() => expect(posted(api, 'schema-files/taxonomy/media-type')).toHaveLength(1));
-	const body = posted(api, 'schema-files/taxonomy/media-type')[0].data!;
+	await waitFor(() => expect(posted(api, 'admin/schema-files/taxonomy/media-type')).toHaveLength(1));
+	const body = posted(api, 'admin/schema-files/taxonomy/media-type')[0].data!;
 	expect(body.text).toContain('// keep me');
 	expect(parseJsonc(body.text).data).toEqual({ name: 'Media Type', show_admin_column: true });
 	expect(body.hash).toBe('h1');
@@ -293,7 +293,7 @@ test('a guardrail confirmation resends with the codes acknowledged', async () =>
 	let attempts = 0;
 	const api = mockApi(
 		routes(0, {
-			'POST schema-files/taxonomy/media-type': (body: unknown) => {
+			'POST admin/schema-files/taxonomy/media-type': (body: unknown) => {
 				attempts += 1;
 				if ((body as { acknowledge: string[] }).acknowledge.length === 0) {
 					throw {
@@ -313,7 +313,7 @@ test('a guardrail confirmation resends with the codes acknowledged', async () =>
 	await user.click(await screen.findByRole('button', { name: 'Save anyway' }));
 
 	await waitFor(() => expect(attempts).toBe(2));
-	expect(posted(api, 'schema-files/taxonomy/media-type')[1].data!.acknowledge).toEqual(['taxonomy_removed']);
+	expect(posted(api, 'admin/schema-files/taxonomy/media-type')[1].data!.acknowledge).toEqual(['taxonomy_removed']);
 });
 
 test('opening an inline taxonomy by URL links to its post type instead of an editor', async () => {

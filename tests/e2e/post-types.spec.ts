@@ -306,7 +306,7 @@ test.describe( 'Post types', () => {
 
 			await expect(
 				requestUtils.rest( {
-					path: '/proto-blocks/v1/schema-files/type/book',
+					path: '/proto-blocks/v1/admin/schema-files/type/book',
 					method: 'POST',
 					data: {
 						text: '{ "name": "Book" }\n',

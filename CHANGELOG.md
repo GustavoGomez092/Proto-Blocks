@@ -70,7 +70,7 @@
   `DISALLOW_FILE_EDIT`.
 - REST routes `proto-blocks/v1/admin/types`, `admin/types/<slug>`,
   `admin/types/<slug>/scaffold`, `admin/taxonomies`, `admin/taxonomies/<slug>`
-  and `proto-blocks/v1/schema-files/<type|taxonomy>/<slug>`.
+  and `proto-blocks/v1/admin/schema-files/<type|taxonomy>/<slug>`.
 - **`wp proto-blocks type list|create|scaffold|validate|rename` and
   `wp proto-blocks taxonomy list|create|validate|rename`**;
   `wp proto-blocks validate` also reports declarations.

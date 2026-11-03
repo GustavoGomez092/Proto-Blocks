@@ -15,12 +15,12 @@ use ProtoBlocks\ContentModel\PhpDeclarations;
 use ProtoBlocks\ContentModel\SchemaFileWriter;
 
 /**
- * schema-files/<kind>/<slug>: the boundary between the admin UI and the
+ * admin/schema-files/<kind>/<slug>: the boundary between the admin UI and the
  * theme's declaration files.
  */
 final class SchemaFilesRoutesTest extends ContentModelRoutesTestCase
 {
-    private const ROUTE = 'schema-files/(?P<kind>type|taxonomy|options)/(?P<slug>[a-z][a-z0-9_-]{0,63})';
+    private const ROUTE = 'admin/schema-files/(?P<kind>type|taxonomy|options)/(?P<slug>[a-z][a-z0-9_-]{0,63})';
 
     private function routes(bool $fileMods = true): SchemaFilesRoutes
     {
@@ -99,11 +99,11 @@ final class SchemaFilesRoutesTest extends ContentModelRoutesTestCase
     {
         $match = static fn (string $path): bool => preg_match('@^' . self::ROUTE . '$@i', $path) === 1;
 
-        foreach (['schema-files/type/../x', 'schema-files/type/a/b', 'schema-files/type/%2e%2e', 'schema-files/plugin/x', 'schema-files/type/', 'schema-files/type/.x'] as $path) {
+        foreach (['admin/schema-files/type/../x', 'admin/schema-files/type/a/b', 'admin/schema-files/type/%2e%2e', 'admin/schema-files/plugin/x', 'admin/schema-files/type/', 'admin/schema-files/type/.x'] as $path) {
             self::assertFalse($match($path), $path);
         }
-        self::assertTrue($match('schema-files/type/Product'));
-        self::assertTrue($match('schema-files/TYPE/product'));
+        self::assertTrue($match('admin/schema-files/type/Product'));
+        self::assertTrue($match('admin/schema-files/TYPE/product'));
 
         $routes = $this->routes();
         foreach (['Product', "product\n", 'post_type', 'abcdefghijklmnopqrstu'] as $slug) {
@@ -271,6 +271,74 @@ final class SchemaFilesRoutesTest extends ContentModelRoutesTestCase
         self::assertIsArray($result, json_encode($result) ?: '');
         self::assertFalse($result['created']);
         self::assertSame($next, file_get_contents($path));
+    }
+
+    public function testPutRefusesKeysNamingPhpCodeForEveryKind(): void
+    {
+        $cases = [
+            ['type', 'product', '{"name": "Product", "register_meta_box_cb": "phpinfo"}', '/register_meta_box_cb', 'proto-types/product/type.jsonc'],
+            ['type', 'book', '{"name": "Book", "taxonomies": [{"name": "Genre", "meta_box_sanitize_cb": "phpinfo"}]}', '/taxonomies/0/meta_box_sanitize_cb', 'proto-types/book/type.jsonc'],
+            ['taxonomy', 'genre', '{"name": "Genre", "update_count_callback": "phpinfo"}', '/update_count_callback', 'proto-taxonomies/genre/taxonomy.jsonc'],
+            ['options', 'theme-settings', '{"title": "Theme Settings", "rest_controller_class": "WP_REST_Posts_Controller"}', '/rest_controller_class', 'proto-options/theme-settings/page.jsonc'],
+        ];
+        foreach ($cases as [$kind, $slug, $text, $path, $file]) {
+            $error = self::assertWpError('proto_blocks_schema_invalid', 400, $this->routes()->save(self::request(
+                ['kind' => $kind, 'slug' => $slug],
+                ['text' => $text, 'hash' => null, 'acknowledge' => []]
+            )));
+            self::assertSame($path, $error->get_error_data()['errors'][0]['path'], $kind);
+            self::assertFileDoesNotExist($this->root . '/' . $file);
+        }
+    }
+
+    public function testPutRefusesMarkupInLabels(): void
+    {
+        $error = self::assertWpError('proto_blocks_schema_invalid', 400, $this->routes()->save(self::request(
+            ['kind' => 'type', 'slug' => 'product'],
+            ['text' => '{"name": "Product", "labels": {"add_new_item": "<img src=x onerror=alert(1)>"}}', 'hash' => null, 'acknowledge' => []]
+        )));
+        self::assertSame('/labels/add_new_item', $error->get_error_data()['errors'][0]['path']);
+        self::assertFileDoesNotExist($this->root . '/proto-types/product/type.jsonc');
+    }
+
+    public function testPutNewOverrideOfRegisteredTypeNeedsConfirmationForSupportsRemoval(): void
+    {
+        $GLOBALS['pb_test_post_types']['post'] = (object) ['name' => 'post', '_builtin' => true, 'labels' => []];
+        $GLOBALS['pb_test_supports']['post'] = ['title' => true, 'editor' => true, 'thumbnail' => true, 'excerpt' => true, 'comments' => true];
+        $this->posts['post'] = 1200;
+        $next = '{"supports": ["title", "thumbnail", "excerpt", "comments"]}';
+
+        $error = self::assertWpError('proto_blocks_needs_confirmation', 409, $this->routes()->save(self::request(
+            ['kind' => 'type', 'slug' => 'post'],
+            ['text' => $next, 'hash' => null, 'acknowledge' => []]
+        )));
+        $guardrails = $error->get_error_data()['guardrails'];
+        self::assertSame('supports_removed', $guardrails[0]['code']);
+        self::assertSame(['editor'], $guardrails[0]['detail']);
+        self::assertSame(1200, $guardrails[0]['count']);
+        self::assertFileDoesNotExist($this->root . '/proto-types/post/type.jsonc');
+
+        $result = $this->routes()->save(self::request(
+            ['kind' => 'type', 'slug' => 'post'],
+            ['text' => $next, 'hash' => null, 'acknowledge' => ['supports_removed']]
+        ));
+        self::assertIsArray($result, json_encode($result) ?: '');
+        self::assertTrue($result['created']);
+        self::assertSame($next, file_get_contents($this->root . '/proto-types/post/type.jsonc'));
+    }
+
+    public function testPutNewOverrideKeepingSupportsNeedsNoConfirmation(): void
+    {
+        $GLOBALS['pb_test_post_types']['post'] = (object) ['name' => 'post', '_builtin' => true, 'labels' => []];
+        $GLOBALS['pb_test_supports']['post'] = ['title' => true, 'editor' => true];
+        $this->posts['post'] = 1200;
+
+        $result = $this->routes()->save(self::request(
+            ['kind' => 'type', 'slug' => 'post'],
+            ['text' => '{"labels": {"menu_name": "News"}}', 'hash' => null, 'acknowledge' => []]
+        ));
+        self::assertIsArray($result, json_encode($result) ?: '');
+        self::assertTrue($result['created']);
     }
 
     // --- read ----------------------------------------------------------------

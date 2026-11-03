@@ -3,8 +3,8 @@
  * react-hook-form. It mirrors includes/ContentModel/SchemaCheck.php keyword
  * for keyword (type, enum, pattern, minLength, maxLength, minimum, maximum,
  * properties, required, additionalProperties, items, minItems, maxItems,
- * uniqueItems, anyOf, allOf, local `#/$defs/<name>` references; unknown keywords
- * ignored), including which anyOf branch's errors are reported, so the form
+ * uniqueItems, anyOf, allOf, local `#/$defs/<name>` references, `false` as a
+ * property's schema; unknown keywords ignored), including which anyOf branch's errors are reported, so the form
  * and the server agree on what is valid and where the problem is.
  */
 import { z } from 'zod';
@@ -20,7 +20,7 @@ export interface JsonSchema {
 	maxLength?: number;
 	minimum?: number;
 	maximum?: number;
-	properties?: Record<string, JsonSchema>;
+	properties?: Record<string, JsonSchema | false>;
 	required?: string[];
 	additionalProperties?: boolean | JsonSchema;
 	items?: JsonSchema;
@@ -142,7 +142,9 @@ function check(data: unknown, node: JsonSchema, root: JsonSchema, path: Path): C
 		for (const [key, value] of Object.entries(data)) {
 			const childPath = [...path, key];
 			const property = Object.prototype.hasOwnProperty.call(properties, key) ? properties[key] : undefined;
-			if (isObject(property)) {
+			if (property === false) {
+				errors.push({ path: childPath, message: __('Not allowed in a declaration file.', 'proto-blocks') });
+			} else if (isObject(property)) {
 				errors.push(...check(value, property as JsonSchema, root, childPath));
 			} else if (additional === false) {
 				errors.push({ path: childPath, message: __('Unknown property.', 'proto-blocks') });

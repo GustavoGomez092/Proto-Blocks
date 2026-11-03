@@ -20,7 +20,8 @@ use WP_Error;
  * Registers the admin/* routes of the proto-blocks/v1 namespace. Each
  * screen's routes live in their own class under includes/API/Admin, listed
  * in ROUTE_GROUPS; every route is gated on manage_options, and routes that
- * write files additionally on AdminPage::fileModsAllowed().
+ * write files additionally on AdminPage::fileModsAllowed() and, on
+ * multisite, on the user being a super admin (canWriteCode()).
  */
 final class AdminRestController
 {
@@ -80,16 +81,37 @@ final class AdminRestController
 
     /**
      * Routes that write files: also blocked by DISALLOW_FILE_MODS /
-     * DISALLOW_FILE_EDIT. A missing capability answers false (core's
-     * rest_forbidden); disabled file mods answer the proto_blocks_file_mods
-     * error, which WordPress passes through to the client as-is.
+     * DISALLOW_FILE_EDIT, and on multisite limited to super admins. A
+     * missing capability answers false (core's rest_forbidden); disabled
+     * file mods answer the proto_blocks_file_mods error, which WordPress
+     * passes through to the client as-is.
      */
     public function writePermission(): bool|WP_Error
     {
-        if (!$this->permission()) {
+        if (!$this->permission() || !self::canWriteCode()) {
             return false;
         }
         return AdminPage::fileModsAllowed() ? true : self::fileModsError();
+    }
+
+    /**
+     * Whether the current user may write code files (theme declarations,
+     * templates). On a single site manage_options is enough (checked by the
+     * caller); on multisite a sub-site Administrator has manage_options but
+     * the theme is shared by the network, so only a super admin may.
+     */
+    public static function canWriteCode(): bool
+    {
+        return !is_multisite() || is_super_admin();
+    }
+
+    /**
+     * File writes allowed for this request: file mods are on and the user
+     * may write code (canWriteCode()).
+     */
+    public static function fileWritesAllowed(): bool
+    {
+        return AdminPage::fileModsAllowed() && self::canWriteCode();
     }
 
     /**
