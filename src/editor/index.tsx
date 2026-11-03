@@ -13,6 +13,7 @@ import { InnerBlocks } from '@wordpress/block-editor';
 import { createElement } from '@wordpress/element';
 import { SVG, Path } from '@wordpress/primitives';
 import { getBlockIcon } from './utils/icon-utils';
+import '../fields/bindings/register';
 
 // Get data from PHP
 const protoBlocksData = window.protoBlocksData;

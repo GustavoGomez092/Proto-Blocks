@@ -36,6 +36,7 @@ declare(strict_types=1);
  *   pb_test_transients[$key]      ['value' => ..., 'expiration' => int]
  *   pb_test_meta_boxes[]          add_meta_box calls
  *   pb_test_bindings[$name]       register_block_bindings_source properties
+ *   pb_test_public_types          list of publicly viewable post types (unset = all)
  *   pb_test_queried_object, pb_test_current_post, pb_test_block_editor, pb_test_bloginfo
  */
 
@@ -340,7 +341,12 @@ if (!function_exists('is_post_publicly_viewable')) {
     function is_post_publicly_viewable($post = null)
     {
         $p = get_post($post);
-        return $p !== null && ($p->post_status ?? '') === 'publish';
+        if ($p === null || ($p->post_status ?? '') !== 'publish') {
+            return false;
+        }
+        // pb_test_public_types, when set, lists the publicly viewable post types.
+        return !isset($GLOBALS['pb_test_public_types'])
+            || in_array((string) ($p->post_type ?? ''), (array) $GLOBALS['pb_test_public_types'], true);
     }
 }
 if (!function_exists('post_type_supports')) {

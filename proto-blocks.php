@@ -4,7 +4,7 @@
  * Plugin URI: https://github.com/GustavoGomez092/proto-blocks
  * Description: Create Gutenberg blocks using PHP/HTML templates instead of React. A modern, performant alternative to complex JavaScript block development.
  * Version: 2.14.5
- * Requires at least: 6.3
+ * Requires at least: 6.5
  * Requires PHP: 8.1
  * Author: Gustavo Gomez
  * Author URI: https://github.com/GustavoGomez092
@@ -80,10 +80,10 @@ function init(): void
 
     // Check WordPress version
     global $wp_version;
-    if (version_compare($wp_version, '6.3', '<')) {
+    if (version_compare($wp_version, '6.5', '<')) {
         add_action('admin_notices', function (): void {
             echo '<div class="error"><p>';
-            echo esc_html__('Proto-Blocks requires WordPress 6.3 or higher. Please upgrade WordPress.', 'proto-blocks');
+            echo esc_html__('Proto-Blocks requires WordPress 6.5 or higher. Please upgrade WordPress.', 'proto-blocks');
             echo '</p></div>';
         });
         return;
