@@ -110,14 +110,45 @@ class AjaxHandler
         // paths are identical).
         $attributes = self::sanitizePreviewAttributes($attributes, $metadata);
 
+        // Optional post context, validated like the REST route's postId
+        // (digits only, edit_post, post exists); ignored otherwise.
+        $postId = isset($_POST['post_id']) ? wp_unslash($_POST['post_id']) : null;
+
         try {
-            $html = $this->engine->renderPreview($templatePath, $attributes, $metadata);
+            $html = self::renderWithPreviewPost(
+                $postId,
+                fn(): string => $this->engine->renderPreview($templatePath, $attributes, $metadata)
+            );
             wp_send_json_success(['html' => $html]);
         } catch (\Throwable $e) {
             if (PROTO_BLOCKS_DEBUG) {
                 wp_send_json_error($e->getMessage(), 500);
             } else {
                 wp_send_json_error(__('Failed to generate preview.', 'proto-blocks'), 500);
+            }
+        }
+    }
+
+    /**
+     * Run $render with the preview post (if the user may edit it) as the
+     * global post, restoring the previous global afterwards. Shared by the
+     * admin-ajax preview and the REST /preview route.
+     */
+    public static function renderWithPreviewPost(mixed $postId, callable $render): mixed
+    {
+        $previousPost = $GLOBALS['post'] ?? null;
+        $postSet = RestAPI::setupPreviewPost($postId);
+
+        try {
+            return $render();
+        } finally {
+            if ($postSet) {
+                $GLOBALS['post'] = $previousPost;
+                if ($previousPost instanceof \WP_Post) {
+                    setup_postdata($previousPost);
+                } elseif (function_exists('wp_reset_postdata')) {
+                    wp_reset_postdata();
+                }
             }
         }
     }
