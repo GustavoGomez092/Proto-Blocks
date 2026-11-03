@@ -14,6 +14,7 @@ use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 use ProtoBlocks\Admin\AdminPage;
+use ProtoBlocks\API\Admin\DashboardRoutes;
 use ProtoBlocks\API\Admin\SystemRoutes;
 use ProtoBlocks\API\AdminRestController;
 use ProtoBlocks\Template\Cache;
@@ -163,5 +164,50 @@ final class AdminRestControllerTest extends TestCase
         self::assertSame(400, $error->get_error_data()['status']);
 
         self::assertInstanceOf(\WP_Error::class, SystemRoutes::validateCategoryName(['x']));
+    }
+
+    public function testExampleBlocksStateLockedByConfig(): void
+    {
+        self::assertSame(
+            ['enabled' => true, 'locked' => true],
+            AdminRestController::exampleBlocksState(true, true, false)
+        );
+    }
+
+    public function testExampleBlocksStateFromOption(): void
+    {
+        self::assertSame(
+            ['enabled' => true, 'locked' => false],
+            AdminRestController::exampleBlocksState(false, false, '1')
+        );
+        self::assertSame(
+            ['enabled' => false, 'locked' => false],
+            AdminRestController::exampleBlocksState(false, true, false)
+        );
+    }
+
+    public function testValidateDemoTypeRejectsUnknown(): void
+    {
+        $error = AdminRestController::validateDemoType('all', true);
+
+        self::assertInstanceOf(\WP_Error::class, $error);
+        self::assertSame('proto_blocks_invalid_type', $error->get_error_code());
+        self::assertSame(400, $error->get_error_data()['status']);
+    }
+
+    public function testValidateDemoTypeRequiresTailwind(): void
+    {
+        $error = AdminRestController::validateDemoType('tailwind', false);
+
+        self::assertInstanceOf(\WP_Error::class, $error);
+        self::assertSame('proto_blocks_tailwind_disabled', $error->get_error_code());
+        self::assertSame(409, $error->get_error_data()['status']);
+        self::assertNull(AdminRestController::validateDemoType('tailwind', true));
+        self::assertNull(AdminRestController::validateDemoType('vanilla', false));
+    }
+
+    public function testRouteGroupsListDashboardRoutes(): void
+    {
+        self::assertContains(DashboardRoutes::class, AdminRestController::ROUTE_GROUPS);
     }
 }
