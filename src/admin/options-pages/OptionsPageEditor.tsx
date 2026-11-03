@@ -258,7 +258,7 @@ function PageForm({ slug, file, detail, save, remove, reload, onSaved, onDeleted
 					{view === 'jsonc' ? (
 						<JsoncView path={file.path} text={preview} label={__('File text that Save writes', 'proto-blocks')} />
 					) : null}
-					<div hidden={view === 'jsonc'} className="grid gap-6">
+					<div hidden={view === 'jsonc'} className={view === 'jsonc' ? 'hidden' : 'grid gap-6'}>
 					<FormPanel>
 					<Section title={__('Page', 'proto-blocks')}>
 						<div className="grid gap-1.5">
