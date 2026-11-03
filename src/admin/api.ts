@@ -14,12 +14,15 @@ import { getBootstrap } from './bootstrap';
 export class ApiError extends Error {
 	code: string;
 	status: number;
+	/** The WP_Error data object without `status`; {} when the error had none. */
+	data: Record<string, unknown>;
 
-	constructor(code: string, message: string, status: number) {
+	constructor(code: string, message: string, status: number, data: Record<string, unknown> = {}) {
 		super(message);
 		this.name = 'ApiError';
 		this.code = code;
 		this.status = status;
+		this.data = data;
 	}
 }
 
@@ -44,7 +47,8 @@ function toApiError(error: unknown): ApiError {
 	const code = typeof e.code === 'string' && e.code !== '' ? e.code : 'unknown_error';
 	const message = typeof e.message === 'string' ? e.message : String(error);
 	const status = typeof e.data?.status === 'number' ? e.data.status : 0;
-	return new ApiError(code, message, status);
+	const { status: _status, ...data } = e.data !== null && typeof e.data === 'object' && !Array.isArray(e.data) ? e.data : {};
+	return new ApiError(code, message, status, data);
 }
 
 async function request<T>({ path, ...options }: { path: string; method: string; data?: unknown }): Promise<T> {

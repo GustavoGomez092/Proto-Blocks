@@ -15,6 +15,8 @@ export const SCREENS: Partial<Record<Screen, ScreenComponent>> = {
 	dashboard: lazy(() => import('./DashboardScreen')),
 	tailwind: lazy(() => import('./TailwindScreen')),
 	previews: lazy(() => import('./PreviewsScreen')),
+	'post-types': lazy(() => import('./PostTypesScreen')),
+	taxonomies: lazy(() => import('./TaxonomiesScreen')),
 };
 
 /** Screen name as shown in the WordPress menu, for headings and errors. */
@@ -30,6 +32,10 @@ export function screenLabel(screen: string): string {
 			return __('Preview Capture', 'proto-blocks');
 		case 'wizard':
 			return __('Setup Wizard', 'proto-blocks');
+		case 'post-types':
+			return __('Post Types', 'proto-blocks');
+		case 'taxonomies':
+			return __('Taxonomies', 'proto-blocks');
 		default:
 			return screen;
 	}
