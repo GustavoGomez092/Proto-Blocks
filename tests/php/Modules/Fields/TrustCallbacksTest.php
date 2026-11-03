@@ -200,6 +200,32 @@ final class TrustCallbacksTest extends TestCase
         $this->assertSame(['<script>new()</script>'], $GLOBALS['pb_test_meta']['post'][11]['snippet']);
     }
 
+    public function testUpdateByMidRenameOfACodeRowIsRefused(): void
+    {
+        $GLOBALS['pb_test_meta']['post'][11]['snippet'] = ['<script>ok()</script>'];
+        $GLOBALS['pb_test_meta']['post'][11]['subtitle'] = ['Hi'];
+        $GLOBALS['pb_test_meta_rows'] = [
+            501 => (object) ['meta_id' => 501, 'post_id' => 11, 'meta_key' => 'snippet', 'meta_value' => '<script>ok()</script>'],
+            502 => (object) ['meta_id' => 502, 'post_id' => 11, 'meta_key' => 'subtitle', 'meta_value' => 'Hi'],
+        ];
+        $this->register(self::field('code', 'snippet'));
+        $this->register(self::field('text', 'subtitle'));
+
+        // Renaming the code row away (it would vanish) and renaming a text row onto the code key.
+        $this->assertFalse(update_metadata_by_mid('post', 501, 'x', 'subtitle'));
+        $this->assertFalse(update_metadata_by_mid('post', 502, '<script>evil()</script>', 'snippet'));
+        $this->assertSame(['<script>ok()</script>'], $GLOBALS['pb_test_meta']['post'][11]['snippet']);
+        $this->assertSame(['Hi'], $GLOBALS['pb_test_meta']['post'][11]['subtitle']);
+        $this->assertSame('snippet', $GLOBALS['pb_test_meta_rows'][501]->meta_key);
+        $this->assertSame('subtitle', $GLOBALS['pb_test_meta_rows'][502]->meta_key);
+
+        $this->as(self::ADMIN);
+        $this->assertTrue(update_metadata_by_mid('post', 501, '<script>ok()</script>', 'old_snippet'));
+        $this->assertSame('old_snippet', $GLOBALS['pb_test_meta_rows'][501]->meta_key);
+        $this->assertArrayNotHasKey('snippet', $GLOBALS['pb_test_meta']['post'][11]);
+        $this->assertSame(['<script>ok()</script>'], $GLOBALS['pb_test_meta']['post'][11]['old_snippet']);
+    }
+
     public function testNoValueFromAnotherObjectLeaks(): void
     {
         $GLOBALS['pb_test_meta']['post'][11]['snippet'] = ['<script>ok()</script>'];

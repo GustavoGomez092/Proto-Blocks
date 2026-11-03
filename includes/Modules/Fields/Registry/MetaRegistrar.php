@@ -28,8 +28,10 @@ use ProtoBlocks\OptionsPages\ProtectedOptions;
  * Custom Fields panel never lists or edits them; REST writes still work
  * because the auth callback decides on its own.
  *
- * User fields may not use core's sensitive user-meta keys (`<prefix>capabilities`,
- * `<prefix>user_level`, multisite `<base prefix><n>_capabilities`, `session_tokens`):
+ * User fields may not use core's sensitive user-meta keys: `session_tokens`,
+ * `<blog prefix>capabilities|user_level`, and `<base prefix>capabilities|user_level`
+ * plus `<base prefix><n>_capabilities|user_level` on multisite (main site and
+ * every subsite):
  * they are refused with a `protected_meta_key` warning. Post and term keys
  * need no such list: field names start with a letter (GroupValidator::
  * NAME_PATTERN), so core's underscore-prefixed keys (`_edit_lock`,

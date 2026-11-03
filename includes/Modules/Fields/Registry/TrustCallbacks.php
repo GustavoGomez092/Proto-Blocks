@@ -22,7 +22,8 @@ use ProtoBlocks\Security\AttributeSanitizer;
  *
  * - Meta: guard() marks the key per kind and subtype; hook() adds
  *   short-circuit filters on add_/update_/delete_{type}_metadata and
- *   update_{type}_metadata_by_mid. They receive the real object, run before
+ *   update_{type}_metadata_by_mid (which checks the row's current key and
+ *   any new key it would be renamed to). They receive the real object, run before
  *   any row is touched, and return false (refused) for an untrusted writer,
  *   so the stored value stays exactly as it is and a refusal is recorded.
  *   WordPress gives sanitize callbacks no object ID, so the meta sanitize
@@ -84,13 +85,25 @@ final class TrustCallbacks
             add_filter("update_{$kind}_metadata", $byObject, self::GUARD_PRIORITY, 3);
             add_filter("delete_{$kind}_metadata", $byObject, self::GUARD_PRIORITY, 3);
             add_filter("update_{$kind}_metadata_by_mid", function ($check, $metaId = 0, $value = null, $metaKey = false) use ($kind) {
-                // update_metadata_by_mid() passes false when the caller omits the key; core then
-                // writes under the row's own key, so the guard must check that key.
+                // Core writes under the row's current key when $metaKey is false, and RENAMES the
+                // row when a new key is passed, so both the row's key and the passed key are
+                // checked; either being code-bearing refuses the write. With no row the object
+                // is unknown and a guarded key on any subtype refuses (core cannot update a
+                // missing row anyway).
                 $row = $this->metaRow($kind, (int) $metaId);
-                $key = is_string($metaKey) && $metaKey !== '' ? $metaKey : (string) ($row->meta_key ?? '');
                 $objectId = $row !== null ? (int) ($row->{$kind . '_id'} ?? 0) : 0;
+                $keys = array_unique(array_filter([
+                    $row !== null ? (string) ($row->meta_key ?? '') : '',
+                    is_string($metaKey) ? $metaKey : '',
+                ], static fn(string $k): bool => $k !== ''));
+                $result = $check;
+                foreach ($keys as $key) {
+                    if ($this->guardWrite($check, $kind, $objectId, $key) === false) {
+                        $result = false;
+                    }
+                }
 
-                return $this->guardWrite($check, $kind, $objectId, $key);
+                return $result;
             }, self::GUARD_PRIORITY, 4);
         }
     }

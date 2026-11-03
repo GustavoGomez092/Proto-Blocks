@@ -180,7 +180,11 @@ if (!function_exists('get_metadata_by_mid')) {
     }
 }
 if (!function_exists('update_metadata_by_mid')) {
-    /** Core order: short-circuit filter with the given key (false when omitted), then the row's key is used. */
+    /**
+     * Core order: short-circuit filter with the given key (false when omitted), then
+     * the write; a different string key RENAMES the row (pb_test_meta and
+     * pb_test_meta_rows are kept in sync).
+     */
     function update_metadata_by_mid($meta_type, $meta_id, $meta_value, $meta_key = false)
     {
         $check = pb_test_apply_hooks("update_{$meta_type}_metadata_by_mid", null, (int) $meta_id, $meta_value, $meta_key);
@@ -191,8 +195,16 @@ if (!function_exists('update_metadata_by_mid')) {
         if (!$row) {
             return false;
         }
-        $key = $meta_key === false ? $row->meta_key : (string) $meta_key;
-        $GLOBALS['pb_test_meta'][$meta_type][(int) $row->{$meta_type . '_id'}][$key] = [wp_unslash($meta_value)];
+        $objectId = (int) $row->{$meta_type . '_id'};
+        $old = (string) $row->meta_key;
+        $key = is_string($meta_key) && $meta_key !== '' ? $meta_key : $old;
+        if ($key !== $old) {
+            unset($GLOBALS['pb_test_meta'][$meta_type][$objectId][$old]);
+        }
+        $value = wp_unslash($meta_value);
+        $GLOBALS['pb_test_meta'][$meta_type][$objectId][$key] = [$value];
+        $row->meta_key = $key;
+        $row->meta_value = $value;
         return true;
     }
 }
