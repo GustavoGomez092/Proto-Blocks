@@ -26,3 +26,16 @@ fresh copy into `wp-content/themes` (the screens write into the theme), activate
 restores the previous theme afterwards. `tests/e2e/fixtures/parity.php` is the in-WordPress
 parity check (`npx wp-env run tests-cli wp eval-file wp-content/pb-e2e-fixtures/parity.php`).
 The committed content-model baselines were generated on macOS (`-chromium-darwin`).
+
+The settings-page spec (`options-page`) uses the `pb-e2e-options` mu-plugin
+(`tests/e2e/fixtures/mu-plugins`, mapped into `wp-content/mu-plugins`). It adds
+`wp-content/pb-e2e` (the same fixtures folder, mapped a second time) to
+`proto_blocks_schema_paths`, so `tests/e2e/fixtures/proto-options` declares the
+`theme-settings` and `shop-notices` pages, and `wp-content/pb-e2e/blocks` to
+`proto_blocks_paths` for the `options-probe` block. On first load it also creates
+a `product` type (without WooCommerce), the `pb_shop_manager` role
+(`manage_woocommerce`, no `unfiltered_html`) and its test-site user `shopmanager`.
+These add admin menu items on every screen, so full-page admin baselines include them.
+The Fields module's `sanitize_option` trust callback strips markup for writers
+without `unfiltered_html` (WP-CLI's default user 0), so the spec seeds option values
+with `wp eval --user=admin`.
