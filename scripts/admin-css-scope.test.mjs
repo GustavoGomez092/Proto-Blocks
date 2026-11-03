@@ -7,10 +7,12 @@ import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const postcss = require('postcss');
-const scopePlugin = require('./postcss/scope-admin-utilities.js');
+const scopeUtilities = require('./postcss/scope-utilities.js');
+const ADMIN_ROOTS = ['#proto-blocks-admin', '#proto-blocks-admin-portal'];
+const scopePlugin = () => scopeUtilities({ files: { 'admin/styles/admin.css': ADMIN_ROOTS } });
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SCOPE = scopePlugin.SCOPE;
+const SCOPE = `:where(${ADMIN_ROOTS.join(', ')})`;
 
 function run(css, from = '/x/src/admin/styles/admin.css') {
 	return postcss([scopePlugin()]).process(css, { from }).css;
