@@ -17,6 +17,7 @@ if (!function_exists('get_option')) {
 if (!function_exists('update_option')) {
     function update_option($name, $value, $autoload = null)
     {
+        $GLOBALS['pb_test_update_calls'] = ($GLOBALS['pb_test_update_calls'] ?? 0) + 1;
         $GLOBALS['pb_test_options'][$name] = $value;
         $GLOBALS['pb_test_autoload'][$name] = $autoload;
         return true;
