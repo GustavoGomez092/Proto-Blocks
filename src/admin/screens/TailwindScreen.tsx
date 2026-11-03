@@ -162,7 +162,7 @@ function CliStatus({ status }: { status: TailwindStatus }) {
 		browser: {
 			icon: <MonitorCheckIcon />,
 			tone: 'text-success',
-			text: __('Browser engine (CLI not used)', 'proto-blocks'),
+			text: __('Browser compiler', 'proto-blocks'),
 		},
 		functional: {
 			icon: <CircleCheckIcon />,
