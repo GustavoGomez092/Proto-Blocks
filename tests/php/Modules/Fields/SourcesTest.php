@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Tests\Modules\Fields;
 
-use PHPUnit\Framework\TestCase;
 use ProtoBlocks\ContentModel\Jsonc;
 use ProtoBlocks\Modules\Fields\Definition\FieldGroup;
 use ProtoBlocks\Modules\Fields\FieldsModule;
@@ -15,7 +14,7 @@ use ProtoBlocks\Modules\Fields\Sources\PhpGroups;
 
 require_once __DIR__ . '/wp-stubs.php';
 
-final class SourcesTest extends TestCase
+final class SourcesTest extends FieldsTestCase
 {
     public const THEME = __DIR__ . '/fixtures/theme';
 
@@ -23,9 +22,7 @@ final class SourcesTest extends TestCase
 
     protected function setUp(): void
     {
-        PhpGroups::reset();
-        $GLOBALS['pb_test_actions'] = [];
-        $GLOBALS['pb_test_hooks'] = [];
+        parent::setUp();
         $tmp = sys_get_temp_dir() . '/pb-fields-sources-' . bin2hex(random_bytes(6));
         mkdir($tmp);
         $this->tmp = (string) realpath($tmp);
@@ -33,11 +30,8 @@ final class SourcesTest extends TestCase
 
     protected function tearDown(): void
     {
-        PhpGroups::reset();
-        FieldReader::setShared(null);
-        $GLOBALS['pb_test_actions'] = [];
-        $GLOBALS['pb_test_hooks'] = [];
         self::removeTree($this->tmp);
+        parent::tearDown();
     }
 
     /** A test-local JSONC decoder: comments and trailing commas stripped, any root. */

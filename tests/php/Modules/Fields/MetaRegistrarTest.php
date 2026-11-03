@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Tests\Modules\Fields;
 
-use PHPUnit\Framework\TestCase;
 use ProtoBlocks\Modules\Fields\Definition\FieldGroup;
 use ProtoBlocks\Modules\Fields\Definition\GroupNormalizer;
 use ProtoBlocks\Modules\Fields\Registry\GroupIndex;
@@ -16,29 +15,9 @@ use ProtoBlocks\Modules\Fields\Types\TypeRegistry;
 require_once __DIR__ . '/wp-stubs.php';
 require_once __DIR__ . '/stubs/Structured.php';
 
-final class MetaRegistrarTest extends TestCase
+final class MetaRegistrarTest extends FieldsTestCase
 {
     private const FIXTURES = __DIR__ . '/../../../fixtures/fields';
-
-    protected function setUp(): void
-    {
-        foreach (['pb_test_filters', 'pb_test_hooks', 'pb_test_meta_reg', 'pb_test_supports', 'pb_test_meta', 'pb_test_posts', 'pb_test_object_terms', 'pb_test_terms', 'pb_test_users'] as $g) {
-            $GLOBALS[$g] = [];
-        }
-        $GLOBALS['pb_test_current_user'] = 0;
-        unset($GLOBALS['wp_version']);
-    }
-
-    protected function tearDown(): void
-    {
-        // Leave no registered meta / hooks behind for tests that assert a clean slate.
-        foreach (['pb_test_filters', 'pb_test_hooks', 'pb_test_meta_reg', 'pb_test_supports', 'pb_test_meta', 'pb_test_posts', 'pb_test_object_terms', 'pb_test_terms', 'pb_test_users'] as $g) {
-            $GLOBALS[$g] = [];
-        }
-        unset($GLOBALS['wp_version']);
-        $GLOBALS['pb_test_current_user'] = 0;
-        $GLOBALS['pb_test_caps'] = [];
-    }
 
     /** @return list<FieldGroup> */
     private static function realistic(): array
