@@ -12,8 +12,11 @@ if (!function_exists('proto_options_page')) {
      * Declare a settings page in PHP.
      *
      * The page slug comes from the title (or `$args['slug']`). The declaration
-     * is only recorded here; validation happens when the registry loads it, so a
-     * bad declaration never fatals the site at include time.
+     * is only recorded (as a Phase 1 PHP declaration of kind `options`, so a
+     * `proto-options/<slug>/page.jsonc` file of the same slug wins);
+     * validation happens when the registry loads it, so a bad declaration never
+     * fatals the site at include time. Declare before `init` priority 9, like
+     * proto_post_type().
      *
      * @param string $title Page title.
      * @param array  $args  Same keys as a page.jsonc file (menu, capability, fields, ...).
@@ -23,7 +26,6 @@ if (!function_exists('proto_options_page')) {
         $slug = isset($args['slug']) && is_string($args['slug'])
             ? $args['slug']
             : \ProtoBlocks\OptionsPages\PageDefinition::slugFromTitle($title);
-        unset($args['slug']);
 
         if ($slug === null) {
             if (function_exists('_doing_it_wrong')) {
@@ -37,11 +39,13 @@ if (!function_exists('proto_options_page')) {
         }
 
         $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1);
-        $source = isset($trace[0]['file']) ? $trace[0]['file'] . ':' . ($trace[0]['line'] ?? 0) : null;
+        $source = isset($trace[0]['file']) ? $trace[0]['file'] . ':' . ($trace[0]['line'] ?? 0) : 'unknown:0';
 
-        $GLOBALS['proto_blocks_php_options_pages'][$slug] = [
-            'data' => $args + ['title' => $title],
-            'source' => $source,
-        ];
+        \ProtoBlocks\ContentModel\PhpDeclarations::add(
+            \ProtoBlocks\ContentModel\Declaration::OPTIONS,
+            $title,
+            ['slug' => $slug] + $args,
+            $source
+        );
     }
 }

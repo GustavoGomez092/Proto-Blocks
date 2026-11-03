@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\ContentModel;
 
+use ProtoBlocks\OptionsPages\PageTemplate;
+
 /**
  * The commented JSONC a new declaration file starts from.
  *
@@ -15,6 +17,9 @@ final class DeclarationTemplate
 {
     public static function render(string $kind, string $name, ?string $slug = null): string
     {
+        if ($kind === Declaration::OPTIONS) {
+            return PageTemplate::render($name, $slug === null ? [] : ['slug' => $slug]);
+        }
         if ($kind !== Declaration::TYPE && $kind !== Declaration::TAXONOMY) {
             throw new \InvalidArgumentException('Unknown declaration kind: ' . $kind);
         }
