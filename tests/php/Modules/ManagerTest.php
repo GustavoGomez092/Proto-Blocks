@@ -193,6 +193,19 @@ final class ManagerTest extends TestCase
         $this->assertArrayNotHasKey('proto_blocks_declaration_errors', $GLOBALS['pb_test_hooks']);
         $this->assertArrayNotHasKey('after_setup_theme', $GLOBALS['pb_test_hooks']);
         $this->assertInstanceOf(PostTypes::class, $manager->postTypes(), 'post types still boot');
+
+        // instance() hands out an inert stand-in, not a live wired module.
+        $this->write('proto-fields/a/group.json', '{"key": "group_a", "title": "A", "location": [[{"param": "post_type", "operator": "==", "value": "post"}]], "fields": [{"key": "f", "name": "a", "type": "text"}]}');
+        $GLOBALS['pb_test_actions']['init'][] = [];
+        $standIn = FieldsModule::instance();
+        $this->assertFalse($standIn->isEnabled());
+        $this->assertSame([], $standIn->index()->all());
+        $hooksBefore = $GLOBALS['pb_test_hooks'];
+        $standIn->boot();
+        $standIn->registerMeta();
+        $this->assertSame($hooksBefore, $GLOBALS['pb_test_hooks'], 'boot() and registerMeta() hook nothing');
+        $this->assertSame([], $GLOBALS['pb_test_meta_reg'] ?? []);
+        $this->assertNull(FieldReader::shared());
     }
 
     public function testFieldsSourcesAreWiredToTheContentModel(): void

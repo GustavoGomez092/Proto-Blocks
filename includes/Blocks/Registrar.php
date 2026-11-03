@@ -425,8 +425,13 @@ class Registrar
             // Get preview image URL if exists
             $previewImageUrl = null;
             if (!empty($protoConfig['previewImage'])) {
-                $previewBase = $this->getAssetUrl(dirname($protoConfig['previewImage']));
-                $previewImageUrl = $previewBase !== '' ? $previewBase . '/' . basename($protoConfig['previewImage']) : null;
+                $uploadsPreview = \ProtoBlocks\Admin\PreviewCapture::uploadsPreviewFor((string) ($protoConfig['blockDir'] ?? ''));
+                if ($uploadsPreview !== null && $uploadsPreview['path'] === $protoConfig['previewImage']) {
+                    $previewImageUrl = $uploadsPreview['url'];
+                } else {
+                    $previewBase = $this->getAssetUrl(dirname($protoConfig['previewImage']));
+                    $previewImageUrl = $previewBase !== '' ? $previewBase . '/' . basename($protoConfig['previewImage']) : null;
+                }
             }
 
             $data[] = [

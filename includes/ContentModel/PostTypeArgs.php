@@ -39,6 +39,7 @@ final class PostTypeArgs
         if ($issues !== []) {
             return ['args' => [], 'issues' => $issues];
         }
+        [$d, $warnings] = UntrustedKeys::filter($d, '#/$defs/type');
 
         $data = $d->data;
         $name = $d->name() ?? $d->slug;
@@ -58,7 +59,7 @@ final class PostTypeArgs
             'taxonomies'      => self::stringTaxonomies($data['taxonomies'] ?? []),
         ];
 
-        return self::apply($args, $d, $themeDir, $themeUrl);
+        return self::withWarnings(self::apply($args, $d, $themeDir, $themeUrl), $warnings);
     }
 
     /**
@@ -74,8 +75,19 @@ final class PostTypeArgs
         if ($issues !== []) {
             return ['args' => $existing, 'issues' => $issues];
         }
+        [$d, $warnings] = UntrustedKeys::filter($d, '#/$defs/type');
 
-        return self::apply($existing, $d, $themeDir, $themeUrl);
+        return self::withWarnings(self::apply($existing, $d, $themeDir, $themeUrl), $warnings);
+    }
+
+    /**
+     * @param array{args: array<string, mixed>, issues: list<Issue>} $result
+     * @param list<Issue> $warnings
+     * @return array{args: array<string, mixed>, issues: list<Issue>}
+     */
+    private static function withWarnings(array $result, array $warnings): array
+    {
+        return ['args' => $result['args'], 'issues' => array_merge($warnings, $result['issues'])];
     }
 
     /**
@@ -92,7 +104,8 @@ final class PostTypeArgs
         }
 
         $issues = [];
-        foreach (SchemaCheck::validate($d->data, SchemaCheck::schema(), $ref) as $error) {
+        // Trusted code may set keys and label text a file cannot (UntrustedKeys).
+        foreach (SchemaCheck::validate(UntrustedKeys::forSchemaCheck($d->data), SchemaCheck::schema(), $ref) as $error) {
             $path = $error['path'] === '' ? '/' : $error['path'];
             $issues[] = new Issue(Issue::ERROR, 'schema_invalid', $path . ': ' . $error['message'], $d->source, $d->slug, $d->kind);
         }

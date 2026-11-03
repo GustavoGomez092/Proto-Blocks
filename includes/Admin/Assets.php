@@ -480,8 +480,13 @@ JS;
                 // Get preview image URL if exists
                 $previewImageUrl = null;
                 if (!empty($protoConfig['previewImage'])) {
-                    $url = $this->pathToUrl($protoConfig['previewImage']);
-                    $previewImageUrl = $url !== '' ? $url : null;
+                    $uploadsPreview = \ProtoBlocks\Admin\PreviewCapture::uploadsPreviewFor((string) ($protoConfig['blockDir'] ?? ''));
+                    if ($uploadsPreview !== null && $uploadsPreview['path'] === $protoConfig['previewImage']) {
+                        $previewImageUrl = $uploadsPreview['url'];
+                    } else {
+                        $url = $this->pathToUrl($protoConfig['previewImage']);
+                        $previewImageUrl = $url !== '' ? $url : null;
+                    }
                 }
 
                 $data[] = [

@@ -77,6 +77,8 @@ export interface TailwindData {
 		preview: string;
 		dirWritable?: boolean;
 	};
+	/** Compiled CSS size in bytes. */
+	cssSize?: number;
 	cssSizeFormatted: string;
 }
 
@@ -114,24 +116,27 @@ function engineLabel(engine: Engine): string {
 	}
 }
 
-/** "4 minutes ago" in the browser's locale, or "Never". */
-function lastCompiledLabel(timestamp: number | null): string {
+/** "just now" under a minute, then "4 minutes ago" in the browser's locale, or "Never". */
+export function lastCompiledLabel(timestamp: number | null, now: number = Date.now()): string {
 	if (!timestamp) {
 		return __('Never', 'proto-blocks');
 	}
-	const seconds = Math.round(timestamp - Date.now() / 1000);
+	const seconds = Math.round(timestamp - now / 1000);
+	if (Math.abs(seconds) < 60) {
+		return __('just now', 'proto-blocks');
+	}
 	const units: [Intl.RelativeTimeFormatUnit, number][] = [
 		['day', 86400],
 		['hour', 3600],
 		['minute', 60],
 	];
-	const format = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+	const format = new Intl.RelativeTimeFormat(undefined, { numeric: 'always' });
 	for (const [unit, size] of units) {
 		if (Math.abs(seconds) >= size) {
 			return format.format(Math.round(seconds / size), unit);
 		}
 	}
-	return format.format(0, 'minute');
+	return __('just now', 'proto-blocks');
 }
 
 type CliState = 'browser' | 'functional' | 'mismatch' | 'unverified' | 'not_runnable' | 'missing';
@@ -194,7 +199,7 @@ function CliStatus({ status }: { status: TailwindStatus }) {
 	const { icon, tone, text } = view[state];
 
 	return (
-		<dd className={cn('mt-1 flex items-center gap-2 font-medium [&_svg]:size-4 [&_svg]:flex-none', tone)}>
+		<dd className={cn('mt-1 ml-0 flex items-center justify-start gap-2 text-left font-medium [&_svg]:size-4 [&_svg]:flex-none', tone)}>
 			<span aria-hidden="true" className="contents">
 				{icon}
 			</span>
@@ -600,7 +605,7 @@ function StatusCard({
 					<div className="grid grid-cols-2 gap-3">
 						<div className={tile}>
 							<dt className={overline}>{__('Last Compiled', 'proto-blocks')}</dt>
-							<dd className="mt-1 font-medium tabular-nums">{lastCompiledLabel(data.settings.lastCompiled)}</dd>
+							<dd className="mt-1 font-medium tabular-nums">{lastCompiledLabel(data.cssSize === 0 ? null : data.settings.lastCompiled)}</dd>
 						</div>
 						<div className={tile}>
 							<dt className={overline}>{__('CSS Size', 'proto-blocks')}</dt>
