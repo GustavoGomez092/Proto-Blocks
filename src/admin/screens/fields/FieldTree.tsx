@@ -76,7 +76,7 @@ function fieldListAt(fields: RawField[], parent: FieldPath | null, layout?: numb
 	return layout !== undefined && owner ? fieldsOf(layoutList(owner)[layout] ?? {}) : list;
 }
 
-function Row({ field, path, ctx }: { field: RawField; path: FieldPath; ctx: TreeContext }) {
+function Row({ field, path, count, ctx }: { field: RawField; path: FieldPath; count: number; ctx: TreeContext }) {
 	const id = rowId(field, path);
 	const sortable = useSortable({ id, disabled: ctx.readOnly });
 	const label = title(field);
@@ -84,6 +84,7 @@ function Row({ field, path, ctx }: { field: RawField; path: FieldPath; ctx: Tree
 	const open = !ctx.collapsed.has(id);
 	const selected = ctx.selectedKey === id;
 	const isLifted = ctx.lifted === id;
+	const required = Boolean(field.required) && field.required !== '0';
 	const handleRef = useRef<HTMLButtonElement | null>(null);
 
 	useEffect(() => {
@@ -122,22 +123,40 @@ function Row({ field, path, ctx }: { field: RawField; path: FieldPath; ctx: Tree
 		const layoutIndex = path.length >= 3 && path[path.length - 3] === 'layouts' ? (path[path.length - 2] as number) : undefined;
 		const siblings = fieldListAt(ctx.all, parent, layoutIndex);
 		let to: FieldPath | null = null;
+		// 1-based position and list size after the move, for the announcement.
+		let position = 0;
+		let size = 0;
 		if (event.key === 'ArrowUp' && index > 0) {
 			to = [...parentPath, index - 1];
+			[position, size] = [index, siblings.length];
 		} else if (event.key === 'ArrowDown' && index < siblings.length - 1) {
 			to = [...parentPath, index + 1];
+			[position, size] = [index + 2, siblings.length];
 		} else if (event.key === 'ArrowRight' && index > 0 && hasSubFields(siblings[index - 1])) {
-			to = [...parentPath, index - 1, fieldsOf(siblings[index - 1]).length];
+			const into = fieldsOf(siblings[index - 1]).length;
+			to = [...parentPath, index - 1, into];
+			[position, size] = [into + 1, into + 1];
 		} else if (event.key === 'ArrowLeft' && parent !== null) {
-			to = [...parent.slice(0, -1), (parent[parent.length - 1] as number) + 1];
+			const at = parent[parent.length - 1] as number;
+			const grand = parentFieldPath(parent);
+			const grandLayout = parent.length >= 3 && parent[parent.length - 3] === 'layouts' ? (parent[parent.length - 2] as number) : undefined;
+			to = [...parent.slice(0, -1), at + 1];
+			[position, size] = [at + 2, fieldListAt(ctx.all, grand, grandLayout).length + 1];
 		}
 		if (event.key.startsWith('Arrow')) {
 			event.preventDefault();
 		}
 		if (to) {
 			ctx.dispatch({ type: 'move', from: path, to });
-			/* translators: %s: field label */
-			ctx.announce(sprintf(__('Moved %s.', 'proto-blocks'), label));
+			ctx.announce(
+				sprintf(
+					/* translators: 1: field label, 2: new position, 3: number of fields in that list */
+					__('Moved %1$s to position %2$d of %3$d.', 'proto-blocks'),
+					label,
+					position,
+					size
+				)
+			);
 		}
 	};
 
@@ -189,10 +208,20 @@ function Row({ field, path, ctx }: { field: RawField; path: FieldPath; ctx: Tree
 					id={`pb-row-${id}`}
 					onClick={() => ctx.onSelect(path, id)}
 					aria-current={selected ? 'true' : undefined}
+					aria-label={
+						sprintf(
+							/* translators: 1: position, 2: number of fields in the list, 3: field label, 4: field type */
+							__('Field %1$d of %2$d, %3$s, %4$s', 'proto-blocks'),
+							(path[path.length - 1] as number) + 1,
+							count,
+							label,
+							typeLabel(field.type)
+						) + (required ? __(', required', 'proto-blocks') : '')
+					}
 					className="flex min-w-0 flex-1 items-center gap-2 rounded px-1.5 py-1 text-left text-sm hover:bg-muted/60"
 				>
 					<span className="truncate font-medium">{label}</span>
-					{field.required && field.required !== '0' ? (
+					{required ? (
 						<span className="text-destructive">
 							<span aria-hidden="true">*</span>
 							<span className="sr-only">{__('required', 'proto-blocks')}</span>
@@ -314,7 +343,7 @@ function FieldList({
 			<SortableContext items={ids} strategy={verticalListSortingStrategy}>
 				<ul aria-label={label} className="grid gap-1">
 					{fields.map((f, i) => (
-						<Row key={ids[i]} field={f} path={[...prefix, i]} ctx={ctx} />
+						<Row key={ids[i]} field={f} path={[...prefix, i]} count={fields.length} ctx={ctx} />
 					))}
 				</ul>
 			</SortableContext>

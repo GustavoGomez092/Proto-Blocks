@@ -48,6 +48,29 @@ export interface FieldGroupDetail {
 	roles: Choice[];
 	optionsPages: Choice[];
 	pageTemplates: Choice[];
+	/** Why the group cannot be saved here, when the server says (as in the list's GroupRow). */
+	readOnlyReason?: 'file_mods' | 'multisite' | 'not_writable' | 'acf' | 'inline' | null;
+}
+
+/** The new-group file slug grammar (the field-group kind's slug). */
+const NEW_SLUG = /^[a-z][a-z0-9_-]{0,31}$/;
+
+/** A title as a valid file slug: 'Event details' → 'event-details'. */
+function sanitizeSlug(title: string): string {
+	return slugifyName(title).replace(/_/g, '-').slice(0, 32).replace(/-+$/, '') || 'group';
+}
+
+function readOnlyText(reason: FieldGroupDetail['readOnlyReason']): string {
+	switch (reason) {
+		case 'acf':
+			return __('Advanced Custom Fields owns this key. Edit the group in ACF.', 'proto-blocks');
+		case 'inline':
+			return __('This group is declared in PHP or inside another declaration. Edit it there.', 'proto-blocks');
+		case 'not_writable':
+			return __('Its file is outside the theme folders Proto-Blocks can write to, or its folder is not writable. Edit the file directly.', 'proto-blocks');
+		default:
+			return __('It is not stored in a file this screen can write. Edit it where it is declared.', 'proto-blocks');
+	}
 }
 
 interface Draft {
@@ -245,7 +268,8 @@ export function Builder({ group: groupKey, onBack, onCreated }: BuilderProps) {
 
 	const fields = (Array.isArray(draft.group.fields) ? draft.group.fields : []).filter(isObject);
 	const title = typeof draft.group.title === 'string' ? draft.group.title : '';
-	const fileSlug = slug ?? (slugifyName(title).replace(/_/g, '-') || 'group');
+	const fileSlug = slug ?? sanitizeSlug(title);
+	const slugError = file === null && groupKey === null && !NEW_SLUG.test(fileSlug) ? __('Use 1 to 32 lowercase letters, digits, "-" or "_", starting with a letter.', 'proto-blocks') : null;
 
 	const showProblems = (list: Problem[]) => {
 		setProblems(list);
@@ -271,11 +295,18 @@ export function Builder({ group: groupKey, onBack, onCreated }: BuilderProps) {
 			showProblems(invalid.map((e) => ({ message: e.message, key: keyAt(e.path), setting: e.setting })));
 			return;
 		}
+		if (slugError) {
+			setProblems([{ message: slugError }]);
+			document.getElementById('pb-group-slug')?.focus();
+			return;
+		}
 		const target = file ? { kind: file.kind, slug: file.slug } : { kind: 'field-group' as const, slug: fileSlug };
 		setSaving(true);
 		try {
 			const result = await putSchemaFile(target.kind, target.slug, current.text, current.hash);
-			setDraft({ ...current, hash: result.hash, savedNames: namesByKey(current.group) });
+			// Edits made while the request was in flight stay; only the hash and saved names change.
+			const latest = draftRef.current ?? current;
+			setDraft({ ...latest, hash: result.hash, savedNames: namesByKey(current.group) });
 			setProblems([]);
 			toast.success(sprintf(/* translators: %s: file path */ __('Field group saved to %s.', 'proto-blocks'), result.path));
 			if (!file && onCreated && typeof current.group.key === 'string') {
@@ -355,7 +386,7 @@ export function Builder({ group: groupKey, onBack, onCreated }: BuilderProps) {
 			) : readOnly ? (
 				<Alert>
 					<AlertTitle>{__('This group is read-only here.', 'proto-blocks')}</AlertTitle>
-					<AlertDescription>{__('It is not stored in a file this screen can write. Edit it where it is declared.', 'proto-blocks')}</AlertDescription>
+					<AlertDescription>{readOnlyText(detail?.readOnlyReason ?? (file ? 'not_writable' : null))}</AlertDescription>
 				</Alert>
 			) : null}
 
@@ -380,7 +411,19 @@ export function Builder({ group: groupKey, onBack, onCreated }: BuilderProps) {
 				{file === null && groupKey === null ? (
 					<div className="grid gap-1.5">
 						<Label htmlFor="pb-group-slug">{__('File name', 'proto-blocks')}</Label>
-						<Input id="pb-group-slug" className="font-mono" value={fileSlug} onChange={(e) => setSlug(e.target.value)} />
+						<Input
+							id="pb-group-slug"
+							className="font-mono"
+							value={fileSlug}
+							aria-invalid={slugError ? true : undefined}
+							aria-describedby={slugError ? 'pb-group-slug-error' : undefined}
+							onChange={(e) => setSlug(e.target.value)}
+						/>
+						{slugError ? (
+							<p id="pb-group-slug-error" role="alert" className="text-[13px] text-destructive">
+								{slugError}
+							</p>
+						) : null}
 					</div>
 				) : null}
 			</Card>

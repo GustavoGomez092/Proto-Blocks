@@ -194,7 +194,7 @@ describe('Builder', () => {
 		mockApi({ 'admin/fields/group_events': detail(), 'POST admin/schema-files/field-group/events': saved });
 		render(<Builder group="group_events" onBack={() => {}} />);
 
-		await userEvent.click(await screen.findByRole('button', { name: /^Colour/ }));
+		await userEvent.click(await screen.findByRole('button', { name: 'Field 1 of 1, Colour, Select' }));
 		await userEvent.type(screen.getByRole('textbox', { name: 'Choices' }), 'red : Red');
 		const preview = screen.getByLabelText('JSONC preview');
 		await waitFor(() => expect(preview.textContent).toContain('"red": "Red"'));
@@ -214,7 +214,7 @@ describe('Builder', () => {
 		mockBootstrap({ screen: 'fields' });
 		mockApi({ 'admin/fields/group_events': detail() });
 		render(<Builder group="group_events" onBack={() => {}} />);
-		await userEvent.click(await screen.findByRole('button', { name: /^Colour/ }));
+		await userEvent.click(await screen.findByRole('button', { name: 'Field 1 of 1, Colour, Select' }));
 		const name = screen.getByRole('textbox', { name: 'Field name' });
 		await userEvent.clear(name);
 		await userEvent.type(name, '9lives');
@@ -231,7 +231,7 @@ describe('Builder', () => {
 		});
 		mockApi({ 'admin/fields/group_events': detail(), 'POST admin/schema-files/field-group/events': saved });
 		render(<Builder group="group_events" onBack={() => {}} />);
-		await userEvent.click(await screen.findByRole('button', { name: /^Colour/ }));
+		await userEvent.click(await screen.findByRole('button', { name: 'Field 1 of 1, Colour, Select' }));
 		await userEvent.type(screen.getByRole('textbox', { name: 'Label' }), 's');
 		await waitFor(() => expect(screen.getByLabelText('JSONC preview').textContent).toContain('"Colours"'));
 		await userEvent.click(screen.getByRole('button', { name: 'Save to file' }));
@@ -239,6 +239,47 @@ describe('Builder', () => {
 		await waitFor(() => expect(screen.getByLabelText('JSONC preview').textContent).toBe(text));
 		expect(saved).toHaveBeenCalledTimes(1);
 		expect(requests().filter((r) => r.method === 'GET')).toHaveLength(2);
+	});
+
+	it('keeps edits made while a save is in flight and sends the new hash next time', async () => {
+		mockBootstrap({ screen: 'fields' });
+		let finish: (v: unknown) => void = () => {};
+		const hashes: unknown[] = [];
+		const saved = jest.fn((body: unknown) => {
+			hashes.push((body as { hash: string }).hash);
+			return hashes.length === 1
+				? new Promise((resolve) => {
+						finish = resolve;
+					})
+				: { path: 'proto-fields/events/group.jsonc', hash: 'hash-3', created: false };
+		});
+		mockApi({ 'admin/fields/group_events': detail(), 'POST admin/schema-files/field-group/events': saved });
+		render(<Builder group="group_events" onBack={() => {}} />);
+		await userEvent.click(await screen.findByRole('button', { name: 'Field 1 of 1, Colour, Select' }));
+		await userEvent.click(screen.getByRole('button', { name: 'Save to file' }));
+		await userEvent.type(screen.getByRole('textbox', { name: 'Label' }), 's');
+		const preview = screen.getByLabelText('JSONC preview');
+		await waitFor(() => expect(preview.textContent).toContain('"Colours"'));
+		finish({ path: 'proto-fields/events/group.jsonc', hash: 'hash-2', created: false });
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Save to file' })).toBeEnabled());
+		expect(preview.textContent).toContain('"Colours"');
+		await userEvent.click(screen.getByRole('button', { name: 'Save to file' }));
+		await waitFor(() => expect(hashes).toEqual(['hash-1', 'hash-2']));
+		expect(parse(requests().filter((r) => r.method === 'POST')[1].data.text).fields[0].label).toBe('Colours');
+	});
+
+	it('refuses a new group file name outside the slug grammar', async () => {
+		mockBootstrap({ screen: 'fields' });
+		mockApi({});
+		render(<Builder group={null} onBack={() => {}} />);
+		const slug = screen.getByRole('textbox', { name: 'File name' });
+		expect(slug).toHaveValue('new-field-group');
+		await userEvent.clear(slug);
+		await userEvent.type(slug, 'Bad Slug');
+		await userEvent.click(screen.getByRole('button', { name: 'Save to file' }));
+		expect(slug).toHaveFocus();
+		expect(slug).toHaveAttribute('aria-invalid', 'true');
+		expect(requests()).toHaveLength(0);
 	});
 
 	it('adds a field from the menu and selects it', async () => {
