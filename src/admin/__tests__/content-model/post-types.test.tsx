@@ -646,3 +646,44 @@ test('Replace opens an empty icon input, and a typed value over 2048 characters 
 	await waitFor(() => expect(post).not.toHaveBeenCalled());
 	expect((await screen.findAllByText(/at most 2048|too long|2048/i)).length).toBeGreaterThan(0);
 });
+
+describe('a registered type whose file only names it', () => {
+	const realistic = () =>
+		detail({
+			effective: {
+				...detail().effective,
+				labels: { name: 'Events', singular_name: 'Event', menu_name: 'Events' },
+				has_archive: true,
+				rewrite: { slug: 'event', with_front: false, feeds: false, pages: true, ep_mask: 1 },
+				menu_icon: 'data:image/svg+xml;base64,' + 'AAAA'.repeat(850),
+			},
+		});
+
+	test('toggling only the archive writes only has_archive', async () => {
+		const user = userEvent.setup();
+		const post = jest.fn(() => saved);
+		await openEdit({
+			'admin/types/product': realistic(),
+			'admin/schema-files/type/product': file({ text: '{\n  "name": "Event"\n}' }),
+			'POST admin/schema-files/type/product': post,
+		});
+
+		await user.click(screen.getByRole('radio', { name: /No archive/ }));
+		await user.click(screen.getByRole('button', { name: 'Save to file' }));
+
+		await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+		const [body] = posted('admin/schema-files/type/product');
+		expect(body.text).toBe('{\n  "name": "Event",\n  "has_archive": false\n}');
+	});
+
+	test('the effective settings preview wraps and shortens the inline icon', async () => {
+		await openEdit({
+			'admin/types/product': realistic(),
+			'admin/schema-files/type/product': file({ text: '{\n  "name": "Event"\n}' }),
+		});
+		const pre = screen.getByLabelText('Effective settings', { selector: 'pre' });
+		expect(pre).toHaveClass('whitespace-pre-wrap', 'break-all', 'max-w-full', 'overflow-x-auto');
+		expect(pre.textContent).toContain('(3.3 KB)');
+		expect(pre.textContent).not.toMatch(/[A-Za-z0-9+/=]{200,}/);
+	});
+});
