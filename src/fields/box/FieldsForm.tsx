@@ -10,7 +10,7 @@
  * row subscribes to its own error only, and conditional rows watch only
  * their controlling fields. A keystroke re-renders nothing else.
  */
-import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { __, _n, sprintf } from '@wordpress/i18n';
 import { CircleAlertIcon } from 'lucide-react';
 import { get, useForm, useFormState, useWatch } from 'react-hook-form';
@@ -24,7 +24,10 @@ import { buildValueSchema, type ValueSchemaOptions } from '../validation/value-s
 import { domId, dottedPath, PRESENT_NAME, type FieldPath } from './names';
 import { registerForm } from './editor-save';
 import {
+	AnnounceContext,
+	Announcer,
 	BoxContext,
+	ChunkBoundary,
 	FieldA11yContext,
 	hasInput,
 	inputFor,
@@ -175,7 +178,6 @@ function RowBody( { field, scope, visible }: { field: FieldDef; scope: FieldPath
 			data-field={ name }
 			className={ cn( 'col-span-12', spanClass( field ), visible ? 'flex flex-col gap-1.5' : 'hidden' ) }
 		>
-			{ scope.length === 0 && visible && editable && <input type="hidden" name={ PRESENT_NAME( groupKey ) } value={ field.name } /> }
 			<Label id={ a11y.labelId } { ...( Label === 'label' ? { htmlFor: id } : {} ) } className="w-fit text-sm font-semibold text-[#1d2327]">
 				{ field.label || field.name }
 				{ field.required && (
@@ -193,9 +195,13 @@ function RowBody( { field, scope, visible }: { field: FieldDef; scope: FieldPath
 				</p>
 			) }
 			<FieldA11yContext.Provider value={ a11y }>
-				<Suspense fallback={ <Skeleton className="h-9 w-full" /> }>
-					<Input field={ field } path={ path } groupKey={ groupKey } readOnly={ readOnly } />
-				</Suspense>
+				{ /* If the input fails to load, its present marker goes too, so the stored value is kept. */ }
+				<ChunkBoundary>
+					{ scope.length === 0 && visible && editable && <input type="hidden" name={ PRESENT_NAME( groupKey ) } value={ field.name } /> }
+					<Suspense fallback={ <Skeleton className="h-9 w-full" /> }>
+						<Input field={ field } path={ path } groupKey={ groupKey } readOnly={ readOnly } />
+					</Suspense>
+				</ChunkBoundary>
 			</FieldA11yContext.Provider>
 			{ message && (
 				<p id={ errorId } role="alert" className="flex items-center gap-1.5 text-[13px] text-destructive">
@@ -424,13 +430,19 @@ export function FieldsForm( { payload, outcome }: { payload: BoxPayload; outcome
 
 	const box = useMemo< BoxContextValue >( () => ( { control, groupKey, payload } ), [ control, groupKey, payload ] );
 	const initialErrors = useMemo( () => new Set( Object.keys( serverErrors ).map( ( p ) => p.split( '.' )[ 0 ] ) ), [ serverErrors ] );
+	const announcer = useRef< ( message: string ) => void >( null );
+	const announce = useCallback( ( message: string ) => announcer.current?.( message ), [] );
 
 	return (
 		<BoxContext.Provider value={ box }>
-			<div ref={ root } className="@container">
-				{ Object.keys( serverErrors ).length > 0 && <ServerErrorSummary errors={ serverErrors } fields={ fields } outcome={ saveOutcome } /> }
-				<FieldList fields={ fields } scope={ [] } initialErrors={ initialErrors } />
-			</div>
+			<AnnounceContext.Provider value={ announce }>
+				<div ref={ root } className="@container">
+					{ Object.keys( serverErrors ).length > 0 && <ServerErrorSummary errors={ serverErrors } fields={ fields } outcome={ saveOutcome } /> }
+					<FieldList fields={ fields } scope={ [] } initialErrors={ initialErrors } />
+					{ /* One polite live region per box for row and list actions. */ }
+					<Announcer ref={ announcer } />
+				</div>
+			</AnnounceContext.Provider>
 		</BoxContext.Provider>
 	);
 }
