@@ -124,6 +124,7 @@ class PreviewCapture
             $ids = get_posts([
                 'post_type'        => $types === [] ? 'any' : $types,
                 'post_status'      => 'publish',
+                'has_password'     => false,
                 'posts_per_page'   => 1,
                 'orderby'          => 'date',
                 'order'            => 'DESC',
@@ -351,12 +352,17 @@ class PreviewCapture
         $postSet      = $postId !== '' && \ProtoBlocks\API\RestAPI::setupPreviewPost($postId);
 
         $engine = Plugin::getInstance()->getEngine();
-        $html   = '<div class="proto-blocks-scope">'
-                . $engine->renderPreview($templatePath, $attributes, $schema)
-                . '</div>';
-
-        if ($postSet) {
-            $GLOBALS['post'] = $previousPost;
+        try {
+            $html = '<div class="proto-blocks-scope">'
+                  . $engine->renderPreview($templatePath, $attributes, $schema)
+                  . '</div>';
+        } finally {
+            if ($postSet) {
+                if (function_exists('wp_reset_postdata')) {
+                    wp_reset_postdata();
+                }
+                $GLOBALS['post'] = $previousPost;
+            }
         }
 
         // Build the minimal document. We deliberately bypass
