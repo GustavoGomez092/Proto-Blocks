@@ -104,7 +104,9 @@ abstract class ContentModelRoutesTestCase extends TestCase
     {
         return new Guardrails(
             fn (string $type): int => $this->posts[$type] ?? 0,
-            fn (string $taxonomy): int => $this->terms[$taxonomy] ?? 0
+            fn (string $taxonomy): int => $this->terms[$taxonomy] ?? 0,
+            // As ContentModelRoutes::guardrails(): the registered type's supports.
+            static fn (string $type): ?array => post_type_exists($type) ? array_keys(get_all_post_type_supports($type)) : null
         );
     }
 

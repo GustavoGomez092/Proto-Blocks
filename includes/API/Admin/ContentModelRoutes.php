@@ -79,7 +79,8 @@ abstract class ContentModelRoutes
     {
         return $this->guardrails ??= new Guardrails(
             static fn (string $type): int => self::countPosts($type),
-            static fn (string $taxonomy): int => self::countTerms($taxonomy)
+            static fn (string $taxonomy): int => self::countTerms($taxonomy),
+            static fn (string $type): ?array => post_type_exists($type) ? array_keys(get_all_post_type_supports($type)) : null
         );
     }
 

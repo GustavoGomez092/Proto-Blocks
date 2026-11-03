@@ -590,7 +590,8 @@ final class ContentModelCommands {
             ),
             static fn ( string $taxonomy ): int => (int) $wpdb->get_var(
                 $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->term_taxonomy} WHERE taxonomy = %s", $taxonomy )
-            )
+            ),
+            static fn ( string $type ): ?array => post_type_exists( $type ) ? array_keys( get_all_post_type_supports( $type ) ) : null
         );
     }
 }

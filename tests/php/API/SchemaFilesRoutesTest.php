@@ -301,6 +301,46 @@ final class SchemaFilesRoutesTest extends ContentModelRoutesTestCase
         self::assertFileDoesNotExist($this->root . '/proto-types/product/type.jsonc');
     }
 
+    public function testPutNewOverrideOfRegisteredTypeNeedsConfirmationForSupportsRemoval(): void
+    {
+        $GLOBALS['pb_test_post_types']['post'] = (object) ['name' => 'post', '_builtin' => true, 'labels' => []];
+        $GLOBALS['pb_test_supports']['post'] = ['title' => true, 'editor' => true, 'thumbnail' => true, 'excerpt' => true, 'comments' => true];
+        $this->posts['post'] = 1200;
+        $next = '{"supports": ["title", "thumbnail", "excerpt", "comments"]}';
+
+        $error = self::assertWpError('proto_blocks_needs_confirmation', 409, $this->routes()->save(self::request(
+            ['kind' => 'type', 'slug' => 'post'],
+            ['text' => $next, 'hash' => null, 'acknowledge' => []]
+        )));
+        $guardrails = $error->get_error_data()['guardrails'];
+        self::assertSame('supports_removed', $guardrails[0]['code']);
+        self::assertSame(['editor'], $guardrails[0]['detail']);
+        self::assertSame(1200, $guardrails[0]['count']);
+        self::assertFileDoesNotExist($this->root . '/proto-types/post/type.jsonc');
+
+        $result = $this->routes()->save(self::request(
+            ['kind' => 'type', 'slug' => 'post'],
+            ['text' => $next, 'hash' => null, 'acknowledge' => ['supports_removed']]
+        ));
+        self::assertIsArray($result, json_encode($result) ?: '');
+        self::assertTrue($result['created']);
+        self::assertSame($next, file_get_contents($this->root . '/proto-types/post/type.jsonc'));
+    }
+
+    public function testPutNewOverrideKeepingSupportsNeedsNoConfirmation(): void
+    {
+        $GLOBALS['pb_test_post_types']['post'] = (object) ['name' => 'post', '_builtin' => true, 'labels' => []];
+        $GLOBALS['pb_test_supports']['post'] = ['title' => true, 'editor' => true];
+        $this->posts['post'] = 1200;
+
+        $result = $this->routes()->save(self::request(
+            ['kind' => 'type', 'slug' => 'post'],
+            ['text' => '{"labels": {"menu_name": "News"}}', 'hash' => null, 'acknowledge' => []]
+        ));
+        self::assertIsArray($result, json_encode($result) ?: '');
+        self::assertTrue($result['created']);
+    }
+
     // --- read ----------------------------------------------------------------
 
     public function testGetExistingFile(): void

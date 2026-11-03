@@ -162,6 +162,7 @@ final class SchemaFilesRoutes extends ContentModelRoutes
         // Guardrails only on data the writer would accept; otherwise its validation error is the answer.
         $after = self::validData($kind, $slug, $text);
         if ($after !== null) {
+            // No declaration yet: Guardrails starts from the registered type (a new override file).
             $findings = $this->guardrails()->checkSave($kind, $slug, $declaration?->data, $after);
             foreach ($findings as $finding) {
                 if (!in_array($finding['code'], $acknowledge, true)) {

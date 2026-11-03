@@ -17,26 +17,43 @@ final class Guardrails
     private const DEFAULT_SUPPORTS = ['title', 'editor', 'thumbnail', 'excerpt', 'revisions'];
 
     /**
-     * @param \Closure $postCount fn(string $postType): int
-     * @param \Closure $termCount fn(string $taxonomy): int
+     * @param \Closure      $postCount          fn(string $postType): int
+     * @param \Closure      $termCount          fn(string $taxonomy): int
+     * @param \Closure|null $registeredSupports fn(string $postType): ?list<string>, the
+     *                                          features the registered type supports now (null when
+     *                                          the type is not registered)
      */
-    public function __construct(private readonly \Closure $postCount, private readonly \Closure $termCount)
-    {
+    public function __construct(
+        private readonly \Closure $postCount,
+        private readonly \Closure $termCount,
+        private readonly ?\Closure $registeredSupports = null
+    ) {
     }
 
     /**
+     * A declaration without `supports` leaves the registered type's
+     * supports as they are (an override) or gets the plugin defaults it was
+     * registered with, so both sides of the comparison read the registered
+     * supports when the key is absent. A new declaration of a registered
+     * type (an override file being created) starts from the registered
+     * object.
+     *
      * @param array<string, mixed>|null $before Current declaration data; null for a new declaration.
      * @param array<string, mixed>      $after  Data about to be saved.
      * @return list<array{code: string, message: string, count: int, detail: list<string>}>
      */
     public function checkSave(string $kind, string $slug, ?array $before, array $after): array
     {
+        $isType = $kind === Declaration::TYPE;
+        $registered = $isType ? $this->registeredSupports($slug) : null;
         if ($before === null) {
-            return [];
+            if ($registered === null) {
+                return [];
+            }
+            $before = ['supports' => $registered];
         }
 
         $issues = [];
-        $isType = $kind === Declaration::TYPE;
         $count = null;
         $contentCount = function () use (&$count, $isType, $slug): int {
             return $count ??= $isType ? $this->posts($slug) : $this->terms($slug);
@@ -44,8 +61,8 @@ final class Guardrails
 
         if ($isType) {
             $removed = array_values(array_diff(
-                array_intersect(self::GUARDED_SUPPORTS, self::supports($before)),
-                self::supports($after)
+                array_intersect(self::GUARDED_SUPPORTS, self::supports($before, $registered)),
+                self::supports($after, $registered)
             ));
             if ($removed !== [] && $contentCount() > 0) {
                 $issues[] = [
@@ -137,14 +154,26 @@ final class Guardrails
         return max(0, (int) ($this->termCount)($taxonomy));
     }
 
+    /** @return list<string>|null */
+    private function registeredSupports(string $type): ?array
+    {
+        if ($this->registeredSupports === null) {
+            return null;
+        }
+        $supports = ($this->registeredSupports)($type);
+
+        return is_array($supports) ? array_values(array_filter($supports, 'is_string')) : null;
+    }
+
     /**
      * @param array<string, mixed> $data
+     * @param list<string>|null    $registered
      * @return list<string>
      */
-    private static function supports(array $data): array
+    private static function supports(array $data, ?array $registered): array
     {
         if (!array_key_exists('supports', $data)) {
-            return self::DEFAULT_SUPPORTS;
+            return $registered ?? self::DEFAULT_SUPPORTS;
         }
 
         return is_array($data['supports']) ? array_values(array_filter($data['supports'], 'is_string')) : [];
