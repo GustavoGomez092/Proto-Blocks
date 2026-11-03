@@ -41,9 +41,16 @@ final class SvgSanitizer
     ];
 
     /** SMIL elements that can rewrite an attribute (and so a URL) at runtime. */
-    private const ANIMATION_ELEMENTS = ['animate', 'set', 'animatemotion', 'animatetransform'];
+    private const ANIMATION_ELEMENTS = ['animate', 'set', 'animatemotion', 'animatetransform', 'animatecolor'];
 
-    private const UNSAFE_CSS = '/(expression\s*\(|javascript:|vbscript:|@import|behavior\s*:|-moz-binding|image-set\s*\(|cross-fade\s*\(|\\\\|url\s*\(\s*[\'"]?\s*+(?!#))/i';
+    /** attributeName values an animation may target; anything else is dropped. */
+    private const SAFE_ANIMATION_TARGETS = [
+        'fill', 'stroke', 'opacity', 'fill-opacity', 'stroke-opacity', 'transform', 'd', 'r',
+        'cx', 'cy', 'x', 'y', 'width', 'height', 'points', 'stroke-width',
+        'stroke-dasharray', 'stroke-dashoffset',
+    ];
+
+    private const UNSAFE_CSS = '/(expression\s*\(|javascript:|vbscript:|@import|behavior\s*:|-moz-binding|image-set\s*\(|cross-fade\s*\(|\\\\|([\'"])[^\'"]*(?:https?:|\/\/|data:)[^\'"]*\2|url\s*\(\s*[\'"]?\s*+(?!#))/i';
 
     /**
      * @return string|null Sanitised `<svg>` markup, or null when the input is
@@ -109,9 +116,8 @@ final class SvgSanitizer
             return true;
         }
         if (in_array($tag, self::ANIMATION_ELEMENTS, true)) {
-            $target = strtolower($element->getAttribute('attributeName'));
-            if (str_contains($target, 'href') || str_starts_with($target, 'on') || str_contains($target, 'src')
-                || $target === 'style' || $target === 'class') {
+            $target = strtolower(trim($element->getAttribute('attributeName')));
+            if (!in_array($target, self::SAFE_ANIMATION_TARGETS, true)) {
                 return true;
             }
         }

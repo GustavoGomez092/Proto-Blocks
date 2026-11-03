@@ -181,4 +181,27 @@ final class SvgSanitizerTest extends TestCase
         $this->assertNull(SvgSanitizer::sanitize("\xFF\xFE" . mb_convert_encoding($doc, 'UTF-16LE', 'UTF-8')));
         $this->assertNull(SvgSanitizer::sanitize("\xFE\xFF" . mb_convert_encoding($doc, 'UTF-16BE', 'UTF-8')));
     }
+
+    public function testSmilTargetAllowlist(): void
+    {
+        foreach ([' style ', '&#10;style', 'HREF', 'xlink:href', ''] as $target) {
+            $out = SvgSanitizer::sanitize($this->svg('<path d="M0 0"><set attributeName="' . $target . '" to="x"/></path>'));
+            $this->assertNotNull($out);
+            $this->assertStringNotContainsString('<set', $out, "target '$target'");
+        }
+        $out = SvgSanitizer::sanitize($this->svg('<path d="M0 0"><animate attributeName=" Opacity " from="0" to="1"/></path>'));
+        $this->assertStringContainsString('<animate', (string) $out);
+    }
+
+    public function testQuotedUrlLikeStringsInStyleDropped(): void
+    {
+        $out = SvgSanitizer::sanitize($this->svg(
+            '<path style="mask-image:src(&quot;https://evil.test/a&quot;)" d="M0 0"/>'
+            . '<path style="x:image(&apos;//evil.test/b&apos;)" d="M1 1"/>'
+            . '<path style="x:foo(&quot;data:text/html,1&quot;)" d="M2 2"/>'
+        ));
+        $this->assertNotNull($out);
+        $this->assertStringNotContainsString('style=', $out);
+        $this->assertStringNotContainsString('evil.test', $out);
+    }
 }
