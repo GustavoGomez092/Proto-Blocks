@@ -4,7 +4,7 @@ import { useForm, type FieldErrors, type Resolver } from 'react-hook-form';
 import { toast } from 'sonner';
 import { ArrowLeftIcon, LockIcon, TrashIcon } from 'lucide-react';
 import { adminGet, adminPost, ApiError } from '@/admin/api';
-import { getBootstrap } from '@/admin/bootstrap';
+import { getWriteReason } from '@/admin/bootstrap';
 import { ConflictDialog } from '@/admin/components/content-model/ConflictDialog';
 import { DeclarationShell } from '@/admin/components/content-model/DeclarationShell';
 import { DeleteDeclarationDialog } from '@/admin/components/content-model/DeleteDeclarationDialog';
@@ -350,7 +350,7 @@ function errorText(error: unknown): string {
 }
 
 function CreateTaxonomy({ types, onBack, onOpen }: { types: ListItem[]; onBack: () => void; onOpen: (slug: string) => void }) {
-	const { fileModsAllowed } = getBootstrap();
+	const writeReason = getWriteReason();
 	const form = useForm<Values>({ defaultValues: {}, resolver: useMemo(() => makeResolver(true), []) });
 	const [slug, setSlug] = useState('');
 	const [slugTouched, setSlugTouched] = useState(false);
@@ -359,7 +359,7 @@ function CreateTaxonomy({ types, onBack, onOpen }: { types: ListItem[]; onBack: 
 	const [conflict, setConflict] = useState(false);
 	const [guardrails, setGuardrails] = useState<Guardrail[] | null>(null);
 	const formId = useId();
-	const readOnly = !fileModsAllowed;
+	const readOnly = writeReason !== null;
 
 	const create = async (acknowledge: string[]) => {
 		const values = clean(form.getValues());
@@ -404,7 +404,7 @@ function CreateTaxonomy({ types, onBack, onOpen }: { types: ListItem[]; onBack: 
 	return (
 		<DeclarationShell
 			title={__('Add taxonomy', 'proto-blocks')}
-			readOnlyReason={readOnly ? 'file_mods' : null}
+			readOnlyReason={writeReason}
 			path={slug ? `proto-taxonomies/${slug}/taxonomy.jsonc` : ''}
 			actions={
 				<>
@@ -471,7 +471,7 @@ function EditForm({
 	types: ListItem[];
 	onBack: () => void;
 }) {
-	const { fileModsAllowed } = getBootstrap();
+	const writeReason = getWriteReason();
 	const { file, loading, error, save, remove, reload } = useDeclarationFile('taxonomy', slug);
 	const { item } = detail;
 	const defaults = useMemo(() => pick(file?.data ?? {}), [file?.text, file?.hash]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -498,7 +498,7 @@ function EditForm({
 
 	const overriding = !file.exists && item.origin !== 'file' && item.origin !== 'php';
 	const itemReason: Reason = item.readOnlyReason === 'not_proto' ? null : item.readOnlyReason;
-	const reason: Reason = !fileModsAllowed ? 'file_mods' : (itemReason ?? (file.writable ? null : ((file.reason as Reason) ?? 'not_writable')));
+	const reason: Reason = writeReason ?? (itemReason ?? (file.writable ? null : ((file.reason as Reason) ?? 'not_writable')));
 	const readOnly = reason !== null;
 
 	const changed = (): Record<string, unknown> => {

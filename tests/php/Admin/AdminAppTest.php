@@ -32,13 +32,31 @@ final class AdminAppTest extends TestCase
     {
         $data = (new AdminApp(null))->bootstrapData('system');
 
-        foreach (['screen', 'restRoot', 'restNonce', 'adminUrl', 'version', 'fileModsAllowed', 'fileModsConstant', 'assetBase', 'tailwind'] as $key) {
+        foreach (['screen', 'restRoot', 'restNonce', 'adminUrl', 'version', 'fileModsAllowed', 'writeReason', 'fileModsConstant', 'assetBase', 'tailwind'] as $key) {
             self::assertArrayHasKey($key, $data);
         }
         self::assertSame('system', $data['screen']);
         self::assertStringEndsWith('/proto-blocks/v1/', $data['restRoot']);
         self::assertSame('nonce:wp_rest', $data['restNonce']);
         self::assertIsBool($data['fileModsAllowed']);
+    }
+
+    public function testWriteReasonFollowsFileModsAndMultisite(): void
+    {
+        $app = new AdminApp(null);
+        $data = $app->bootstrapData('system');
+        self::assertSame($data['fileModsAllowed'] ? null : 'file_mods', $data['writeReason']);
+
+        if ($data['fileModsAllowed']) {
+            try {
+                $GLOBALS['pb_test_multisite'] = true;
+                $GLOBALS['pb_test_super_admins'] = [];
+                self::assertSame('multisite', $app->bootstrapData('system')['writeReason']);
+                self::assertTrue($app->bootstrapData('system')['fileModsAllowed']);
+            } finally {
+                unset($GLOBALS['pb_test_multisite'], $GLOBALS['pb_test_super_admins']);
+            }
+        }
     }
 
     public function testFileModsConstantMatchesFileModsAllowed(): void

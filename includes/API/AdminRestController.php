@@ -83,15 +83,45 @@ final class AdminRestController
      * Routes that write files: also blocked by DISALLOW_FILE_MODS /
      * DISALLOW_FILE_EDIT, and on multisite limited to super admins. A
      * missing capability answers false (core's rest_forbidden); disabled
-     * file mods answer the proto_blocks_file_mods error, which WordPress
-     * passes through to the client as-is.
+     * file mods and the multisite refusal answer the proto_blocks_file_mods /
+     * proto_blocks_multisite errors, which WordPress passes through to the
+     * client as-is.
      */
     public function writePermission(): bool|WP_Error
     {
-        if (!$this->permission() || !self::canWriteCode()) {
+        if (!$this->permission()) {
             return false;
         }
-        return AdminPage::fileModsAllowed() ? true : self::fileModsError();
+        return self::writeReason() === null ? true : self::writeBlockedError();
+    }
+
+    /**
+     * Why file writes are off for this request: 'file_mods' (DISALLOW_FILE_MODS
+     * / DISALLOW_FILE_EDIT), 'multisite' (not a network administrator), or
+     * null when allowed. File mods win when both apply.
+     *
+     * @return 'file_mods'|'multisite'|null
+     */
+    public static function writeReason(): ?string
+    {
+        if (!AdminPage::fileModsAllowed()) {
+            return 'file_mods';
+        }
+        return self::canWriteCode() ? null : 'multisite';
+    }
+
+    /** The error for a refused file write: proto_blocks_multisite or proto_blocks_file_mods by writeReason(). */
+    public static function writeBlockedError(): WP_Error
+    {
+        if (self::writeReason() === 'multisite') {
+            return new WP_Error(
+                'proto_blocks_multisite',
+                __('Only network administrators can write theme files on a multisite network.', 'proto-blocks'),
+                ['status' => 403]
+            );
+        }
+
+        return self::fileModsError();
     }
 
     /**

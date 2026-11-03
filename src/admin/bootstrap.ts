@@ -3,9 +3,11 @@
  * window.protoBlocksAdmin before the admin script runs.
  */
 
-export type Screen = 'dashboard' | 'tailwind' | 'system' | 'previews' | 'wizard' | 'post-types' | 'taxonomies';
+export type Screen = 'dashboard' | 'tailwind' | 'system' | 'previews' | 'wizard' | 'post-types' | 'taxonomies' | 'options-page';
 
 export type FileModsConstant = 'DISALLOW_FILE_MODS' | 'DISALLOW_FILE_EDIT';
+
+export type WriteReason = 'file_mods' | 'multisite' | null;
 
 export interface AdminBootstrap {
 	screen: Screen;
@@ -17,6 +19,11 @@ export interface AdminBootstrap {
 	version: string;
 	/** False when DISALLOW_FILE_MODS / DISALLOW_FILE_EDIT is set. */
 	fileModsAllowed: boolean;
+	/**
+	 * Why the current user cannot write declaration files: file mods are off,
+	 * or a multisite sub-site administrator; null when writes are allowed.
+	 */
+	writeReason?: WriteReason;
 	/** The constant that disables file writes; null when they are allowed. */
 	fileModsConstant: FileModsConstant | null;
 	assetBase: string;
@@ -35,4 +42,10 @@ export function getBootstrap(): AdminBootstrap {
 		throw new Error('protoBlocksAdmin bootstrap missing');
 	}
 	return data;
+}
+
+/** Why declaration files can't be written (see AdminBootstrap.writeReason); derived from fileModsAllowed when the server sent none. */
+export function getWriteReason(): WriteReason {
+	const data = getBootstrap();
+	return data.writeReason ?? (data.fileModsAllowed ? null : 'file_mods');
 }

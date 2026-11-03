@@ -6,7 +6,6 @@ namespace ProtoBlocks\Tests\Modules\Fields;
 
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;
-use PHPUnit\Framework\TestCase;
 use ProtoBlocks\Modules\Fields\Definition\FieldGroup;
 use ProtoBlocks\Modules\Fields\Definition\GroupNormalizer;
 use ProtoBlocks\Modules\Fields\Read\ContextResolver;
@@ -23,19 +22,14 @@ require_once __DIR__ . '/wp-stubs.php';
 require_once __DIR__ . '/stubs/Structured.php';
 require_once __DIR__ . '/stubs/Read.php';
 
-final class FieldReaderTest extends TestCase
+final class FieldReaderTest extends FieldsTestCase
 {
     private const FIXTURES = __DIR__ . '/../../../fixtures/fields';
 
     protected function setUp(): void
     {
+        parent::setUp();
         self::seed();
-    }
-
-    protected function tearDown(): void
-    {
-        FieldReader::setShared(null);
-        unset($GLOBALS['pb_test_queried_object'], $GLOBALS['pb_test_current_post'], $GLOBALS['pb_test_in_the_loop']);
     }
 
     /**

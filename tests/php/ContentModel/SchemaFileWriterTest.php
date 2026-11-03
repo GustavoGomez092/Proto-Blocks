@@ -273,6 +273,14 @@ final class SchemaFileWriterTest extends TestCase
         $this->assertSame([], glob($this->child . '/*'));
     }
 
+    public function testCallbackKeyAndMarkupLabelAreRefused(): void
+    {
+        $e = $this->assertWriteError('schema_invalid', 400, fn () => $this->writer()->write('type', 'product', '{"name": "X", "rest_controller_class": "WP_REST_Posts_Controller"}', null, null));
+        $this->assertContains('/rest_controller_class', array_column($e->data['errors'], 'path'));
+        $this->assertWriteError('schema_invalid', 400, fn () => $this->writer()->write('type', 'product', '{"name": "X<b>"}', null, null));
+        $this->assertSame([], glob($this->child . '/*'));
+    }
+
     public function testTaxonomyIsValidatedAgainstTaxonomySchema(): void
     {
         $this->assertWriteError('schema_invalid', 400, fn () => $this->writer()->write('taxonomy', 'genre', '{"name": "Genre", "post_types": "book"}', null, null));

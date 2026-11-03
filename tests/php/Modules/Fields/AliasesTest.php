@@ -6,7 +6,6 @@ namespace ProtoBlocks\Tests\Modules\Fields;
 
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
-use PHPUnit\Framework\TestCase;
 use ProtoBlocks\Modules\Fields\Read\Aliases;
 use ProtoBlocks\Modules\Fields\Read\FieldReader;
 
@@ -22,10 +21,11 @@ require_once __DIR__ . '/../../../../includes/Modules/Fields/functions.php';
  */
 #[RunTestsInSeparateProcesses]
 #[PreserveGlobalState(false)]
-final class AliasesTest extends TestCase
+final class AliasesTest extends FieldsTestCase
 {
     protected function setUp(): void
     {
+        parent::setUp();
         FieldReaderTest::seed();
         FieldReader::setShared(FieldReaderTest::reader());
     }

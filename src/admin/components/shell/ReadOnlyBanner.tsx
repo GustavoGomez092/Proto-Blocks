@@ -21,7 +21,7 @@ export function ReadOnlyBanner({
 	constant,
 	description,
 }: {
-	reason: 'file_mods' | 'not_writable';
+	reason: 'file_mods' | 'multisite' | 'not_writable';
 	path?: string;
 	/** Constant to name for file_mods; defaults to the bootstrap's fileModsConstant. */
 	constant?: FileModsConstant;
@@ -35,10 +35,14 @@ export function ReadOnlyBanner({
 	const title =
 		reason === 'file_mods'
 			? __('File modifications are disabled on this site', 'proto-blocks')
-			: __('The theme folder is not writable', 'proto-blocks');
+			: reason === 'multisite'
+				? __('Read-only on a multisite network', 'proto-blocks')
+				: __('The theme folder is not writable', 'proto-blocks');
 
 	const body =
-		reason === 'file_mods'
+		reason === 'multisite'
+			? __('This is a multisite network; only network administrators can edit declaration files.', 'proto-blocks')
+			: reason === 'file_mods'
 			? interpolate(
 					/* translators: %s: a wp-config.php constant, DISALLOW_FILE_MODS or DISALLOW_FILE_EDIT. */
 					__('%s is set in wp-config.php, so controls that write files are turned off.', 'proto-blocks'),

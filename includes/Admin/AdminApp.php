@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace ProtoBlocks\Admin;
 
 use InvalidArgumentException;
+use ProtoBlocks\API\AdminRestController;
 use ProtoBlocks\Tailwind\Manager as TailwindManager;
 
 /**
@@ -22,7 +23,7 @@ final class AdminApp
 {
     public const MOUNT_ID = 'proto-blocks-admin';
     public const PORTAL_ID = 'proto-blocks-admin-portal';
-    public const SCREENS = ['dashboard', 'tailwind', 'system', 'previews', 'wizard', 'post-types', 'taxonomies'];
+    public const SCREENS = ['dashboard', 'tailwind', 'system', 'previews', 'wizard', 'post-types', 'taxonomies', 'options-page'];
 
     /** Script handle of the built admin app. */
     public const SCRIPT_HANDLE = 'proto-blocks-admin';
@@ -124,6 +125,8 @@ final class AdminApp
             'adminUrl' => esc_url_raw(admin_url('admin.php')),
             'version' => defined('PROTO_BLOCKS_VERSION') ? (string) \PROTO_BLOCKS_VERSION : '',
             'fileModsAllowed' => AdminPage::fileModsAllowed(),
+            // Why the current user cannot write declaration files: 'file_mods', 'multisite' or null.
+            'writeReason' => AdminRestController::writeReason(),
             // Which constant to name in the read-only banner; null when allowed.
             'fileModsConstant' => self::fileModsConstant(),
             // Same base the Tailwind browser compiler uses to fetch its wasm.
@@ -134,13 +137,14 @@ final class AdminApp
 
     /**
      * Print the mount and portal nodes and the bootstrap data. Prints
-     * nothing for users without manage_options.
+     * nothing for users without $capability (manage_options unless the
+     * screen names its own, as a settings page does).
      *
      * @throws InvalidArgumentException When $screen is not one of SCREENS.
      */
-    public function renderScreen(string $screen): void
+    public function renderScreen(string $screen, string $capability = 'manage_options'): void
     {
-        if (!current_user_can('manage_options')) {
+        if (!current_user_can($capability)) {
             return;
         }
 

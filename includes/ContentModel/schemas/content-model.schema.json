@@ -12,7 +12,7 @@
       "properties": {
         "$schema": { "type": "string" },
         "register_meta_box_cb": false,
-        "meta_box_cb": false,
+        "meta_box_cb": { "enum": [false] },
         "meta_box_sanitize_cb": false,
         "update_count_callback": false,
         "rest_controller_class": false,
@@ -87,7 +87,7 @@
       "properties": {
         "$schema": { "type": "string" },
         "register_meta_box_cb": false,
-        "meta_box_cb": false,
+        "meta_box_cb": { "enum": [false] },
         "meta_box_sanitize_cb": false,
         "update_count_callback": false,
         "rest_controller_class": false,
