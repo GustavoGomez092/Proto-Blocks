@@ -92,6 +92,32 @@ final class FileLoaderTest extends TestCase
         $this->assertStringEndsWith('broken/type.jsonc', $issue->source);
     }
 
+    public function testNamelessOverrideFileLoads(): void
+    {
+        $this->write('proto-types/post/type.jsonc', '{"template": [["core/paragraph"]]}');
+        $this->write('proto-taxonomies/category/taxonomy.jsonc', '{"labels": {"menu_name": "Topics"}}');
+
+        $result = (new FileLoader())->load([$this->parent]);
+
+        $post = $result['declarations']['type']['post'] ?? null;
+        $this->assertInstanceOf(Declaration::class, $post);
+        $this->assertNull($post->name());
+        $this->assertSame([['core/paragraph']], $post->data['template']);
+        $this->assertArrayHasKey('category', $result['declarations']['taxonomy']);
+        $this->assertNull($result['declarations']['taxonomy']['category']->name());
+        $this->assertSame([], $result['issues']);
+    }
+
+    public function testInlineTaxonomyWithoutNameIsSchemaError(): void
+    {
+        $this->write('proto-types/book/type.jsonc', '{"name": "Book", "taxonomies": [{"hierarchical": true}]}');
+
+        $result = (new FileLoader())->load([$this->parent]);
+
+        $this->assertArrayNotHasKey('book', $result['declarations']['type']);
+        $this->assertStringContainsString('/taxonomies/0/name', $this->issue($result, 'schema_invalid')->message);
+    }
+
     public function testSchemaErrorsSkipDeclaration(): void
     {
         $this->write('proto-types/widget/type.jsonc', '{"name": "Widget", "public": "yes", "menu_position": "22"}');

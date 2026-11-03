@@ -355,8 +355,14 @@ class Commands extends WP_CLI_Command {
             }
         }
 
+        // A named block scopes the run to that block only.
+        $check_content_model = empty( $args[0] );
+
         if ( empty( $blocks ) ) {
             WP_CLI::warning( 'No Proto-Blocks found to validate.' );
+            if ( $check_content_model ) {
+                $this->finishValidation( [], true, $assoc_args );
+            }
             return;
         }
 
@@ -373,14 +379,50 @@ class Commands extends WP_CLI_Command {
             }
         }
 
-        $format = $assoc_args['format'] ?? 'table';
-        WP_CLI\Utils\format_items( $format, $results, [ 'block', 'status', 'message' ] );
+        $this->finishValidation( $results, $check_content_model, $assoc_args );
+    }
+
+    /**
+     * Print the block results and, unless a single block was named, the
+     * declaration report; then fail once if either holds an error.
+     *
+     * @param array $results    Block rows.
+     * @param bool  $with_model Whether to include post type and taxonomy declarations.
+     * @param array $assoc_args Associative arguments.
+     */
+    private function finishValidation( array $results, bool $with_model, array $assoc_args ): void {
+        $format = (string) ( $assoc_args['format'] ?? 'table' );
+        $rows   = [];
+        if ( $with_model ) {
+            $plugin = Plugin::getInstance();
+            $rows   = ContentModelCommands::validationRows( $plugin->getContentModel(), $plugin->getModules()->issues() );
+        }
+
+        $has_errors = ContentModelCommands::hasErrors( $rows );
+        foreach ( $results as $row ) {
+            if ( 'error' === $row['status'] ) {
+                $has_errors = true;
+            }
+        }
+
+        if ( 'json' === $format ) {
+            // One document, so the output stays parseable.
+            WP_CLI::line( (string) wp_json_encode( [ 'blocks' => $results, 'declarations' => $rows ] ) );
+        } else {
+            if ( $results ) {
+                WP_CLI\Utils\format_items( $format, $results, [ 'block', 'status', 'message' ] );
+            }
+            if ( $with_model ) {
+                ContentModelCommands::printRows( $rows, $format );
+            }
+        }
 
         if ( $has_errors ) {
-            WP_CLI::error( 'Validation failed for one or more blocks.' );
-        } else {
-            WP_CLI::success( 'All blocks validated successfully.' );
+            WP_CLI::error( 'Validation failed for one or more blocks or declarations.' );
+            return;
         }
+
+        WP_CLI::success( 'All blocks and declarations validated successfully.' );
     }
 
     /**
@@ -1104,6 +1146,14 @@ class Commands extends WP_CLI_Command {
  */
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
     WP_CLI::add_command( 'proto-blocks', Commands::class );
+
+    // Declared post types and taxonomies.
+    WP_CLI::add_command( 'proto-blocks type', function ( $args, $assoc_args ) {
+        ( new ContentModelCommands() )->type( $args, $assoc_args );
+    } );
+    WP_CLI::add_command( 'proto-blocks taxonomy', function ( $args, $assoc_args ) {
+        ( new ContentModelCommands() )->taxonomy( $args, $assoc_args );
+    } );
 
     // Add cache subcommand
     WP_CLI::add_command( 'proto-blocks cache', function( $args, $assoc_args ) {

@@ -10,7 +10,7 @@ namespace ProtoBlocks\ContentModel;
  * Supports exactly: type, enum, pattern, minLength, maxLength, minimum,
  * maximum, properties, required, additionalProperties, items, minItems,
  * maxItems, uniqueItems,
- * anyOf and local `#/$defs/<name>` references. Unknown keywords are ignored.
+ * anyOf, allOf and local `#/$defs/<name>` references. Unknown keywords are ignored.
  * The browser-side checker implements the same subset.
  */
 final class SchemaCheck
@@ -168,6 +168,14 @@ final class SchemaCheck
 
         if (isset($node['anyOf']) && is_array($node['anyOf'])) {
             array_push($errors, ...self::checkAnyOf($data, $node['anyOf'], $root, $path));
+        }
+
+        if (isset($node['allOf']) && is_array($node['allOf'])) {
+            foreach ($node['allOf'] as $branch) {
+                if (is_array($branch)) {
+                    array_push($errors, ...self::check($data, $branch, $root, $path));
+                }
+            }
         }
 
         return $errors;

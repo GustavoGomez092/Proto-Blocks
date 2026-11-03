@@ -24,6 +24,11 @@ final class CodeType implements FieldTypeInterface
         return true;
     }
 
+    public function hasUnfilteredHtml(Field $field): bool
+    {
+        return $this->requiresUnfilteredHtml();
+    }
+
     public function stores(): bool
     {
         return true;
