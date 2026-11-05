@@ -29,7 +29,7 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		await user.click(within(dialog).getByRole('checkbox', { name: 'Regex' }));
 		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), '/b');
 		await submit(user, dialog);
-		expect(await within(dialog).findByText(/The regular expression does not compile/)).toBeTruthy();
+		expect(await within(dialog).findByText(/The pattern does not compile/)).toBeTruthy();
 		expect(within(dialog).getByRole('textbox', { name: 'Source' }).getAttribute('aria-invalid')).toBe('true');
 		expect(posts()).toEqual([]);
 	});
@@ -50,8 +50,8 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		renderScreen();
 		const dialog = await openAdd(user);
 		await submit(user, dialog);
-		expect(await within(dialog).findByText('Enter the source path.')).toBeTruthy();
-		expect(within(dialog).getByText('Enter the target.')).toBeTruthy();
+		expect(await within(dialog).findByText('A rule needs a source unless its condition is "Page not found (404)".')).toBeTruthy();
+		expect(within(dialog).getByText('A redirect needs a target.')).toBeTruthy();
 		expect(posts()).toEqual([]);
 	});
 
@@ -63,7 +63,7 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		const dialog = await screen.findByRole('dialog', { name: 'Edit redirect' });
 		expect(within(dialog).getByRole('combobox', { name: 'Code' }).textContent).toContain('399 Not a valid code');
 		await submit(user, dialog);
-		expect(await within(dialog).findByText('Choose a code this action supports.')).toBeTruthy();
+		expect(await within(dialog).findByText('A redirect code must be one of 301, 302, 303, 307, 308.')).toBeTruthy();
 		expect(posts()).toEqual([]);
 	});
 
@@ -88,7 +88,7 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		expect(within(dialog).queryByRole('combobox', { name: 'Code' })).toBeNull();
 		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), 'https://other.test/api');
 		await submit(user, dialog);
-		expect(await within(dialog).findByText('Use a path starting with / or a full http:// or https:// URL.')).toBeTruthy();
+		expect(await within(dialog).findByText('A pass-through target must be a path on this site, starting with "/".')).toBeTruthy();
 		expect(posts()).toEqual([]);
 	});
 
@@ -125,8 +125,16 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		await user.type(within(dialog).getByRole('textbox', { name: 'Source' }), '/a');
 		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), '/b');
 		await submit(user, dialog);
-		expect(await within(dialog).findByText('Enter the header or cookie name.')).toBeTruthy();
-		expect(within(dialog).getByText('Enter a value for this condition.')).toBeTruthy();
+		// The server's order: the value first, then the name.
+		expect(await within(dialog).findByText('Enter a value for this condition.')).toBeTruthy();
+		await user.type(within(dialog).getByRole('textbox', { name: 'Header value' }), 'beta');
+		await submit(user, dialog);
+		expect(await within(dialog).findByText('Enter a header name of letters, digits and "-".')).toBeTruthy();
+		await user.type(within(dialog).getByRole('textbox', { name: 'Header name' }), 'X Beta');
+		await submit(user, dialog);
+		expect(await within(dialog).findByText('Enter a header name of letters, digits and "-".')).toBeTruthy();
+		expect(posts()).toEqual([]);
+		await user.clear(within(dialog).getByRole('textbox', { name: 'Header value' }));
 
 		await choose(user, 'Match condition', 'IP address');
 		expect(within(dialog).queryByRole('textbox', { name: 'Header name' })).toBeNull();
@@ -136,6 +144,65 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 
 		await choose(user, 'Match condition', 'Logged in');
 		expect(within(dialog).queryByRole('textbox', { name: 'IP addresses or ranges' })).toBeNull();
+	});
+});
+
+describe('a save the server refuses', () => {
+	const refuse = (errors: unknown[]) => () => {
+		throw { code: 'proto_blocks_schema_invalid', message: 'The declaration does not match the schema.', data: { status: 400, errors } };
+	};
+
+	test("each finding for the saved rule renders next to its field; others in the dialog's error", async () => {
+		const added = readRules(legacyText).length;
+		routes({
+			'POST admin/schema-files/redirects/legacy-site': refuse([
+				{ path: `/rules/${added}/to`, code: 'invalid_target', message: 'The target URL needs a host (server).' },
+				{ path: `/rules/${added}/when/value/0`, message: 'Not an IP address or CIDR range (server).' },
+				{ path: '/rules/0/from', code: 'invalid_source', message: 'Broken older rule (server).' },
+			]),
+		});
+		const user = userEvent.setup();
+		renderScreen();
+		const dialog = await openAdd(user);
+		await user.type(within(dialog).getByRole('textbox', { name: 'Source' }), '/shop');
+		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), 'https://shop.test/');
+		await choose(user, 'Match condition', 'IP address');
+		await user.type(within(dialog).getByRole('textbox', { name: 'IP addresses or ranges' }), '10.0.0.1');
+		await submit(user, dialog);
+
+		expect(await within(dialog).findByText('The target URL needs a host (server).')).toBeTruthy();
+		const target = within(dialog).getByRole('textbox', { name: 'Target' });
+		expect(target.getAttribute('aria-invalid')).toBe('true');
+		expect(target.getAttribute('aria-describedby')).toContain(`${target.id}-error`);
+		expect(within(dialog).getByText('Not an IP address or CIDR range (server).')).toBeTruthy();
+		expect(within(dialog).getByRole('alert').textContent).toBe('rules.0.from: Broken older rule (server).');
+		// Handled in the dialog: no toast, the dialog stays open.
+		expect(screen.queryByText('The change was not saved.')).toBeNull();
+		expect(screen.getByRole('dialog', { name: 'Add redirect' })).toBeTruthy();
+	});
+
+	test('editing in place maps by the rule position in the file; a field the dialog hides goes to the general error', async () => {
+		routes({
+			'POST admin/schema-files/redirects/legacy-site': refuse([{ path: '/rules/4/code', message: 'An error code must be one of the list (server).' }]),
+		});
+		const user = userEvent.setup();
+		renderScreen();
+		await user.click(within(await rowOf('/gone-forever')).getByRole('button', { name: 'Edit /gone-forever' }));
+		const dialog = await screen.findByRole('dialog', { name: 'Edit redirect' });
+		await choose(user, 'Action', 'Do nothing');
+		await submit(user, dialog);
+		expect((await within(dialog).findByRole('alert')).textContent).toBe('An error code must be one of the list (server).');
+	});
+
+	test('a refusal without findings is still a toast', async () => {
+		routes({ 'POST admin/schema-files/redirects/legacy-site': refuse([]) });
+		const user = userEvent.setup();
+		renderScreen();
+		const dialog = await openAdd(user);
+		await user.type(within(dialog).getByRole('textbox', { name: 'Source' }), '/shop');
+		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), '/store');
+		await submit(user, dialog);
+		expect(await screen.findByText('The change was not saved.')).toBeTruthy();
 	});
 });
 

@@ -18,7 +18,7 @@ import type { FileResult } from '@/admin/content-model/types';
 import { asApiError, loadFile, postFile } from './api';
 import { QUERY_MODES, queryLabel } from './codes';
 import { applySettingsEdits } from './edits';
-import { settingsSchema } from './schema';
+import { serverFindings, settingsFieldErrors, settingsSchema } from './schema';
 import { useWriteFlow, writeGuard, type TabProps } from './shared';
 import type { IpHeader, IpPolicy, QueryMode, Settings } from './types';
 
@@ -264,7 +264,28 @@ export default function SettingsTab({ index, reload, readOnly }: TabProps) {
 			toast.info(__('Nothing changed.', 'proto-blocks'));
 			return;
 		}
-		await run((acknowledge) => postFile('redirect-settings', 'settings', text, file.exists ? file.hash : null, acknowledge), __('Settings saved.', 'proto-blocks'));
+		await run(
+			(acknowledge) => postFile('redirect-settings', 'settings', text, file.exists ? file.hash : null, acknowledge),
+			__('Settings saved.', 'proto-blocks'),
+			[],
+			(error) => {
+				// A refusal from SettingsValidator: each finding next to its field, the rest in a toast.
+				const findings = serverFindings(error);
+				if (findings.length === 0) {
+					return false;
+				}
+				const loose: string[] = [];
+				for (const [field, message] of Object.entries(settingsFieldErrors(findings))) {
+					if (field !== 'root' && form.getValues(field as never) !== undefined) {
+						form.setError(field as never, { type: 'server', message });
+					} else {
+						loose.push(message);
+					}
+				}
+				toast.error(__('The settings were not saved.', 'proto-blocks'), loose.length > 0 ? { description: loose.join(' ') } : undefined);
+				return true;
+			}
+		);
 	});
 
 	const db = async (path: string, success: string) => {

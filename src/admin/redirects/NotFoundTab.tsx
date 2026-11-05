@@ -14,8 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { asApiError, download, query, usePaged } from './api';
 import { addRule, newRuleId } from './edits';
 import { RuleDialog } from './RuleDialog';
-import type { RuleFormValues } from './rule-form';
-import { defaultGroup, formatDate, Pager, ruleWrites, useWriteFlow, writableGroups, writeGuard, type TabProps } from './shared';
+import { defaultGroup, formatDate, Pager, saveRule, useWriteFlow, writableGroups, writeGuard, type RuleSubmit, type TabProps } from './shared';
 import type { FileRule, NotFoundGroupRow, NotFoundRow, Paged } from './types';
 
 const PER_PAGE = 50;
@@ -111,9 +110,9 @@ export default function NotFoundTab({ index, reload, readOnly }: TabProps) {
 		refresh();
 	};
 
-	const saveRedirect = async (values: RuleFormValues, rule: FileRule) => {
+	const saveRedirect: RuleSubmit = async (values, rule, refused) => {
 		const url = adding;
-		const ok = await runWrites(ruleWrites(index, null, values, rule), __('Redirect added.', 'proto-blocks'));
+		const ok = await saveRule(runWrites, index, null, values, rule, __('Redirect added.', 'proto-blocks'), refused);
 		if (ok && url) {
 			await removeUrl(url);
 		}

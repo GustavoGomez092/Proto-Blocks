@@ -21,8 +21,7 @@ import { actionLabel, conditionLabel, CONDITIONS } from './codes';
 import { addRule, moveRule, newRuleId, readRules, removeRule, setRuleEnabled } from './edits';
 import { GroupMenu } from './GroupMenu';
 import { RuleDialog } from './RuleDialog';
-import type { RuleFormValues } from './rule-form';
-import { defaultGroup, formatDate, ruleWrites, sortedGroups, useWriteFlow, writableGroups, writeGuard, type TabProps } from './shared';
+import { defaultGroup, formatDate, saveRule, sortedGroups, useWriteFlow, writableGroups, writeGuard, type RuleSubmit, type TabProps } from './shared';
 import { TestBox } from './TestBox';
 import type { FileRule, Group, Rule } from './types';
 
@@ -147,8 +146,8 @@ export function RedirectsTab({
 	const fileEditable = (group: Group) => !readOnly && group.origin === 'file' && group.writable;
 	const groupWrite = (group: Group, edit: (text: string) => string): GroupWrite => ({ slug: group.slug, expectedHash: group.hash, edit });
 
-	const save = (values: RuleFormValues, rule: FileRule) =>
-		runWrites(ruleWrites(index, dialog?.rule ?? null, values, rule), dialog?.rule ? __('Redirect saved.', 'proto-blocks') : __('Redirect added.', 'proto-blocks'));
+	const save: RuleSubmit = (values, rule, refused) =>
+		saveRule(runWrites, index, dialog?.rule ?? null, values, rule, dialog?.rule ? __('Redirect saved.', 'proto-blocks') : __('Redirect added.', 'proto-blocks'), refused);
 
 	const selectedRows = rows.filter((row) => selected.has(row.key));
 	const selectedFile = selectedRows.filter((row) => fileEditable(row.group));
