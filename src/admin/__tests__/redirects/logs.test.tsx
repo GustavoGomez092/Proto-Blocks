@@ -177,6 +177,55 @@ describe('log', () => {
 	});
 });
 
+describe('log export', () => {
+	test('exports the current filters with the nonce; the server file name is used; a refusal toasts', async () => {
+		routes({ 'admin/redirects/log': { rows: [], total: 0, page: 1, perPage: 50, pages: 0 } });
+		const fetchMock = jest
+			.fn()
+			.mockResolvedValueOnce({ ok: true, status: 200, blob: async () => new Blob(['id\n']), headers: { get: (name: string) => (name === 'Content-Disposition' ? 'attachment; filename="proto-redirect-log-2026-11-05.csv"' : null) } })
+			.mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({ code: 'rest_forbidden', message: 'Sorry, you are not allowed to do that.' }) });
+		const original = { fetch: window.fetch, create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+		window.fetch = fetchMock as unknown as typeof fetch;
+		URL.createObjectURL = jest.fn(() => 'blob:x');
+		URL.revokeObjectURL = jest.fn();
+		const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+		try {
+			const user = userEvent.setup();
+			renderScreen('&tab=log');
+			expect(await screen.findByText('No redirects logged.')).toBeTruthy();
+			await user.type(screen.getByRole('textbox', { name: 'Code' }), '302');
+			await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+			await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+			expect(fetchMock).toHaveBeenNthCalledWith(1, 'https://example.test/wp-json/proto-blocks/v1/admin/redirects/log/export?format=csv&code=302', { headers: { 'X-WP-Nonce': 'nonce-wp_rest' }, credentials: 'same-origin' });
+			expect((click.mock.contexts[0] as HTMLAnchorElement).download).toBe('proto-redirect-log-2026-11-05.csv');
+
+			await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+			expect((await screen.findAllByText('Sorry, you are not allowed to do that.')).length).toBeGreaterThan(0);
+			expect(click).toHaveBeenCalledTimes(1);
+		} finally {
+			click.mockRestore();
+			window.fetch = original.fetch;
+			URL.createObjectURL = original.create;
+			URL.revokeObjectURL = original.revoke;
+		}
+	});
+
+	test('a failed 404 export toasts the server message', async () => {
+		routes({ 'admin/redirects/404': { rows: [{ url: '/missing', count: 1, lastSeen: '2026-11-04 09:00:00', lastReferrer: null }], total: 1 } });
+		const original = window.fetch;
+		window.fetch = jest.fn(async () => ({ ok: false, status: 400, json: async () => ({ code: 'proto_blocks_invalid_format', message: 'Logs export as CSV only.' }) })) as unknown as typeof fetch;
+		try {
+			const user = userEvent.setup();
+			renderScreen('&tab=404s');
+			await screen.findByRole('table', { name: '404s by URL' });
+			await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+			expect((await screen.findAllByText('Logs export as CSV only.')).length).toBeGreaterThan(0);
+		} finally {
+			window.fetch = original;
+		}
+	});
+});
+
 function jestClear() {
 	(jest.requireMock('@wordpress/api-fetch') as { default: jest.Mock }).default.mockClear();
 }

@@ -227,20 +227,31 @@ export function usePaged<T>(path: string) {
 	return { data, error, loading, reload: load };
 }
 
-function filenameFrom(disposition: string | null): string | null {
+/** A header-supplied name as a bare file name: no folders, no control characters; null when nothing usable is left. */
+function safeName(name: string): string | null {
+	// eslint-disable-next-line no-control-regex
+	const base = name.replace(/[\u0000-\u001f\u007f]/g, '').split(/[\\/]/).pop()?.trim() ?? '';
+	return base === '' || base === '.' || base === '..' ? null : base;
+}
+
+/** The file name of a `Content-Disposition` header (`filename*=` first, then `filename=`). */
+export function filenameFrom(disposition: string | null | undefined): string | null {
 	if (!disposition) {
 		return null;
 	}
 	const star = /filename\*=(?:UTF-8'')?([^;]+)/i.exec(disposition);
 	if (star) {
 		try {
-			return decodeURIComponent(star[1].trim().replace(/^"|"$/g, ''));
+			const name = safeName(decodeURIComponent(star[1].trim().replace(/^"|"$/g, '')));
+			if (name) {
+				return name;
+			}
 		} catch {
 			// Fall through to the plain filename.
 		}
 	}
 	const plain = /filename="?([^";]+)"?/i.exec(disposition);
-	return plain ? plain[1].trim() : null;
+	return plain ? safeName(plain[1]) : null;
 }
 
 /**
@@ -249,7 +260,12 @@ function filenameFrom(disposition: string | null): string | null {
  */
 export async function download(path: string, fallbackName: string): Promise<string> {
 	const { restRoot, restNonce } = getBootstrap();
-	const response = await fetch(restUrl(path, restRoot), { headers: { 'X-WP-Nonce': restNonce }, credentials: 'same-origin' });
+	let response: Response;
+	try {
+		response = await fetch(restUrl(path, restRoot), { headers: { 'X-WP-Nonce': restNonce }, credentials: 'same-origin' });
+	} catch (e) {
+		throw new ApiError('proto_blocks_export_failed', e instanceof Error ? e.message : String(e), 0);
+	}
 	if (!response.ok) {
 		let code = 'proto_blocks_export_failed';
 		let message = `HTTP ${response.status}`;
@@ -263,7 +279,7 @@ export async function download(path: string, fallbackName: string): Promise<stri
 		throw new ApiError(code, message, response.status);
 	}
 	const blob = await response.blob();
-	const name = filenameFrom(response.headers.get('Content-Disposition')) ?? fallbackName;
+	const name = filenameFrom(response.headers?.get('Content-Disposition')) ?? fallbackName;
 	const url = URL.createObjectURL(blob);
 	const link = document.createElement('a');
 	link.href = url;

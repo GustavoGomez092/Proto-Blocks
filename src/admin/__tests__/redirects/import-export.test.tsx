@@ -3,6 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { parseJsonc } from '@/admin/content-model/jsonc';
 import { readRules } from '@/admin/redirects/edits';
+import { filenameFrom } from '@/admin/redirects/api';
 import { detectFormat, mergeRules, sameSource } from '@/admin/redirects/import';
 import { calls, choose, renderScreen, routes, setup, writes } from './fixtures';
 
@@ -209,6 +210,98 @@ describe('export', () => {
 		} finally {
 			window.fetch = original;
 		}
+	});
+});
+
+/** Replaces fetch and the Blob link for one test; returns the fetch mock and the clicked links. */
+function stubDownload(response: unknown) {
+	const fetchMock = jest.fn(async () => (response instanceof Error ? Promise.reject(response) : response));
+	const original = { fetch: window.fetch, create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+	window.fetch = fetchMock as unknown as typeof fetch;
+	URL.createObjectURL = jest.fn(() => 'blob:x');
+	URL.revokeObjectURL = jest.fn();
+	const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+	return {
+		fetchMock,
+		names: () => click.mock.contexts.map((link) => (link as HTMLAnchorElement).download),
+		restore: () => {
+			click.mockRestore();
+			window.fetch = original.fetch;
+			URL.createObjectURL = original.create;
+			URL.revokeObjectURL = original.revoke;
+		},
+	};
+}
+
+describe('export downloads', () => {
+	test('Netlify: the file is named _redirects, from Content-Disposition', async () => {
+		routes({ 'admin/redirects/import/plugins': { importers: [] } });
+		const stub = stubDownload({ ok: true, status: 200, blob: async () => new Blob(['/a /b 301\n']), headers: { get: (name: string) => (name === 'Content-Disposition' ? 'attachment; filename="_redirects"' : null) } });
+		try {
+			const user = userEvent.setup();
+			renderScreen('&tab=import');
+			await screen.findByRole('heading', { name: 'Export' });
+			await choose(user, 'Format', 'Netlify (_redirects)');
+			await user.click(screen.getByRole('button', { name: 'Download' }));
+			await waitFor(() => expect(stub.names()).toEqual(['_redirects']));
+			expect(stub.fetchMock).toHaveBeenCalledWith('https://example.test/wp-json/proto-blocks/v1/admin/redirects/export?format=redirects', { headers: { 'X-WP-Nonce': 'nonce-wp_rest' }, credentials: 'same-origin' });
+			expect((await screen.findAllByText('Downloaded _redirects.')).length).toBeGreaterThan(0);
+		} finally {
+			stub.restore();
+		}
+	});
+
+	test('the server name wins over the fallback', async () => {
+		routes({ 'admin/redirects/import/plugins': { importers: [] } });
+		const stub = stubDownload({ ok: true, status: 200, blob: async () => new Blob(['x']), headers: { get: () => 'attachment; filename="proto-redirects-all-2026-11-05.csv"' } });
+		try {
+			const user = userEvent.setup();
+			renderScreen('&tab=import');
+			await user.click(await screen.findByRole('button', { name: 'Download' }));
+			await waitFor(() => expect(stub.names()).toEqual(['proto-redirects-all-2026-11-05.csv']));
+		} finally {
+			stub.restore();
+		}
+	});
+
+	test('a non-JSON error page and a network failure both toast, nothing is downloaded', async () => {
+		routes({ 'admin/redirects/import/plugins': { importers: [] } });
+		let stub = stubDownload({ ok: false, status: 502, json: async () => { throw new SyntaxError('Unexpected token <'); } });
+		try {
+			const user = userEvent.setup();
+			renderScreen('&tab=import');
+			await user.click(await screen.findByRole('button', { name: 'Download' }));
+			expect((await screen.findAllByText('HTTP 502')).length).toBeGreaterThan(0);
+			expect(screen.getAllByText('The export failed.').length).toBeGreaterThan(0);
+			expect(stub.names()).toEqual([]);
+		} finally {
+			stub.restore();
+		}
+
+		document.body.innerHTML = '';
+		stub = stubDownload(new TypeError('Failed to fetch'));
+		try {
+			const user = userEvent.setup();
+			renderScreen('&tab=import');
+			await user.click(await screen.findByRole('button', { name: 'Download' }));
+			expect((await screen.findAllByText('Failed to fetch')).length).toBeGreaterThan(0);
+			expect(stub.names()).toEqual([]);
+		} finally {
+			stub.restore();
+		}
+	});
+
+	test('filenameFrom', () => {
+		expect(filenameFrom('attachment; filename="_redirects"')).toBe('_redirects');
+		expect(filenameFrom('attachment; filename=log.csv')).toBe('log.csv');
+		expect(filenameFrom("attachment; filename*=UTF-8''r%C3%A9sum%C3%A9.csv; filename=\"x.csv\"")).toBe('résumé.csv');
+		// Folders and control characters never reach the download attribute.
+		expect(filenameFrom('attachment; filename="../../evil.sh"')).toBe('evil.sh');
+		expect(filenameFrom("attachment; filename*=UTF-8''..%2F..%2Fa%0A.txt")).toBe('a.txt');
+		expect(filenameFrom('attachment; filename=".."')).toBeNull();
+		expect(filenameFrom("attachment; filename*=UTF-8''%E0%A4%A; filename=\"ok.csv\"")).toBe('ok.csv');
+		expect(filenameFrom('inline')).toBeNull();
+		expect(filenameFrom(null)).toBeNull();
 	});
 });
 
