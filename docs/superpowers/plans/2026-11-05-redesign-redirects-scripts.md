@@ -39,9 +39,28 @@ structure (tab switch before a snippet, "Save to file", "Script title", radio co
 New tests: empty-state templates, location chips, print-order aside, plain-words summary,
 prints-before, tab jump on error.
 
-## Phase 2: Redirects
+## Phase 2: Redirects (after the UI follow-ups merge)
 
-(Planned after Phase 1; see section below.)
+Component inventory (design → existing pieces):
+- Header + tabs on the hairline → `PageHeader` gains a `nav` slot; Radix `Tabs` root now wraps the
+  header so the `TabsList` sits in it. Per-tab description line. Rules tab shows the rule count.
+- Toolbar → `Input` with search icon (sr-only label), `FilterPill` (Radix `Select` restyled as a pill:
+  dashed "+ Code" unset, solid "Code 301" set), `GroupMenu`, Add redirect.
+- Rules table → `Table`/`Panel`; Rule column (source, regex chip, arrow, target, condition pill;
+  second line origin dot, title, "otherwise"); `CodeCell` (temp note, amber errors); Group; Hits
+  (faint at 0); Last hit; On (`Switch`); Edit + "⋮" `Popover` menu (Move up/down, Duplicate, Delete).
+  Disabled rows on the subtle wash. Footer: counts, file path when filtered to a group, ordering note.
+- 404s → period chips (Radix radio items as pills) driving From/To, grouped table with "Redirect…",
+  Ignore, delete; aside with hits, distinct paths, ignore-rule count and the retention note linking to
+  Settings.
+- Edit redirect dialog → from/to card (source with Regular expression check, condition and action
+  selects on the divider, target + With status with its SEO hint), `<details>` Matching options,
+  Title · optional + Group, footer Enabled `Switch` + Cancel / Save redirect, "Writes to <file>".
+- Log, Import / Export, Settings (not in the design) → same search field, toolbar, table density,
+  muted secondary columns; Import / Export in two columns (Export as the aside); Settings at
+  max 960px with 24px gaps.
+
+No new tokens beyond `--panel-key` (Phase 1).
 
 ## Rulings
 
@@ -49,5 +68,14 @@ prints-before, tab jump on error.
   shows them but no such behaviour exists; adding dead links would mislead. The aside caption is
   reworded to what the list can know (print order, not per-page evaluation).
 - "Prints before" names the next enabled script sharing a location, by (priority, slug).
+- Redirects: the design's "Always / Logged in / Logged out / Referrer…" segmented control cannot hold
+  the eleven condition types, so the divider holds the existing Match condition and Action selects.
+- Redirects: the 404s period chips default to "All time" (the design shows 7 days) so the default
+  request and every existing URL contract stay as they were.
+- Redirects: no 404 count badge on the tab and no 7-day sparkline: the index route carries neither,
+  and adding requests on every screen load would change the REST contract. "Redirects created from
+  404s" is replaced by the count of ignore rules, which the index does carry.
+- Redirects: the visible labels follow the design ("When a visitor requests", "Send them to", "With
+  status", "Regular expression", tab "Rules"); tests updated to the new accessible names.
 - Templates are client-side presets only (title, snippets, where); the server validates as for any
   new script.
