@@ -582,7 +582,21 @@ if (!class_exists('WP_REST_Response')) {
 // option lands in pb_test_autoload[$name] (null when not passed).
 if (!function_exists('get_option')) {
     function get_option($name, $default = false) {
+        if (isset($GLOBALS['pb_test_option_reads'])) {
+            $GLOBALS['pb_test_option_reads'][] = $name; // tests opt in to see which options were read
+        }
         return array_key_exists($name, $GLOBALS['pb_test_options'] ?? []) ? $GLOBALS['pb_test_options'][$name] : $default;
+    }
+}
+if (!function_exists('wp_load_alloptions')) {
+    /** The autoloaded options: pb_test_options minus those last written with autoload false. */
+    function wp_load_alloptions($force_cache = false): array {
+        $GLOBALS['pb_test_alloptions_calls'] = ($GLOBALS['pb_test_alloptions_calls'] ?? 0) + 1;
+        return array_filter(
+            $GLOBALS['pb_test_options'] ?? [],
+            static fn($name): bool => ($GLOBALS['pb_test_autoload'][$name] ?? true) !== false,
+            ARRAY_FILTER_USE_KEY
+        );
     }
 }
 if (!function_exists('update_option')) {
