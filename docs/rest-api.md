@@ -7,7 +7,7 @@
 > - **Admin:** every Proto-Blocks screen is a client of these routes.
 > - **CLI:** the CLI uses the same writer and validators directly, not HTTP.
 
-Related: [content model files](content-model-files.md), [post types](post-types.md), [taxonomies](taxonomies.md), [fields](fields.md), [settings pages](settings-pages.md), [trust and security](trust-and-security.md).
+Related: [content model files](content-model-files.md), [post types](post-types.md), [taxonomies](taxonomies.md), [fields](fields.md), [settings pages](settings-pages.md), [redirects](redirects.md), [scripts](scripts.md), [trust and security](trust-and-security.md).
 
 ## Conventions
 
@@ -23,6 +23,8 @@ Related: [content model files](content-model-files.md), [post types](post-types.
 |---|---|
 | `admin/*` read routes | `manage_options` |
 | `admin/*` routes that write files | `manage_options`, `DISALLOW_FILE_MODS` and `DISALLOW_FILE_EDIT` false, and `is_super_admin()` on multisite |
+| `admin/scripts/<slug>` write routes | the file-write gate, and `unfiltered_html` |
+| `admin/redirects/import/deactivate` | `activate_plugins` |
 | `options/<slug>` | a logged-in user with the page's declared capability |
 | `fields/errors` | the object's edit capability (`edit_post`, `edit_term`, `edit_user`, or the page capability) |
 | `fields/relationship`, `blocks`, `blocks/<name>`, `preview`, `controls/options` | `edit_posts` |
@@ -432,6 +434,110 @@ Permission: `manage_options`.
 
 It resolves the slug through the registry only and returns no option values.
 `404 proto_blocks_options_page_not_found` for an unknown slug.
+
+## Redirects
+
+Guide: [redirects](redirects.md).
+Reads need `manage_options`. Writes to files go through the file-write gate and the existing `admin/schema-files/redirects/<slug>` and `admin/schema-files/redirect-settings/settings` routes.
+
+### GET `admin/redirects`
+
+```json
+{
+  "moduleEnabled": true,
+  "paused": false,
+  "createTarget": { "path": "wp-content/themes/acme/proto-redirects", "writable": true, "reason": null },
+  "groups": [
+    { "slug": "legacy-site", "title": "Legacy site", "enabled": true, "position": 10, "origin": "file", "double": null,
+      "writable": true, "hash": "3b0c...",
+      "rules": [ { "id": "r_8f3a2c1d", "from": "/about-us", "to": "/about", "hits": 12, "lastHit": "2026-11-05 10:00:00", "issues": [] } ] }
+  ],
+  "settings": { },
+  "settingsFile": { "exists": true, "hash": "9a1d...", "writable": true },
+  "issues": [],
+  "db": { "tables": true, "orphans": 0 }
+}
+```
+
+`paused` is true while the Redirection plugin is active and `coexist` is false.
+Each rule carries the keys of the file plus `hits`, `lastHit` and `issues`.
+
+### GET `admin/redirects/test?url=`
+
+```json
+{ "matched": true, "group": "legacy-site", "ruleId": "r_8f3a2c1d", "action": "url", "code": 301, "target": "/about",
+  "trace": [ { "group": "legacy-site", "ruleId": "r_8f3a2c1d", "result": "matched", "reason": "" } ] }
+```
+
+It evaluates without redirecting. `login` and `role` conditions use the calling admin's session, and the response says so.
+
+### Logs
+
+| Method | Route | Notes |
+|---|---|---|
+| GET | `admin/redirects/log`, `admin/redirects/404` | query: `page`, `per_page` (5 to 200), `search`, `code`, `rule`, `from`, `to`, `group_by=url` |
+| DELETE | `admin/redirects/log`, `admin/redirects/404` | body or query: `ids[]`, or `all=1` with the current filter |
+| GET | `admin/redirects/log/export?format=csv`, `admin/redirects/404/export?format=csv` | CSV, formula-escaped |
+
+### Hits, import, export, tables
+
+| Method | Route | Purpose |
+|---|---|---|
+| POST | `admin/redirects/hits/reset` | body `{group, ruleId}` |
+| POST | `admin/redirects/hits/prune` | remove orphan hit rows |
+| POST | `admin/redirects/import/parse` | multipart upload or `{format, text}`. Returns `{ rules: [{rule, status, reason}], groups? }`. |
+| GET | `admin/redirects/import/plugins` | importers whose data is present on this site |
+| POST | `admin/redirects/import/plugins/<id>/preview` | preview one plugin's rules |
+| POST | `admin/redirects/import/deactivate` | deactivate the source plugin. Needs `activate_plugins`. |
+| GET | `admin/redirects/export?format=csv\|json\|apache\|nginx\|redirects&group=` | file response |
+| POST | `admin/redirects/db/install` | create the three tables |
+
+Uploads are capped at 5 MB. Nothing in an upload is executed.
+
+## Scripts
+
+Guide: [scripts](scripts.md).
+
+### GET `admin/scripts`
+
+Permission: `manage_options`.
+
+```json
+{
+  "moduleEnabled": true,
+  "createTarget": { "path": "wp-content/themes/acme/proto-scripts", "writable": true, "reason": null },
+  "canWrite": true,
+  "writeReason": null,
+  "roles": [ { "slug": "administrator", "name": "Administrator" } ],
+  "items": [
+    { "slug": "gtm", "title": "Google Tag Manager", "enabled": true, "priority": 10,
+      "locations": [ "head", "bodyOpen" ], "where": { "include": [ "all" ] },
+      "origin": "file", "double": null, "issues": [] }
+  ],
+  "issues": []
+}
+```
+
+`writeReason` is `unfiltered_html` when the user may not post unfiltered HTML, besides the usual read-only reasons.
+
+### GET `admin/scripts/<slug>`
+
+The metadata file as the schema-files route returns it (`text`, `hash`, `data`), plus the snippet texts:
+
+```json
+{ "snippets": { "head": "<script>...</script>", "bodyOpen": "", "bodyClose": "" } }
+```
+
+### POST `admin/scripts/<slug>`
+
+Permission: write (*writes files*) and `unfiltered_html`.
+
+```json
+{ "text": "<script.jsonc text>", "hash": "<hash from GET, or null>", "snippets": { "head": "...", "bodyOpen": "", "bodyClose": "" } }
+```
+
+The server writes `script.jsonc` and the three `.html` files in one request and returns `{ "hash": "...", "path": "...", "warnings": [] }`.
+Delete goes through `DELETE admin/schema-files/script/<slug>?confirm=<slug>`.
 
 ## Admin screens (other)
 

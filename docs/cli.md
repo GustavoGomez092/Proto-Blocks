@@ -1,13 +1,13 @@
 # WP-CLI
 
 > **At a glance**
-> - **What:** every `wp proto-blocks` command: blocks, post types, taxonomies, settings pages, field groups, validation, cache and Tailwind.
+> - **What:** every `wp proto-blocks` command: blocks, post types, taxonomies, settings pages, field groups, redirects, scripts, validation, cache and Tailwind.
 > - **Where:** commands write declaration files into the active theme (`proto-types/`, `proto-taxonomies/`, `proto-options/`) and block templates into `templates/`.
 > - **PHP:** nothing to call; the commands use the same writer and validators as the admin screens.
 > - **Admin:** the same operations live on Proto Blocks > Post Types, Taxonomies, Fields and Options Pages.
 > - **CLI:** `wp help proto-blocks` lists the commands below.
 
-Related: [post types](post-types.md), [taxonomies](taxonomies.md), [fields](fields.md), [settings pages](settings-pages.md), [content model files](content-model-files.md).
+Related: [post types](post-types.md), [taxonomies](taxonomies.md), [fields](fields.md), [settings pages](settings-pages.md), [redirects](redirects.md), [scripts](scripts.md), [content model files](content-model-files.md).
 
 ## Conventions
 
@@ -39,6 +39,8 @@ WP-CLI runs as user 0 unless you pass `--user`.
 | `wp proto-blocks taxonomy list\|create\|validate\|rename` | taxonomies |
 | `wp proto-blocks options list\|create` | settings pages |
 | `wp proto-blocks fields list\|validate` | field groups |
+| `wp proto-blocks redirect <subcommand>` | redirects, groups, import, export, logs, tables |
+| `wp proto-blocks script list\|create\|validate\|enable\|disable\|delete` | scripts |
 
 ## `wp proto-blocks validate`
 
@@ -67,7 +69,7 @@ JSON output is one document:
 }
 ```
 
-- `kind` is `type`, `taxonomy`, `options` or `field-group` (or empty for a finding without a kind).
+- `kind` is `type`, `taxonomy`, `options`, `field-group`, `redirects`, `redirect-settings` or `script` (or empty for a finding without a kind).
 - `level` is `error` or `warning`.
 - Exits 1 when any block row has `status: error` or any declaration row has `level: error`.
 - Ends with "Success: All blocks and declarations validated successfully." otherwise.
@@ -290,6 +292,63 @@ Error: 1 error(s), 1 warning(s).
 
 Exits 1 on any error; otherwise "Success: No errors, N warning(s)."
 The `wide_location` warning is CLI-only: a group whose post branch no `post_type`, `post`, `page_template` or `post_taxonomy` `==` rule narrows.
+
+## `wp proto-blocks redirect`
+
+Redirect rules, groups, import, export, logs and tables.
+Guide: [redirects](redirects.md).
+
+```bash
+wp proto-blocks redirect <subcommand>
+```
+
+| Subcommand | Flags | Purpose |
+|---|---|---|
+| `list` | `--group=<slug>`, `--format=table\|json\|csv` | every rule |
+| `add <from> [<to>]` | `--code=`, `--group=`, `--regex`, `--when=<type>`, `--when-value=`, `--action=`, `--query=`, `--title=` | append a rule to a group file |
+| `delete <id>` | `--group=` | remove a rule |
+| `enable <id>`, `disable <id>` | | toggle a rule |
+| `group list` | | every group |
+| `group create <title>` | | a new group file |
+| `group enable <slug>`, `group disable <slug>` | | toggle a group |
+| `group delete <slug>` | | delete a group file |
+| `validate` | | check every group and the settings file. Also part of `wp proto-blocks validate`. |
+| `test <url>` | `--logged-in` | which rule fires for a URL, with a trace. Nothing is redirected. |
+| `import <file>` | `--format=csv\|json\|apache\|redirects`, `--group=`, `--duplicates=skip\|replace\|add`, `--dry-run` | import a file |
+| `import-plugin <id>` | `--group=`, `--dry-run` | import another plugin's redirects |
+| `export [<file>\|-]` | `--format=csv\|json\|apache\|nginx\|redirects`, `--group=` | write an export to a file, or to stdout with `-` |
+| `log` | `--404`, `--limit=`, `--clear` | read or clear the redirect log, or the 404 log with `--404` |
+| `prune` | | remove hit rows whose rule no longer exists |
+| `db install\|status\|drop` | `--yes` | create, check or drop the three tables |
+
+```bash
+wp proto-blocks redirect add /old /new --code=301 --group=legacy-site
+wp proto-blocks redirect test /old
+wp proto-blocks redirect import-plugin redirection --dry-run
+wp proto-blocks redirect export --format=apache -
+```
+
+- File writes need file modifications on, and on multisite a network administrator, as for every writing command.
+- Writes go through the server-side serializer. Hand-written comments inside the rules array of an edited group file are lost. The file header says so.
+- Pass `--logged-in` to `redirect test` to evaluate `login` and `role` conditions as a logged-in visitor.
+- `db drop` is the only way to drop the tables. Deactivating the plugin keeps them.
+
+## `wp proto-blocks script`
+
+Head, body-open and body-close snippets.
+Guide: [scripts](scripts.md).
+
+```bash
+wp proto-blocks script list
+wp proto-blocks script create <title>
+wp proto-blocks script validate
+wp proto-blocks script enable <slug>
+wp proto-blocks script disable <slug>
+wp proto-blocks script delete <slug> --confirm=<slug>
+```
+
+- `create` writes `proto-scripts/<slug>/script.jsonc` into the active theme.
+- `delete` needs `--confirm=<slug>` equal to the slug. It removes the folder only when it holds a valid `script.jsonc` and nothing but the three snippet files.
 
 ## Blocks
 

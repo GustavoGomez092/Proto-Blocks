@@ -12,6 +12,8 @@ A next-generation WordPress plugin that enables developers to create Gutenberg b
 ## Features
 
 - **Content model in files**: post types, taxonomies, custom fields and settings pages from one line of PHP or a JSONC file in the theme, edited from admin screens that write the same files. See [Content model](#content-model)
+- **Redirects in files**: 301/302/307/308 redirects, 410s, internal rewrites and conditions (login, role, referrer, agent, IP, language and more) as version-controlled JSONC groups in the theme, with regex, query modes, hit counts, a redirect log, a 404 log, a permalink monitor, canonical https/www and import from Redirection, CSV, JSON, Apache and `_redirects`. Only hits and logs touch the database. See `docs/redirects.md`
+- **Scripts in files**: head, body-open and body-close snippets (tags, verification metas, consent scripts) as files in the theme, scoped by page, login state and role, edited from an admin screen that writes the same files. See `docs/scripts.md`
 - **Single Source of Truth**: Define blocks using a single `block.json` file
 - **Template Caching**: Compiled templates are cached for optimal performance
 - **Extensible Field Types**: Plugin architecture for custom field types
@@ -1263,9 +1265,9 @@ Debug mode enables:
 
 ## Content model
 
-Since 2.15.0 Proto-Blocks also declares a site's content model: post types, taxonomies, custom fields and settings pages.
+Since 2.15.0 Proto-Blocks also declares a site's content model: post types, taxonomies, custom fields and settings pages. Since 2.16.0 the same pattern covers redirects and head/body scripts.
 Each is a line of PHP or a small JSONC file in the theme, edited from an admin UI that writes the same files.
-Nothing about the content model is stored in the database.
+Nothing about the content model is stored in the database. The redirect module keeps only hit counts, the redirect log and the 404 log there (three tables); no rule or setting is ever stored.
 
 | Feature | File | PHP | Admin | Guide |
 |---|---|---|---|---|
@@ -1273,6 +1275,8 @@ Nothing about the content model is stored in the database.
 | Taxonomies | `proto-taxonomies/<slug>/taxonomy.jsonc` | `proto_taxonomy('Topic', ['post_types' => ['event']])` | Proto Blocks > Taxonomies | [docs/taxonomies.md](docs/taxonomies.md) |
 | Custom fields | `proto-fields/<slug>/group.jsonc` | `proto_field_group('event', [...])` | Proto Blocks > Fields | [docs/fields.md](docs/fields.md) |
 | Settings pages | `proto-options/<slug>/page.jsonc` | `proto_options_page('Theme Settings', [...])` | Proto Blocks > Options Pages | [docs/settings-pages.md](docs/settings-pages.md) |
+| Redirects | `proto-redirects/<group>/redirects.jsonc`, `proto-redirects/settings.jsonc` | `proto_redirect('/old', '/new')` | Proto Blocks > Redirects | [docs/redirects.md](docs/redirects.md) |
+| Scripts | `proto-scripts/<slug>/script.jsonc` + `head.html`, `body-open.html`, `body-close.html` | `proto_script('GTM', ['head' => '...'])` | Proto Blocks > Scripts | [docs/scripts.md](docs/scripts.md) |
 
 Shared rules: [content model files](docs/content-model-files.md) (JSONC, precedence, how the UI writes, read-only mode), [trust and security](docs/trust-and-security.md), [REST API](docs/rest-api.md), [WP-CLI](docs/cli.md).
 
@@ -1363,6 +1367,8 @@ Read these before generating code for a site built with Proto-Blocks:
 | A post type or taxonomy | [docs/post-types.md](docs/post-types.md), [docs/taxonomies.md](docs/taxonomies.md) |
 | Custom fields and reading them in templates | [docs/fields.md](docs/fields.md) |
 | A settings page | [docs/settings-pages.md](docs/settings-pages.md) |
+| Redirects, 404 handling, importing from the Redirection plugin | [docs/redirects.md](docs/redirects.md) |
+| Head, body-open and body-close scripts (GTM, verification metas, consent) | [docs/scripts.md](docs/scripts.md) |
 | File format, precedence, read-only mode | [docs/content-model-files.md](docs/content-model-files.md) |
 | What is safe, and who may write what | [docs/trust-and-security.md](docs/trust-and-security.md) |
 | HTTP clients | [docs/rest-api.md](docs/rest-api.md) |
@@ -1370,7 +1376,7 @@ Read these before generating code for a site built with Proto-Blocks:
 
 The five rules that matter most:
 
-1. **Declare in files, then validate.** Write `proto-types/`, `proto-taxonomies/`, `proto-fields/` and `proto-options/` JSONC files in the theme (the folder name is the slug), and finish only when `wp proto-blocks validate` exits 0. Files cannot name PHP callbacks or put `<`/`>` in labels.
+1. **Declare in files, then validate.** Write `proto-types/`, `proto-taxonomies/`, `proto-fields/`, `proto-options/`, `proto-redirects/` and `proto-scripts/` JSONC files in the theme (the folder name is the slug), and finish only when `wp proto-blocks validate` exits 0. Files cannot name PHP callbacks or put `<`/`>` in labels.
 2. **Echo the getter as returned.** `proto_field()`, `proto_rows()` and `$template->field()` already escape for the field type (except `code`); use `$raw = true` only when you escape yourself. Never build the context argument from request data: the getter has no read-permission check.
 3. **Treat `code` and `password` as administrator-only.** Only users with `unfiltered_html` write them; others see them hidden. Never re-type an existing field to `code`: stored values then come back raw.
 4. **Mind exposure.** Post and term fields are in core's REST API by default (user fields are not); settings page fields are bindable by any author. Set `"show_in_rest": false` and `"bindings": false` on anything private.
@@ -1390,13 +1396,15 @@ wp proto-blocks type list | create "Event" | scaffold event | validate | rename 
 wp proto-blocks taxonomy list | create "Topic" | validate | rename
 wp proto-blocks options list | create "Theme Settings"
 wp proto-blocks fields list | validate
+wp proto-blocks redirect list | add /old /new | test /old | import file.csv | export | db status
+wp proto-blocks script list | create "GTM" | enable gtm | disable gtm
 ```
 
 Every command, flag, output column and exit code: [docs/cli.md](docs/cli.md).
 
 ## Admin
 
-The **Proto-Blocks** admin is a React app (Tailwind 4 + shadcn/ui, built from `src/admin/` to `assets/js/admin.js` and `assets/css/admin.css`). Its screens are **Blocks** (dashboard, example blocks, cache), **Post Types**, **Taxonomies**, **Fields**, **Options Pages**, **Tailwind Settings**, **System Status**, **Preview Capture** and the **Setup Wizard**. Nothing in the admin is rendered by PHP; each screen reads and writes through REST routes under `proto-blocks/v1/admin/*`. Every route requires `manage_options` and the REST nonce. Routes that write files are also refused with `403 proto_blocks_file_mods` when `DISALLOW_FILE_MODS` or `DISALLOW_FILE_EDIT` is set, and with `403 proto_blocks_multisite` on multisite for users who are not network administrators.
+The **Proto-Blocks** admin is a React app (Tailwind 4 + shadcn/ui, built from `src/admin/` to `assets/js/admin.js` and `assets/css/admin.css`). Its screens are **Blocks** (dashboard, example blocks, cache), **Post Types**, **Taxonomies**, **Fields**, **Options Pages**, **Redirects** (rules, 404s, log, import/export, settings), **Scripts**, **Tailwind Settings**, **System Status**, **Preview Capture** and the **Setup Wizard**. Nothing in the admin is rendered by PHP; each screen reads and writes through REST routes under `proto-blocks/v1/admin/*`. Every route requires `manage_options` and the REST nonce. Routes that write files are also refused with `403 proto_blocks_file_mods` when `DISALLOW_FILE_MODS` or `DISALLOW_FILE_EDIT` is set, and with `403 proto_blocks_multisite` on multisite for users who are not network administrators.
 
 The content-model screens edit theme files and become read-only, with a banner, when files cannot be written: see [docs/content-model-files.md](docs/content-model-files.md#read-only-reasons). Every route, its permission and its payload: [docs/rest-api.md](docs/rest-api.md).
 
@@ -1548,8 +1556,15 @@ Proto-Blocks provides several hooks for customization:
 | `proto_blocks_category_slug` | Customize category slug | `$slug` (string) |
 | `proto_blocks_paths` | Add custom block discovery paths | `$paths` (array) |
 | `proto_blocks_discovered` | Modify discovered blocks | `$blocks` (array) |
-| `proto_blocks_modules` | Switch content-model modules off (`post_types`, `taxonomies`, `fields`, `options_pages`) | `$modules` (array of bools) |
-| `proto_blocks_schema_paths` | Add roots searched for `proto-types/`, `proto-taxonomies/`, `proto-fields/`, `proto-options/` | `$paths` (array) |
+| `proto_blocks_modules` | Switch content-model modules off (`post_types`, `taxonomies`, `fields`, `options_pages`, `redirects`, `scripts`) | `$modules` (array of bools) |
+| `proto_blocks_schema_paths` | Add roots searched for `proto-types/`, `proto-taxonomies/`, `proto-fields/`, `proto-options/`, `proto-redirects/`, `proto-scripts/` | `$paths` (array) |
+| `proto_blocks_redirects_excluded` | Exclude more requests from redirect matching and 404 logging | `$excluded` (bool), `$request` |
+| `proto_blocks_redirects_priority` | `init` priority of the main redirect pass (default 10) | `$priority` (int) |
+| `proto_blocks_redirects_canonical_target` | Change the https/www/alias/relocate target | `$target`, `$request` |
+| `proto_blocks_redirects_log_404` | Return false to skip logging a 404 | `$log` (bool), `$request` |
+| `proto_blocks_redirects_nothing` | Action fired when a `nothing` rule matches | `$rule`, `$request` |
+| `proto_blocks_scripts_markers` | Return false to drop the `<!-- proto-blocks: slug -->` markers | `$markers` (bool) |
+| `proto_blocks_scripts_enabled` | Veto script output for the current request | `$enabled` (bool) |
 | `proto_blocks_declaration_errors` | Add validation findings for a declaration | `$errors`, `$kind`, `$data`, `$slug` |
 | `proto_blocks_field_groups` | Modify the loaded field groups | `$groups` (array) |
 | `proto_blocks_field_stores` | Replace a field value store | `$stores` (array) |
