@@ -103,6 +103,9 @@ register_activation_hook(__FILE__, function (): void {
     // Flush rewrite rules
     flush_rewrite_rules();
 
+    // Redirect hit/log tables (runtime data only; rules live in theme files).
+    \ProtoBlocks\Modules\Redirects\RedirectsModule::activate();
+
     // Set activation flag for wizard redirect
     set_transient('proto_blocks_activated', true, 30);
 
@@ -116,6 +119,9 @@ register_activation_hook(__FILE__, function (): void {
 register_deactivation_hook(__FILE__, function (): void {
     // Flush rewrite rules
     flush_rewrite_rules();
+
+    // Unschedule the redirect log retention cron; tables are kept.
+    \ProtoBlocks\Modules\Redirects\RedirectsModule::deactivate();
 });
 
 // Uninstall hook is in uninstall.php
