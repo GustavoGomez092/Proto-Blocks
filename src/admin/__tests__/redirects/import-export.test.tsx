@@ -3,6 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { parseJsonc } from '@/admin/content-model/jsonc';
 import { readRules } from '@/admin/redirects/edits';
+import { filenameFrom } from '@/admin/redirects/api';
 import { detectFormat, mergeRules, sameSource } from '@/admin/redirects/import';
 import { calls, choose, renderScreen, routes, setup, writes } from './fixtures';
 
@@ -12,10 +13,11 @@ const fileWrites = () => writes().filter((c) => c.url.startsWith('admin/schema-f
 
 const parsed = {
 	rules: [
-		{ rule: { from: '/spring', to: '/summer', code: 302 }, status: 'duplicate', reason: 'Source exists in promo.', line: 2 },
-		{ rule: { from: '/new', to: '/n' }, status: 'new', reason: null, line: 3 },
-		{ rule: { from: 'bad', to: '/x' }, status: 'invalid', reason: 'Source must start with /.', line: 4 },
+		{ rule: { from: '/spring', to: '/summer', code: 302 }, status: 'duplicate', reason: 'duplicate', line: 2, message: 'Source exists in promo.' },
+		{ rule: { from: '/new', to: '/n' }, status: 'new', reason: null, line: 3, message: null },
+		{ rule: { from: 'bad', to: '/x' }, status: 'invalid', reason: 'invalid_source', line: 4, message: 'Source must start with /.' },
 	],
+	format: 'csv',
 };
 
 async function upload(user: ReturnType<typeof userEvent.setup>, name = 'redirects.csv') {
@@ -28,7 +30,7 @@ describe('file import', () => {
 	test('preview shows each row’s status; replace mode merges into the chosen group', async () => {
 		let body: unknown = null;
 		routes({
-			'admin/redirects/import/plugins': [],
+			'admin/redirects/import/plugins': { importers: [] },
 			'POST admin/redirects/import/parse': (data: unknown) => {
 				body = data;
 				return parsed;
@@ -45,6 +47,8 @@ describe('file import', () => {
 		expect(within(rows[1]).getByText('New')).toBeTruthy();
 		expect(within(rows[2]).getByText('Invalid')).toBeTruthy();
 		expect(within(rows[2]).getByText('Source must start with /.')).toBeTruthy();
+		// The readable message is shown, not the reason code.
+		expect(within(table).queryByText('invalid_source')).toBeNull();
 		expect(screen.getByText('1 new, 1 duplicate, 1 invalid.')).toBeTruthy();
 
 		await choose(user, 'Import into group', 'Promo');
@@ -63,7 +67,7 @@ describe('file import', () => {
 
 	test('skip is the default; a new group is created with hash null', async () => {
 		routes({
-			'admin/redirects/import/plugins': [],
+			'admin/redirects/import/plugins': { importers: [] },
 			'POST admin/redirects/import/parse': parsed,
 			'admin/schema-files/redirects/imported': { exists: false, path: 'p', text: '', hash: null, data: {}, writable: true, reason: null },
 			'POST admin/schema-files/redirects/imported': { path: 'p', hash: 'h', created: true, warnings: [] },
@@ -87,7 +91,7 @@ describe('file import', () => {
 	});
 
 	test('read-only: Import is disabled', async () => {
-		routes({ 'admin/redirects/import/plugins': [], 'POST admin/redirects/import/parse': parsed });
+		routes({ 'admin/redirects/import/plugins': { importers: [] }, 'POST admin/redirects/import/parse': parsed });
 		const user = userEvent.setup();
 		renderScreen('&tab=import', { fileModsAllowed: false });
 		await upload(user);
@@ -101,8 +105,14 @@ describe('file import', () => {
 describe('plugin import', () => {
 	test('lists available importers, previews, writes one file per group, then deactivates the plugin', async () => {
 		routes({
-			'admin/redirects/import/plugins': { importers: [{ id: 'redirection', label: 'Redirection', cleanupHint: 'Delete the Redirection tables afterwards.', plugin: 'redirection/redirection.php' }] },
+			'admin/redirects/import/plugins': {
+				importers: [{ id: 'redirection', label: 'Redirection', cleanupHint: 'Delete the Redirection tables afterwards.', plugin: 'redirection/redirection.php', plugins: ['redirection/redirection.php'], active: ['redirection/redirection.php'], canDeactivate: true }],
+			},
 			'POST admin/redirects/import/plugins/redirection/preview': {
+				id: 'redirection',
+				label: 'Redirection',
+				cleanupHint: 'Delete the Redirection tables afterwards.',
+				skipped: [{ rule: { from: '/x', to: '/y' }, status: 'invalid', reason: 'unsupported_action', line: 7, message: 'The action has no Proto-Blocks equivalent.' }],
 				groups: {
 					'redirections': { title: 'Redirections', enabled: false, position: 3, rules: [{ from: '/r1', to: '/t1' }] },
 					'legacy-site': { title: 'Legacy site', rules: [{ from: '/about-us', to: '/elsewhere' }, { from: '/r2', to: '/t2', code: 307 }] },
@@ -110,7 +120,7 @@ describe('plugin import', () => {
 			},
 			'admin/schema-files/redirects/redirections': { exists: false, path: 'p', text: '', hash: null, data: {}, writable: true, reason: null },
 			'POST admin/schema-files/redirects/redirections': { path: 'p', hash: 'h', created: true, warnings: [] },
-			'POST admin/redirects/import/deactivate': { deactivated: true },
+			'POST admin/redirects/import/deactivate': { deactivated: ['redirection/redirection.php'], skipped: [] },
 		});
 		const user = userEvent.setup();
 		renderScreen('&tab=import');
@@ -118,6 +128,10 @@ describe('plugin import', () => {
 		expect(await screen.findByText('Redirection: 3 rules in 2 groups')).toBeTruthy();
 		expect(screen.getByText('Delete the Redirection tables afterwards.')).toBeTruthy();
 		expect(screen.getByText('merges into existing group')).toBeTruthy();
+		const skipped = screen.getByRole('table', { name: 'Rows of Redirection that are skipped' });
+		expect(within(skipped).getByText('The action has no Proto-Blocks equivalent.')).toBeTruthy();
+		expect(within(skipped).getByText('Invalid')).toBeTruthy();
+		expect(screen.getByText('1 row cannot be imported:')).toBeTruthy();
 		await user.click(screen.getByRole('checkbox', { name: 'Deactivate Redirection after importing' }));
 		await user.click(screen.getByRole('button', { name: 'Import 3 rules' }));
 		await waitFor(() => expect(calls().some((c) => c.url === 'admin/redirects/import/deactivate')).toBe(true));
@@ -129,10 +143,28 @@ describe('plugin import', () => {
 		// Skip mode: /about-us exists in legacy-site, so only /r2 is added.
 		expect(readRules(merged.data?.text ?? '').map((r) => r.from).slice(-2)).toEqual(['/gone-forever', '/r2']);
 		expect(calls().find((c) => c.url === 'admin/redirects/import/deactivate')?.data).toEqual({ id: 'redirection' });
+		expect(await screen.findByText('Redirection deactivated.')).toBeTruthy();
+	});
+
+	test('no deactivate option without activate_plugins or when the plugin is already inactive', async () => {
+		const importer = { id: 'redirection', label: 'Redirection', cleanupHint: null, plugin: 'redirection/redirection.php', plugins: ['redirection/redirection.php'] };
+		for (const extra of [{ active: ['redirection/redirection.php'], canDeactivate: false }, { active: [], canDeactivate: true }]) {
+			document.body.innerHTML = '';
+			routes({
+				'admin/redirects/import/plugins': { importers: [{ ...importer, ...extra }] },
+				'POST admin/redirects/import/plugins/redirection/preview': { groups: { r: { title: 'R', rules: [{ from: '/a', to: '/b' }] } }, skipped: [] },
+			});
+			const user = userEvent.setup();
+			renderScreen('&tab=import');
+			await user.click(await screen.findByRole('button', { name: 'Preview Redirection' }));
+			expect(await screen.findByText('Redirection: 1 rules in 1 groups')).toBeTruthy();
+			expect(screen.queryByRole('checkbox', { name: 'Deactivate Redirection after importing' })).toBeNull();
+			expect(screen.queryByText(/cannot be imported/)).toBeNull();
+		}
 	});
 
 	test('nothing to import', async () => {
-		routes({ 'admin/redirects/import/plugins': [] });
+		routes({ 'admin/redirects/import/plugins': { importers: [] } });
 		renderScreen('&tab=import');
 		expect(await screen.findByText('No other redirect plugin data found.')).toBeTruthy();
 	});
@@ -140,7 +172,7 @@ describe('plugin import', () => {
 
 describe('export', () => {
 	test('downloads the chosen group and format with the nonce', async () => {
-		routes({ 'admin/redirects/import/plugins': [] });
+		routes({ 'admin/redirects/import/plugins': { importers: [] } });
 		const fetchMock = jest.fn(async () => ({ ok: true, status: 200, blob: async () => new Blob(['{}']), headers: { get: () => null } }));
 		const original = { fetch: window.fetch, create: URL.createObjectURL, revoke: URL.revokeObjectURL };
 		window.fetch = fetchMock as unknown as typeof fetch;
@@ -167,7 +199,7 @@ describe('export', () => {
 	});
 
 	test('a failed export shows the server message', async () => {
-		routes({ 'admin/redirects/import/plugins': [] });
+		routes({ 'admin/redirects/import/plugins': { importers: [] } });
 		const original = window.fetch;
 		window.fetch = jest.fn(async () => ({ ok: false, status: 403, json: async () => ({ code: 'rest_forbidden', message: 'Not allowed.' }) })) as unknown as typeof fetch;
 		try {
@@ -178,6 +210,98 @@ describe('export', () => {
 		} finally {
 			window.fetch = original;
 		}
+	});
+});
+
+/** Replaces fetch and the Blob link for one test; returns the fetch mock and the clicked links. */
+function stubDownload(response: unknown) {
+	const fetchMock = jest.fn(async () => (response instanceof Error ? Promise.reject(response) : response));
+	const original = { fetch: window.fetch, create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+	window.fetch = fetchMock as unknown as typeof fetch;
+	URL.createObjectURL = jest.fn(() => 'blob:x');
+	URL.revokeObjectURL = jest.fn();
+	const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+	return {
+		fetchMock,
+		names: () => click.mock.contexts.map((link) => (link as HTMLAnchorElement).download),
+		restore: () => {
+			click.mockRestore();
+			window.fetch = original.fetch;
+			URL.createObjectURL = original.create;
+			URL.revokeObjectURL = original.revoke;
+		},
+	};
+}
+
+describe('export downloads', () => {
+	test('Netlify: the file is named _redirects, from Content-Disposition', async () => {
+		routes({ 'admin/redirects/import/plugins': { importers: [] } });
+		const stub = stubDownload({ ok: true, status: 200, blob: async () => new Blob(['/a /b 301\n']), headers: { get: (name: string) => (name === 'Content-Disposition' ? 'attachment; filename="_redirects"' : null) } });
+		try {
+			const user = userEvent.setup();
+			renderScreen('&tab=import');
+			await screen.findByRole('heading', { name: 'Export' });
+			await choose(user, 'Format', 'Netlify (_redirects)');
+			await user.click(screen.getByRole('button', { name: 'Download' }));
+			await waitFor(() => expect(stub.names()).toEqual(['_redirects']));
+			expect(stub.fetchMock).toHaveBeenCalledWith('https://example.test/wp-json/proto-blocks/v1/admin/redirects/export?format=redirects', { headers: { 'X-WP-Nonce': 'nonce-wp_rest' }, credentials: 'same-origin' });
+			expect((await screen.findAllByText('Downloaded _redirects.')).length).toBeGreaterThan(0);
+		} finally {
+			stub.restore();
+		}
+	});
+
+	test('the server name wins over the fallback', async () => {
+		routes({ 'admin/redirects/import/plugins': { importers: [] } });
+		const stub = stubDownload({ ok: true, status: 200, blob: async () => new Blob(['x']), headers: { get: () => 'attachment; filename="proto-redirects-all-2026-11-05.csv"' } });
+		try {
+			const user = userEvent.setup();
+			renderScreen('&tab=import');
+			await user.click(await screen.findByRole('button', { name: 'Download' }));
+			await waitFor(() => expect(stub.names()).toEqual(['proto-redirects-all-2026-11-05.csv']));
+		} finally {
+			stub.restore();
+		}
+	});
+
+	test('a non-JSON error page and a network failure both toast, nothing is downloaded', async () => {
+		routes({ 'admin/redirects/import/plugins': { importers: [] } });
+		let stub = stubDownload({ ok: false, status: 502, json: async () => { throw new SyntaxError('Unexpected token <'); } });
+		try {
+			const user = userEvent.setup();
+			renderScreen('&tab=import');
+			await user.click(await screen.findByRole('button', { name: 'Download' }));
+			expect((await screen.findAllByText('HTTP 502')).length).toBeGreaterThan(0);
+			expect(screen.getAllByText('The export failed.').length).toBeGreaterThan(0);
+			expect(stub.names()).toEqual([]);
+		} finally {
+			stub.restore();
+		}
+
+		document.body.innerHTML = '';
+		stub = stubDownload(new TypeError('Failed to fetch'));
+		try {
+			const user = userEvent.setup();
+			renderScreen('&tab=import');
+			await user.click(await screen.findByRole('button', { name: 'Download' }));
+			expect((await screen.findAllByText('Failed to fetch')).length).toBeGreaterThan(0);
+			expect(stub.names()).toEqual([]);
+		} finally {
+			stub.restore();
+		}
+	});
+
+	test('filenameFrom', () => {
+		expect(filenameFrom('attachment; filename="_redirects"')).toBe('_redirects');
+		expect(filenameFrom('attachment; filename=log.csv')).toBe('log.csv');
+		expect(filenameFrom("attachment; filename*=UTF-8''r%C3%A9sum%C3%A9.csv; filename=\"x.csv\"")).toBe('résumé.csv');
+		// Folders and control characters never reach the download attribute.
+		expect(filenameFrom('attachment; filename="../../evil.sh"')).toBe('evil.sh');
+		expect(filenameFrom("attachment; filename*=UTF-8''..%2F..%2Fa%0A.txt")).toBe('a.txt');
+		expect(filenameFrom('attachment; filename=".."')).toBeNull();
+		expect(filenameFrom("attachment; filename*=UTF-8''%E0%A4%A; filename=\"ok.csv\"")).toBe('ok.csv');
+		expect(filenameFrom('inline')).toBeNull();
+		expect(filenameFrom(null)).toBeNull();
 	});
 });
 

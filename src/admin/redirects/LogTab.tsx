@@ -182,7 +182,7 @@ export default function LogTab({ index, onEditRule }: TabProps & { onEditRule: (
 							))}
 						</TableBody>
 					</Table>
-					<Pager page={page} perPage={PER_PAGE} total={list.data.total} onPage={setPage} label={__('Log pages', 'proto-blocks')} />
+					<Pager page={page} perPage={list.data.perPage ?? PER_PAGE} total={list.data.total} onPage={setPage} label={__('Log pages', 'proto-blocks')} />
 				</Panel>
 			)}
 			<ConfirmDialog
