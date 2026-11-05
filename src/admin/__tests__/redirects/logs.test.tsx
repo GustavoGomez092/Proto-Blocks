@@ -44,10 +44,10 @@ describe('404s', () => {
 		renderScreen('&tab=404s');
 		await user.click(await screen.findByRole('button', { name: 'Add redirect for /missing' }));
 		const dialog = await screen.findByRole('dialog', { name: 'Add redirect for this 404' });
-		expect((within(dialog).getByRole('textbox', { name: 'Source' }) as HTMLInputElement).value).toBe('/missing');
-		expect((within(dialog).getByRole('textbox', { name: 'Target' }) as HTMLInputElement).value).toBe('');
+		expect((within(dialog).getByRole('textbox', { name: 'When a visitor requests' }) as HTMLInputElement).value).toBe('/missing');
+		expect((within(dialog).getByRole('textbox', { name: 'Send them to' }) as HTMLInputElement).value).toBe('');
 		expect(within(dialog).getByRole('combobox', { name: 'Group' }).textContent).toBe('Legacy site');
-		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), '/found');
+		await user.type(within(dialog).getByRole('textbox', { name: 'Send them to' }), '/found');
 		await user.click(within(dialog).getByRole('button', { name: 'Save redirect' }));
 
 		await waitFor(() => expect(calls().some((c) => c.method === 'DELETE')).toBe(true));
@@ -68,7 +68,7 @@ describe('404s', () => {
 		renderScreen('&tab=404s');
 		await user.click(await screen.findByRole('button', { name: 'Add redirect for /missing' }));
 		const dialog = await screen.findByRole('dialog', { name: 'Add redirect for this 404' });
-		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), '/found');
+		await user.type(within(dialog).getByRole('textbox', { name: 'Send them to' }), '/found');
 		await user.click(within(dialog).getByRole('button', { name: 'Save redirect' }));
 		expect(await screen.findByText('Bad rule')).toBeTruthy();
 		expect(calls().some((c) => c.method === 'DELETE')).toBe(false);

@@ -105,7 +105,7 @@ describe('tabs', () => {
 		renderScreen('&tab=log');
 		await user.click(await screen.findByRole('button', { name: 'Edit rule r_00000001' }));
 		const dialog = await screen.findByRole('dialog', { name: 'Edit redirect' });
-		expect((within(dialog).getByRole('textbox', { name: 'Source' }) as HTMLInputElement).value).toBe('/about-us');
+		expect((within(dialog).getByRole('textbox', { name: 'When a visitor requests' }) as HTMLInputElement).value).toBe('/about-us');
 	});
 });
 

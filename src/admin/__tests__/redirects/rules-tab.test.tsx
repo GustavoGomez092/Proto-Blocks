@@ -25,12 +25,12 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		const user = userEvent.setup();
 		renderScreen();
 		const dialog = await openAdd(user);
-		await user.type(within(dialog).getByRole('textbox', { name: 'Source' }), '^/(a');
-		await user.click(within(dialog).getByRole('checkbox', { name: 'Regex' }));
-		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), '/b');
+		await user.type(within(dialog).getByRole('textbox', { name: 'When a visitor requests' }), '^/(a');
+		await user.click(within(dialog).getByRole('checkbox', { name: 'Regular expression' }));
+		await user.type(within(dialog).getByRole('textbox', { name: 'Send them to' }), '/b');
 		await submit(user, dialog);
 		expect(await within(dialog).findByText(/The pattern does not compile/)).toBeTruthy();
-		expect(within(dialog).getByRole('textbox', { name: 'Source' }).getAttribute('aria-invalid')).toBe('true');
+		expect(within(dialog).getByRole('textbox', { name: 'When a visitor requests' }).getAttribute('aria-invalid')).toBe('true');
 		expect(posts()).toEqual([]);
 	});
 
@@ -39,8 +39,8 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		const user = userEvent.setup();
 		renderScreen();
 		const dialog = await openAdd(user);
-		await user.click(within(dialog).getByRole('checkbox', { name: 'Regex' }));
-		await user.type(within(dialog).getByRole('textbox', { name: 'Source' }), 'blog');
+		await user.click(within(dialog).getByRole('checkbox', { name: 'Regular expression' }));
+		await user.type(within(dialog).getByRole('textbox', { name: 'When a visitor requests' }), 'blog');
 		expect(within(dialog).getByText(/neither \^ nor \$/)).toBeTruthy();
 	});
 
@@ -61,7 +61,7 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		renderScreen();
 		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Edit /about-us' }));
 		const dialog = await screen.findByRole('dialog', { name: 'Edit redirect' });
-		expect(within(dialog).getByRole('combobox', { name: 'Code' }).textContent).toContain('399 Not a valid code');
+		expect(within(dialog).getByRole('combobox', { name: 'With status' }).textContent).toContain('399 · Not a valid code');
 		await submit(user, dialog);
 		expect(await within(dialog).findByText('A redirect code must be one of 301, 302, 303, 307, 308.')).toBeTruthy();
 		expect(posts()).toEqual([]);
@@ -82,11 +82,11 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		const user = userEvent.setup();
 		renderScreen();
 		const dialog = await openAdd(user);
-		await user.type(within(dialog).getByRole('textbox', { name: 'Source' }), '/old-api');
+		await user.type(within(dialog).getByRole('textbox', { name: 'When a visitor requests' }), '/old-api');
 		await choose(user, 'Action', 'Pass through (internal rewrite)');
 		// pass has no code select.
-		expect(within(dialog).queryByRole('combobox', { name: 'Code' })).toBeNull();
-		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), 'https://other.test/api');
+		expect(within(dialog).queryByRole('combobox', { name: 'With status' })).toBeNull();
+		await user.type(within(dialog).getByRole('textbox', { name: 'Send them to' }), 'https://other.test/api');
 		await submit(user, dialog);
 		expect(await within(dialog).findByText('A pass-through target must be a path on this site, starting with "/".')).toBeTruthy();
 		expect(posts()).toEqual([]);
@@ -97,9 +97,9 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		const user = userEvent.setup();
 		renderScreen();
 		const dialog = await openAdd(user);
-		await user.type(within(dialog).getByRole('textbox', { name: 'Source' }), '/shop');
-		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), 'https://shop.example.test/');
-		await choose(user, 'Code', /^302 /);
+		await user.type(within(dialog).getByRole('textbox', { name: 'When a visitor requests' }), '/shop');
+		await user.type(within(dialog).getByRole('textbox', { name: 'Send them to' }), 'https://shop.example.test/');
+		await choose(user, 'With status', /^302 /);
 		await submit(user, dialog);
 		await waitFor(() => expect(posts()).toHaveLength(1));
 		const [post] = posts();
@@ -122,8 +122,8 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		expect(within(dialog).getByRole('textbox', { name: 'Header value' })).toBeTruthy();
 		expect(within(dialog).getByRole('checkbox', { name: 'Value is a regular expression' })).toBeTruthy();
 		expect(within(dialog).getByRole('textbox', { name: 'Fallback target' })).toBeTruthy();
-		await user.type(within(dialog).getByRole('textbox', { name: 'Source' }), '/a');
-		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), '/b');
+		await user.type(within(dialog).getByRole('textbox', { name: 'When a visitor requests' }), '/a');
+		await user.type(within(dialog).getByRole('textbox', { name: 'Send them to' }), '/b');
 		await submit(user, dialog);
 		// The server's order: the value first, then the name.
 		expect(await within(dialog).findByText('Enter a value for this condition.')).toBeTruthy();
@@ -164,14 +164,14 @@ describe('a save the server refuses', () => {
 		const user = userEvent.setup();
 		renderScreen();
 		const dialog = await openAdd(user);
-		await user.type(within(dialog).getByRole('textbox', { name: 'Source' }), '/shop');
-		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), 'https://shop.test/');
+		await user.type(within(dialog).getByRole('textbox', { name: 'When a visitor requests' }), '/shop');
+		await user.type(within(dialog).getByRole('textbox', { name: 'Send them to' }), 'https://shop.test/');
 		await choose(user, 'Match condition', 'IP address');
 		await user.type(within(dialog).getByRole('textbox', { name: 'IP addresses or ranges' }), '10.0.0.1');
 		await submit(user, dialog);
 
 		expect(await within(dialog).findByText('The target URL needs a host (server).')).toBeTruthy();
-		const target = within(dialog).getByRole('textbox', { name: 'Target' });
+		const target = within(dialog).getByRole('textbox', { name: 'Send them to' });
 		expect(target.getAttribute('aria-invalid')).toBe('true');
 		expect(target.getAttribute('aria-describedby')).toContain(`${target.id}-error`);
 		expect(within(dialog).getByText('Not an IP address or CIDR range (server).')).toBeTruthy();
@@ -199,8 +199,8 @@ describe('a save the server refuses', () => {
 		const user = userEvent.setup();
 		renderScreen();
 		const dialog = await openAdd(user);
-		await user.type(within(dialog).getByRole('textbox', { name: 'Source' }), '/shop');
-		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), '/store');
+		await user.type(within(dialog).getByRole('textbox', { name: 'When a visitor requests' }), '/shop');
+		await user.type(within(dialog).getByRole('textbox', { name: 'Send them to' }), '/store');
 		await submit(user, dialog);
 		expect(await screen.findByText('The change was not saved.')).toBeTruthy();
 	});
