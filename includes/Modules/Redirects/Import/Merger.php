@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Modules\Redirects\Import;
 
+use ProtoBlocks\Modules\Redirects\Definition\RuleNormalizer;
+
 /**
  * Merges imported rules into a group (spec §9 duplicate modes):
  * - `skip` (default): a rule whose duplicate key already exists is left out;
@@ -127,9 +129,14 @@ final class Merger
      */
     public static function derive(string $slug, array $rule, array $taken): string
     {
-        $seed = $slug . "\0" . (string) ($rule['from'] ?? '') . "\0" . json_encode($rule['when'] ?? null) . "\0" . (string) ($rule['action'] ?? 'url');
+        // Same derivation as the file loader (RuleNormalizer::deriveId on the
+        // normalised condition), so a rule that gets its id here keeps it when
+        // the file is read back; the counter only breaks ties inside one import.
+        $from = isset($rule['from']) ? (string) $rule['from'] : null;
+        $when = RuleNormalizer::when($rule['when'] ?? null);
+        $action = (string) ($rule['action'] ?? 'url');
         for ($n = 0; ; $n++) {
-            $id = 'r_' . substr(sha1($n === 0 ? $seed : $seed . "\0" . $n), 0, 8);
+            $id = RuleNormalizer::deriveId($slug, $n === 0 ? $from : ($from ?? '') . "\0" . $n, $when, $action);
             if (!isset($taken[$id])) {
                 return $id;
             }
