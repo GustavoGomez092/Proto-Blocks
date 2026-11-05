@@ -318,7 +318,7 @@ Login, admin, cron, XML-RPC and REST are never touched. See [actions and codes](
 | `log.notFound` | The same for the 404 log. |
 | `log.ip` | `none`, `masked` or `full`. |
 | `log.headers` | Store request headers in the `request` column, minus `authorization`, `cookie`, `set-cookie`, `host`, `proxy-authorization`, `x-wp-nonce`, `x-api-key`, `x-auth-token`, `x-csrf-token` and `x-xsrf-token`. Unless `log.ip` is `full`, the headers that carry a client address are dropped too: `x-forwarded-for`, `cf-connecting-ip`, `x-real-ip`, `client-ip`, `true-client-ip`, `forwarded`, `x-forwarded`, `x-cluster-client-ip`, `via`, `forwarded-for` and `x-client-ip`. At most 50 headers, each value cut at 1000 characters. |
-| `log.external` | Reserved. It is validated and shown on the Settings tab, but nothing reads it yet: redirects issued by other plugins or core are not logged. |
+| `log.external` | Also log redirects issued by other code through `wp_redirect()` (core, WooCommerce, SEO plugins). Such a row has no group or rule, and `redirectBy` is the lower-cased `X-Redirect-By` agent (50 characters at most). `log.redirects` still decides whether and how long rows are kept. Off while the module is paused for the Redirection plugin. |
 | `log.trustedProxies` | `REMOTE_ADDR` values, single addresses or CIDR ranges (100 at most), allowed to supply a client-IP header. |
 | `log.ipHeaders` | Ordered: `CF-Connecting-IP`, `X-Forwarded-For`, `X-Real-IP`, `Client-IP`, `True-Client-IP`. |
 | `trackHits` | Count hits per rule. |
@@ -613,8 +613,8 @@ Full details: [CLI](cli.md#wp-proto-blocks-redirect).
 | A hit row remains after deleting a rule | The rule was removed from the file, not in the UI. | Prune orphan rows in Settings or run `wp proto-blocks redirect prune`. |
 | Redirects work but the log is empty | `log.redirects` is `-1`, the rule has `log: false`, the rule is a `nothing` rule, or the tables are missing. | Check the Settings tab and `wp proto-blocks redirect db status`. |
 | `monitor_unwritable` | The permalink monitor could not write a group file. | See [read-only reasons](content-model-files.md#read-only-reasons), or move `monitor.group` to a writable group. |
+| `monitor_unwritable` mentions multisite | The permalink monitor never writes on multisite. | Add moved-post redirects to a group file by hand, or clear `monitor.postTypes`. |
 | `broken_override` | A broken file stopped a same-slug group from loading. | Fix the JSONC error the same screen reports. |
-| `log.external` does nothing | The setting is reserved. | Redirects from other plugins are not logged. |
 
 **Rule not firing checklist.**
 

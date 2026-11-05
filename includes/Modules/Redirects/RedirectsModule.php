@@ -18,6 +18,7 @@ use ProtoBlocks\Modules\Redirects\Engine\FrontController;
 use ProtoBlocks\Modules\Redirects\Engine\Request;
 use ProtoBlocks\Modules\Redirects\Sources\GroupFiles;
 use ProtoBlocks\Modules\Redirects\Sources\PhpDeclarations;
+use ProtoBlocks\Modules\Redirects\Storage\ExternalRedirects;
 use ProtoBlocks\Modules\Redirects\Storage\Hits;
 use ProtoBlocks\Modules\Redirects\Storage\Installer;
 use ProtoBlocks\Modules\Redirects\Storage\IpResolver;
@@ -64,7 +65,8 @@ final class RedirectsModule implements ModuleInterface
      * Wires the module (runs on `after_setup_theme` 1 through Modules\Manager):
      * file kinds and PHP sealing; tables on `plugins_loaded` (or now when it
      * already ran); the log-retention cron; the client-IP resolver of the
-     * `ip` condition; the front end unless Coexistence pauses it; the
+     * `ip` condition; the front end unless Coexistence pauses it (with
+     * `log.external`, the x_redirect_by logger of other code's redirects); the
      * permalink monitor when `monitor.postTypes` is non-empty, never on
      * multisite (a `monitor_unwritable` warning, reason multisite, instead).
      *
@@ -98,6 +100,10 @@ final class RedirectsModule implements ModuleInterface
         Ip::setResolver(static fn(Request $request): ?string => IpResolver::resolve($request->server, $log));
 
         if (!Coexistence::paused($settings)) {
+            $redirectLog = new RedirectLog($settings);
+            if (($log['external'] ?? false) === true) {
+                (new ExternalRedirects($redirectLog))->register();
+            }
             $dispatcher = new Dispatcher(
                 $settings,
                 self::$headerHandler ?? static function (string $name, string $value): void {
@@ -107,7 +113,7 @@ final class RedirectsModule implements ModuleInterface
                     exit;
                 },
                 new Hits($settings),
-                new RedirectLog($settings)
+                $redirectLog
             );
             $this->front = new FrontController(fn(): array => $this->registry()->enabledRules(), $settings, $dispatcher);
             $this->front->register();

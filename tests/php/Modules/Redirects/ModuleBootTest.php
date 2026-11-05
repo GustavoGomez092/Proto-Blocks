@@ -13,6 +13,7 @@ use ProtoBlocks\Modules\Redirects\Engine\FrontController;
 use ProtoBlocks\Modules\Redirects\Engine\Request;
 use ProtoBlocks\Modules\Redirects\Monitor;
 use ProtoBlocks\Modules\Redirects\RedirectsModule;
+use ProtoBlocks\Modules\Redirects\Storage\ExternalRedirects;
 use ProtoBlocks\Modules\Redirects\Storage\Installer;
 use ProtoBlocks\Modules\Redirects\Storage\Retention;
 
@@ -117,6 +118,25 @@ final class ModuleBootTest extends RedirectsTestCase
         self::assertSame([], self::hookedTo('template_redirect', FrontController::class));
         self::assertInstanceOf(Monitor::class, $module->monitor(), 'the monitor writes files, it does not redirect');
         self::assertCount(1, self::hookedTo(Retention::HOOK, Retention::class));
+    }
+
+    public function testExternalRedirectLoggingIsHookedOnlyWhenLogExternalIsOn(): void
+    {
+        self::booted();
+        self::assertSame([], self::hookedTo('x_redirect_by', ExternalRedirects::class));
+
+        $this->settingsFile(['log' => ['external' => true]]);
+        self::booted();
+        self::assertCount(1, self::hookedTo('x_redirect_by', ExternalRedirects::class));
+        self::assertSame(100, $GLOBALS['pb_test_hooks']['x_redirect_by'][0]['priority']);
+    }
+
+    public function testExternalRedirectLoggingStaysOffWhileCoexistencePauses(): void
+    {
+        Coexistence::setDetector(static fn(): bool => true);
+        $this->settingsFile(['log' => ['external' => true]]);
+        self::booted();
+        self::assertSame([], self::hookedTo('x_redirect_by', ExternalRedirects::class));
     }
 
     public function testCoexistTrueKeepsTheFrontEndWithRedirectionActive(): void

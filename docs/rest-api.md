@@ -495,7 +495,7 @@ The settings file is a flat kind: it has no slug folder, and its slug in the rou
 | GET | `admin/redirects/log/export`, `admin/redirects/404/export` | CSV download of the filtered rows. `format` may only be `csv`. |
 
 List responses are `{ "rows": [...], "total": n, "page": 1, "perPage": 50, "pages": 1 }`, and the 404 route adds `"groupBy": "url"` or `null`.
-A log row is camelCase: `id`, `created` (UTC), `url`, `target`, `code`, `group`, `ruleId`, `redirectBy`, `method`, `ip`, `agent`, `referrer`, `request` (the stored headers, when enabled). A `group_by=url` 404 row is `{ url, count, lastSeen, lastReferrer }`.
+A log row is camelCase: `id`, `created` (UTC), `url`, `target`, `code`, `group`, `ruleId`, `redirectBy` (`proto-blocks`, or with `log.external` the lower-cased `X-Redirect-By` agent of other code, whose rows have no `group` or `ruleId`), `method`, `ip`, `agent`, `referrer`, `request` (the stored headers, when enabled). A `group_by=url` 404 row is `{ url, count, lastSeen, lastReferrer }`.
 Downloads are CSV with formula-escaped cells (a leading `=`, `+`, `-`, `@`, tab or CR, ASCII or full-width, gets a `[FORMULA] ` prefix), sent as attachments with `X-Content-Type-Options: nosniff`, `Cache-Control: no-store` and `X-Proto-Blocks-Download: 1`. A `rest_pre_serve_request` filter prints that body raw instead of JSON-encoding it.
 
 ### Hits, import, export, tables
