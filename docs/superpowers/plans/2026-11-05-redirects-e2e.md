@@ -16,4 +16,11 @@ Spec: docs/superpowers/specs/2026-11-05-redirects-design.md §14 (Playwright, ed
 
 ## Rulings
 
-(filled in while executing)
+- **Raw requests.** `request.fetch` with `maxRedirects: 0` and an absolute URL (a path starting with `//` would otherwise be read as a host). Assertions compare `{status, location, by}` with `X-Redirect-By: proto-blocks`, so core's own redirects (old slugs, canonical) cannot pass for ours.
+- **`%2F`.** wp-env's Apache refuses an encoded slash with its own 404 before PHP runs (AllowEncodedSlashes Off). The test pins that and checks the engine's decoding through `GET admin/redirects/test?url=/a%2Fb`.
+- **Open-redirect capture.** Request paths have `//` collapsed before matching, so the capture that would build `//evil.example` comes from the query (`^/pb-e2e-out\?u=(.*)$`, regex rules match `path?query`).
+- **Read-only.** Docker Desktop for macOS ignores mode bits on the bind-mounted site (`test -w` says no, PHP's `is_writable()` says yes and writes succeed), so the chmod test skips itself when `createTarget.writable` stays true; it runs on Linux Docker. A second test always runs: the mu-plugin adds a filter root holding the `e2e-locked` group (`readOnlyReason: read_only`), whose controls are disabled while it still redirects.
+- **pass body.** The fixture theme's index template prints titles only, so the pass target is recognised by its linked page title.
+- **Declared twice per rule.** A PHP rule dropped for a file twin only left a `double_declaration` issue on the file rule; the origin badge read the group-level `double` only. Fixed in `RedirectsTab` (`doubleOf`), with a Jest test.
+- **CSV export** uses CRLF line ends (RFC 4180); the test splits on `\r\n`.
+- **Stale baselines.** Only the four named captures were regenerated (`-g` scoped); a pixel comparison of old and new shows no change right of the 160px sidebar above the footer band.
