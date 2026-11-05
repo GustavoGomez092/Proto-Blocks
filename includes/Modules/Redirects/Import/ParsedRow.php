@@ -22,6 +22,7 @@ final class ParsedRow
         'not_an_object' => 'The rule is not an object.',
         'too_few_columns' => 'The row needs at least a source and a target.',
         'empty_source' => 'The source is empty.',
+        'invalid_source' => 'The source is not a usable path.',
         'missing_target' => 'The rule needs a target.',
         'self_redirect' => 'The source and the target are the same.',
         'invalid_code' => 'The status code is not one a redirect or an error can use.',
@@ -35,6 +36,7 @@ final class ParsedRow
         'unsupported_variable' => 'The target uses a server variable or a condition back-reference.',
         'unsupported_placeholder' => 'Named placeholders (:name) are not supported; use * and :splat.',
         'malformed_line' => 'The line could not be read.',
+        'unsupported_permalink' => 'The post uses plain (?p=) permalinks, so its old URL cannot be rebuilt.',
         'duplicate' => 'A rule with the same source, regex flag and condition already exists.',
     ];
 
