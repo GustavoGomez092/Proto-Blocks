@@ -373,7 +373,7 @@ final class Registry
         if (is_array($data['rules'] ?? null)) {
             foreach ($data['rules'] as $i => $rule) {
                 if (is_array($rule)) {
-                    if (is_string($rule['source'] ?? null) && $origin === 'php') {
+                    if (is_string($rule['source'] ?? null)) {
                         $sources[$i] = $rule['source'];
                     }
                     foreach (self::RUNTIME_KEYS as $key) {
