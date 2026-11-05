@@ -1,0 +1,28 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`setRuleEnabled disabling a one-line rule rewrites only its line and keeps every comment 1`] = `
+"// proto-redirects/legacy-site/redirects.jsonc
+{
+  "title": "Legacy site", // shown in the UI
+  "enabled": true,
+  "position": 10,
+  "rules": [
+    // About page moved in 2024.
+    { "id": "r_00000001", "from": "/about-us", "to": "/about" },
+    // Keep the old blog URLs alive.
+    { "id": "r_00000002", "title": "Old blog", "from": "^/blog/(\\\\d+)/(.*)$", "regex": true, "to": "/news/$2" }, // regex
+    { "id": "r_00000003", "enabled": false, "from": "/promo", "to": "/sale", "code": 302, "query": "pass" },
+    {
+      // Spread over lines on purpose.
+      "id": "r_00000004",
+      "from": "/members",
+      "when": { "type": "login" },
+      "to": "/dashboard",
+      "else": "/login"
+    },
+    { "from": "/gone-forever", "action": "error", "code": 410 }
+    // End of rules.
+  ]
+}
+"
+`;
