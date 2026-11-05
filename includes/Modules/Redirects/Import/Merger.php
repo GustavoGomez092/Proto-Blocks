@@ -38,6 +38,9 @@ final class Merger
         foreach ($existing as $i => $rule) {
             if (isset($rule['id']) && is_string($rule['id'])) {
                 $ids[$rule['id']] = true;
+            } elseif (is_array($rule)) {
+                // The id the loader will derive for this id-less rule is taken too.
+                $ids[self::derive($slug, $rule, [])] = true;
             }
             $index[self::key($rule, $defaultCase)] ??= $i;
         }
@@ -54,7 +57,8 @@ final class Merger
             }
             if ($at !== null && $mode === 'replace') {
                 $current = $existing[$at];
-                $id = isset($current['id']) && is_string($current['id']) ? $current['id'] : self::derive($slug, $current, $ids);
+                // An id-less rule keeps the id the loader derives for it, so its hit count stays attached.
+                $id = isset($current['id']) && is_string($current['id']) ? $current['id'] : self::derive($slug, $current, []);
                 unset($incoming['id']);
                 $existing[$at] = RawRule::build(['id' => $id] + $incoming + array_intersect_key($current, array_flip(self::KEPT_ON_REPLACE)))
                     + array_diff_key($current, array_flip(RawRule::KEYS));
@@ -111,10 +115,8 @@ final class Merger
         $regex = (bool) ($rule['regex'] ?? false);
         if (!$regex) {
             [$path, $query] = array_pad(explode('?', $from, 2), 2, null);
-            $path = rtrim($path, '/') ?: '/';
-            if ($rule['ignoreCase'] ?? $defaultIgnoreCase) {
-                $path = strtolower($path);
-            }
+            // The registry's comparison key (mb_strtolower, trailing slash trimmed).
+            $path = ($rule['ignoreCase'] ?? $defaultIgnoreCase) ? RuleNormalizer::pathKey($path) : (rtrim($path, '/') ?: '/');
             $from = $path . ($query !== null && $query !== '' ? '?' . $query : '');
         }
         $when = $rule['when'] ?? null;

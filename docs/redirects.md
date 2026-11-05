@@ -76,7 +76,7 @@ The same holds for a broken child-theme file and the parent theme's group of tha
 }
 ```
 
-- The folder name is the group slug: `^[a-z][a-z0-9_-]*$`, 60 characters at most. `settings` is reserved because it is the settings file.
+- The folder name is the group slug: `^[a-z][a-z0-9_-]*$`, 60 characters at most. `settings` is reserved because it is the settings file, and `php` because it names the group of `proto_redirect()` rules.
 - `redirects.json` is accepted. When both exist, `.jsonc` wins with the `both_extensions` warning.
 - A child theme's group beats the parent's group of the same slug.
 - The `proto_blocks_schema_paths` filter adds read-only roots, as for every other kind. The screen and the command line never write a group read from such a root or from the parent theme: they refuse instead of shadowing it.
@@ -144,7 +144,7 @@ The writers (screen, CLI, monitor) omit a flag that equals its effective default
 | Settings | `invalid_host` | error | A `canonical.aliases` entry that is not a bare host name. |
 | Settings | `invalid_url` | error | `canonical.relocate` is not an absolute http(s) URL without query or fragment. |
 | Settings | `invalid_ip` | error | A `log.trustedProxies` entry that is not an IP address or CIDR range. |
-| Discovery | `invalid_slug` | error | A folder name that is not a group slug, including `settings`. The folder is skipped. |
+| Discovery | `invalid_slug` | error | A folder name that is not a group slug, including `settings` and `php`. The folder is skipped. |
 | Discovery | `path_outside_root` | error | A file or folder resolves outside its root. |
 | Discovery | `file_too_large` | error | The file is over 256 KB. |
 | Discovery | `unreadable` | error | The file could not be read. |
@@ -155,7 +155,7 @@ The writers (screen, CLI, monitor) omit a flag that equals its effective default
 | PHP | `duplicate_php` | warning | The same PHP group slug twice. |
 | PHP | `invalid_slug` | error | A PHP group slug that is invalid, `settings` or `php`. |
 | Precedence | `double_declaration` | warning | The same group or rule in PHP and in a file. |
-| Monitor | `monitor_unwritable`, `monitor_rule_disabled` | warning | See [permalink monitor](#permalink-monitor). |
+| Monitor | `monitor_unwritable`, `monitor_rule_disabled`, `monitor_conflict` | warning | See [permalink monitor](#permalink-monitor). |
 
 At run time the engine also records `unsafe_target`, `self_loop` and `regex_error` (see [safety rules](#safety-rules)). They are not file findings.
 
@@ -193,7 +193,7 @@ Matched sends the request to `to`; not matched goes to `else`, or falls through 
 |---|---|
 | `url` | `wp_redirect($target, $code, 'proto-blocks')`, then `exit`. Core sends `X-Redirect-By: proto-blocks`. 301 and 308 get `Cache-Control` and `Expires` per the `cache` setting. 302, 303 and 307 get `nocache_headers()`. Rule `headers` and `headers.redirect` are sent first. |
 | `error` | Sends the status line, `nocache_headers()` and `X-Redirect-By`, sets the query to 404 and renders the theme's 404 template. WordPress resets the query when it runs its own, so the status and the 404 state are applied again on `wp` (priority 1000), and 410 and 451 are sent once more at `send_headers` so caches see them. |
-| `pass` | An internal rewrite. `to` must be a path. `REQUEST_URI`, `PATH_INFO`, `QUERY_STRING` and `$_GET` are replaced and WordPress parses the new request. The canonical redirect is suppressed. An absolute `to` is `invalid_target`. Proto-Blocks never proxies an external URL. |
+| `pass` | An internal rewrite. `to` must be a path. `REQUEST_URI`, `PATH_INFO`, `QUERY_STRING` and `$_GET` are replaced (and `$_REQUEST` rebuilt from the new `$_GET` and `$_POST`) and WordPress parses the new request. The canonical redirect is suppressed. An absolute `to` is `invalid_target`. Proto-Blocks never proxies an external URL. |
 | `nothing` | Stops processing. Suppresses 404 logging and the canonical redirect for this request. Fires the `proto_blocks_redirects_nothing` action with the rule and the request. It is never written to the redirect log (it still counts a hit unless `log` is false). |
 
 In the redirect log a `url` rule is logged with its code, an `error` rule with its error code, and a `pass` rule with code 200.
@@ -317,8 +317,8 @@ Login, admin, cron, XML-RPC and REST are never touched. See [actions and codes](
 | `log.redirects` | Days to keep the redirect log. `-1` do not log, `0` forever, maximum 90. |
 | `log.notFound` | The same for the 404 log. |
 | `log.ip` | `none`, `masked` or `full`. |
-| `log.headers` | Store request headers in the `request` column, minus `authorization`, `cookie`, `set-cookie`, `host`, `proxy-authorization`, `x-wp-nonce`, `x-api-key`, `x-auth-token`, `x-csrf-token` and `x-xsrf-token`. At most 50 headers, each value cut at 1000 characters. |
-| `log.external` | Reserved. It is validated and shown on the Settings tab, but nothing reads it yet: redirects issued by other plugins or core are not logged. |
+| `log.headers` | Store request headers in the `request` column, minus `authorization`, `cookie`, `set-cookie`, `host`, `proxy-authorization`, `x-wp-nonce`, `x-api-key`, `x-auth-token`, `x-csrf-token` and `x-xsrf-token`. Unless `log.ip` is `full`, the headers that carry a client address are dropped too: `x-forwarded-for`, `cf-connecting-ip`, `x-real-ip`, `client-ip`, `true-client-ip`, `forwarded`, `x-forwarded`, `x-cluster-client-ip`, `via`, `forwarded-for` and `x-client-ip`. At most 50 headers, each value cut at 1000 characters. |
+| `log.external` | Also log redirects issued by other code through `wp_redirect()` (core, WooCommerce, SEO plugins). Such a row has no group or rule, and `redirectBy` is the lower-cased `X-Redirect-By` agent (50 characters at most). `log.redirects` still decides whether and how long rows are kept. Off while the module is paused for the Redirection plugin. |
 | `log.trustedProxies` | `REMOTE_ADDR` values, single addresses or CIDR ranges (100 at most), allowed to supply a client-IP header. |
 | `log.ipHeaders` | Ordered: `CF-Connecting-IP`, `X-Forwarded-For`, `X-Real-IP`, `Client-IP`, `True-Client-IP`. |
 | `trackHits` | Count hits per rule. |
@@ -329,7 +329,7 @@ Login, admin, cron, XML-RPC and REST are never touched. See [actions and codes](
 | `monitor.associated` | A suffix that starts with `/`, such as `/feed/` (100 characters at most), that adds a second rule with the suffix on both sides. |
 | `headers.site` | Sent on every front-end response. |
 | `headers.redirect` | Sent only with redirects. |
-| `canonical.https` | 301 http to https. |
+| `canonical.https` | 301 http to https. The target is always built from the site host (`home_url()`): a request with an unknown `Host` header is sent to the site host, never to the host it named. |
 | `canonical.www` | `""`, `www` or `nowww`. |
 | `canonical.aliases` | Other hostnames 301'd to the site URL. Host only (punycode for international names), lower-cased, 20 at most. |
 | `canonical.relocate` | `""` or an absolute http(s) URL without query, fragment or user name. Sends everything except wp-admin, wp-login.php and REST there with a 301. |
@@ -372,7 +372,7 @@ Hits and log rows change on every request and cannot be files.
 Configuration is never stored there.
 Delete the tables and every redirect still works.
 
-- Tables are created with `dbDelta` on plugin activation and on `plugins_loaded` whenever the option `proto_blocks_redirects_db` is not `1`. A host that refuses `CREATE` keeps the module working without logs; the Settings tab offers "Create tables" and the CLI `db install`.
+- Tables are created with `dbDelta` on plugin activation and on `plugins_loaded` whenever the option `proto_blocks_redirects_db` is not `1`. After a failed attempt the automatic retry waits an hour (transient `proto_blocks_redirects_db_retry`). A host that refuses `CREATE` keeps the module working without logs; the Settings tab offers "Create tables" and the CLI `db install`.
 - Deactivation unschedules the retention cron and keeps the data. `wp proto-blocks redirect db drop` is the only way to drop the tables.
 - Writes are prepared statements. The URL is decoded, sanitised and cut at 2000 characters. Agent and referrer are cut at 255. The method is allow-listed (GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS, TRACE, CONNECT) and upper-cased; anything else is stored as `OTHER`.
 - Logging is write-only on the request path. Reads happen in the admin.
@@ -407,12 +407,13 @@ When a published watched post changes its path, the monitor appends a rule to th
 - It remembers the permalink on `pre_post_update` and compares on `post_updated` priority 11.
 - Both statuses must be `publish`, the type must be watched and the old path must not be `/`.
 - Paths are percent-decoded (the engine matches decoded paths), taken relative to the site's home path, and a permalink on another host is ignored.
-- If an enabled non-regex rule in any file group already has `from` equal to the new path, that rule is set `enabled: false` in its own file to avoid a loop, with a `monitor_rule_disabled` notice. Regex rules are never touched. A PHP rule cannot be written, so the notice says where it is declared. The trash rule does not trigger this (it is disabled and targets `/`).
+- If an enabled non-regex rule in any file group already has `from` equal to the new path, that rule is set `enabled: false` in its own file to avoid a loop, with a `monitor_rule_disabled` notice. Regex rules are never touched. A PHP rule cannot be written, so the notice says where it is declared. The trash rule does not trigger this (it is disabled and targets `/`). Disabling a rule needs `manage_options` from the user who saved the post: for anyone else (an author renaming their own post) the rule is left alone, the move rule that would chain into it is not added, and a `monitor_conflict` warning names the post and the rule.
 - A rule already in the monitor group with the same source is updated in place, so moving a post twice does not pile up rules.
 - `monitor.associated` appends a second rule with the suffix on both sides.
 - `monitor.trash` appends a disabled rule to `/` when a watched post is trashed.
 - The monitor writes every touched file or none. If any file involved is not writable, including a group read from the parent theme or a `proto_blocks_schema_paths` root (a read-only root counts as unwritable: a new copy would shadow it), it records a `monitor_unwritable` warning and writes nothing. Warnings are kept in the option `proto_blocks_redirects_monitor_issues` and shown on the screen and in `validate`.
-- Post saves by editors still write, because the monitor uses the writer directly: it is not gated on the REST write gate.
+- Post saves by editors still write on a single site, because the monitor uses the writer directly: it is not gated on the REST write gate.
+- On multisite the monitor is off: a sub-site editor must not write into a theme the whole network shares. With `monitor.postTypes` set, a `monitor_unwritable` warning (reason `multisite`) shows on the screen and in `validate`.
 - The monitor keeps running while the module is paused for the Redirection plugin: it writes files and never redirects.
 - The monitor writes through the server-side serializer. Comments inside that group file are not preserved.
 
@@ -424,7 +425,7 @@ When a published watched post changes its path, the monitor appends a rule to th
 
 - Names match `^[A-Za-z0-9-]{1,100}$`.
 - Values are strings of 1000 characters at most. CR, LF and control characters are refused.
-- `Set-Cookie`, `Location`, `Status`, `Content-Length` and `Transfer-Encoding` are refused as names.
+- `Set-Cookie`, `Location`, `Status`, `Content-Length`, `Transfer-Encoding` and `Refresh` (a meta-refresh redirect that would skip the target-safety rules) are refused as names.
 - Every refusal is `invalid_header`. A rule's header with the same name as a `headers.redirect` header replaces it.
 
 **Canonical.**
@@ -612,8 +613,8 @@ Full details: [CLI](cli.md#wp-proto-blocks-redirect).
 | A hit row remains after deleting a rule | The rule was removed from the file, not in the UI. | Prune orphan rows in Settings or run `wp proto-blocks redirect prune`. |
 | Redirects work but the log is empty | `log.redirects` is `-1`, the rule has `log: false`, the rule is a `nothing` rule, or the tables are missing. | Check the Settings tab and `wp proto-blocks redirect db status`. |
 | `monitor_unwritable` | The permalink monitor could not write a group file. | See [read-only reasons](content-model-files.md#read-only-reasons), or move `monitor.group` to a writable group. |
+| `monitor_unwritable` mentions multisite | The permalink monitor never writes on multisite. | Add moved-post redirects to a group file by hand, or clear `monitor.postTypes`. |
 | `broken_override` | A broken file stopped a same-slug group from loading. | Fix the JSONC error the same screen reports. |
-| `log.external` does nothing | The setting is reserved. | Redirects from other plugins are not logged. |
 
 **Rule not firing checklist.**
 

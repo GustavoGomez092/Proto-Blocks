@@ -24,6 +24,12 @@ abstract class LogTable
         'set-cookie', 'x-wp-nonce', 'x-api-key', 'x-auth-token', 'x-csrf-token', 'x-xsrf-token',
     ];
 
+    /** Request headers that carry a client address, lower-case: stored only when `log.ip` is `full`. */
+    public const IP_HEADERS = [
+        'x-forwarded-for', 'cf-connecting-ip', 'x-real-ip', 'client-ip', 'true-client-ip', 'forwarded',
+        'x-forwarded', 'x-cluster-client-ip', 'via', 'forwarded-for', 'x-client-ip',
+    ];
+
     private const HEADER_COUNT_MAX = 50;
     private const HEADER_VALUE_MAX = 1000;
     private const DELETE_BATCH = 1000;
@@ -203,7 +209,8 @@ abstract class LogTable
 
     /**
      * The stored `request` column: null unless `log.headers` is true, then the
-     * JSON of the headers minus the sensitive ones.
+     * JSON of the headers minus the sensitive ones (and minus IP_HEADERS
+     * unless `log.ip` is `full`).
      *
      * @param array<string, string> $headers lower-case names
      */
@@ -212,10 +219,16 @@ abstract class LogTable
         if (($this->logSettings()['headers'] ?? false) !== true) {
             return null;
         }
+        // Masking a header value is not worth it: unless the IP policy is `full`
+        // the address-bearing headers are dropped, so `none`/`masked` hold.
+        $withIps = ($this->logSettings()['ip'] ?? 'none') === 'full';
         $kept = [];
         foreach ($headers as $name => $value) {
             $name = strtolower(trim((string) $name));
             if ($name === '' || in_array($name, self::SENSITIVE_HEADERS, true) || preg_match('/^[a-z0-9-]{1,100}\z/D', $name) !== 1) {
+                continue;
+            }
+            if (!$withIps && in_array($name, self::IP_HEADERS, true)) {
                 continue;
             }
             $kept[$name] = (string) self::cut(self::text((string) $value), self::HEADER_VALUE_MAX);

@@ -103,7 +103,7 @@ final class Monitor
         if ($suffix !== '') {
             $rules[] = ['from' => self::withSuffix($old, $suffix), 'to' => self::withSuffix($new, $suffix), 'title' => $title, 'enabled' => true];
         }
-        $this->apply($rules);
+        $this->apply($rules, $after);
     }
 
     /** Remembers the permalink before the post is trashed (its slug changes afterwards). */
@@ -125,7 +125,7 @@ final class Monitor
         if (!is_object($post) || $path === null || $path === '/' || !$this->watched((string) ($post->post_type ?? ''))) {
             return;
         }
-        $this->apply([['from' => $path, 'to' => '/', 'title' => $this->title($post, 'trashed'), 'enabled' => false]]);
+        $this->apply([['from' => $path, 'to' => '/', 'title' => $this->title($post, 'trashed'), 'enabled' => false]], $post);
     }
 
     /** @return list<Issue> the kept monitor findings, newest last */
@@ -160,9 +160,14 @@ final class Monitor
      * Adds $rules to the monitor group and disables looping rules, writing
      * every touched group file or none of them.
      *
+     * Disabling another rule edits configuration an administrator owns, so it
+     * needs `manage_options` from the user saving the post. Without it the
+     * rule is left alone, a `monitor_conflict` warning names the post and the
+     * rule, and the move rule that would chain into it is not added.
+     *
      * @param list<array{from: string, to: string, title: string, enabled: bool}> $rules
      */
-    private function apply(array $rules): void
+    private function apply(array $rules, object $post): void
     {
         $slug = $this->groupSlug();
         if (SchemaFileWriter::slugError(self::KIND, $slug) !== null) {
@@ -174,6 +179,28 @@ final class Monitor
             return;
         }
 
+        $mayDisable = current_user_can('manage_options');
+        $conflicts = [];
+        if (!$mayDisable) {
+            $kept = [];
+            foreach ($rules as $rule) {
+                $looping = $rule['enabled'] ? $this->loopingFileRules($rule['to']) : [];
+                foreach ($looping as $other) {
+                    $conflicts[] = $this->conflictNotice($post, $rule, $other);
+                }
+                if ($looping === []) {
+                    $kept[] = $rule;
+                }
+            }
+            $rules = $kept;
+            if ($rules === []) {
+                foreach ($conflicts as $notice) {
+                    $this->record('monitor_conflict', $notice['message'], $notice['source'], $notice['slug']);
+                }
+                return;
+            }
+        }
+
         /** @var array<string, array<string, mixed>> $groups slug => group to write */
         $groups = [$slug => $this->targetGroup($slug)];
         foreach ($rules as $rule) {
@@ -183,7 +210,7 @@ final class Monitor
         $notices = [];
         foreach ($rules as $rule) {
             if ($rule['enabled']) {
-                $groups = $this->disableLoops($groups, $rule['to'], $notices);
+                $groups = $this->disableLoops($groups, $rule['to'], $notices, $mayDisable);
             }
         }
 
@@ -227,6 +254,9 @@ final class Monitor
             }
         }
 
+        foreach ($conflicts as $notice) {
+            $this->record('monitor_conflict', $notice['message'], $notice['source'], $notice['slug']);
+        }
         foreach ($notices as $notice) {
             $this->record('monitor_rule_disabled', $notice['message'], $notice['source'], $notice['slug']);
         }
@@ -316,13 +346,56 @@ final class Monitor
     }
 
     /**
-     * Disables every enabled non-regex file rule whose `from` is $path.
+     * The enabled non-regex file rules whose `from` is $path (the ones loop
+     * avoidance would disable).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function loopingFileRules(string $path): array
+    {
+        return array_values(array_filter((array) $this->registry->rules(), static fn($rule): bool => is_array($rule)
+            && ($rule['enabled'] ?? true) === true
+            && ($rule['origin'] ?? 'file') === 'file'
+            && self::samePath($rule, $path)));
+    }
+
+    /**
+     * @param array{from: string, to: string} $move
+     * @param array<string, mixed>             $other
+     * @return array{message: string, source: string, slug: string}
+     */
+    private function conflictNotice(object $post, array $move, array $other): array
+    {
+        $groupSlug = (string) ($other['group'] ?? '');
+        $group = $this->registry->group($groupSlug);
+
+        return [
+            'message' => sprintf(
+                /* translators: 1: post title, 2: post ID, 3: old path, 4: new path, 5: rule source path, 6: rule id, 7: group slug */
+                __('The permalink monitor did not add a redirect for "%1$s" (post %2$d, %3$s to %4$s): the redirect from %5$s (rule %6$s) in the group "%7$s" sends that address elsewhere. Only a save by an administrator may disable it; change or disable the rule, then add the redirect.', 'proto-blocks'),
+                trim(wp_strip_all_tags((string) ($post->post_title ?? ''))),
+                (int) ($post->ID ?? 0),
+                $move['from'],
+                $move['to'],
+                (string) ($other['from'] ?? ''),
+                (string) ($other['id'] ?? '#' . (int) ($other['index'] ?? 0)),
+                $groupSlug
+            ),
+            'source' => is_array($group) ? (string) ($group['source'] ?? '') : (string) ($other['source'] ?? ''),
+            'slug' => $groupSlug,
+        ];
+    }
+
+    /**
+     * Disables every enabled non-regex file rule whose `from` is $path
+     * (only reports it when $mayDisable is false; apply() then already
+     * dropped the move rule, so this runs for PHP-rule notices only).
      *
      * @param array<string, array<string, mixed>> $groups
      * @param list<array{message: string, source: string, slug: string}> $notices
      * @return array<string, array<string, mixed>>
      */
-    private function disableLoops(array $groups, string $path, array &$notices): array
+    private function disableLoops(array $groups, string $path, array &$notices, bool $mayDisable = true): array
     {
         foreach ((array) $this->registry->rules() as $rule) {
             if (!is_array($rule) || ($rule['enabled'] ?? true) !== true || ($rule['regex'] ?? false) === true || !self::samePath($rule, $path)) {
@@ -341,6 +414,9 @@ final class Monitor
                     'source' => (string) ($rule['source'] ?? ''),
                     'slug' => $groupSlug,
                 ];
+                continue;
+            }
+            if (!$mayDisable) {
                 continue;
             }
             if (!isset($groups[$groupSlug])) {

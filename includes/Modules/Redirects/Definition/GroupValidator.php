@@ -16,6 +16,14 @@ final class GroupValidator
     public const SLUG_PATTERN = '/^(?!settings$)[a-z][a-z0-9_-]{0,59}$/D';
 
     /**
+     * A group FILE slug (folder, writer kind, monitor group, import target):
+     * SLUG_PATTERN minus `php` as well, which names the group of
+     * proto_redirect() rules (a `php` folder would replace them whole).
+     * SLUG_PATTERN alone still matches log and hit rows of that group.
+     */
+    public const FILE_SLUG_PATTERN = '/^(?!(?:settings|php)$)[a-z][a-z0-9_-]{0,59}$/D';
+
+    /**
      * @param array<string|int, mixed>   $data       the decoded group file
      * @param list<array<string, mixed>> $otherRules normalised rules of the other groups (with `group`), for chains
      * @return array{errors: list<array{path: string, code: string, message: string, level: string}>, warnings: list<array{path: string, code: string, message: string, level: string}>}

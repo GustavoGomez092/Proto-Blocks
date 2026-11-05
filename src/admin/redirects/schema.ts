@@ -24,7 +24,7 @@ export const RESERVED_SLUGS = ['settings', 'php'];
 export const HEADER_NAME = /^[A-Za-z0-9-]{1,100}$/;
 export const HEADER_VALUE_MAX = 1000;
 /** Patterns::FORBIDDEN_HEADERS (lower case). */
-export const FORBIDDEN_HEADERS = ['set-cookie', 'location', 'status', 'content-length', 'transfer-encoding'];
+export const FORBIDDEN_HEADERS = ['set-cookie', 'location', 'status', 'content-length', 'transfer-encoding', 'refresh'];
 /** RuleValidator's condition grammars. */
 export const FILTER_NAME = /^[a-z0-9_-]+$/;
 export const ROLE_NAME = /^[A-Za-z0-9_-]{1,100}$/;

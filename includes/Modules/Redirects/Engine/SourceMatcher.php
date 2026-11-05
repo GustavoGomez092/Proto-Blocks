@@ -62,12 +62,14 @@ final class SourceMatcher
     /**
      * Captures for a regex rule, [] for a matching non-regex rule, null when
      * the rule does not match. $error receives preg_last_error_msg() when a
-     * regex fails (invalid pattern, backtrack/recursion limit).
+     * regex fails (invalid pattern, backtrack/recursion limit). $compiled is
+     * the pattern compiled by the caller, false when it was already refused
+     * (not compiled again), null to compile it here.
      *
      * @param array<string,mixed> $rule
      * @return array<int|string,string>|null
      */
-    public static function matches(array $rule, Request $r, ?string &$error = null, ?string $compiled = null): ?array
+    public static function matches(array $rule, Request $r, ?string &$error = null, string|false|null $compiled = null): ?array
     {
         $error = null;
         $from = $rule['from'] ?? null;
@@ -77,7 +79,7 @@ final class SourceMatcher
         $ignoreCase = (bool) ($rule['ignoreCase'] ?? true);
         if (!empty($rule['regex'])) {
             $compiled ??= RegexGuard::compile($from, $ignoreCase);
-            if ($compiled === null) {
+            if ($compiled === null || $compiled === false) {
                 $error = 'Invalid or too long pattern';
                 return null;
             }

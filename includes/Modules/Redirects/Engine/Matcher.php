@@ -32,7 +32,7 @@ final class Matcher
     private array $regex = [];
     /** @var list<int> */
     private array $sourceless = [];
-    /** @var array<int, ?string> */
+    /** @var array<int, string|false> compiled patterns; false = refused once, never recompiled */
     private array $compiled = [];
     /** @var array<string, array{code: string, group: string, ruleId: string, message: string}> */
     private array $issues = [];
@@ -59,7 +59,7 @@ final class Matcher
                 $this->sourceless[] = $i;
             } elseif (!empty($rule['regex'])) {
                 $this->regex[] = $i;
-                $this->compiled[$i] = RegexGuard::compile($from, (bool) $rule['ignoreCase']);
+                $this->compiled[$i] = RegexGuard::compile($from, (bool) $rule['ignoreCase']) ?? false;
             } else {
                 $this->exact[SourceMatcher::key(SourceMatcher::parse($from)['path'])][] = $i;
             }

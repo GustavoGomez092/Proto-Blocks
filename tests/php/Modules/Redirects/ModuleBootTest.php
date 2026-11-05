@@ -13,6 +13,7 @@ use ProtoBlocks\Modules\Redirects\Engine\FrontController;
 use ProtoBlocks\Modules\Redirects\Engine\Request;
 use ProtoBlocks\Modules\Redirects\Monitor;
 use ProtoBlocks\Modules\Redirects\RedirectsModule;
+use ProtoBlocks\Modules\Redirects\Storage\ExternalRedirects;
 use ProtoBlocks\Modules\Redirects\Storage\Installer;
 use ProtoBlocks\Modules\Redirects\Storage\Retention;
 
@@ -119,6 +120,25 @@ final class ModuleBootTest extends RedirectsTestCase
         self::assertCount(1, self::hookedTo(Retention::HOOK, Retention::class));
     }
 
+    public function testExternalRedirectLoggingIsHookedOnlyWhenLogExternalIsOn(): void
+    {
+        self::booted();
+        self::assertSame([], self::hookedTo('x_redirect_by', ExternalRedirects::class));
+
+        $this->settingsFile(['log' => ['external' => true]]);
+        self::booted();
+        self::assertCount(1, self::hookedTo('x_redirect_by', ExternalRedirects::class));
+        self::assertSame(100, $GLOBALS['pb_test_hooks']['x_redirect_by'][0]['priority']);
+    }
+
+    public function testExternalRedirectLoggingStaysOffWhileCoexistencePauses(): void
+    {
+        Coexistence::setDetector(static fn(): bool => true);
+        $this->settingsFile(['log' => ['external' => true]]);
+        self::booted();
+        self::assertSame([], self::hookedTo('x_redirect_by', ExternalRedirects::class));
+    }
+
     public function testCoexistTrueKeepsTheFrontEndWithRedirectionActive(): void
     {
         Coexistence::setDetector(static fn(): bool => true);
@@ -202,6 +222,50 @@ final class ModuleBootTest extends RedirectsTestCase
         $init = array_values(array_filter($GLOBALS['pb_test_hooks']['init'], static fn(array $e): bool => $e['priority'] === RedirectsModule::SEAL_PRIORITY));
         self::assertSame([\ProtoBlocks\Modules\Redirects\Sources\PhpDeclarations::class, 'seal'], $init[0]['callback']);
         self::assertSame([$module, 'onSealed'], $init[1]['callback']);
+    }
+
+    public function testBootOnAnAdminRequestReadsOnlyTheSettingsFile(): void
+    {
+        $this->settingsFile(['log' => ['ip' => 'full']]);
+        for ($i = 0; $i < 50; $i++) {
+            $this->put($this->child, 'proto-redirects/g' . $i . '/redirects.jsonc', self::groupText([['from' => '/old-' . $i, 'to' => '/new-' . $i]]));
+        }
+        $GLOBALS['pb_test_is_admin'] = true;
+        try {
+            $module = self::booted();
+        } finally {
+            unset($GLOBALS['pb_test_is_admin']);
+        }
+
+        self::assertSame('full', $module->settings()['log']['ip'], 'the settings were read');
+        self::assertSame(0, $module->registry()->buildCount(), 'no group was built');
+        $files = (new \ReflectionProperty(\ProtoBlocks\Modules\Redirects\Registry::class, 'files'))->getValue($module->registry());
+        self::assertNull((new \ReflectionProperty(\ProtoBlocks\Modules\Redirects\Sources\GroupFiles::class, 'files'))->getValue($files), 'no group file was opened');
+    }
+
+    public function testTheFrontControllersFirstMatchBuildsTheRegistryOnce(): void
+    {
+        for ($i = 0; $i < 50; $i++) {
+            $this->put($this->child, 'proto-redirects/g' . $i . '/redirects.jsonc', self::groupText([['from' => '/old-' . $i, 'to' => '/new-' . $i]]));
+        }
+        $server = $_SERVER;
+        $_SERVER = ['REQUEST_URI' => '/nothing-here', 'HTTP_HOST' => 'example.test', 'REQUEST_METHOD' => 'GET', 'REMOTE_ADDR' => '203.0.113.5'];
+        try {
+            $module = self::booted();
+            self::assertSame(0, $module->registry()->buildCount());
+
+            $module->frontController()?->onInit();
+            self::assertSame(1, $module->registry()->buildCount());
+
+            $GLOBALS['pb_test_query']['is_404'] = true;
+            $module->frontController()?->onTemplateRedirect();
+            $module->issues();
+            $module->settings();
+            self::assertSame(1, $module->registry()->buildCount(), 'one build per request');
+        } finally {
+            $_SERVER = $server;
+            unset($GLOBALS['pb_test_query']['is_404']);
+        }
     }
 
     public function testActivateEnsuresTheTables(): void

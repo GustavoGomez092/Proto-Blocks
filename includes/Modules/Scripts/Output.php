@@ -175,6 +175,12 @@ final class Output
         }
         $theme = self::theme();
         $missing = did_action('wp_body_open') === 0;
+        // The option is autoloaded whenever it exists, so its absence from the
+        // autoloaded set means "absent": a get_option() of a missing option
+        // would cost a query on every front-end page without an object cache.
+        if (!$missing && function_exists('wp_load_alloptions') && !array_key_exists(self::BODY_OPEN_OPTION, (array) wp_load_alloptions())) {
+            return;
+        }
         $stored = get_option(self::BODY_OPEN_OPTION, []);
         $stored = is_array($stored) ? $stored : [];
         if (($stored[$theme] ?? false) === $missing) {

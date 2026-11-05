@@ -25,6 +25,7 @@ abstract class StorageTestCase extends TestCase
         $GLOBALS['pb_test_filters'] = [];
         $GLOBALS['pb_test_hooks'] = [];
         $GLOBALS['pb_test_now'] = self::NOW;
+        unset($GLOBALS['pb_test_transients'][\ProtoBlocks\Modules\Redirects\Storage\Installer::RETRY_TRANSIENT]);
     }
 
     protected function tearDown(): void

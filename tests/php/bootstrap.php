@@ -21,6 +21,9 @@ require __DIR__ . '/../../vendor/autoload.php';
  *   pb_test_filters[$hook][]       callables apply_filters() runs (tests register these)
  *   pb_test_actions[$hook][]       argument lists do_action() was called with
  *   pb_test_current_user           acting user id (default 0, logged out)
+ *   pb_test_user_switches[]        ids passed to wp_set_current_user()
+ *   pb_test_user_list[]            user ids get_users() returns
+ *   pb_test_network_plugins[]      basenames is_plugin_active_for_network() reports
  *   pb_test_caps[$userId]          list of that user's capabilities
  *   pb_test_users[$id]             array|object user records (wp_get_current_user)
  *   pb_test_multisite              is_multisite() value (default false)
@@ -328,6 +331,36 @@ if (!function_exists('did_action')) {
 
 // ------------------------------------------------------------------ users and capabilities
 
+// Moved here from tests/php/Modules/Redirects/wp-stubs.php (redirects review):
+// new stubs belong in this file only.
+if (!function_exists('wp_set_current_user')) {
+    /** Switches pb_test_current_user; every switch is recorded in pb_test_user_switches. */
+    function wp_set_current_user($id, $name = '')
+    {
+        $GLOBALS['pb_test_user_switches'][] = (int) $id;
+        $GLOBALS['pb_test_current_user'] = (int) $id;
+        return (object) ['ID' => (int) $id];
+    }
+}
+if (!function_exists('get_users')) {
+    /** The ids in pb_test_user_list; `number` honoured. */
+    function get_users($args = [])
+    {
+        $ids = array_values($GLOBALS['pb_test_user_list'] ?? []);
+        if (isset($args['number'])) {
+            $ids = array_slice($ids, 0, (int) $args['number']);
+        }
+        return $ids;
+    }
+}
+if (!function_exists('is_plugin_active_for_network')) {
+    function is_plugin_active_for_network($plugin)
+    {
+        return in_array((string) $plugin, $GLOBALS['pb_test_network_plugins'] ?? [], true);
+    }
+}
+
+
 if (!function_exists('get_current_user_id')) {
     function get_current_user_id(): int
     {
@@ -582,7 +615,21 @@ if (!class_exists('WP_REST_Response')) {
 // option lands in pb_test_autoload[$name] (null when not passed).
 if (!function_exists('get_option')) {
     function get_option($name, $default = false) {
+        if (isset($GLOBALS['pb_test_option_reads'])) {
+            $GLOBALS['pb_test_option_reads'][] = $name; // tests opt in to see which options were read
+        }
         return array_key_exists($name, $GLOBALS['pb_test_options'] ?? []) ? $GLOBALS['pb_test_options'][$name] : $default;
+    }
+}
+if (!function_exists('wp_load_alloptions')) {
+    /** The autoloaded options: pb_test_options minus those last written with autoload false. */
+    function wp_load_alloptions($force_cache = false): array {
+        $GLOBALS['pb_test_alloptions_calls'] = ($GLOBALS['pb_test_alloptions_calls'] ?? 0) + 1;
+        return array_filter(
+            $GLOBALS['pb_test_options'] ?? [],
+            static fn($name): bool => ($GLOBALS['pb_test_autoload'][$name] ?? true) !== false,
+            ARRAY_FILTER_USE_KEY
+        );
     }
 }
 if (!function_exists('update_option')) {
@@ -1220,6 +1267,35 @@ if (!function_exists('deactivate_plugins')) {
             $GLOBALS['pb_test_active_plugins'] = array_values(array_diff($GLOBALS['pb_test_active_plugins'] ?? [], [(string) $plugin]));
         }
     }
+}
+
+// ------------------------------------------------------------------ multisite iteration (shared)
+
+// pb_test_sites = list of site ids (default [1]); switch_to_blog() records the
+// visited ids in pb_test_switched[] and sets pb_test_current_site.
+if (!function_exists('get_sites')) {
+    function get_sites($args = [])
+    {
+        return $GLOBALS['pb_test_sites'] ?? [1];
+    }
+}
+if (!function_exists('switch_to_blog')) {
+    function switch_to_blog($new_blog_id, $deprecated = null)
+    {
+        $GLOBALS['pb_test_switched'][] = (int) $new_blog_id;
+        $GLOBALS['pb_test_current_site'] = (int) $new_blog_id;
+        return true;
+    }
+}
+if (!function_exists('restore_current_blog')) {
+    function restore_current_blog()
+    {
+        $GLOBALS['pb_test_current_site'] = 1;
+        return true;
+    }
+}
+if (!function_exists('get_current_blog_id')) {
+    function get_current_blog_id() { return (int) ($GLOBALS['pb_test_current_site'] ?? 1); }
 }
 
 // ------------------------------------------------------------------ database (shared)

@@ -17,8 +17,8 @@ use ProtoBlocks\Modules\Redirects\Definition\GroupValidator;
  * Files are data: decoded through the injected decoder, never included.
  * Discovery is confined to each root (realpaths of the folder, the slug
  * folder and the file must lie inside the root: `path_outside_root`); a
- * folder name failing GroupValidator::SLUG_PATTERN (or the reserved
- * `settings`) is skipped (`invalid_slug`); a file over MAX_BYTES is never
+ * folder name failing GroupValidator::FILE_SLUG_PATTERN (or the reserved
+ * `settings` and `php`) is skipped (`invalid_slug`); a file over MAX_BYTES is never
  * read (`file_too_large`: split the group); a decode failure is
  * `invalid_jsonc`; `.jsonc` wins over `.json` (`both_extensions` warning).
  * Roots are searched in order; a later root (the child theme) replaces an
@@ -34,7 +34,7 @@ final class GroupFiles
     public const BASENAME = 'redirects';
     public const SETTINGS_BASENAME = 'settings';
     public const SETTINGS_SLUG = 'settings';
-    public const SLUG_PATTERN = GroupValidator::SLUG_PATTERN;
+    public const SLUG_PATTERN = GroupValidator::FILE_SLUG_PATTERN;
     public const MAX_BYTES = FileLoader::MAX_BYTES;
 
     private readonly \Closure $roots;
@@ -45,6 +45,9 @@ final class GroupFiles
 
     /** @var array{path: string, root: string, data: array<string|int, mixed>}|null */
     private ?array $settings = null;
+
+    /** Whether $settings holds the settings-only read (no group file opened). */
+    private bool $settingsRead = false;
 
     /** @var list<Issue> */
     private array $issues = [];
@@ -78,11 +81,19 @@ final class GroupFiles
      * The settings file of the last root that has one; null when none, or
      * when that file is broken (the defaults apply, never a parent's file).
      *
+     * Reads only the settings file (no group folder is scanned or opened)
+     * unless the groups were loaded already, so booting the module on a
+     * request that never matches costs one small read. Its findings are
+     * reported by issues(), which does the full load.
+     *
      * @return array{path: string, root: string, data: array<string|int, mixed>}|null
      */
     public function settingsFile(): ?array
     {
-        $this->load();
+        if ($this->files === null && !$this->settingsRead) {
+            $this->settings = $this->readSettingsOnly();
+            $this->settingsRead = true;
+        }
 
         return $this->settings;
     }
@@ -103,12 +114,48 @@ final class GroupFiles
         return $this->paths;
     }
 
+    /**
+     * The settings-file half of load(): same roots, confinement and
+     * "a later root replaces (or breaks) an earlier one" rules. Issues and
+     * paths found here are dropped; load() reports them.
+     *
+     * @return array{path: string, root: string, data: array<string|int, mixed>}|null
+     */
+    private function readSettingsOnly(): ?array
+    {
+        [$issues, $paths] = [$this->issues, $this->paths];
+        $settings = null;
+        foreach (($this->roots)() as $root) {
+            $real = is_string($root) && $root !== '' ? realpath($root) : false;
+            if ($real === false || !is_dir($real)) {
+                continue;
+            }
+            $dir = $real . DIRECTORY_SEPARATOR . self::FOLDER;
+            if (!is_dir($dir)) {
+                continue;
+            }
+            if (!self::inside(realpath($dir), $real)) {
+                $settings = null;
+                continue;
+            }
+            $file = $this->fileIn($dir, self::SETTINGS_BASENAME, self::SETTINGS_SLUG, self::SETTINGS_KIND);
+            if ($file !== null) {
+                $data = $this->read($file, $real, self::SETTINGS_SLUG, self::SETTINGS_KIND);
+                $settings = $data === null ? null : ['path' => $file, 'root' => $real, 'data' => $data];
+            }
+        }
+        [$this->issues, $this->paths] = [$issues, $paths];
+
+        return $settings;
+    }
+
     private function load(): void
     {
         if ($this->files !== null) {
             return;
         }
         $this->files = [];
+        $this->settings = null;
         foreach (($this->roots)() as $root) {
             $real = is_string($root) && $root !== '' ? realpath($root) : false;
             if ($real === false || !is_dir($real)) {
@@ -173,11 +220,13 @@ final class GroupFiles
             if (preg_match(self::SLUG_PATTERN, $slug) !== 1) {
                 $this->issues[] = new Issue(Issue::ERROR, 'invalid_slug', $slug === self::SETTINGS_SLUG
                     ? __('The redirect group folder "settings" is reserved for proto-redirects/settings.jsonc; the folder was skipped.', 'proto-blocks')
+                    : ($slug === PhpDeclarations::VIRTUAL_SLUG
+                    ? __('The redirect group folder "php" is reserved for the rules declared with proto_redirect(); the folder was skipped. Rename it.', 'proto-blocks')
                     : sprintf(
                         /* translators: %s: folder name */
                         __('The redirect group folder "%s" must start with a lowercase letter and use only a-z, 0-9, "_" and "-" (60 characters at most); it was skipped.', 'proto-blocks'),
                         $slug
-                    ), $folder, null, self::KIND);
+                    )), $folder, null, self::KIND);
                 continue;
             }
             if (!self::inside(realpath($folder), $root)) {
