@@ -46,7 +46,7 @@ your-theme/
 | Field group | `proto-fields/` | `group.jsonc` or `group.json` | `^[a-z][a-z0-9_-]{0,31}$` |
 | Settings page | `proto-options/` | `page.jsonc` or `page.json` | `^[a-z][a-z0-9-]*$`, 64 characters at most, not reserved |
 | Redirect group | `proto-redirects/` | `redirects.jsonc` or `redirects.json` | `^[a-z][a-z0-9_-]*$`, 60 characters at most, `settings` reserved |
-| Redirect settings | `proto-redirects/` | `settings.jsonc` | none; one file, REST path `redirect-settings/settings` |
+| Redirect settings | `proto-redirects/` | `settings.jsonc` or `settings.json` | none; a flat file beside the group folders (no slug folder), REST path `redirect-settings/settings` |
 | Script | `proto-scripts/` | `script.jsonc` plus `head.html`, `body-open.html`, `body-close.html` | `^[a-z][a-z0-9_-]*$`, 32 characters at most |
 
 The reserved slugs are listed in [post types](post-types.md#slug-rules), [taxonomies](taxonomies.md#slug-rules) and [settings pages](settings-pages.md#slug-rules).
@@ -148,6 +148,8 @@ This stops a child that re-typed a parent's `code` field from silently falling b
 
 A broken `proto-options/<slug>/page.jsonc` also suppresses a `proto_options_page()` call of the same slug, so a typo never hands the page to the PHP call's capability.
 
+A broken `proto-redirects/<group>/redirects.jsonc` (invalid JSONC, over 256 KB, unreadable, outside its root, or a group-level schema error) drops the group, and a `proto_redirect_group()` of the same slug and the parent theme's group of that slug are dropped too (`broken_override`). A rule that fails validation inside an otherwise valid group is dropped on its own and the rest of the group still runs.
+
 ## The schema files
 
 | File | Validates |
@@ -186,6 +188,7 @@ The full contract is in [REST API](rest-api.md#declaration-files).
 ### Comments inside an edited array are lost
 
 The editor replaces an array it changes as one value.
+The redirects screen is the exception: it splices a one-line rule as text, so comments between rules and at the end of a rule's line survive. The command line and the permalink monitor rewrite the whole group file, so hand-written comments in it are lost.
 Comments **inside** that array (for example inside `fields`, `tabs`, `children`, `taxonomies` or `supports`) are lost on save.
 Comments outside the edited array, and comments next to other keys, are kept.
 `labels` and `rewrite` are edited key by key, so a comment beside one label survives an edit to another.
@@ -210,7 +213,7 @@ If a file appeared at that path meanwhile, the save is a conflict too.
 - Roots added by `proto_blocks_schema_paths` are never written.
 - New declarations are created in the active (child) theme.
 - An existing file is edited in place when it sits in the active theme or its parent.
-- Only `<theme>/<folder>/<slug>/<basename>.jsonc|.json` is ever written or deleted.
+- Only `<theme>/<folder>/<slug>/<basename>.jsonc|.json` is ever written or deleted. The one exception is the flat redirect settings file `<theme>/proto-redirects/settings.jsonc|.json`, and deleting it never removes the shared `proto-redirects/` folder.
 
 ### Deleting
 
@@ -262,7 +265,7 @@ On a single site, `manage_options` is enough.
 ## What is stored in the database
 
 Declarations never are.
-The plugin keeps only bookkeeping, the redirect module's runtime data and one scripts flag:
+The plugin keeps only bookkeeping, the redirect module's runtime data (three tables, a schema version and the monitor's warnings) and one scripts flag:
 
 | Name | Kind | Holds |
 |---|---|---|
@@ -272,7 +275,8 @@ The plugin keeps only bookkeeping, the redirect module's runtime data and one sc
 | `{prefix}proto_redirect_hits` | table | hit count and last hit per redirect rule |
 | `{prefix}proto_redirect_log` | table | the redirect log |
 | `{prefix}proto_404_log` | table | the 404 log |
-| `proto_blocks_redirects_db` | option | `1` once the three tables exist, so they are checked only when it is not `1` |
+| `proto_blocks_redirects_db` | option | the schema version (`1`) once the three tables exist, so they are checked only when it is not `1` |
+| `proto_blocks_redirects_monitor_issues` | option | the newest 20 permalink monitor warnings (`monitor_unwritable`, `monitor_rule_disabled`), so the screen can show them on a later request |
 | `proto_blocks_scripts_body_open` | option | `{ "<theme>": true }` while the active theme was last seen not firing `wp_body_open`, for the `missing_body_open` warning. Autoloaded while set, deleted otherwise. |
 
 Redirect and script configuration is never stored here.

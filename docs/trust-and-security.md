@@ -61,6 +61,7 @@ PHP declarations (`proto_post_type()`, `proto_taxonomy()`, `proto_field_group()`
 
 - A broken child-theme field group never falls back to the parent's group of the same slug (`broken_override`).
 - A broken settings page file also suppresses a PHP declaration of the same slug, so the page never falls back to a wider capability.
+- A broken redirect group file drops a PHP group of the same slug and the parent theme's group too (`broken_override`). A rule that fails validation is dropped alone; the rest of its group runs. A group-level schema error skips the group.
 - A location rule the plugin does not implement makes the whole group unrenderable; it never shows on every post.
 - An `optionsSource` that cannot be resolved rejects every value.
 - A `pattern` that does not compile fails every value.
@@ -75,7 +76,12 @@ The module refuses that case. Full list: [redirects](redirects.md#safety-rules).
 - Only `http` and `https` are accepted. The final target goes through `wp_sanitize_redirect()`.
 - A rule whose target is the current request does not fire. A rule whose `to` equals `from` is refused.
 - Regex: compiled at write time, 500 characters at most, `preg_last_error()` checked on every match.
-- Headers: names match `^[A-Za-z0-9-]{1,100}$`, CR and LF are refused, and `Set-Cookie`, `Location`, `Status`, `Content-Length` and `Transfer-Encoding` cannot be set.
+- A rule whose target equals the request, or that a capture group turns unsafe, does not fire and evaluation goes on; an unsafe target leaves one code 0 row in the redirect log.
+- Headers: names match `^[A-Za-z0-9-]{1,100}$`, values are 1000 characters at most, CR, LF and control characters are refused, and `Set-Cookie`, `Location`, `Status`, `Content-Length` and `Transfer-Encoding` cannot be set.
+- Logs: the client IP is stored as `none` (default), `masked` or `full`. A proxy header is trusted only when `REMOTE_ADDR` is a listed trusted proxy (address or CIDR), and only the five allow-listed header names count. Stored request headers (opt-in) never include `authorization`, `cookie`, `set-cookie`, `host`, `proxy-authorization`, `x-wp-nonce`, `x-api-key`, `x-auth-token`, `x-csrf-token` or `x-xsrf-token`, with 50 headers at most and values cut at 1000 characters. The logs are written with prepared statements.
+- Imports and exports: parsers never execute or unserialize an uploaded file, uploads are capped at 5 MB, every imported row goes through the file validator, exporters refuse any value holding a control character, and CSV downloads prefix formula-looking cells (`=`, `+`, `-`, `@`, tab, CR) with `[FORMULA] `.
+- Deactivating the source plugin after an import needs `activate_plugins`, and only the plugin the importer names can be deactivated.
+- The REST routes under `admin/redirects` need `manage_options` and write no theme file; rule and settings files go through the file-write gate of `admin/schema-files`.
 - `pass` is an internal rewrite. It never fetches an external URL.
 - `when.type: "filter"` names a hook, not a callable.
 - Logs: IP storage defaults to `none`, sensitive request headers are never stored, reading logs needs `manage_options`, and CSV exports prefix cells that start with `=`, `+`, `-` or `@`.
