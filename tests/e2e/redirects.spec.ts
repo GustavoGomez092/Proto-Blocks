@@ -100,6 +100,25 @@ function ruleRow( page: Page, source: string ) {
 	} );
 }
 
+/**
+ * An item of a rule row's "More actions for …" menu (Move up / Move down /
+ * Duplicate / Delete), with the menu opened.
+ * @param page   The current page.
+ * @param source The rule's source.
+ * @param name   The item's label, e.g. `Duplicate /old`.
+ */
+async function rowMenuItem( page: Page, source: string, name: string ) {
+	await page.getByRole( 'button', { name: `More actions for ${ source }`, exact: true } ).click();
+	return page.getByRole( 'dialog' ).getByRole( 'button', { name, exact: true } );
+}
+
+/** Clicks an item of a rule row's "More actions for …" menu. */
+async function rowAction( page: Page, source: string, name: string ) {
+	const item = await rowMenuItem( page, source, name );
+	await expect( item ).toBeEnabled();
+	await item.click();
+}
+
 /** Picks an option of a Radix select by the select's label. */
 async function choose(
 	scope: Page | ReturnType< Page[ 'getByRole' ] >,
@@ -450,9 +469,9 @@ test.describe( 'Redirects', () => {
 			await row.getByRole( 'button', { name: `Add redirect for ${ lost }` } ).click();
 
 			const dialog = page.getByRole( 'dialog', { name: 'Add redirect for this 404' } );
-			await expect( dialog.getByLabel( 'Source', { exact: true } ) ).toHaveValue( lost );
-			await expect( dialog.getByLabel( 'Target', { exact: true } ) ).toHaveValue( '' );
-			await dialog.getByLabel( 'Target', { exact: true } ).fill( `/${ TARGET }/` );
+			await expect( dialog.getByLabel( 'When a visitor requests', { exact: true } ) ).toHaveValue( lost );
+			await expect( dialog.getByLabel( 'Send them to', { exact: true } ) ).toHaveValue( '' );
+			await dialog.getByLabel( 'Send them to', { exact: true } ).fill( `/${ TARGET }/` );
 			await dialog.getByRole( 'button', { name: 'Save redirect' } ).click();
 			await expect( page.getByText( 'Redirect added.' ) ).toBeVisible();
 			await expect( dialog ).toHaveCount( 0 );
@@ -477,9 +496,9 @@ test.describe( 'Redirects', () => {
 			// Create.
 			await page.getByRole( 'button', { name: 'Add redirect', exact: true } ).click();
 			let dialog = page.getByRole( 'dialog', { name: 'Add redirect' } );
-			await dialog.getByLabel( 'Source', { exact: true } ).fill( '/pb-e2e-ui-a' );
-			await dialog.getByLabel( 'Target', { exact: true } ).fill( '/pb-e2e-ui-b' );
-			await dialog.getByLabel( 'Title', { exact: true } ).fill( 'E2E created' );
+			await dialog.getByLabel( 'When a visitor requests', { exact: true } ).fill( '/pb-e2e-ui-a' );
+			await dialog.getByLabel( 'Send them to', { exact: true } ).fill( '/pb-e2e-ui-b' );
+			await dialog.getByLabel( /^Title/ ).fill( 'E2E created' );
 			await dialog.getByRole( 'button', { name: 'Save redirect' } ).click();
 			await expect( page.getByText( 'Redirect added.' ) ).toBeVisible();
 			await expect( ruleRow( page, '/pb-e2e-ui-a' ) ).toBeVisible();
@@ -492,9 +511,9 @@ test.describe( 'Redirects', () => {
 			// Edit: new target, 302.
 			await page.getByRole( 'button', { name: 'Edit /pb-e2e-ui-a', exact: true } ).click();
 			dialog = page.getByRole( 'dialog', { name: 'Edit redirect' } );
-			await expect( dialog.getByLabel( 'Source', { exact: true } ) ).toHaveValue( '/pb-e2e-ui-a' );
-			await dialog.getByLabel( 'Target', { exact: true } ).fill( '/pb-e2e-ui-c' );
-			await choose( dialog, page, 'Code', '302 Found (temporary)' );
+			await expect( dialog.getByLabel( 'When a visitor requests', { exact: true } ) ).toHaveValue( '/pb-e2e-ui-a' );
+			await dialog.getByLabel( 'Send them to', { exact: true } ).fill( '/pb-e2e-ui-c' );
+			await choose( dialog, page, 'With status', '302 · Found (temporary)' );
 			await dialog.getByRole( 'button', { name: 'Save redirect' } ).click();
 			await expect( page.getByText( 'Redirect saved.' ) ).toBeVisible();
 			await expect.poll( () => readGroup( 'e2e-ui' ) ).toContain( '"to": "/pb-e2e-ui-c"' );
@@ -519,23 +538,21 @@ test.describe( 'Redirects', () => {
 			// Move: the new rule (last) goes up one, above fix-2.
 			const order = () => [ ...readGroup( 'e2e-ui' ).matchAll( /"from": "([^"]+)"/g ) ].map( ( m ) => m[ 1 ] );
 			expect( order() ).toEqual( [ '/pb-e2e-fix-1', '/pb-e2e-fix-2', '/pb-e2e-ui-a' ] );
-			await page.getByRole( 'button', { name: 'Move /pb-e2e-ui-a up', exact: true } ).click();
+			await rowAction( page, '/pb-e2e-ui-a', 'Move /pb-e2e-ui-a up' );
 			await expect.poll( order ).toEqual( [ '/pb-e2e-fix-1', '/pb-e2e-ui-a', '/pb-e2e-fix-2' ] );
-			await expect( page.getByRole( 'button', { name: 'Move /pb-e2e-ui-a up', exact: true } ) ).toBeEnabled();
-			await page.getByRole( 'button', { name: 'Move /pb-e2e-fix-1 down', exact: true } ).click();
+			await rowAction( page, '/pb-e2e-fix-1', 'Move /pb-e2e-fix-1 down' );
 			await expect.poll( order ).toEqual( [ '/pb-e2e-ui-a', '/pb-e2e-fix-1', '/pb-e2e-fix-2' ] );
 			expect( readGroup( 'e2e-ui' ) ).toContain( COMMENT );
 
 			// Duplicate: a copy right below, with a new id.
-			await expect( page.getByRole( 'button', { name: 'Duplicate /pb-e2e-fix-2', exact: true } ) ).toBeEnabled();
-			await page.getByRole( 'button', { name: 'Duplicate /pb-e2e-fix-2', exact: true } ).click();
+			await rowAction( page, '/pb-e2e-fix-2', 'Duplicate /pb-e2e-fix-2' );
 			await expect( page.getByText( 'Redirect duplicated.' ) ).toBeVisible();
 			await expect.poll( order ).toEqual( [ '/pb-e2e-ui-a', '/pb-e2e-fix-1', '/pb-e2e-fix-2', '/pb-e2e-fix-2' ] );
 			const ids = [ ...readGroup( 'e2e-ui' ).matchAll( /"id": "(r_[a-f0-9]{8})"/g ) ].map( ( m ) => m[ 1 ] );
 			expect( new Set( ids ).size ).toBe( 4 );
 
 			// Delete the created rule.
-			await page.getByRole( 'button', { name: 'Delete /pb-e2e-ui-a', exact: true } ).click();
+			await rowAction( page, '/pb-e2e-ui-a', 'Delete /pb-e2e-ui-a' );
 			await page.getByRole( 'alertdialog' ).getByRole( 'button', { name: 'Delete 1 redirect' } ).click();
 			await expect( page.getByText( 'Redirect deleted.' ) ).toBeVisible();
 			await expect.poll( order ).toEqual( [ '/pb-e2e-fix-1', '/pb-e2e-fix-2', '/pb-e2e-fix-2' ] );
@@ -622,7 +639,7 @@ test.describe( 'Redirects', () => {
 			await php.getByRole( 'button', { name: 'Edit /pb-e2e-php-src', exact: true } ).click();
 			const dialog = page.getByRole( 'dialog', { name: 'Edit redirect' } );
 			await expect( dialog ).toContainText( 'This rule is declared in PHP.' );
-			await dialog.getByLabel( 'Target', { exact: true } ).fill( '/pb-e2e-php-file-target' );
+			await dialog.getByLabel( 'Send them to', { exact: true } ).fill( '/pb-e2e-php-file-target' );
 			await dialog.getByRole( 'button', { name: 'Save redirect' } ).click();
 			await expect( page.getByText( 'Redirect saved.' ) ).toBeVisible();
 			await expect.poll( () => readGroup( 'e2e-ui' ) ).toContain( '"from": "/pb-e2e-php-src"' );
@@ -754,8 +771,8 @@ test.describe( 'Redirects', () => {
 			await visit( '/pb-e2e-fix-2' );
 			await visit( '/pb-e2e-fix-2?' );
 			await openScreen( page );
-			await expect( ruleRow( page, '/pb-e2e-fix-2' ).getByRole( 'cell' ).nth( 7 ) ).toHaveText( '2' );
-			await expect( ruleRow( page, '/pb-e2e-fix-1' ).getByRole( 'cell' ).nth( 7 ) ).toHaveText( '0' );
+			await expect( ruleRow( page, '/pb-e2e-fix-2' ).getByRole( 'cell' ).nth( 4 ) ).toHaveText( '2' );
+			await expect( ruleRow( page, '/pb-e2e-fix-1' ).getByRole( 'cell' ).nth( 4 ) ).toHaveText( '0' );
 
 			await page.getByRole( 'tab', { name: 'Log' } ).click();
 			await expect( page ).toHaveURL( /[?&]tab=log/ );
@@ -766,7 +783,7 @@ test.describe( 'Redirects', () => {
 			await expect( rows.first() ).toContainText( 'proto-blocks' );
 			await rows.first().getByRole( 'button', { name: 'Edit rule r_e2e00002' } ).click();
 			const dialog = page.getByRole( 'dialog', { name: 'Edit redirect' } );
-			await expect( dialog.getByLabel( 'Source', { exact: true } ) ).toHaveValue( '/pb-e2e-fix-2' );
+			await expect( dialog.getByLabel( 'When a visitor requests', { exact: true } ) ).toHaveValue( '/pb-e2e-fix-2' );
 		} );
 
 		test( 'read-only when proto-redirects is not writable (chmod)', async ( {
@@ -793,7 +810,8 @@ test.describe( 'Redirects', () => {
 				await expect( page.getByRole( 'button', { name: 'Add redirect', exact: true } ) ).toBeDisabled();
 				const row = ruleRow( page, '/pb-e2e-fix-1' );
 				await expect( row.getByRole( 'switch' ) ).toBeDisabled();
-				await expect( row.getByRole( 'button', { name: 'Delete /pb-e2e-fix-1', exact: true } ) ).toBeDisabled();
+				await expect( await rowMenuItem( page, '/pb-e2e-fix-1', 'Delete /pb-e2e-fix-1' ) ).toBeDisabled();
+				await page.keyboard.press( 'Escape' );
 				await expect( row.getByRole( 'button', { name: 'Edit /pb-e2e-fix-1', exact: true } ) ).toBeDisabled();
 				// The rules still run.
 				await expectRedirect( '/pb-e2e-fix-1', 301, '/pb-e2e-fix-1-new' );
@@ -819,9 +837,10 @@ test.describe( 'Redirects', () => {
 				await expect( row ).toContainText( 'E2E Locked' );
 				await expect( row ).toContainText( 'Read-only: the file is outside the theme' );
 				await expect( row.getByRole( 'switch' ) ).toBeDisabled();
-				for ( const action of [ 'Edit', 'Move', 'Duplicate', 'Delete' ] ) {
-					const name = action === 'Move' ? 'Move /pb-e2e-locked up' : `${ action } /pb-e2e-locked`;
-					await expect( row.getByRole( 'button', { name, exact: true } ), action ).toBeDisabled();
+				await expect( row.getByRole( 'button', { name: 'Edit /pb-e2e-locked', exact: true } ) ).toBeDisabled();
+				for ( const name of [ 'Move /pb-e2e-locked down', 'Duplicate /pb-e2e-locked', 'Delete /pb-e2e-locked' ] ) {
+					await expect( await rowMenuItem( page, '/pb-e2e-locked', name ), name ).toBeDisabled();
+					await page.keyboard.press( 'Escape' );
 				}
 				// The writable group next to it stays editable.
 				await expect( ruleRow( page, '/pb-e2e-fix-1' ).getByRole( 'switch' ) ).toBeEnabled();

@@ -40,6 +40,15 @@ const VIEWER = {
 
 const BASE_URL = process.env.WP_BASE_URL ?? 'http://localhost:8889';
 
+/**
+ * Shows one snippet location of the editor (only the active tab's editor is rendered).
+ * @param page The current page.
+ * @param name The tab's caption, e.g. /^after <body>/.
+ */
+async function snippetTab( page: Page, name: RegExp ) {
+	await page.getByRole( 'tab', { name } ).click();
+}
+
 async function openScreen( page: Page, query = '' ) {
 	await page.goto( `${ SCREEN }${ query }` );
 	await expect( page.locator( '[aria-busy="true"]' ) ).toHaveCount( 0 );
@@ -189,27 +198,30 @@ test.describe( 'Scripts', () => {
 		page,
 	} ) => {
 		await openScreen( page );
-		await page.getByRole( 'button', { name: 'New script' } ).first().click();
+		// No scripts yet: the empty state's template tiles.
+		await page.getByRole( 'button', { name: /^Blank script/ } ).click();
 
-		await page.getByLabel( 'Title', { exact: true } ).fill( 'E2E UI Script' );
+		await page.getByLabel( 'Script title', { exact: true } ).fill( 'E2E UI Script' );
 		await expect( page.getByLabel( 'Slug (folder name)' ) ).toHaveValue(
 			'e2e-ui-script'
 		);
 		await page.getByLabel( 'Priority', { exact: true } ).fill( '5' );
-		await page.getByLabel( 'In <head>' ).fill( '<meta name="pb-e2e-ui" content="head">' );
-		await page.getByLabel( 'Right after <body>' ).fill( '<div id="pb-e2e-ui-open"></div>' );
-		await page.getByLabel( 'Before </body>' ).fill( '<script>window.pbE2eUi = 1;</script>' );
+		await page.getByRole( 'textbox', { name: 'In <head>', exact: true } ).fill( '<meta name="pb-e2e-ui" content="head">' );
+		await snippetTab( page, /^after <body>/ );
+		await page.getByRole( 'textbox', { name: 'Right after <body>', exact: true } ).fill( '<div id="pb-e2e-ui-open"></div>' );
+		await snippetTab( page, /^before <\/body>/ );
+		await page.getByRole( 'textbox', { name: 'Before </body>', exact: true } ).fill( '<script>window.pbE2eUi = 1;</script>' );
 
 		// Placement: exclude a page, logged-out visitors only.
 		await page.getByLabel( 'Exclude target kind' ).selectOption( 'page:' );
 		await page.getByLabel( 'Exclude target value' ).fill( EXCLUDED );
 		await page.getByRole( 'button', { name: 'Add to exclude' } ).click();
 		await expect(
-			page.getByRole( 'list', { name: 'Exclude' } ).getByText( `page:${ EXCLUDED }` )
+			page.getByRole( 'list', { name: 'Exclude' } ).getByText( `Page · ${ EXCLUDED }`, { exact: true } )
 		).toBeVisible();
-		await page.getByRole( 'radio', { name: 'Logged out only' } ).click();
+		await page.getByRole( 'radio', { name: 'Logged out', exact: true } ).click();
 
-		await page.getByRole( 'button', { name: 'Save', exact: true } ).click();
+		await page.getByRole( 'button', { name: 'Save to file', exact: true } ).click();
 		await expect( page.getByText( 'Script saved.' ) ).toBeVisible();
 		await expect( page ).toHaveURL( /[?&]slug=e2e-ui-script/ );
 
@@ -238,9 +250,10 @@ test.describe( 'Scripts', () => {
 		expect( await html( anonymous, `/${ EXCLUDED }/` ) ).not.toContain( 'pb-e2e-ui' );
 
 		// Edit: the title changes, the head snippet is emptied (its file and key go away).
-		await page.getByLabel( 'Title', { exact: true } ).fill( 'E2E UI Script Edited' );
-		await page.getByLabel( 'In <head>' ).fill( '' );
-		await page.getByRole( 'button', { name: 'Save', exact: true } ).click();
+		await page.getByLabel( 'Script title', { exact: true } ).fill( 'E2E UI Script Edited' );
+		await snippetTab( page, /^<head>/ );
+		await page.getByRole( 'textbox', { name: 'In <head>', exact: true } ).fill( '' );
+		await page.getByRole( 'button', { name: 'Save to file', exact: true } ).click();
 		await expect( page.getByText( 'Script saved.' ).first() ).toBeVisible();
 		await expect.poll( () => themeFile( THEME, `${ dir }/script.jsonc` ) ).toContain(
 			'"title": "E2E UI Script Edited"'
@@ -281,7 +294,7 @@ test.describe( 'Scripts', () => {
 		await row( page, 'E2E Delete' )
 			.getByRole( 'button', { name: 'Edit E2E Delete' } )
 			.click();
-		await expect( page.getByLabel( 'In <head>' ) ).toHaveValue( HEAD );
+		await expect( page.getByRole( 'textbox', { name: 'In <head>', exact: true } ) ).toHaveValue( HEAD );
 		await page.getByRole( 'button', { name: 'Delete', exact: true } ).click();
 		await page
 			.getByRole( 'alertdialog' )
@@ -298,10 +311,10 @@ test.describe( 'Scripts', () => {
 		requestUtils,
 	} ) => {
 		await openScreen( page, '&new=1' );
-		await page.getByLabel( 'Title', { exact: true } ).fill( 'E2E Php Snippet' );
-		const head = page.getByLabel( 'In <head>' );
+		await page.getByLabel( 'Script title', { exact: true } ).fill( 'E2E Php Snippet' );
+		const head = page.getByRole( 'textbox', { name: 'In <head>', exact: true } );
 		await head.fill( '<?php echo "x"; ?>' );
-		await page.getByRole( 'button', { name: 'Save', exact: true } ).click();
+		await page.getByRole( 'button', { name: 'Save to file', exact: true } ).click();
 		await expect( page.getByText( 'Fix the highlighted fields before saving.' ) ).toBeVisible();
 		await expect( page.getByText( /a PHP opening tag .* is not allowed/ ) ).toBeVisible();
 		await expect( head ).toHaveAttribute( 'aria-invalid', 'true' );
@@ -409,11 +422,11 @@ test.describe( 'Scripts', () => {
 
 			await item.getByRole( 'button', { name: 'View E2E Locked' } ).click();
 			await expect( page.getByText( 'Scripts are read-only for you' ) ).toBeVisible();
-			await expect( page.getByRole( 'button', { name: 'Save', exact: true } ) ).toBeDisabled();
+			await expect( page.getByRole( 'button', { name: 'Save to file', exact: true } ) ).toBeDisabled();
 			await expect( page.getByRole( 'button', { name: 'Delete', exact: true } ) ).toHaveCount( 0 );
-			await expect( page.getByLabel( 'Title', { exact: true } ) ).not.toBeEditable();
-			await expect( page.getByLabel( 'In <head>' ) ).toHaveValue( HEAD );
-			await expect( page.getByLabel( 'In <head>' ) ).not.toBeEditable();
+			await expect( page.getByLabel( 'Script title', { exact: true } ) ).not.toBeEditable();
+			await expect( page.getByRole( 'textbox', { name: 'In <head>', exact: true } ) ).toHaveValue( HEAD );
+			await expect( page.getByRole( 'textbox', { name: 'In <head>', exact: true } ) ).not.toBeEditable();
 			await expect( page.getByRole( 'switch', { name: 'Enabled' } ) ).toBeDisabled();
 			await expect( page.getByRole( 'radio', { name: 'Anyone' } ) ).toBeDisabled();
 			await expect( page.getByRole( 'button', { name: 'Add to include' } ) ).toHaveCount( 0 );
