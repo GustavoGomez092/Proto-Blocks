@@ -283,7 +283,8 @@ JSONC);
         $GLOBALS['pb_test_filters']['proto_blocks_modules'][] = static fn(array $defaults): array => ['fields' => false] + $defaults;
         (new Manager($this->registry()))->boot();
 
-        self::assertSame([], SchemaFileWriter::extendedKinds());
+        // Other modules (scripts, redirects) add kinds of their own; only field-group must be absent.
+        self::assertNotContains('field-group', SchemaFileWriter::extendedKinds());
         $route = $schemaRoute();
         self::assertStringNotContainsString('field-group', $route);
         self::assertSame(0, preg_match('@^' . $route . '$@i', 'admin/schema-files/field-group/events'));
@@ -301,7 +302,7 @@ JSONC);
         FieldsModule::setInstance(null);
         $GLOBALS['pb_test_filters']['proto_blocks_modules'] = [];
         (new Manager($this->registry()))->boot();
-        self::assertSame(['field-group'], SchemaFileWriter::extendedKinds());
+        self::assertContains('field-group', SchemaFileWriter::extendedKinds());
         self::assertSame(1, preg_match('@^' . $schemaRoute() . '$@i', 'admin/schema-files/field-group/events'));
     }
 
