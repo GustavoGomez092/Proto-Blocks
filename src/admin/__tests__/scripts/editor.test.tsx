@@ -28,10 +28,16 @@ afterEach(() => {
 
 const saved = { hash: 'h2', path: 'wp-content/themes/demo/proto-scripts/gtm/script.jsonc', created: false, warnings: [] };
 
+/** Snippet editors sit in tabs: select the location's tab first. */
+async function openTab(location: 'head' | 'bodyOpen' | 'bodyClose') {
+	const name = { head: /^<head>/, bodyOpen: /^after <body>/, bodyClose: /^before <\/body>/ }[location];
+	await userEvent.click(screen.getByRole('tab', { name }));
+}
+
 async function openGtm(extra: Record<string, unknown> = {}) {
 	mockApi({ 'admin/scripts': index(), 'GET admin/scripts/gtm': detail(), 'POST admin/scripts/gtm': saved, ...extra });
 	renderScreen('&slug=gtm');
-	return screen.findByRole('textbox', { name: 'Title' });
+	return screen.findByRole('textbox', { name: 'Script title' });
 }
 
 describe('script editor', () => {
@@ -41,9 +47,12 @@ describe('script editor', () => {
 		expect(screen.getByRole('switch', { name: 'Enabled' }).getAttribute('aria-checked')).toBe('true');
 		expect((screen.getByRole('spinbutton', { name: 'Priority' }) as HTMLInputElement).value).toBe('10');
 		expect((screen.getByRole('textbox', { name: 'In <head>' }) as HTMLTextAreaElement).value).toBe('<script>gtm()</script>');
+		await openTab('bodyOpen');
 		expect((screen.getByRole('textbox', { name: 'Right after <body>' }) as HTMLTextAreaElement).value).toBe('<noscript>gtm</noscript>');
+		await openTab('bodyClose');
 		expect((screen.getByRole('textbox', { name: 'Before </body>' }) as HTMLTextAreaElement).value).toBe('');
-		expect(screen.getByRole('list', { name: 'Exclude' }).textContent).toContain('page:privacy-policy');
+		expect(screen.getByRole('list', { name: 'Exclude' }).textContent).toContain('Page · privacy-policy');
+		expect(screen.getByTitle('page:privacy-policy')).toBeTruthy();
 		expect(screen.getByText('Proto-Blocks file')).toBeTruthy();
 	});
 
@@ -59,10 +68,12 @@ describe('script editor', () => {
 
 	test('save payload: script.jsonc edited in place, every snippet, the loaded hash', async () => {
 		await openGtm();
+		await openTab('bodyClose');
 		await userEvent.type(screen.getByRole('textbox', { name: 'Before </body>' }), '<script>bye()</script>');
+		await openTab('bodyOpen');
 		await userEvent.clear(screen.getByRole('textbox', { name: 'Right after <body>' }));
-		await userEvent.click(screen.getByRole('radio', { name: 'Logged out only' }));
-		await userEvent.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+		await userEvent.click(screen.getByRole('radio', { name: 'Logged out' }));
+		await userEvent.click(screen.getAllByRole('button', { name: 'Save to file' })[0]);
 
 		await waitFor(() => expect(posts()).toHaveLength(1));
 		const post = posts()[0];
@@ -81,9 +92,10 @@ describe('script editor', () => {
 
 	test('validation: empty title and PHP in a snippet block the save', async () => {
 		await openGtm();
-		await userEvent.clear(screen.getByRole('textbox', { name: 'Title' }));
+		await userEvent.clear(screen.getByRole('textbox', { name: 'Script title' }));
+		await openTab('bodyClose');
 		await userEvent.type(screen.getByRole('textbox', { name: 'Before </body>' }), '<?php echo 1; ?>');
-		await userEvent.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+		await userEvent.click(screen.getAllByRole('button', { name: 'Save to file' })[0]);
 
 		expect(await screen.findByText('A title is required.')).toBeTruthy();
 		expect(screen.getByText(/a PHP opening tag/)).toBeTruthy();
@@ -93,13 +105,13 @@ describe('script editor', () => {
 
 	test('validation: markup in the title and an out-of-range priority', async () => {
 		await openGtm();
-		const title = screen.getByRole('textbox', { name: 'Title' });
+		const title = screen.getByRole('textbox', { name: 'Script title' });
 		await userEvent.clear(title);
 		await userEvent.type(title, 'GTM <b>');
 		const priority = screen.getByRole('spinbutton', { name: 'Priority' });
 		await userEvent.clear(priority);
 		await userEvent.type(priority, '200000');
-		await userEvent.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+		await userEvent.click(screen.getAllByRole('button', { name: 'Save to file' })[0]);
 		expect(await screen.findByText('The title cannot contain "<" or ">".')).toBeTruthy();
 		expect(screen.getByText(/between -100000 and 100000/)).toBeTruthy();
 		expect(posts()).toHaveLength(0);
@@ -111,7 +123,7 @@ describe('script editor', () => {
 				throw { code: 'proto_blocks_conflict', message: 'changed', data: { status: 409, hash: 'h9' } };
 			},
 		});
-		await userEvent.click(screen.getAllByRole('button', { name: 'Save' })[0]);
+		await userEvent.click(screen.getAllByRole('button', { name: 'Save to file' })[0]);
 		expect(await screen.findByText(/The file changed on disk since it was loaded/)).toBeTruthy();
 	});
 
@@ -122,7 +134,7 @@ describe('script editor', () => {
 		});
 		renderScreen('&slug=gtm');
 		expect(await screen.findByText('Scripts are read-only for you')).toBeTruthy();
-		const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+		const save = screen.getByRole('button', { name: 'Save to file' }) as HTMLButtonElement;
 		expect(save.disabled).toBe(true);
 		expect(save.getAttribute('aria-describedby')).toBe('proto-blocks-read-only');
 		expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
@@ -146,7 +158,7 @@ describe('script editor', () => {
 		});
 		renderScreen('&slug=verify');
 		expect(await screen.findByText(/Declared in PHP at wp-content\/themes\/demo\/functions.php:12/)).toBeTruthy();
-		expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
+		expect((screen.getByRole('button', { name: 'Save to file' }) as HTMLButtonElement).disabled).toBe(true);
 	});
 
 	test('delete goes through schema-files with the typed confirm', async () => {
@@ -164,10 +176,11 @@ describe('script editor', () => {
 			'GET admin/scripts/chat-widget': detail({ item: row({ slug: 'chat-widget', title: 'Chat widget' }) }),
 		});
 		renderScreen('&new=1');
-		await userEvent.type(await screen.findByRole('textbox', { name: 'Title' }), 'Chat widget');
+		await userEvent.type(await screen.findByRole('textbox', { name: 'Script title' }), 'Chat widget');
 		expect((screen.getByRole('textbox', { name: 'Slug (folder name)' }) as HTMLInputElement).value).toBe('chat-widget');
+		await openTab('bodyClose');
 		await userEvent.type(screen.getByRole('textbox', { name: 'Before </body>' }), '<script src="https://chat.example/w.js"></script>');
-		await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+		await userEvent.click(screen.getByRole('button', { name: 'Save to file' }));
 
 		await waitFor(() => expect(posts()).toHaveLength(1));
 		const body = posts()[0].data as { text: string; hash: null; snippets: Record<string, string> };
@@ -182,12 +195,71 @@ describe('script editor', () => {
 	test('create: an invalid slug is refused before any request', async () => {
 		mockApi({ 'admin/scripts': index() });
 		renderScreen('&new=1');
-		await userEvent.type(await screen.findByRole('textbox', { name: 'Title' }), 'X');
+		await userEvent.type(await screen.findByRole('textbox', { name: 'Script title' }), 'X');
 		const slug = screen.getByRole('textbox', { name: 'Slug (folder name)' });
 		await userEvent.clear(slug);
 		await userEvent.type(slug, 'Bad Slug');
-		await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+		await userEvent.click(screen.getByRole('button', { name: 'Save to file' }));
 		expect(await screen.findByText(/Start with a lowercase letter/)).toBeTruthy();
 		expect(posts()).toHaveLength(0);
+	});
+
+	test('a snippet error in a hidden tab selects that tab on save', async () => {
+		await openGtm();
+		await openTab('bodyClose');
+		await userEvent.type(screen.getByRole('textbox', { name: 'Before </body>' }), '<?= 1 ?>');
+		await openTab('head');
+		expect(screen.queryByRole('textbox', { name: 'Before </body>' })).toBeNull();
+		await userEvent.click(screen.getByRole('button', { name: 'Save to file' }));
+		expect(screen.getByRole('tab', { name: /^before <\/body>/ }).getAttribute('aria-selected')).toBe('true');
+		expect(screen.getByRole('textbox', { name: 'Before </body>' }).getAttribute('aria-invalid')).toBe('true');
+		expect(screen.getByRole('tab', { name: /has an error/ })).toBeTruthy();
+		expect(posts()).toHaveLength(0);
+	});
+
+	test('snippet tabs: code dot or "empty", the file name and the locations count', async () => {
+		await openGtm();
+		expect(screen.getByRole('tab', { name: /^before <\/body>/ }).textContent).toContain('empty');
+		expect(screen.getByRole('tab', { name: /^<head>/ }).textContent).not.toContain('empty');
+		expect(screen.getByText('2 of 3 locations used')).toBeTruthy();
+		expect(screen.getByText('head.html')).toBeTruthy();
+		await openTab('bodyClose');
+		expect(screen.getByText('body-close.html')).toBeTruthy();
+	});
+
+	test('the aside says it in plain words, names the next script and shows the file to be written', async () => {
+		mockApi({
+			'admin/scripts': index({
+				items: [row(), row({ slug: 'verify', title: 'Search Console', priority: 20, priorities: { head: 20, bodyOpen: 20, bodyClose: 20 }, locations: ['head'] })],
+			}),
+			'GET admin/scripts/gtm': detail(),
+		});
+		renderScreen('&slug=gtm');
+		await screen.findByRole('textbox', { name: 'Script title' });
+		expect(screen.getByTestId('plain-words').textContent).toBe(
+			'Prints in <head> and right after <body> on every page except Page · privacy-policy, for anyone, except users with the role Administrator.'
+		);
+		expect(screen.getByTestId('prints-before').textContent).toBe('Search Console');
+		const jsonc = screen.getByRole('region', { name: 'script.jsonc' });
+		expect(jsonc.textContent).toContain('Matches the file on disk');
+
+		await userEvent.click(screen.getByRole('radio', { name: 'Logged in' }));
+		expect(screen.getByTestId('plain-words').textContent).toContain('for logged-in visitors');
+		expect(jsonc.textContent).toContain('"loggedIn": true');
+		expect(jsonc.textContent).toContain('Unsaved changes');
+
+		// A priority after Search Console's: nothing left to print before.
+		const priority = screen.getByRole('spinbutton', { name: 'Priority' });
+		await userEvent.clear(priority);
+		await userEvent.type(priority, '30');
+		expect(screen.getByTestId('prints-before').textContent).toBe('—');
+	});
+
+	test('Ctrl+S saves; the header shows the shortcut and an inline title input', async () => {
+		await openGtm();
+		expect(screen.getByRole('heading', { level: 1, name: 'Google Tag Manager' })).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Save to file' }).querySelector('kbd')?.getAttribute('aria-hidden')).toBe('true');
+		await userEvent.keyboard('{Control>}s{/Control}');
+		await waitFor(() => expect(posts()).toHaveLength(1));
 	});
 });

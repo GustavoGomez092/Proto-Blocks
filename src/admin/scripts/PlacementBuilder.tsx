@@ -1,26 +1,41 @@
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { __, sprintf } from '@wordpress/i18n';
 import { PlusIcon, XIcon } from 'lucide-react';
-import { Badge } from '@/admin/components/ui/badge';
-import { Button } from '@/admin/components/ui/button';
 import { Checkbox } from '@/admin/components/ui/checkbox';
-import { Input } from '@/admin/components/ui/input';
-import { Label } from '@/admin/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/admin/components/ui/radio-group';
-import { buildTarget, TARGET_KINDS, targetError } from './schema';
+import { RadioGroup, SegmentedRadioItem, segmentedGroupClassName } from '@/admin/components/ui/radio-group';
+import { cn } from '@/admin/lib/utils';
+import { buildTarget, TARGET_KINDS, targetError, targetLabel } from './schema';
 import type { Where } from './types';
 
-/** Chips for one target list plus a "kind + value + Add" row. */
+/** Two-column row of the "Where it runs" card: title and help on the left (200px), controls on the right. */
+function PlacementRow({ title, help, children }: { title: string; help: ReactNode; children: ReactNode }) {
+	const id = useId();
+	return (
+		<div role="group" aria-labelledby={id} className="grid gap-3 border-b border-divider p-5 last:border-b-0 md:grid-cols-[200px_minmax(0,1fr)] md:gap-6">
+			<div className="grid content-start gap-1">
+				<span id={id} className="text-label font-medium">
+					{title}
+				</span>
+				<p className="text-label text-muted-foreground">{help}</p>
+			</div>
+			<div className="grid min-w-0 content-start gap-3.5">{children}</div>
+		</div>
+	);
+}
+
+const compact = 'h-7 rounded-md border border-input bg-background px-2 text-label';
+
+/** One chip row: the label, a chip per target (with remove), then a compact "kind + value + Add" control. */
 function TargetList({
 	label,
-	help,
+	tone,
 	targets,
 	onChange,
 	readOnly,
 	emptyText,
 }: {
 	label: string;
-	help: string;
+	tone: 'include' | 'exclude';
 	targets: string[];
 	onChange: (next: string[]) => void;
 	readOnly: boolean;
@@ -45,35 +60,40 @@ function TargetList({
 	};
 
 	return (
-		<fieldset className="grid gap-2" aria-describedby={`${id}-help`}>
-			<legend className="text-label font-medium">{label}</legend>
-			<p id={`${id}-help`} className="text-caption text-muted-foreground">
-				{help}
-			</p>
-			<ul className="flex flex-wrap gap-1.5" aria-label={label}>
-				{targets.length === 0 ? <li className="text-caption text-muted-foreground">{emptyText}</li> : null}
-				{targets.map((target) => (
-					<li key={target}>
-						<Badge variant="secondary" className="gap-1 font-mono">
-							{target}
+		<div className="grid gap-1.5">
+			<div className="flex flex-wrap items-center gap-2">
+				<span id={`${id}-label`} className="w-16 flex-none text-caption text-muted-foreground">
+					{label}
+				</span>
+				<ul className="flex flex-wrap items-center gap-1.5" aria-labelledby={`${id}-label`}>
+					{targets.length === 0 ? <li className="text-caption text-muted-foreground">{emptyText}</li> : null}
+					{targets.map((target) => (
+						<li
+							key={target}
+							title={target}
+							className={cn(
+								'inline-flex h-7 items-center gap-1.5 rounded-md pl-2.5 text-label font-medium',
+								readOnly ? 'pr-2.5' : 'pr-1.5',
+								tone === 'include' ? 'bg-brand-soft text-brand-ink' : 'bg-destructive-soft text-destructive'
+							)}
+						>
+							{targetLabel(target)}
 							{readOnly ? null : (
 								<button
 									type="button"
-									className="cursor-pointer rounded-full"
+									className="grid size-[18px] cursor-pointer place-items-center rounded-sm hover:bg-background/60"
 									/* translators: %s: a placement target, e.g. page:about */
 									aria-label={sprintf(__('Remove %s', 'proto-blocks'), target)}
 									onClick={() => onChange(targets.filter((t) => t !== target))}
 								>
-									<XIcon aria-hidden="true" className="size-3" />
+									<XIcon aria-hidden="true" className="size-[11px]" />
 								</button>
 							)}
-						</Badge>
-					</li>
-				))}
-			</ul>
-			{readOnly ? null : (
-				<div className="grid gap-1.5">
-					<div className="flex flex-wrap items-center gap-2">
+						</li>
+					))}
+				</ul>
+				{readOnly ? null : (
+					<span className="inline-flex flex-wrap items-center gap-1.5">
 						<label className="sr-only" htmlFor={`${id}-kind`}>
 							{/* translators: %s: Include or Exclude */}
 							{sprintf(__('%s target kind', 'proto-blocks'), label)}
@@ -85,7 +105,7 @@ function TargetList({
 								setKind(event.target.value);
 								setError(null);
 							}}
-							className="h-[38px] rounded-md border border-input bg-background px-2 text-body"
+							className={cn(compact, 'max-w-[220px]')}
 						>
 							{TARGET_KINDS.map((k) => (
 								<option key={k.kind} value={k.kind}>
@@ -99,11 +119,11 @@ function TargetList({
 									{/* translators: %s: Include or Exclude */}
 									{sprintf(__('%s target value', 'proto-blocks'), label)}
 								</label>
-								<Input
+								<input
 									id={`${id}-value`}
 									value={value}
 									placeholder={current.placeholder}
-									className="w-56 font-mono"
+									className={cn(compact, 'w-40 font-mono', error && 'border-destructive')}
 									aria-invalid={error ? true : undefined}
 									onChange={(event) => setValue(event.target.value)}
 									onKeyDown={(event) => {
@@ -115,23 +135,29 @@ function TargetList({
 								/>
 							</>
 						) : null}
-						<Button type="button" variant="outline" size="sm" onClick={add}>
-							<PlusIcon aria-hidden="true" />
-							{/* translators: %s: Include or Exclude */}
-							{sprintf(__('Add to %s', 'proto-blocks'), label.toLowerCase())}
-						</Button>
-					</div>
-					{error ? (
-						<p role="alert" className="text-caption text-destructive">
-							{error}
-						</p>
-					) : null}
-				</div>
-			)}
-		</fieldset>
+						<button
+							type="button"
+							/* translators: %s: Include or Exclude */
+							aria-label={sprintf(__('Add to %s', 'proto-blocks'), label.toLowerCase())}
+							className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-dashed border-input px-2.5 text-caption font-medium text-muted-foreground hover:border-primary hover:text-primary"
+							onClick={add}
+						>
+							<PlusIcon aria-hidden="true" className="size-3" />
+							{__('Add', 'proto-blocks')}
+						</button>
+					</span>
+				)}
+			</div>
+			{error ? (
+				<p role="alert" className="text-caption text-destructive md:pl-[72px]">
+					{error}
+				</p>
+			) : null}
+		</div>
 	);
 }
 
+/** Role chip-checkboxes under a caption ("Never for these roles"). */
 function RoleChecks({
 	label,
 	roles,
@@ -150,23 +176,33 @@ function RoleChecks({
 	const all = [...roles, ...selected.filter((slug) => !known.has(slug)).map((slug) => ({ slug, name: slug }))];
 	return (
 		<fieldset className="grid gap-2">
-			<legend className="text-label font-medium">{label}</legend>
-			<div className="flex flex-wrap gap-x-4 gap-y-2">
-				{all.map((role) => (
-					<div key={role.slug} className="flex items-center gap-2">
-						<Checkbox
-							id={`${id}-${role.slug}`}
-							checked={selected.includes(role.slug)}
-							disabled={readOnly}
-							onCheckedChange={(checked) =>
-								onChange(checked === true ? [...selected, role.slug] : selected.filter((slug) => slug !== role.slug))
-							}
-						/>
-						<Label htmlFor={`${id}-${role.slug}`} className="font-normal">
+			<legend className="mb-2 text-caption text-muted-foreground">{label}</legend>
+			<div className="flex flex-wrap gap-2">
+				{all.map((role) => {
+					const on = selected.includes(role.slug);
+					return (
+						<label
+							key={role.slug}
+							htmlFor={`${id}-${role.slug}`}
+							className={cn(
+								'inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border px-2.5 text-label',
+								on ? 'border-primary bg-code font-medium' : 'border-border bg-card',
+								readOnly && 'cursor-not-allowed'
+							)}
+						>
+							<Checkbox
+								id={`${id}-${role.slug}`}
+								checked={on}
+								disabled={readOnly}
+								className="size-3.5"
+								onCheckedChange={(checked) =>
+									onChange(checked === true ? [...selected, role.slug] : selected.filter((slug) => slug !== role.slug))
+								}
+							/>
 							{role.name}
-						</Label>
-					</div>
-				))}
+						</label>
+					);
+				})}
 			</div>
 		</fieldset>
 	);
@@ -175,6 +211,7 @@ function RoleChecks({
 /**
  * Spec §2 placement: include / exclude targets, logged-in state and roles.
  * A page is in scope when it matches any include entry and no exclude entry.
+ * Renders the two rows of the editor's "Where it runs" card: Pages, Visitors.
  */
 export function PlacementBuilder({
 	where,
@@ -187,69 +224,64 @@ export function PlacementBuilder({
 	onChange: (next: Where) => void;
 	readOnly?: boolean;
 }) {
-	const id = useId();
 	const login = where.loggedIn === null ? 'any' : where.loggedIn ? 'in' : 'out';
 	const conflict = where.loggedIn === false && where.roles.length > 0;
 
 	return (
-		<div className="grid gap-5">
-			<TargetList
-				label={__('Include', 'proto-blocks')}
-				help={__('The script runs on pages that match any of these.', 'proto-blocks')}
-				targets={where.include}
-				emptyText={__('Nowhere: add a target or the script never runs.', 'proto-blocks')}
-				readOnly={readOnly}
-				onChange={(include) => onChange({ ...where, include })}
-			/>
-			<TargetList
-				label={__('Exclude', 'proto-blocks')}
-				help={__('…but never on pages that match any of these.', 'proto-blocks')}
-				targets={where.exclude}
-				emptyText={__('No exclusions.', 'proto-blocks')}
-				readOnly={readOnly}
-				onChange={(exclude) => onChange({ ...where, exclude })}
-			/>
-			<fieldset className="grid gap-2">
-				<legend className="text-label font-medium">{__('Visitors', 'proto-blocks')}</legend>
+		<>
+			<PlacementRow
+				title={__('Pages', 'proto-blocks')}
+				help={__('Runs where any include matches, unless an exclude matches.', 'proto-blocks')}
+			>
+				<TargetList
+					label={__('Include', 'proto-blocks')}
+					tone="include"
+					targets={where.include}
+					emptyText={__('Nowhere: add a target or the script never runs.', 'proto-blocks')}
+					readOnly={readOnly}
+					onChange={(include) => onChange({ ...where, include })}
+				/>
+				<TargetList
+					label={__('Exclude', 'proto-blocks')}
+					tone="exclude"
+					targets={where.exclude}
+					emptyText={__('No exclusions.', 'proto-blocks')}
+					readOnly={readOnly}
+					onChange={(exclude) => onChange({ ...where, exclude })}
+				/>
+			</PlacementRow>
+			<PlacementRow title={__('Visitors', 'proto-blocks')} help={__('Role filters imply a logged-in visitor.', 'proto-blocks')}>
 				<RadioGroup
 					value={login}
 					disabled={readOnly}
-					className="flex flex-wrap gap-4"
+					aria-label={__('Logged-in state', 'proto-blocks')}
+					className={segmentedGroupClassName}
 					onValueChange={(value) => onChange({ ...where, loggedIn: value === 'any' ? null : value === 'in' })}
 				>
-					{[
-						['any', __('Anyone', 'proto-blocks')],
-						['in', __('Logged in only', 'proto-blocks')],
-						['out', __('Logged out only', 'proto-blocks')],
-					].map(([value, text]) => (
-						<div key={value} className="flex items-center gap-2">
-							<RadioGroupItem id={`${id}-${value}`} value={value} />
-							<Label htmlFor={`${id}-${value}`} className="font-normal">
-								{text}
-							</Label>
-						</div>
-					))}
+					<SegmentedRadioItem value="any">{__('Anyone', 'proto-blocks')}</SegmentedRadioItem>
+					<SegmentedRadioItem value="in">{__('Logged in', 'proto-blocks')}</SegmentedRadioItem>
+					<SegmentedRadioItem value="out">{__('Logged out', 'proto-blocks')}</SegmentedRadioItem>
 				</RadioGroup>
-			</fieldset>
-			<RoleChecks
-				label={__('Only these roles (implies logged in)', 'proto-blocks')}
-				roles={roles}
-				selected={where.roles}
-				readOnly={readOnly}
-				onChange={(next) => onChange({ ...where, roles: next })}
-			/>
-			<RoleChecks
-				label={__('Never for these roles', 'proto-blocks')}
-				roles={roles}
-				selected={where.excludeRoles}
-				readOnly={readOnly}
-				onChange={(next) => onChange({ ...where, excludeRoles: next })}
-			/>
-			{conflict ? (
-				<p role="alert" className="text-caption text-destructive">
-					{__('"Only these roles" matches logged-in users, but "Logged out only" is chosen: the script would never run.', 'proto-blocks')}
-				</p>
-			) : null}
-		</div>
+				<RoleChecks
+					label={__('Only these roles (implies logged in)', 'proto-blocks')}
+					roles={roles}
+					selected={where.roles}
+					readOnly={readOnly}
+					onChange={(next) => onChange({ ...where, roles: next })}
+				/>
+				<RoleChecks
+					label={__('Never for these roles', 'proto-blocks')}
+					roles={roles}
+					selected={where.excludeRoles}
+					readOnly={readOnly}
+					onChange={(next) => onChange({ ...where, excludeRoles: next })}
+				/>
+				{conflict ? (
+					<p role="alert" className="text-caption text-destructive">
+						{__('"Only these roles" matches logged-in users, but "Logged out" is chosen: the script would never run.', 'proto-blocks')}
+					</p>
+				) : null}
+			</PlacementRow>
+		</>
 	);
 }
