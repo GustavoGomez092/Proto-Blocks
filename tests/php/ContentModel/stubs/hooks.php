@@ -46,12 +46,6 @@ if (!function_exists('post_type_exists')) {
         return isset($GLOBALS['pb_test_post_types'][$post_type]);
     }
 }
-if (!function_exists('get_post_type_object')) {
-    function get_post_type_object($post_type)
-    {
-        return $GLOBALS['pb_test_post_types'][$post_type] ?? null;
-    }
-}
 if (!function_exists('get_post_type_labels')) {
     function get_post_type_labels($post_type_object)
     {
@@ -120,18 +114,6 @@ if (!function_exists('get_stylesheet')) {
     function get_stylesheet()
     {
         return (string) ($GLOBALS['pb_test_stylesheet'] ?? 'theme');
-    }
-}
-if (!function_exists('is_admin')) {
-    function is_admin()
-    {
-        return (bool) ($GLOBALS['pb_test_is_admin'] ?? false);
-    }
-}
-if (!function_exists('is_customize_preview')) {
-    function is_customize_preview()
-    {
-        return (bool) ($GLOBALS['pb_test_customize_preview'] ?? false);
     }
 }
 if (!function_exists('get_current_screen')) {

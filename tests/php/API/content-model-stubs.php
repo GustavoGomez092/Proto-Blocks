@@ -10,14 +10,6 @@ declare(strict_types=1);
 //   pb_test_post_types[$slug]  registered post type objects (ContentModel/stubs/hooks.php)
 //   pb_test_taxonomies[$slug]  registered taxonomy objects (ContentModel/stubs/hooks.php)
 
-if (!function_exists('get_post_types')) {
-    function get_post_types($args = [], $output = 'names', $operator = 'and')
-    {
-        $objects = $GLOBALS['pb_test_post_types'] ?? [];
-        $names = array_keys($objects);
-        return $output === 'objects' ? $objects : array_combine($names, $names);
-    }
-}
 if (!function_exists('get_taxonomies')) {
     function get_taxonomies($args = [], $output = 'names', $operator = 'and')
     {

@@ -719,6 +719,641 @@ if (!function_exists('_doing_it_wrong')) {
     }
 }
 
+// ------------------------------------------------------------------ posts and users (shared)
+
+// Moved here from tests/php/Modules/Fields/wp-stubs.php (2026-11-05) because
+// the Redirects and Scripts modules need the same shapes. Globals:
+//   pb_test_posts[$id]          array|object post records
+//   pb_test_current_post        get_the_ID() value
+//   pb_test_queried_object      get_queried_object() value
+//   pb_test_permalinks[$id]     get_permalink() values
+//   pb_test_post_types[$slug]  post type objects (get_post_types / get_post_type_object)
+if (!function_exists('pb_test_obj')) {
+    /** Array → object, object as is, anything else null. */
+    function pb_test_obj(mixed $value): ?object
+    {
+        if (is_object($value)) {
+            return $value;
+        }
+        return is_array($value) ? (object) $value : null;
+    }
+}
+if (!function_exists('is_user_logged_in')) {
+    function is_user_logged_in()
+    {
+        return get_current_user_id() > 0;
+    }
+}
+if (!function_exists('get_userdata')) {
+    function get_userdata($user_id)
+    {
+        return pb_test_obj($GLOBALS['pb_test_users'][(int) $user_id] ?? null) ?? false;
+    }
+}
+if (!function_exists('get_post')) {
+    function get_post($post = null, $output = 'OBJECT', $filter = 'raw')
+    {
+        if (is_object($post)) {
+            return $post;
+        }
+        $id = $post === null ? get_the_ID() : (int) $post;
+        return pb_test_obj($GLOBALS['pb_test_posts'][(int) $id] ?? null);
+    }
+}
+if (!function_exists('get_the_ID')) {
+    function get_the_ID()
+    {
+        return $GLOBALS['pb_test_current_post'] ?? false;
+    }
+}
+if (!function_exists('get_post_type')) {
+    function get_post_type($post = null)
+    {
+        $p = get_post($post);
+        return $p && isset($p->post_type) ? (string) $p->post_type : false;
+    }
+}
+if (!function_exists('get_post_status')) {
+    function get_post_status($post = null)
+    {
+        $p = get_post($post);
+        return $p && isset($p->post_status) ? (string) $p->post_status : false;
+    }
+}
+if (!function_exists('get_the_title')) {
+    function get_the_title($post = 0)
+    {
+        $p = get_post($post);
+        return $p ? (string) ($p->post_title ?? '') : '';
+    }
+}
+if (!function_exists('get_queried_object')) {
+    function get_queried_object()
+    {
+        return $GLOBALS['pb_test_queried_object'] ?? null;
+    }
+}
+if (!function_exists('get_permalink')) {
+    /** pb_test_permalinks[$id] when set, else https://x.test/?p=ID for a known post, else false. */
+    function get_permalink($post = 0, $leavename = false)
+    {
+        $id = is_object($post) ? (int) ($post->ID ?? 0) : (int) $post;
+        if ($id === 0) {
+            $id = (int) get_the_ID();
+        }
+        if (isset($GLOBALS['pb_test_permalinks'][$id])) {
+            return $GLOBALS['pb_test_permalinks'][$id];
+        }
+        $p = get_post($post ?: null);
+        return $p ? 'https://x.test/?p=' . (int) $p->ID : false;
+    }
+}
+if (!function_exists('get_post_types')) {
+    function get_post_types($args = [], $output = 'names', $operator = 'and')
+    {
+        $objects = $GLOBALS['pb_test_post_types'] ?? [];
+        $names = array_keys($objects);
+        return $output === 'objects' ? $objects : array_combine($names, $names);
+    }
+}
+if (!function_exists('get_post_type_object')) {
+    function get_post_type_object($post_type)
+    {
+        return $GLOBALS['pb_test_post_types'][$post_type] ?? null;
+    }
+}
+if (!function_exists('wp_slash')) {
+    function wp_slash($value)
+    {
+        if (is_array($value)) {
+            return array_map('wp_slash', $value);
+        }
+        return is_string($value) ? addslashes($value) : $value;
+    }
+}
+if (!function_exists('wp_unslash')) {
+    function wp_unslash($value)
+    {
+        if (is_array($value)) {
+            return array_map('wp_unslash', $value);
+        }
+        return is_string($value) ? stripslashes($value) : $value;
+    }
+}
+if (!function_exists('absint')) {
+    function absint($maybeint)
+    {
+        return abs((int) $maybeint);
+    }
+}
+if (!class_exists('WP_Roles')) {
+    /**
+     * pb_test_roles = role slug => ['name' => ..., 'capabilities' => [cap => bool]]
+     * (OptionsPagesRoutesTest reads ->roles; the Scripts/Redirects tests read
+     * ->role_names / get_names()). A missing 'name' falls back to the slug.
+     */
+    class WP_Roles
+    {
+        public array $roles = [];
+        public array $role_names = [];
+        public function __construct()
+        {
+            $this->roles = $GLOBALS['pb_test_roles'] ?? [];
+            foreach ($this->roles as $slug => $role) {
+                $this->role_names[$slug] = (string) (is_array($role) ? ($role['name'] ?? $slug) : $slug);
+            }
+        }
+        public function get_names(): array { return $this->role_names; }
+        public function is_role($role): bool { return isset($this->roles[$role]); }
+    }
+}
+if (!function_exists('wp_roles')) {
+    function wp_roles() { return new WP_Roles(); }
+}
+
+// ------------------------------------------------------------------ front-end request (shared)
+
+// Conditional tags read pb_test_query[$tag]: false/missing = not that page,
+// true = that page, or a list of accepted arguments (post types, slugs, ids,
+// taxonomies) so is_singular('product') is true when the list holds 'product'.
+// Other request state:
+//   pb_test_is_admin         is_admin() (default false)
+//   pb_test_ssl              is_ssl() (default false)
+//   pb_test_home_url         home_url('') base (default http://example.test)
+//   pb_test_doing_cron       wp_doing_cron(); pb_test_doing_ajax wp_doing_ajax()
+//   pb_test_redirects[]      ['location', 'status', 'by', 'safe'] per wp_redirect()/wp_safe_redirect()
+//   pb_test_status           last status_header() code; pb_test_nocache true after nocache_headers()
+//   pb_test_now              current_time() clock (unix timestamp)
+if (!function_exists('pb_test_conditional')) {
+    /** Shared evaluator for the conditional-tag stubs below. */
+    function pb_test_conditional(string $tag, mixed $arg = ''): bool
+    {
+        $value = $GLOBALS['pb_test_query'][$tag] ?? false;
+        if ($arg === '' || $arg === null || $arg === [] || $arg === 0) {
+            return (bool) $value;
+        }
+        if (is_bool($value)) {
+            return $value;
+        }
+        $wanted = array_map('strval', (array) $arg);
+        $have = array_map('strval', (array) $value);
+        return array_intersect($wanted, $have) !== [];
+    }
+}
+if (!function_exists('is_admin')) {
+    function is_admin()
+    {
+        return (bool) ($GLOBALS['pb_test_is_admin'] ?? false);
+    }
+}
+if (!function_exists('is_ssl')) {
+    function is_ssl() { return (bool) ($GLOBALS['pb_test_ssl'] ?? false); }
+}
+if (!function_exists('wp_doing_cron')) {
+    function wp_doing_cron() { return (bool) ($GLOBALS['pb_test_doing_cron'] ?? false); }
+}
+if (!function_exists('wp_doing_ajax')) {
+    function wp_doing_ajax() { return (bool) ($GLOBALS['pb_test_doing_ajax'] ?? false); }
+}
+if (!function_exists('is_404')) {
+    function is_404() { return pb_test_conditional('is_404'); }
+}
+if (!function_exists('is_front_page')) {
+    function is_front_page() { return pb_test_conditional('is_front_page'); }
+}
+if (!function_exists('is_home')) {
+    function is_home() { return pb_test_conditional('is_home'); }
+}
+if (!function_exists('is_search')) {
+    function is_search() { return pb_test_conditional('is_search'); }
+}
+if (!function_exists('is_archive')) {
+    function is_archive() { return pb_test_conditional('is_archive'); }
+}
+if (!function_exists('is_singular')) {
+    function is_singular($post_types = '') { return pb_test_conditional('is_singular', $post_types); }
+}
+if (!function_exists('is_post_type_archive')) {
+    function is_post_type_archive($post_types = '') { return pb_test_conditional('is_post_type_archive', $post_types); }
+}
+if (!function_exists('is_page')) {
+    function is_page($page = '') { return pb_test_conditional('is_page', $page); }
+}
+if (!function_exists('is_single')) {
+    function is_single($post = '') { return pb_test_conditional('is_single', $post); }
+}
+if (!function_exists('is_tax')) {
+    function is_tax($taxonomy = '', $term = '')
+    {
+        if ($term !== '' && $term !== []) {
+            return pb_test_conditional('is_tax', $taxonomy) && pb_test_conditional('is_tax_term', $term);
+        }
+        return pb_test_conditional('is_tax', $taxonomy);
+    }
+}
+if (!function_exists('is_category')) {
+    function is_category($category = '') { return pb_test_conditional('is_category', $category); }
+}
+if (!function_exists('is_tag')) {
+    function is_tag($tag = '') { return pb_test_conditional('is_tag', $tag); }
+}
+if (!function_exists('has_term')) {
+    /** pb_test_query['has_term'][$taxonomy] = list of term slugs on the current post. */
+    function has_term($term = '', $taxonomy = '', $post = null)
+    {
+        $terms = $GLOBALS['pb_test_query']['has_term'][(string) $taxonomy] ?? [];
+        if ($term === '' || $term === []) {
+            return $terms !== [];
+        }
+        return array_intersect(array_map('strval', (array) $term), array_map('strval', $terms)) !== [];
+    }
+}
+if (!function_exists('is_embed')) {
+    function is_embed() { return pb_test_conditional('is_embed'); }
+}
+if (!function_exists('is_feed')) {
+    function is_feed($feeds = '') { return pb_test_conditional('is_feed'); }
+}
+if (!function_exists('is_customize_preview')) {
+    function is_customize_preview()
+    {
+        return (bool) ($GLOBALS['pb_test_customize_preview'] ?? false);
+    }
+}
+if (!function_exists('home_url')) {
+    function home_url($path = '', $scheme = null)
+    {
+        $base = rtrim((string) ($GLOBALS['pb_test_home_url'] ?? 'http://example.test'), '/');
+        if ($scheme !== null) {
+            $base = set_url_scheme($base, $scheme);
+        }
+        $path = (string) $path;
+        if ($path === '') {
+            return $base;
+        }
+        return $base . (str_starts_with($path, '/') || str_starts_with($path, '?') ? '' : '/') . $path;
+    }
+}
+if (!function_exists('site_url')) {
+    function site_url($path = '', $scheme = null) { return home_url($path, $scheme); }
+}
+if (!function_exists('rest_get_url_prefix')) {
+    function rest_get_url_prefix() { return (string) ($GLOBALS['pb_test_rest_prefix'] ?? 'wp-json'); }
+}
+if (!function_exists('wp_parse_url')) {
+    function wp_parse_url($url, $component = -1) { return parse_url((string) $url, $component); }
+}
+if (!function_exists('wp_parse_args')) {
+    function wp_parse_args($args, $defaults = [])
+    {
+        if (is_object($args)) {
+            $args = get_object_vars($args);
+        } elseif (!is_array($args)) {
+            parse_str((string) $args, $args);
+        }
+        return array_merge((array) $defaults, (array) $args);
+    }
+}
+if (!function_exists('wp_get_referer')) {
+    function wp_get_referer() { return $_SERVER['HTTP_REFERER'] ?? false; }
+}
+if (!function_exists('wp_normalize_path')) {
+    function wp_normalize_path($path)
+    {
+        $path = str_replace('\\', '/', (string) $path);
+        return preg_replace('#(?<=.)/+#', '/', $path);
+    }
+}
+if (!function_exists('wp_check_invalid_utf8')) {
+    function wp_check_invalid_utf8($text, $strip = false)
+    {
+        $text = (string) $text;
+        if ($text === '' || preg_match('/^./us', $text) === 1) {
+            return $text;
+        }
+        return $strip ? (string) iconv('UTF-8', 'UTF-8//IGNORE', $text) : '';
+    }
+}
+if (!function_exists('wp_strip_all_tags')) {
+    function wp_strip_all_tags($text, $remove_breaks = false)
+    {
+        $text = preg_replace('@<(script|style)[^>]*?>.*?</\\1>@si', '', (string) $text);
+        $text = strip_tags((string) $text);
+        if ($remove_breaks) {
+            $text = preg_replace('/[\r\n\t ]+/', ' ', (string) $text);
+        }
+        return trim((string) $text);
+    }
+}
+if (!function_exists('esc_textarea')) {
+    function esc_textarea($text) { return htmlspecialchars((string) $text, ENT_QUOTES, 'UTF-8'); }
+}
+if (!function_exists('is_serialized')) {
+    function is_serialized($data, $strict = true)
+    {
+        if (!is_string($data)) {
+            return false;
+        }
+        $data = trim($data);
+        if ($data === 'N;') {
+            return true;
+        }
+        return (bool) preg_match('/^[aObis]:[0-9]*[:;{]/', $data);
+    }
+}
+if (!function_exists('maybe_unserialize')) {
+    function maybe_unserialize($data)
+    {
+        if (is_serialized($data)) {
+            return @unserialize(trim((string) $data), ['allowed_classes' => false]);
+        }
+        return $data;
+    }
+}
+if (!function_exists('current_time')) {
+    /** 'mysql' → UTC datetime string, 'timestamp' → int; pb_test_now fixes the clock. */
+    function current_time($type, $gmt = 0)
+    {
+        $now = (int) ($GLOBALS['pb_test_now'] ?? time());
+        if ($type === 'timestamp' || $type === 'U') {
+            return $now;
+        }
+        if ($type === 'mysql') {
+            return gmdate('Y-m-d H:i:s', $now);
+        }
+        return gmdate((string) $type, $now);
+    }
+}
+
+// ------------------------------------------------------------------ redirects and headers (shared)
+
+if (!function_exists('wp_sanitize_redirect')) {
+    /** Core's character allow-list and CRLF removal, close enough for tests. */
+    function wp_sanitize_redirect($location)
+    {
+        $location = (string) $location;
+        $location = preg_replace('|[^a-z0-9-~+_.?#=&;,/:%!*\[\]()@]|i', '', $location);
+        $location = wp_kses_no_null_pb($location);
+        // Strip %0d and %0a in any case, repeatedly.
+        $strip = ['%0d', '%0a', '%0D', '%0A'];
+        do {
+            $before = $location;
+            $location = str_replace($strip, '', $location);
+        } while ($before !== $location);
+        return $location;
+    }
+    function wp_kses_no_null_pb(string $s): string
+    {
+        return (string) preg_replace('/\\\\0+|\\\\x00|\x00/', '', $s);
+    }
+}
+if (!function_exists('wp_validate_redirect')) {
+    /** Same-host or relative locations pass; anything else returns $fallback. */
+    function wp_validate_redirect($location, $fallback = '')
+    {
+        $location = trim((string) $location);
+        if ($location === '') {
+            return $fallback;
+        }
+        if (str_starts_with($location, '//')) {
+            $location = 'http:' . $location;
+        }
+        $parts = parse_url($location);
+        if ($parts === false) {
+            return $fallback;
+        }
+        if (isset($parts['scheme']) && !in_array(strtolower($parts['scheme']), ['http', 'https'], true)) {
+            return $fallback;
+        }
+        if (!isset($parts['host'])) {
+            return $location;
+        }
+        $home = strtolower((string) parse_url(home_url(), PHP_URL_HOST));
+        return strtolower($parts['host']) === $home ? $location : $fallback;
+    }
+}
+if (!function_exists('wp_redirect')) {
+    /** Records the call in pb_test_redirects[]; never exits. */
+    function wp_redirect($location, $status = 302, $x_redirect_by = 'WordPress')
+    {
+        $GLOBALS['pb_test_redirects'][] = ['location' => (string) $location, 'status' => (int) $status, 'by' => (string) $x_redirect_by, 'safe' => false];
+        $GLOBALS['pb_test_status'] = (int) $status;
+        return true;
+    }
+}
+if (!function_exists('wp_safe_redirect')) {
+    function wp_safe_redirect($location, $status = 302, $x_redirect_by = 'WordPress')
+    {
+        $validated = wp_validate_redirect((string) $location, home_url('/'));
+        $GLOBALS['pb_test_redirects'][] = ['location' => $validated, 'status' => (int) $status, 'by' => (string) $x_redirect_by, 'safe' => true];
+        $GLOBALS['pb_test_status'] = (int) $status;
+        return true;
+    }
+}
+if (!function_exists('status_header')) {
+    function status_header($code, $description = '') { $GLOBALS['pb_test_status'] = (int) $code; }
+}
+if (!function_exists('nocache_headers')) {
+    function nocache_headers() { $GLOBALS['pb_test_nocache'] = true; }
+}
+
+// ------------------------------------------------------------------ cron and plugins (shared)
+
+// pb_test_cron[$hook][] = ['timestamp', 'recurrence', 'args'] per schedule call.
+if (!function_exists('wp_schedule_event')) {
+    function wp_schedule_event($timestamp, $recurrence, $hook, $args = [], $wp_error = false)
+    {
+        $GLOBALS['pb_test_cron'][$hook][] = ['timestamp' => (int) $timestamp, 'recurrence' => (string) $recurrence, 'args' => (array) $args];
+        return true;
+    }
+}
+if (!function_exists('wp_schedule_single_event')) {
+    function wp_schedule_single_event($timestamp, $hook, $args = [], $wp_error = false)
+    {
+        $GLOBALS['pb_test_cron'][$hook][] = ['timestamp' => (int) $timestamp, 'recurrence' => null, 'args' => (array) $args];
+        return true;
+    }
+}
+if (!function_exists('wp_next_scheduled')) {
+    function wp_next_scheduled($hook, $args = [])
+    {
+        foreach ($GLOBALS['pb_test_cron'][$hook] ?? [] as $event) {
+            if ($event['args'] === (array) $args) {
+                return $event['timestamp'];
+            }
+        }
+        return false;
+    }
+}
+if (!function_exists('wp_unschedule_event')) {
+    function wp_unschedule_event($timestamp, $hook, $args = [], $wp_error = false)
+    {
+        foreach ($GLOBALS['pb_test_cron'][$hook] ?? [] as $i => $event) {
+            if ($event['timestamp'] === (int) $timestamp && $event['args'] === (array) $args) {
+                unset($GLOBALS['pb_test_cron'][$hook][$i]);
+            }
+        }
+        return true;
+    }
+}
+if (!function_exists('wp_clear_scheduled_hook')) {
+    function wp_clear_scheduled_hook($hook, $args = [], $wp_error = false)
+    {
+        $count = count($GLOBALS['pb_test_cron'][$hook] ?? []);
+        unset($GLOBALS['pb_test_cron'][$hook]);
+        return $count;
+    }
+}
+// pb_test_active_plugins = list of plugin basenames; deactivate_plugins() records
+// what it removed in pb_test_deactivated[].
+if (!function_exists('is_plugin_active')) {
+    function is_plugin_active($plugin)
+    {
+        return in_array((string) $plugin, $GLOBALS['pb_test_active_plugins'] ?? [], true);
+    }
+}
+if (!function_exists('deactivate_plugins')) {
+    function deactivate_plugins($plugins, $silent = false, $network_wide = null)
+    {
+        foreach ((array) $plugins as $plugin) {
+            $GLOBALS['pb_test_deactivated'][] = (string) $plugin;
+            $GLOBALS['pb_test_active_plugins'] = array_values(array_diff($GLOBALS['pb_test_active_plugins'] ?? [], [(string) $plugin]));
+        }
+    }
+}
+
+// ------------------------------------------------------------------ database (shared)
+
+// A recording $wpdb. Tests queue results with $wpdb->queue[] (each call to a
+// read method shifts one; an empty queue returns the method's "nothing" value)
+// and inspect $wpdb->calls[] = ['method', ...arguments]. prepare() does a
+// simple %s/%d/%f substitution so assertions can read the final SQL.
+if (!class_exists('wpdb')) {
+    class wpdb
+    {
+        public string $prefix = 'wp_';
+        public string $base_prefix = 'wp_';
+        public int $insert_id = 0;
+        public string $last_error = '';
+        public int $rows_affected = 0;
+        public array $calls = [];
+        public array $queue = [];
+        public string $charset = 'utf8mb4';
+        public string $collate = 'utf8mb4_unicode_ci';
+        public $options;
+        public $posts;
+        public $postmeta;
+        public $termmeta;
+
+        public function __construct()
+        {
+            $this->options = $this->prefix . 'options';
+            $this->posts = $this->prefix . 'posts';
+            $this->postmeta = $this->prefix . 'postmeta';
+            $this->termmeta = $this->prefix . 'termmeta';
+        }
+        public function get_charset_collate(): string { return 'DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'; }
+        public function esc_like($text): string { return addcslashes((string) $text, '_%\\'); }
+        public function prepare($query, ...$args)
+        {
+            if ($args !== [] && is_array($args[0]) && count($args) === 1) {
+                $args = $args[0];
+            }
+            $query = str_replace("'%s'", '%s', (string) $query);
+            $query = str_replace('"%s"', '%s', $query);
+            $query = preg_replace('/(?<!%)%s/', "'%s'", $query);
+            $escaped = array_map(static function ($a) {
+                return is_string($a) ? addslashes($a) : $a;
+            }, $args);
+            $this->calls[] = ['prepare', $query, $args];
+            return @vsprintf((string) $query, $escaped) ?: (string) $query;
+        }
+        private function shift(mixed $default): mixed
+        {
+            return $this->queue === [] ? $default : array_shift($this->queue);
+        }
+        public function query($query)
+        {
+            $this->calls[] = ['query', (string) $query];
+            $result = $this->shift(0);
+            $this->rows_affected = is_int($result) ? $result : 0;
+            return $result;
+        }
+        public function get_results($query = null, $output = OBJECT)
+        {
+            $this->calls[] = ['get_results', (string) $query, $output];
+            $rows = $this->shift([]);
+            if ($output === ARRAY_A) {
+                return array_map(static fn($r) => (array) $r, (array) $rows);
+            }
+            return array_map(static fn($r) => (object) $r, (array) $rows);
+        }
+        public function get_var($query = null, $x = 0, $y = 0)
+        {
+            $this->calls[] = ['get_var', (string) $query];
+            return $this->shift(null);
+        }
+        public function get_row($query = null, $output = OBJECT, $y = 0)
+        {
+            $this->calls[] = ['get_row', (string) $query, $output];
+            $row = $this->shift(null);
+            if ($row === null) {
+                return null;
+            }
+            return $output === ARRAY_A ? (array) $row : (object) $row;
+        }
+        public function get_col($query = null, $x = 0)
+        {
+            $this->calls[] = ['get_col', (string) $query];
+            return (array) $this->shift([]);
+        }
+        public function insert($table, $data, $format = null)
+        {
+            $this->calls[] = ['insert', (string) $table, (array) $data, $format];
+            $this->insert_id++;
+            return 1;
+        }
+        public function replace($table, $data, $format = null)
+        {
+            $this->calls[] = ['replace', (string) $table, (array) $data, $format];
+            return 1;
+        }
+        public function update($table, $data, $where, $format = null, $where_format = null)
+        {
+            $this->calls[] = ['update', (string) $table, (array) $data, (array) $where];
+            return (int) $this->shift(1);
+        }
+        public function delete($table, $where, $where_format = null)
+        {
+            $this->calls[] = ['delete', (string) $table, (array) $where];
+            return (int) $this->shift(1);
+        }
+        public function get_blog_prefix($blog_id = null): string { return $this->prefix; }
+    }
+}
+if (!defined('OBJECT')) {
+    define('OBJECT', 'OBJECT');
+}
+if (!defined('ARRAY_A')) {
+    define('ARRAY_A', 'ARRAY_A');
+}
+if (!defined('ARRAY_N')) {
+    define('ARRAY_N', 'ARRAY_N');
+}
+if (!isset($GLOBALS['wpdb'])) {
+    $GLOBALS['wpdb'] = new wpdb();
+}
+if (!function_exists('dbDelta')) {
+    /** Records each statement in pb_test_dbdelta[]; returns an empty result list. */
+    function dbDelta($queries = '', $execute = true)
+    {
+        foreach ((array) $queries as $q) {
+            $GLOBALS['pb_test_dbdelta'][] = (string) $q;
+        }
+        return [];
+    }
+}
+
 // ------------------------------------------------------------------ plugin helpers
 
 // The plugin's global helpers (proto_blocks_sanitize_color(), ...) are real

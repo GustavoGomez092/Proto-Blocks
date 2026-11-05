@@ -42,16 +42,6 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../Security/wp-stubs.php';
 
-if (!function_exists('pb_test_obj')) {
-    /** Arrays in the fixture globals are handed out as objects, like WP_Post/WP_Term/WP_User. */
-    function pb_test_obj(mixed $value): ?object
-    {
-        if (is_object($value)) {
-            return $value;
-        }
-        return is_array($value) ? (object) $value : null;
-    }
-}
 
 // ---------------------------------------------------------------- meta registration
 
@@ -202,24 +192,6 @@ if (!function_exists('metadata_exists')) {
         return isset($GLOBALS['pb_test_meta'][$meta_type][(int) $object_id][$meta_key]);
     }
 }
-if (!function_exists('wp_slash')) {
-    function wp_slash($value)
-    {
-        if (is_array($value)) {
-            return array_map('wp_slash', $value);
-        }
-        return is_string($value) ? addslashes($value) : $value;
-    }
-}
-if (!function_exists('wp_unslash')) {
-    function wp_unslash($value)
-    {
-        if (is_array($value)) {
-            return array_map('wp_unslash', $value);
-        }
-        return is_string($value) ? stripslashes($value) : $value;
-    }
-}
 
 if (!function_exists('get_post_meta')) {
     function get_post_meta($post_id, $key = '', $single = false)
@@ -279,62 +251,14 @@ if (!function_exists('delete_user_meta')) {
 
 // ---------------------------------------------------------------- users
 
-if (!function_exists('is_user_logged_in')) {
-    function is_user_logged_in()
-    {
-        return get_current_user_id() > 0;
-    }
-}
-if (!function_exists('get_userdata')) {
-    function get_userdata($user_id)
-    {
-        return pb_test_obj($GLOBALS['pb_test_users'][(int) $user_id] ?? null) ?? false;
-    }
-}
 
 // ---------------------------------------------------------------- posts
 
-if (!function_exists('get_post')) {
-    function get_post($post = null, $output = 'OBJECT', $filter = 'raw')
-    {
-        if (is_object($post)) {
-            return $post;
-        }
-        $id = $post === null ? get_the_ID() : (int) $post;
-        return pb_test_obj($GLOBALS['pb_test_posts'][(int) $id] ?? null);
-    }
-}
-if (!function_exists('get_the_ID')) {
-    function get_the_ID()
-    {
-        return $GLOBALS['pb_test_current_post'] ?? false;
-    }
-}
-if (!function_exists('get_post_type')) {
-    function get_post_type($post = null)
-    {
-        $p = get_post($post);
-        return $p && isset($p->post_type) ? (string) $p->post_type : false;
-    }
-}
-if (!function_exists('get_post_status')) {
-    function get_post_status($post = null)
-    {
-        $p = get_post($post);
-        return $p && isset($p->post_status) ? (string) $p->post_status : false;
-    }
-}
 if (!function_exists('get_page_template_slug')) {
     function get_page_template_slug($post = null)
     {
         $p = get_post($post);
         return $p ? (string) ($p->page_template ?? '') : false;
-    }
-}
-if (!function_exists('get_queried_object')) {
-    function get_queried_object()
-    {
-        return $GLOBALS['pb_test_queried_object'] ?? null;
     }
 }
 if (!function_exists('is_post_publicly_viewable')) {
@@ -466,9 +390,3 @@ if (!function_exists('register_block_bindings_source')) {
 
 // ---------------------------------------------------------------- numbers
 
-if (!function_exists('absint')) {
-    function absint($maybeint)
-    {
-        return abs((int) $maybeint);
-    }
-}
