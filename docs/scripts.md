@@ -217,7 +217,7 @@ Scripts are files. The module keeps one bookkeeping option:
 | `invalid_slug` | The folder or PHP slug is not `^[a-z][a-z0-9_-]*$`, 32 characters at most. | Rename it. |
 | `invalid_jsonc`, `unreadable`, `file_too_large`, `path_outside_root` | `script.jsonc` cannot be parsed or read, is over 256 KB, or resolves outside the theme. The script is skipped. | Fix or replace the file. |
 | `both_extensions` (warning) | `script.jsonc` and `script.json` both exist. The `.jsonc` is used. | Delete one. |
-| `unsafe_key` (warning) | A key naming PHP code, or such as `__proto__`, was stripped. | Remove it. |
+| `unsafe_key` (warning) | A key that names PHP code (or a reserved key such as `__proto__`) was stripped from the file. | Remove it. |
 | `broken_override` | A child-theme file is broken, so the parent file and PHP declaration of the same slug were dropped too. | Fix the child file. |
 | `duplicate_php_declaration` (warning) | `proto_script()` was called twice with the same slug. | Keep one call. |
 | `proto_blocks_unfiltered_html` (403) | A write without `unfiltered_html`. | Edit as an administrator who has it. |
