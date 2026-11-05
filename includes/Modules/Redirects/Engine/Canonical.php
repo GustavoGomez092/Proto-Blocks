@@ -16,6 +16,11 @@ use ProtoBlocks\Modules\Redirects\Engine\Conditions\Server;
  * - www / nowww: only for the site's own host, with or without `www.`;
  * - https: http requests are upgraded.
  *
+ * Targets only ever name the site host (home_url), its www. variant or the
+ * relocate URL: a request whose Host is none of these nor an alias gets the
+ * site host when https fires, and no redirect otherwise (an unchecked Host
+ * header is never echoed).
+ *
  * Filter `proto_blocks_redirects_canonical_target` (?string target, Request, settings).
  */
 final class Canonical
@@ -58,6 +63,9 @@ final class Canonical
         $host = $r->host;
         $port = $r->port;
 
+        $bare = str_starts_with($homeHost, 'www.') ? substr($homeHost, 4) : $homeHost;
+        $isSite = static fn(string $h): bool => $homeHost !== '' && ($h === $bare || $h === 'www.' . $bare);
+
         $aliases = [];
         foreach ((array) ($c['aliases'] ?? []) as $alias) {
             if (is_string($alias) && trim($alias) !== '') {
@@ -69,17 +77,25 @@ final class Canonical
             $port = $home?->port;
         }
 
-        $www = (string) ($c['www'] ?? '');
-        if ($homeHost !== '' && ($www === 'www' || $www === 'nowww')) {
-            $bare = str_starts_with($homeHost, 'www.') ? substr($homeHost, 4) : $homeHost;
-            if ($host === $bare || $host === 'www.' . $bare) {
-                $host = $www === 'www' ? 'www.' . $bare : $bare;
-            }
-        }
+        // A host that is neither the site's (with or without www.) nor an alias
+        // came from an unchecked Host header: it is never echoed into a target.
+        $foreign = !$isSite($host);
 
         if (!empty($c['https']) && $scheme === 'http') {
             $scheme = 'https';
             $port = null;
+        }
+
+        if ($foreign) {
+            if ($homeHost === '' || $scheme === $r->scheme) {
+                return null;
+            }
+            $host = $homeHost;
+        }
+
+        $www = (string) ($c['www'] ?? '');
+        if ($homeHost !== '' && ($www === 'www' || $www === 'nowww') && $isSite($host)) {
+            $host = $www === 'www' ? 'www.' . $bare : $bare;
         }
 
         if ($scheme === $r->scheme && $host === $r->host && $port === $r->port) {

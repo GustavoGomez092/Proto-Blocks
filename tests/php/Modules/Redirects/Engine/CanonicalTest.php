@@ -119,6 +119,32 @@ final class CanonicalTest extends EngineTestCase
         self::assertSame('https://example.test/evil.com/x', self::canon("http://example.test//evil.com/x\r\n", ['https' => true]));
     }
 
+    public function testHttpsUpgradeNeverEchoesAForeignHostHeader(): void
+    {
+        $request = Request::fromUrl('/x?a=1', ['HTTP_HOST' => 'evil.test']);
+        self::assertSame('https://example.test/x?a=1', Canonical::target($request, self::settings(['canonical' => ['https' => true]])));
+    }
+
+    public function testForeignHostWithPortGoesToTheSiteHostAndPort(): void
+    {
+        $GLOBALS['pb_test_home_url'] = 'http://example.test:10003';
+        self::assertSame('https://example.test/x', self::canon('http://evil.test:8080/x', ['https' => true]));
+        self::assertSame('https://www.example.test/x', self::canon('http://evil.test/x', ['https' => true, 'www' => 'www']));
+    }
+
+    public function testForeignHostIsLeftAloneWhenNoStepFires(): void
+    {
+        self::assertNull(self::canon('https://evil.test/x', ['https' => true]));
+        self::assertNull(self::canon('http://evil.test/x', ['www' => 'nowww']));
+        self::assertNull(self::canon('http://evil.test/x', ['aliases' => ['old.example']]));
+    }
+
+    public function testForeignHostWithoutAHomeUrlIsNull(): void
+    {
+        $GLOBALS['pb_test_home_url'] = '';
+        self::assertNull(self::canon('http://evil.test/x', ['https' => true]));
+    }
+
     public function testNoHostIsNull(): void
     {
         self::assertNull(Canonical::target(Request::fromUrl('/a'), self::settings(['canonical' => ['https' => true]])));

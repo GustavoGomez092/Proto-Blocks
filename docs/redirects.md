@@ -329,7 +329,7 @@ Login, admin, cron, XML-RPC and REST are never touched. See [actions and codes](
 | `monitor.associated` | A suffix that starts with `/`, such as `/feed/` (100 characters at most), that adds a second rule with the suffix on both sides. |
 | `headers.site` | Sent on every front-end response. |
 | `headers.redirect` | Sent only with redirects. |
-| `canonical.https` | 301 http to https. |
+| `canonical.https` | 301 http to https. The target is always built from the site host (`home_url()`): a request with an unknown `Host` header is sent to the site host, never to the host it named. |
 | `canonical.www` | `""`, `www` or `nowww`. |
 | `canonical.aliases` | Other hostnames 301'd to the site URL. Host only (punycode for international names), lower-cased, 20 at most. |
 | `canonical.relocate` | `""` or an absolute http(s) URL without query, fragment or user name. Sends everything except wp-admin, wp-login.php and REST there with a 301. |
