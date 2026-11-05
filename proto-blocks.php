@@ -3,7 +3,7 @@
  * Plugin Name: Proto-Blocks
  * Plugin URI: https://github.com/GustavoGomez092/proto-blocks
  * Description: Create Gutenberg blocks using PHP/HTML templates instead of React. A modern, performant alternative to complex JavaScript block development.
- * Version: 2.16.0
+ * Version: 2.16.1
  * Requires at least: 6.5
  * Requires PHP: 8.1
  * Author: Gustavo Gomez
@@ -25,7 +25,7 @@ namespace ProtoBlocks;
 defined('ABSPATH') || exit;
 
 // Plugin constants
-define('PROTO_BLOCKS_VERSION', '2.16.0');
+define('PROTO_BLOCKS_VERSION', '2.16.1');
 define('PROTO_BLOCKS_FILE', __FILE__);
 define('PROTO_BLOCKS_DIR', plugin_dir_path(__FILE__));
 define('PROTO_BLOCKS_URL', plugin_dir_url(__FILE__));
