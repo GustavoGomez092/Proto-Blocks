@@ -372,7 +372,7 @@ Hits and log rows change on every request and cannot be files.
 Configuration is never stored there.
 Delete the tables and every redirect still works.
 
-- Tables are created with `dbDelta` on plugin activation and on `plugins_loaded` whenever the option `proto_blocks_redirects_db` is not `1`. A host that refuses `CREATE` keeps the module working without logs; the Settings tab offers "Create tables" and the CLI `db install`.
+- Tables are created with `dbDelta` on plugin activation and on `plugins_loaded` whenever the option `proto_blocks_redirects_db` is not `1`. After a failed attempt the automatic retry waits an hour (transient `proto_blocks_redirects_db_retry`). A host that refuses `CREATE` keeps the module working without logs; the Settings tab offers "Create tables" and the CLI `db install`.
 - Deactivation unschedules the retention cron and keeps the data. `wp proto-blocks redirect db drop` is the only way to drop the tables.
 - Writes are prepared statements. The URL is decoded, sanitised and cut at 2000 characters. Agent and referrer are cut at 255. The method is allow-listed (GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS, TRACE, CONNECT) and upper-cased; anything else is stored as `OTHER`.
 - Logging is write-only on the request path. Reads happen in the admin.

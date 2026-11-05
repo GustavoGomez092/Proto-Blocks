@@ -151,6 +151,7 @@ final class RedirectsModule implements ModuleInterface
     /** Plugin activation: create the tables now. */
     public static function activate(): void
     {
+        delete_transient(Installer::RETRY_TRANSIENT); // an explicit activation never waits for the back-off
         (new Installer())->ensure();
     }
 
