@@ -25,14 +25,14 @@ final class YoastImporter extends AbstractPluginImporter
 
     public function available(): bool
     {
-        $value = get_option(self::OPTION, []);
+        $value = $this->rawOption(self::OPTION);
         return is_array($value) && $value !== [];
     }
 
     public function preview(): array
     {
         $this->skipped = [];
-        $value = get_option(self::OPTION, []);
+        $value = $this->rawOption(self::OPTION);
         $rows = [];
         $line = 0;
         foreach (is_array($value) ? $value : [] as $entry) {

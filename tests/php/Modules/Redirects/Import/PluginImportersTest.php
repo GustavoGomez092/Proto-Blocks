@@ -81,7 +81,8 @@ final class PluginImportersTest extends TestCase
 
     public function testAvailableListsOnlySourcesWithData(): void
     {
-        $GLOBALS['pb_test_options']['301_redirects'] = ['/a' => '/b'];
+        // Redirection: SHOW TABLES finds nothing; Simple 301: the raw option row.
+        self::db()->queue = [null, serialize(['/a' => '/b'])];
         $available = array_map(static fn($i) => $i->id(), PluginImporters::available());
         $this->assertSame(['simple-301-redirects'], $available);
     }
@@ -154,17 +155,18 @@ final class PluginImportersTest extends TestCase
     {
         $importer = new Simple301Importer();
         $this->assertFalse($importer->available());
-        $GLOBALS['pb_test_options']['301_redirects'] = '';
+        self::db()->queue = [''];
         $this->assertFalse($importer->available(), 'non-array option');
 
-        $GLOBALS['pb_test_options']['301_redirects'] = [
+        $stored = serialize([
             '/old' => 'https://example.test/new',
             'relative' => '/rel',
             '/blog/*' => '/news/*',
             '' => '/nothing',
             '/js' => 'javascript:alert(1)',
             '/loop' => '/loop',
-        ];
+        ]);
+        self::db()->queue = [$stored, $stored];
         $this->assertTrue($importer->available());
         $groups = $importer->preview();
         $rules = $groups['simple-301-redirects']['rules'];
@@ -174,7 +176,24 @@ final class PluginImportersTest extends TestCase
         $this->assertSame(['from' => '^/blog/(.*)$', 'regex' => true, 'to' => '/news/$1', 'code' => 301, 'action' => 'url'], $rules[2], '* → (.*) and $1');
         $this->assertCount(3, $rules);
         $this->assertSame(['empty_source', 'invalid_target', 'self_redirect'], array_column($importer->skipped(), 'reason'));
-        $this->assertSame([], self::db()->calls, 'options only');
+        $reads = array_values(array_filter(self::db()->calls, static fn(array $c): bool => $c[0] === 'prepare'));
+        $this->assertStringStartsWith('SELECT option_value FROM wp_options WHERE option_name = ', $reads[0][1]);
+        $this->assertSame(['301_redirects'], $reads[0][2]);
+    }
+
+    public function testOptionImportersNeverInstantiateStoredObjects(): void
+    {
+        $GLOBALS['pb_test_options']['wpseo-premium-redirects-base'] = 'core get_option() must not be used';
+        $payload = serialize([new \ArrayObject(['origin' => 'old', 'url' => 'new']), ['origin' => 'kept', 'url' => '/k', 'type' => 301, 'format' => 'plain']]);
+        self::db()->queue = [$payload];
+        $importer = new YoastImporter();
+        $rules = $importer->preview()['yoast-premium']['rules'];
+
+        $this->assertSame('/kept', $rules[0]['from']);
+        $this->assertSame(['not_an_object'], array_column($importer->skipped(), 'reason'), 'the object came back incomplete, never an ArrayObject');
+
+        self::db()->queue = [serialize(['/a' => new \ArrayObject([])])];
+        $this->assertTrue((new Simple301Importer())->available());
     }
 
     // ------------------------------------------------------------------ Safe Redirect Manager
@@ -256,13 +275,14 @@ final class PluginImportersTest extends TestCase
     {
         $importer = new YoastImporter();
         $this->assertFalse($importer->available());
-        $GLOBALS['pb_test_options']['wpseo-premium-redirects-base'] = [
+        $stored = serialize([
             ['origin' => 'old', 'url' => 'new', 'type' => 301, 'format' => 'plain'],
             ['origin' => '^cat/(.*)$', 'url' => '/category/$1', 'type' => 302, 'format' => 'regex'],
             ['origin' => 'gone', 'url' => '', 'type' => 410, 'format' => 'plain'],
             ['origin' => 'bad', 'url' => '/x', 'type' => 200, 'format' => 'plain'],
             'junk',
-        ];
+        ]);
+        self::db()->queue = [$stored, $stored];
         $this->assertTrue($importer->available());
         $rules = $importer->preview()['yoast-premium']['rules'];
         $this->assertSame(['from' => '/old', 'regex' => false, 'to' => '/new', 'code' => 301, 'action' => 'url'], $rules[0]);
