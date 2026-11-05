@@ -13,7 +13,7 @@ A next-generation WordPress plugin that enables developers to create Gutenberg b
 
 - **Content model in files**: post types, taxonomies, custom fields and settings pages from one line of PHP or a JSONC file in the theme, edited from admin screens that write the same files. See [Content model](#content-model)
 - **Redirects in files**: 301/302/307/308 redirects, 410s, internal rewrites and conditions (login, role, referrer, agent, IP, language and more) as version-controlled JSONC groups in the theme, with regex, query modes, hit counts, a redirect log, a 404 log, a permalink monitor, canonical https/www and import from Redirection, CSV, JSON, Apache and `_redirects`. Only hits and logs touch the database. See `docs/redirects.md`
-- **Scripts in files**: head, body-open and body-close snippets (tags, verification metas, consent scripts) as files in the theme, scoped by page, login state and role, edited from an admin screen that writes the same files. See `docs/scripts.md`
+- **Scripts in files**: head, body-open and body-close snippets (tags, verification metas, consent scripts) as files in the theme (or `proto_script()`), scoped by page, login state and role, edited from an admin screen that writes the same files. Writing needs `unfiltered_html`; output is raw and front end only. See `docs/scripts.md`
 - **Single Source of Truth**: Define blocks using a single `block.json` file
 - **Template Caching**: Compiled templates are cached for optimal performance
 - **Extensible Field Types**: Plugin architecture for custom field types
@@ -1397,7 +1397,7 @@ wp proto-blocks taxonomy list | create "Topic" | validate | rename
 wp proto-blocks options list | create "Theme Settings"
 wp proto-blocks fields list | validate
 wp proto-blocks redirect list | add /old /new | test /old | import file.csv | export | db status
-wp proto-blocks script list | create "GTM" | enable gtm | disable gtm
+wp proto-blocks script list | create "GTM" [--slug --priority] | validate | enable gtm | disable gtm | delete gtm --confirm=gtm
 ```
 
 Every command, flag, output column and exit code: [docs/cli.md](docs/cli.md).
@@ -1563,8 +1563,8 @@ Proto-Blocks provides several hooks for customization:
 | `proto_blocks_redirects_canonical_target` | Change the https/www/alias/relocate target | `$target`, `$request` |
 | `proto_blocks_redirects_log_404` | Return false to skip logging a 404 | `$log` (bool), `$request` |
 | `proto_blocks_redirects_nothing` | Action fired when a `nothing` rule matches | `$rule`, `$request` |
-| `proto_blocks_scripts_markers` | Return false to drop the `<!-- proto-blocks: slug -->` markers | `$markers` (bool) |
-| `proto_blocks_scripts_enabled` | Veto script output for the current request | `$enabled` (bool) |
+| `proto_blocks_scripts_markers` | Return false to drop the `<!-- proto-blocks: slug -->` markers | `$markers` (bool), `$slug`, `$location` |
+| `proto_blocks_scripts_enabled` | Switch script output off for the current request (it cannot switch it on in admin, ajax, cron, REST, iframe, preview, feed or embed requests) | `$enabled` (bool), `$location` |
 | `proto_blocks_declaration_errors` | Add validation findings for a declaration | `$errors`, `$kind`, `$data`, `$slug` |
 | `proto_blocks_field_groups` | Modify the loaded field groups | `$groups` (array) |
 | `proto_blocks_field_stores` | Replace a field value store | `$stores` (array) |

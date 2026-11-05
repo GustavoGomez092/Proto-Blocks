@@ -86,11 +86,16 @@ The module refuses that case. Full list: [redirects](redirects.md#safety-rules).
 `proto-scripts/` snippets are output exactly as stored on the front end.
 That is the point, and it is a boundary: anyone who can write these files can run JavaScript on every visitor's browser, exactly as someone who can edit the theme.
 
-- Writing a script file needs `manage_options` **and** `unfiltered_html`. Without it the screen is read-only with the reason `unfiltered_html`. `DISALLOW_UNFILTERED_HTML` disables writes site-wide.
-- File-mods and multisite rules apply as for every declaration.
-- A `<?php`, `<?=` or `<?` followed by whitespace in a snippet is refused (`php_in_snippet`). Snippets are never included as PHP.
-- Snippets never render in the admin, feeds, REST, embeds, the customizer preview or the block-editor iframe.
-- Only three fixed file names per script folder are ever read or written (`invalid_snippet_file`).
+- Writing a script file needs `manage_options` **and** `unfiltered_html`. Without it the write is refused with `403 proto_blocks_unfiltered_html` and the screen is read-only with the reason `unfiltered_html`. `DISALLOW_UNFILTERED_HTML` disables writes site-wide.
+- The generic `admin/schema-files/script/*` write and delete routes need `unfiltered_html` as well.
+- File-mods and multisite rules apply as for every declaration. Write reasons are reported in the order `file_mods`, `multisite`, `unfiltered_html`.
+- WP-CLI does not check `unfiltered_html`: the shell user owns the theme files. The file-mods rule still applies.
+- A `<?php`, `<?=` or `<?` followed by whitespace in a snippet, in a file, inline or in a `proto_script()` call, is refused (`php_in_snippet`). Snippets are never included as PHP.
+- Snippets are capped at 256 KB (`snippet_too_large`, `413 proto_blocks_file_too_large` on a save).
+- Snippets are never printed in the admin, ajax, cron, REST, iframe requests, the customizer preview, feeds or embeds. `proto_blocks_scripts_enabled` can only switch output off.
+- A script with any error is skipped whole. A broken child-theme file also drops the parent file and the PHP declaration of the same slug.
+- Only three fixed file names per script folder are ever read or written (`invalid_snippet_file`, also for a `{file}` value in `proto_script()`).
+- Deleting a script removes the folder only when it holds a valid `script.jsonc` and nothing but the three snippet files; anything else is kept and reported.
 
 ## Values
 
