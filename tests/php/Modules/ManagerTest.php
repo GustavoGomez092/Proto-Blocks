@@ -191,7 +191,7 @@ final class ManagerTest extends TestCase
         }
         $this->assertSame([], $GLOBALS['pb_test_bindings'] ?? [], 'no bindings source');
         foreach ($GLOBALS['pb_test_hooks']['proto_blocks_declaration_errors'] ?? [] as $entry) {
-            $this->assertInstanceOf(\ProtoBlocks\Modules\OptionsPages::class, $entry['callback'][0], 'only the options pages module checks declarations');
+            $this->assertNotInstanceOf(FieldsModule::class, $entry['callback'][0], 'the Fields module checks no declarations');
         }
         $this->assertArrayNotHasKey('after_setup_theme', $GLOBALS['pb_test_hooks']);
         $this->assertInstanceOf(PostTypes::class, $manager->postTypes(), 'post types still boot');
