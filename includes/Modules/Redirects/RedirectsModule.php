@@ -48,6 +48,8 @@ final class RedirectsModule implements ModuleInterface
     private ?Monitor $monitor = null;
     private ?Retention $retention = null;
     private string $phpFingerprint = '';
+    /** @var list<Issue> findings of boot() itself (the monitor refused on multisite) */
+    private array $bootIssues = [];
 
     public function __construct(private readonly ContentModelRegistry $contentModel)
     {
@@ -63,7 +65,8 @@ final class RedirectsModule implements ModuleInterface
      * file kinds and PHP sealing; tables on `plugins_loaded` (or now when it
      * already ran); the log-retention cron; the client-IP resolver of the
      * `ip` condition; the front end unless Coexistence pauses it; the
-     * permalink monitor when `monitor.postTypes` is non-empty.
+     * permalink monitor when `monitor.postTypes` is non-empty, never on
+     * multisite (a `monitor_unwritable` warning, reason multisite, instead).
      *
      * Settings are read here (one registry build per request, shared with the
      * engine). PHP declarations made between now and the `init` 9 seal make
@@ -112,8 +115,16 @@ final class RedirectsModule implements ModuleInterface
 
         $postTypes = $settings['monitor']['postTypes'] ?? [];
         if (is_array($postTypes) && $postTypes !== []) {
-            $this->monitor = new Monitor($this->registry(), new SchemaFileWriter(SchemaPaths::writableRoots(), AdminPage::fileModsAllowed()), $settings);
-            $this->monitor->register();
+            if (is_multisite()) {
+                // A sub-site editor must never write into a theme the whole network shares.
+                $this->bootIssues[] = new Issue(Issue::WARNING, 'monitor_unwritable', __(
+                    'The permalink monitor is off (reason: multisite): it never writes into a theme the network shares. Add moved-post redirects to a group file by hand.',
+                    'proto-blocks'
+                ), (string) ($this->registry()->settingsPath() ?? ''), GroupFiles::SETTINGS_SLUG, GroupFiles::SETTINGS_KIND);
+            } else {
+                $this->monitor = new Monitor($this->registry(), new SchemaFileWriter(SchemaPaths::writableRoots(), AdminPage::fileModsAllowed()), $settings);
+                $this->monitor->register();
+            }
         }
     }
 
@@ -147,7 +158,7 @@ final class RedirectsModule implements ModuleInterface
         return $this->front;
     }
 
-    /** Null unless `monitor.postTypes` is non-empty. */
+    /** Null unless `monitor.postTypes` is non-empty; always null on multisite. */
     public function monitor(): ?Monitor
     {
         return $this->monitor;
@@ -263,7 +274,7 @@ final class RedirectsModule implements ModuleInterface
      */
     public function issues(): array
     {
-        return [...$this->registry()->issues(), ...($this->monitor?->issues() ?? [])];
+        return [...$this->registry()->issues(), ...$this->bootIssues, ...($this->monitor?->issues() ?? [])];
     }
 
     /** The content-model registry the module was built with. */

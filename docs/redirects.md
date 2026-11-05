@@ -412,7 +412,8 @@ When a published watched post changes its path, the monitor appends a rule to th
 - `monitor.associated` appends a second rule with the suffix on both sides.
 - `monitor.trash` appends a disabled rule to `/` when a watched post is trashed.
 - The monitor writes every touched file or none. If any file involved is not writable, including a group read from the parent theme or a `proto_blocks_schema_paths` root (a read-only root counts as unwritable: a new copy would shadow it), it records a `monitor_unwritable` warning and writes nothing. Warnings are kept in the option `proto_blocks_redirects_monitor_issues` and shown on the screen and in `validate`.
-- Post saves by editors still write, because the monitor uses the writer directly: it is not gated on the REST write gate.
+- Post saves by editors still write on a single site, because the monitor uses the writer directly: it is not gated on the REST write gate.
+- On multisite the monitor is off: a sub-site editor must not write into a theme the whole network shares. With `monitor.postTypes` set, a `monitor_unwritable` warning (reason `multisite`) shows on the screen and in `validate`.
 - The monitor keeps running while the module is paused for the Redirection plugin: it writes files and never redirects.
 - The monitor writes through the server-side serializer. Comments inside that group file are not preserved.
 

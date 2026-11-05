@@ -52,22 +52,44 @@ final class MonitorMultisiteTest extends RedirectsTestCase
         $GLOBALS['pb_test_multisite'] = true;
         $GLOBALS['pb_test_super_admins'] = [1];
         $GLOBALS['pb_test_current_user'] = 7; // a sub-site editor, not a network administrator
+        $GLOBALS['pb_test_hooks'] = [];
 
         $module = new RedirectsModule(new ContentModelRegistry(new FileLoader(), static fn(): array => []));
         $module->boot();
-        $monitor = $module->monitor();
-        self::assertNotNull($monitor);
 
-        $post = (object) ['ID' => 5, 'post_status' => 'publish', 'post_type' => 'post', 'post_title' => 'Hello'];
-        $GLOBALS['pb_test_posts'][5] = $post;
-        $GLOBALS['pb_test_permalinks'][5] = 'https://example.test/hello-world/';
-        $monitor->onPrePostUpdate(5, []);
-        $GLOBALS['pb_test_permalinks'][5] = 'https://example.test/hello-there/';
-        $monitor->onPostUpdated(5, $post, $post);
-
+        // Ruling: on multisite the monitor is never registered, so no post hook can write.
+        self::assertNull($module->monitor());
+        foreach (['pre_post_update', 'post_updated', 'wp_trash_post', 'trashed_post'] as $hook) {
+            self::assertFalse(has_action($hook), $hook . ' must not be hooked on multisite');
+        }
         self::assertFileDoesNotExist(
             $this->child . '/proto-redirects/modified-posts/redirects.jsonc',
             'a non-super-admin on multisite wrote a redirect into the network-shared theme'
         );
+
+        $found = array_values(array_filter($module->issues(), static fn($i): bool => $i->code === 'monitor_unwritable'));
+        self::assertCount(1, $found);
+        self::assertSame('warning', $found[0]->level);
+        self::assertStringContainsString('multisite', $found[0]->message);
+        self::assertSame('settings', $found[0]->slug);
+    }
+
+    public function testMultisiteWithoutWatchedPostTypesRecordsNothing(): void
+    {
+        $GLOBALS['pb_test_multisite'] = true;
+        $module = new RedirectsModule(new ContentModelRegistry(new FileLoader(), static fn(): array => []));
+        $module->boot();
+
+        self::assertNull($module->monitor());
+        self::assertSame([], array_values(array_filter($module->issues(), static fn($i): bool => $i->code === 'monitor_unwritable')));
+    }
+
+    public function testSingleSiteStillRegistersTheMonitor(): void
+    {
+        $this->put($this->child, 'proto-redirects/settings.jsonc', '{"monitor": {"postTypes": ["post"]}}');
+        $module = new RedirectsModule(new ContentModelRegistry(new FileLoader(), static fn(): array => []));
+        $module->boot();
+
+        self::assertNotNull($module->monitor());
     }
 }
