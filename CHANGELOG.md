@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.16.0] - Unreleased
+## 2.16.0 — 2026-11-05
 
 ### Added
 - **Redirects module.** Redirect rules and settings are JSONC files in the theme (`proto-redirects/<group>/redirects.jsonc`, `proto-redirects/settings.jsonc`) or `proto_redirect()` / `proto_redirect_group()` in PHP. Actions `url`, `error`, `pass`, `nothing`; conditions login, role, referrer, agent, header, cookie, IP/CIDR, language, server, filter and 404; query modes, case and trailing-slash flags; regex with capture groups; groups with ordering; hit counts, redirect log and 404 log (three tables, the only runtime data; no rule or setting is stored); permalink monitor (single sites only: on multisite it never writes the shared theme); custom headers and canonical https/www; import from Redirection, CSV, JSON, Apache and `_redirects`, export to CSV, JSON, Apache, Nginx and `_redirects`; Proto Blocks > Redirects screen; `wp proto-blocks redirect`; REST routes under `admin/redirects`. Open-redirect, loop and regex guards. With `log.external`, redirects issued by other code through `wp_redirect()` are logged too (`x_redirect_by`). See `docs/redirects.md`.
