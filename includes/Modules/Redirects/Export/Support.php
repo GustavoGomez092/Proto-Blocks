@@ -122,11 +122,20 @@ final class Support
         return '# ' . self::comment($title !== '' && $title !== $slug ? $slug . ': ' . $title : $slug);
     }
 
-    /** [path, query|null] of a literal source. */
+    /**
+     * [path, query|null] of a literal source, split like the engine
+     * (SourceMatcher::parse): at the first unescaped `?`; `\?` is a literal
+     * `?` in the path. The path is not normalised (exports keep it as written).
+     */
     public static function splitQuery(string $from): array
     {
-        $parts = explode('?', $from, 2);
-        return [$parts[0], isset($parts[1]) && $parts[1] !== '' ? $parts[1] : null];
+        $path = $from;
+        $query = null;
+        if (preg_match('/^((?:[^?\\\\]|\\\\.)*)\?(.*)$/s', $from, $m) === 1) {
+            $path = $m[1];
+            $query = $m[2] !== '' ? $m[2] : null;
+        }
+        return [str_replace('\\?', '?', $path), $query];
     }
 
     /**

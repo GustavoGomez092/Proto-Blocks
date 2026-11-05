@@ -153,6 +153,27 @@ final class ExportersTest extends TestCase
         $this->assertStringContainsString("RewriteRule ^/?$ /home [R=301,L]\n", $out, 'root');
     }
 
+    public function testSplitQueryHonoursTheEscapedQuestionMark(): void
+    {
+        self::assertSame(['/what?x', null], Support::splitQuery('/what\?x'));
+        self::assertSame(['/a?b', 'c=1'], Support::splitQuery('/a\?b?c=1'));
+        self::assertSame(['/q', 'a=1'], Support::splitQuery('/q?a=1'));
+        self::assertSame(['/q', null], Support::splitQuery('/q?'));
+        self::assertSame(['/plain', null], Support::splitQuery('/plain'));
+    }
+
+    public function testEscapedQuestionMarkIsALiteralPathCharacterInApacheAndNginx(): void
+    {
+        $rules = [ExportFixtures::rule('g', 1, ['from' => '/what\?x', 'to' => '/d', 'ignoreCase' => false])];
+        $apache = (new ApacheExporter())->render([['slug' => 'g', 'rules' => $rules]], []);
+        self::assertStringContainsString("RewriteRule ^/?what\\?x/?$ /d [R=301,L]\n", $apache);
+        self::assertStringNotContainsString('QUERY_STRING', $apache);
+
+        $nginx = (new NginxExporter())->render([['slug' => 'g', 'rules' => $rules]], []);
+        self::assertStringContainsString('what\\?x', $nginx);
+        self::assertStringNotContainsString('$arg_x', $nginx);
+    }
+
     // ------------------------------------------------------------------ nginx
 
     public function testNginxEdgeCases(): void
