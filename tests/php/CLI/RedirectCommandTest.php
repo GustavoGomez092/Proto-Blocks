@@ -547,6 +547,21 @@ final class RedirectCommandTest extends TestCase
         self::assertStringContainsString('db install', self::cliError(fn() => $this->command()->log([], [])));
     }
 
+    public function testLogCsvIsFormulaEscapedOtherFormatsAreNot(): void
+    {
+        $row = ['id' => '5', 'created' => '2026-11-05 10:00:00', 'url' => '/a', 'target' => '=HYPERLINK("https://evil.test")', 'code' => '301', 'redirect_by' => '@sum', 'method' => 'GET'];
+        $this->db->queue = [self::TABLES, 1, [$row]];
+        $this->command()->log([], ['format' => 'csv']);
+        $csv = self::lastTable()[0];
+        self::assertSame(\ProtoBlocks\API\Admin\RedirectsRoutes::FORMULA_PREFIX . '=HYPERLINK("https://evil.test")', $csv['target']);
+        self::assertSame(\ProtoBlocks\API\Admin\RedirectsRoutes::FORMULA_PREFIX . '@sum', $csv['redirectBy']);
+        self::assertSame('/a', $csv['url']);
+
+        $this->db->queue = [self::TABLES, 1, [$row]];
+        $this->command()->log([], ['format' => 'json']);
+        self::assertSame('=HYPERLINK("https://evil.test")', self::lastTable()[0]['target']);
+    }
+
     public function testPruneDeletesOrphansAndAppliesRetention(): void
     {
         $this->group('main', [['id' => 'r_00000001', 'from' => '/a', 'to' => '/b']]);
