@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Tests\API;
 
-require_once __DIR__ . '/../Modules/Redirects/wp-stubs.php';
 require_once __DIR__ . '/stubs/redirects-doubles.php';
 
 use PHPUnit\Framework\TestCase;

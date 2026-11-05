@@ -6,7 +6,6 @@ namespace ProtoBlocks\Tests\CLI;
 
 require_once __DIR__ . '/wp-stubs.php';
 require_once __DIR__ . '/wp-cli-stub.php';
-require_once __DIR__ . '/../Modules/Redirects/wp-stubs.php';
 require_once __DIR__ . '/../API/stubs/redirects-doubles.php';
 
 use PHPUnit\Framework\TestCase;
