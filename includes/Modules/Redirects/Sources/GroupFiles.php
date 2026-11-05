@@ -46,6 +46,9 @@ final class GroupFiles
     /** @var array{path: string, root: string, data: array<string|int, mixed>}|null */
     private ?array $settings = null;
 
+    /** Whether $settings holds the settings-only read (no group file opened). */
+    private bool $settingsRead = false;
+
     /** @var list<Issue> */
     private array $issues = [];
 
@@ -78,11 +81,19 @@ final class GroupFiles
      * The settings file of the last root that has one; null when none, or
      * when that file is broken (the defaults apply, never a parent's file).
      *
+     * Reads only the settings file (no group folder is scanned or opened)
+     * unless the groups were loaded already, so booting the module on a
+     * request that never matches costs one small read. Its findings are
+     * reported by issues(), which does the full load.
+     *
      * @return array{path: string, root: string, data: array<string|int, mixed>}|null
      */
     public function settingsFile(): ?array
     {
-        $this->load();
+        if ($this->files === null && !$this->settingsRead) {
+            $this->settings = $this->readSettingsOnly();
+            $this->settingsRead = true;
+        }
 
         return $this->settings;
     }
@@ -103,12 +114,48 @@ final class GroupFiles
         return $this->paths;
     }
 
+    /**
+     * The settings-file half of load(): same roots, confinement and
+     * "a later root replaces (or breaks) an earlier one" rules. Issues and
+     * paths found here are dropped; load() reports them.
+     *
+     * @return array{path: string, root: string, data: array<string|int, mixed>}|null
+     */
+    private function readSettingsOnly(): ?array
+    {
+        [$issues, $paths] = [$this->issues, $this->paths];
+        $settings = null;
+        foreach (($this->roots)() as $root) {
+            $real = is_string($root) && $root !== '' ? realpath($root) : false;
+            if ($real === false || !is_dir($real)) {
+                continue;
+            }
+            $dir = $real . DIRECTORY_SEPARATOR . self::FOLDER;
+            if (!is_dir($dir)) {
+                continue;
+            }
+            if (!self::inside(realpath($dir), $real)) {
+                $settings = null;
+                continue;
+            }
+            $file = $this->fileIn($dir, self::SETTINGS_BASENAME, self::SETTINGS_SLUG, self::SETTINGS_KIND);
+            if ($file !== null) {
+                $data = $this->read($file, $real, self::SETTINGS_SLUG, self::SETTINGS_KIND);
+                $settings = $data === null ? null : ['path' => $file, 'root' => $real, 'data' => $data];
+            }
+        }
+        [$this->issues, $this->paths] = [$issues, $paths];
+
+        return $settings;
+    }
+
     private function load(): void
     {
         if ($this->files !== null) {
             return;
         }
         $this->files = [];
+        $this->settings = null;
         foreach (($this->roots)() as $root) {
             $real = is_string($root) && $root !== '' ? realpath($root) : false;
             if ($real === false || !is_dir($real)) {

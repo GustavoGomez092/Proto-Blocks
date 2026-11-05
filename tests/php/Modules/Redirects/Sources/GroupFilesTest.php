@@ -155,6 +155,46 @@ final class GroupFilesTest extends RedirectsTestCase
         self::assertSame('settings', $files->issues()[0]->slug);
     }
 
+    public function testSettingsFileAloneOpensNoGroupFile(): void
+    {
+        $this->put($this->child, 'proto-redirects/settings.jsonc', '{"cache": 24}');
+        for ($i = 0; $i < 50; $i++) {
+            $this->put($this->child, 'proto-redirects/g' . $i . '/redirects.jsonc', '{"rules": []}');
+        }
+        $decoded = 0;
+        $files = new GroupFiles(fn(): array => [$this->parent, $this->child], static function (string $text) use (&$decoded) {
+            $decoded++;
+            return json_decode($text, true, 512, JSON_THROW_ON_ERROR);
+        });
+
+        self::assertSame(['cache' => 24], $files->settingsFile()['data']);
+        self::assertSame(['cache' => 24], $files->settingsFile()['data']);
+        self::assertSame(1, $decoded, 'only settings.jsonc was decoded');
+
+        self::assertCount(50, $files->groups());
+        self::assertSame(52, $decoded, 'the full load reads every group (and the settings file again)');
+        self::assertSame(['cache' => 24], $files->settingsFile()['data']);
+        self::assertSame(52, $decoded);
+    }
+
+    public function testSettingsOnlyReadKeepsFindingsForTheFullLoad(): void
+    {
+        $this->put($this->child, 'proto-redirects/settings.jsonc', '{}');
+        $this->put($this->child, 'proto-redirects/settings.json', '{}');
+        $files = $this->files();
+
+        self::assertSame([], $files->settingsFile()['data']);
+        self::assertSame(['warning:both_extensions'], self::issueCodes($files->issues()), 'reported once, by the full load');
+    }
+
+    public function testSettingsOnlyReadFailsClosedOnABrokenChild(): void
+    {
+        $this->put($this->parent, 'proto-redirects/settings.jsonc', '{"cache": 24}');
+        $this->put($this->child, 'proto-redirects/settings.jsonc', '{"cache": ');
+
+        self::assertNull($this->files()->settingsFile());
+    }
+
     public function testSettingsBothExtensionsAndPathsList(): void
     {
         $a = $this->put($this->parent, 'proto-redirects/settings.jsonc', '{}');

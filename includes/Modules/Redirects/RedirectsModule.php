@@ -70,10 +70,12 @@ final class RedirectsModule implements ModuleInterface
      * permalink monitor when `monitor.postTypes` is non-empty, never on
      * multisite (a `monitor_unwritable` warning, reason multisite, instead).
      *
-     * Settings are read here (one registry build per request, shared with the
-     * engine). PHP declarations made between now and the `init` 9 seal make
-     * the registry rebuild once at the seal; the engine reads its rules
-     * lazily on the first match, so it always sees the sealed set.
+     * Only `settings.jsonc` is read here (Registry::settings() opens no group
+     * file), so admin, REST and cron requests that never match pay for one
+     * small read. The groups are built lazily, once, by the first caller that
+     * needs rules or issues (the engine on its first match, REST, CLI, the
+     * monitor); PHP declarations made before the `init` 9 seal invalidate a
+     * build that already happened.
      */
     public function boot(): void
     {

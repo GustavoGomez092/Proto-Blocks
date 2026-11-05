@@ -224,6 +224,50 @@ final class ModuleBootTest extends RedirectsTestCase
         self::assertSame([$module, 'onSealed'], $init[1]['callback']);
     }
 
+    public function testBootOnAnAdminRequestReadsOnlyTheSettingsFile(): void
+    {
+        $this->settingsFile(['log' => ['ip' => 'full']]);
+        for ($i = 0; $i < 50; $i++) {
+            $this->put($this->child, 'proto-redirects/g' . $i . '/redirects.jsonc', self::groupText([['from' => '/old-' . $i, 'to' => '/new-' . $i]]));
+        }
+        $GLOBALS['pb_test_is_admin'] = true;
+        try {
+            $module = self::booted();
+        } finally {
+            unset($GLOBALS['pb_test_is_admin']);
+        }
+
+        self::assertSame('full', $module->settings()['log']['ip'], 'the settings were read');
+        self::assertSame(0, $module->registry()->buildCount(), 'no group was built');
+        $files = (new \ReflectionProperty(\ProtoBlocks\Modules\Redirects\Registry::class, 'files'))->getValue($module->registry());
+        self::assertNull((new \ReflectionProperty(\ProtoBlocks\Modules\Redirects\Sources\GroupFiles::class, 'files'))->getValue($files), 'no group file was opened');
+    }
+
+    public function testTheFrontControllersFirstMatchBuildsTheRegistryOnce(): void
+    {
+        for ($i = 0; $i < 50; $i++) {
+            $this->put($this->child, 'proto-redirects/g' . $i . '/redirects.jsonc', self::groupText([['from' => '/old-' . $i, 'to' => '/new-' . $i]]));
+        }
+        $server = $_SERVER;
+        $_SERVER = ['REQUEST_URI' => '/nothing-here', 'HTTP_HOST' => 'example.test', 'REQUEST_METHOD' => 'GET', 'REMOTE_ADDR' => '203.0.113.5'];
+        try {
+            $module = self::booted();
+            self::assertSame(0, $module->registry()->buildCount());
+
+            $module->frontController()?->onInit();
+            self::assertSame(1, $module->registry()->buildCount());
+
+            $GLOBALS['pb_test_query']['is_404'] = true;
+            $module->frontController()?->onTemplateRedirect();
+            $module->issues();
+            $module->settings();
+            self::assertSame(1, $module->registry()->buildCount(), 'one build per request');
+        } finally {
+            $_SERVER = $server;
+            unset($GLOBALS['pb_test_query']['is_404']);
+        }
+    }
+
     public function testActivateEnsuresTheTables(): void
     {
         RedirectsModule::activate();
