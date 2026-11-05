@@ -29,5 +29,7 @@ beforeAll(async () => {
 		import('@/admin/screens/FieldsScreen'),
 		import('@/admin/screens/OptionsPagesScreen'),
 		import('@/admin/screens/OptionsPageScreen'),
+		import('@/admin/screens/RedirectsScreen'),
+		import('@/admin/screens/ScriptsScreen'),
 	]);
 }, 120000);

@@ -95,7 +95,7 @@ final class ManagerTest extends TestCase
         $manager = new Manager($this->registry());
         $manager->boot();
 
-        $this->assertSame(['post_types' => true, 'taxonomies' => false, 'fields' => true, 'options_pages' => true], $manager->states());
+        $this->assertSame(['post_types' => true, 'taxonomies' => false, 'fields' => true, 'options_pages' => true, 'redirects' => true, 'scripts' => true], $manager->states());
         $this->assertFalse($manager->isEnabled('unknown'));
         $this->assertNull($manager->taxonomies());
     }

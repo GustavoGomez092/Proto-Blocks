@@ -47,6 +47,8 @@ final class AdminRestController
         Admin\SchemaFilesRoutes::class,
         Admin\OptionsPagesRoutes::class,
         Admin\FieldsRoutes::class,
+        Admin\RedirectsRoutes::class,
+        Admin\ScriptsRoutes::class,
     ];
 
     /**

@@ -12,6 +12,8 @@ use ProtoBlocks\ContentModel\PhpDeclarations;
 use ProtoBlocks\ContentModel\Registry;
 use ProtoBlocks\ContentModel\RewriteHash;
 use ProtoBlocks\Modules\Fields\FieldsModule;
+use ProtoBlocks\Modules\Redirects\RedirectsModule;
+use ProtoBlocks\Modules\Scripts\ScriptsModule;
 
 /**
  * Boots the content-model modules the `proto_blocks_modules` filter leaves
@@ -26,7 +28,7 @@ final class Manager
 {
     public const FILTER = 'proto_blocks_modules';
 
-    public const DEFAULTS = ['post_types' => true, 'taxonomies' => true, 'fields' => true, 'options_pages' => true];
+    public const DEFAULTS = ['post_types' => true, 'taxonomies' => true, 'fields' => true, 'options_pages' => true, 'redirects' => true, 'scripts' => true];
 
     /** @var array<string, bool> */
     private array $states = self::DEFAULTS;
@@ -35,6 +37,8 @@ final class Manager
     private ?Taxonomies $taxonomies = null;
     private ?FieldsModule $fields = null;
     private ?OptionsPages $optionsPages = null;
+    private ?RedirectsModule $redirects = null;
+    private ?ScriptsModule $scripts = null;
     private ?OriginTracker $originTracker = null;
     private bool $booted = false;
 
@@ -76,6 +80,20 @@ final class Manager
         } else {
             // FieldsModule::instance() must not hand out a live module.
             FieldsModule::setInstance(FieldsModule::disabled());
+        }
+        if ($this->states['redirects']) {
+            $this->redirects = new RedirectsModule($this->registry);
+            RedirectsModule::setInstance($this->redirects);
+            $this->redirects->boot();
+        } else {
+            RedirectsModule::setInstance(null);
+        }
+        if ($this->states['scripts']) {
+            $this->scripts = new ScriptsModule($this->registry);
+            ScriptsModule::setInstance($this->scripts);
+            $this->scripts->boot();
+        } else {
+            ScriptsModule::setInstance(null);
         }
         if ($this->postTypes !== null || $this->taxonomies !== null) {
             // After the modules' own wp_loaded work (pending overrides resolve at 10).
@@ -126,6 +144,18 @@ final class Manager
         return $this->optionsPages;
     }
 
+    /** Null when the module is disabled. */
+    public function redirects(): ?RedirectsModule
+    {
+        return $this->redirects;
+    }
+
+    /** Null when the module is disabled. */
+    public function scripts(): ?ScriptsModule
+    {
+        return $this->scripts;
+    }
+
     /** Null on requests that do not show origins (see OriginTracker::wanted()). */
     public function originTracker(): ?OriginTracker
     {
@@ -153,7 +183,7 @@ final class Manager
     public function issues(): array
     {
         $out = [];
-        $all = [...$this->registry->issues(), ...($this->postTypes?->issues() ?? []), ...($this->taxonomies?->issues() ?? []), ...($this->fields?->issues() ?? [])];
+        $all = [...$this->registry->issues(), ...($this->postTypes?->issues() ?? []), ...($this->taxonomies?->issues() ?? []), ...($this->fields?->issues() ?? []), ...($this->redirects?->issues() ?? []), ...($this->scripts?->issues() ?? [])];
         foreach ($all as $issue) {
             $out[self::issueKey($issue)] ??= $issue;
         }

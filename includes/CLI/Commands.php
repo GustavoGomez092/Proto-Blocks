@@ -1159,6 +1159,9 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
     WP_CLI::add_command( 'proto-blocks options', OptionsCommand::class );
     // Field groups.
     WP_CLI::add_command( 'proto-blocks fields', FieldsCommand::class );
+    // Redirects and scripts.
+    WP_CLI::add_command( 'proto-blocks redirect', RedirectCommand::class );
+    WP_CLI::add_command( 'proto-blocks script', ScriptCommand::class );
 
     // Add cache subcommand
     WP_CLI::add_command( 'proto-blocks cache', function( $args, $assoc_args ) {
