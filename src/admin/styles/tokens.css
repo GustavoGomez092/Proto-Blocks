@@ -48,6 +48,8 @@
   --panel: #0f1d2e;
   --panel-foreground: #e6edf5;
   --panel-line: #3b4a5e;
+  /* Redirects / Scripts redesign (2026-11-05): JSON keys and key hints on navy. */
+  --panel-key: #9fb6d3;
 }
 
 @theme inline {
@@ -96,6 +98,7 @@
   --color-panel: var(--panel);
   --color-panel-foreground: var(--panel-foreground);
   --color-panel-line: var(--panel-line);
+  --color-panel-key: var(--panel-key);
   --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   /* Type scale (design foundations). */

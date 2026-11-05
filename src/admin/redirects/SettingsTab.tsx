@@ -320,8 +320,8 @@ export default function SettingsTab({ index, reload, readOnly }: TabProps) {
 	});
 
 	return (
-		<div className="grid gap-4">
-			<form noValidate onSubmit={submit} className="grid gap-4">
+		<div className="grid max-w-[960px] gap-6">
+			<form noValidate onSubmit={submit} className="grid gap-6">
 				<Panel aria-labelledby="pb-rs-defaults">
 					<PanelHeader id="pb-rs-defaults" title={__('Matching defaults', 'proto-blocks')} description={__('For every rule; groups and rules can override them.', 'proto-blocks')} />
 					<SettingRow label={__('Flags', 'proto-blocks')}>

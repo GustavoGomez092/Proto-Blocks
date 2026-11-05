@@ -10,22 +10,28 @@ import type { ScriptDetail, ScriptsIndex } from '@/admin/scripts/types';
 interface View {
 	slug: string | null;
 	creating: boolean;
+	/** Empty-state template the create form starts from (`?template=<id>`). */
+	template?: string | null;
 }
 
 function readView(): View {
 	const params = new URLSearchParams(window.location.search);
-	return { slug: params.get('slug') || null, creating: params.get('new') === '1' };
+	return { slug: params.get('slug') || null, creating: params.get('new') === '1', template: params.get('template') || null };
 }
 
-/** `?slug=<slug>` → editor, `?new=1` → create, else the list; replaceState keeps the URL shareable. */
+/** `?slug=<slug>` → editor, `?new=1[&template=<id>]` → create, else the list; replaceState keeps the URL shareable. */
 function writeView(view: View): void {
 	const url = new URL(window.location.href);
 	url.searchParams.delete('slug');
 	url.searchParams.delete('new');
+	url.searchParams.delete('template');
 	if (view.slug) {
 		url.searchParams.set('slug', view.slug);
 	} else if (view.creating) {
 		url.searchParams.set('new', '1');
+		if (view.template) {
+			url.searchParams.set('template', view.template);
+		}
 	}
 	window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
 }
@@ -80,13 +86,14 @@ export default function ScriptsScreen() {
 
 	const back = () => go({ slug: null, creating: false });
 	const roles = result?.roles ?? [];
+	const items = result?.items ?? [];
 	const writeReason = result?.writeReason ?? null;
 
 	if (view.slug) {
-		return <ScriptEditor key={view.slug} slug={view.slug} roles={roles} writeReason={writeReason} onBack={back} onSaved={(slug) => go({ slug, creating: false })} />;
+		return <ScriptEditor key={view.slug} slug={view.slug} roles={roles} items={items} writeReason={writeReason} onBack={back} onSaved={(slug) => go({ slug, creating: false })} />;
 	}
 	if (view.creating && result && result.canWrite) {
-		return <ScriptEditor key="new" slug={null} roles={roles} writeReason={writeReason} onBack={back} onSaved={(slug) => go({ slug, creating: false })} />;
+		return <ScriptEditor key={`new-${view.template ?? ''}`} slug={null} template={view.template ?? null} roles={roles} items={items} writeReason={writeReason} onBack={back} onSaved={(slug) => go({ slug, creating: false })} />;
 	}
 	return (
 		<ScriptList
@@ -96,7 +103,7 @@ export default function ScriptsScreen() {
 			busy={busy}
 			onRetry={() => void load()}
 			onEdit={(slug) => go({ slug, creating: false })}
-			onCreate={() => go({ slug: null, creating: true })}
+			onCreate={(template) => go({ slug: null, creating: true, template })}
 			onToggle={(slug, enabled) => void toggle(slug, enabled)}
 		/>
 	);

@@ -1,7 +1,7 @@
 import '../helpers';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { calls, index, legacyGroup, phpGroup, promoGroup, renderScreen, routes, rowOf, rulesTable, setup, writes } from './fixtures';
+import { calls, index, rowButton, legacyGroup, phpGroup, promoGroup, renderScreen, routes, rowOf, rulesTable, setup, writes } from './fixtures';
 
 setup();
 
@@ -23,6 +23,7 @@ function allTabs() {
 describe('tabs', () => {
 	test('the Redirects tab lists every rule across groups with code, condition, hits and origin', async () => {
 		allTabs();
+		const user = userEvent.setup();
 		renderScreen();
 		const about = await rowOf('/about-us');
 		expect(within(about).getByText('/about')).toBeTruthy();
@@ -35,7 +36,7 @@ describe('tabs', () => {
 		expect(within(php).getByText('PHP')).toBeTruthy();
 		// A PHP rule is not in a file: toggle, move and delete are off.
 		expect((within(php).getByRole('switch') as HTMLButtonElement).disabled).toBe(true);
-		expect((within(php).getByRole('button', { name: 'Delete /php-old' }) as HTMLButtonElement).disabled).toBe(true);
+		expect((await rowButton(user, '/php-old', 'Delete /php-old')).disabled).toBe(true);
 		expect((within(php).getByRole('button', { name: 'Edit /php-old' }) as HTMLButtonElement).disabled).toBe(false);
 		// Evaluation order: legacy (10), promo (20), php (100).
 		const sources = within(await rulesTable()).getAllByRole('row').slice(1).map((row) => row.querySelector('code')?.textContent);
@@ -68,7 +69,7 @@ describe('tabs', () => {
 		expect(await screen.findByRole('button', { name: 'Save settings' })).toBeTruthy();
 		expect(screen.getByRole('button', { name: 'Prune orphan hit rows (2)' })).toBeTruthy();
 
-		await user.click(screen.getByRole('tab', { name: 'Redirects' }));
+		await user.click(screen.getByRole('tab', { name: /^Rules/ }));
 		await rulesTable();
 		expect(window.location.search).toBe('?page=proto-blocks-redirects');
 	});
@@ -104,7 +105,7 @@ describe('tabs', () => {
 		renderScreen('&tab=log');
 		await user.click(await screen.findByRole('button', { name: 'Edit rule r_00000001' }));
 		const dialog = await screen.findByRole('dialog', { name: 'Edit redirect' });
-		expect((within(dialog).getByRole('textbox', { name: 'Source' }) as HTMLInputElement).value).toBe('/about-us');
+		expect((within(dialog).getByRole('textbox', { name: 'When a visitor requests' }) as HTMLInputElement).value).toBe('/about-us');
 	});
 });
 
@@ -122,7 +123,7 @@ describe('banners', () => {
 		expect(toggle.disabled).toBe(true);
 		expect(toggle.getAttribute('aria-describedby')).toBe('proto-blocks-read-only');
 		for (const name of ['Edit /about-us', 'Delete /about-us', 'Duplicate /about-us', 'Move /about-us down']) {
-			expect((within(about).getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+			expect((await rowButton(user, '/about-us', name)).disabled).toBe(true);
 		}
 
 		await user.click(screen.getByRole('tab', { name: '404s' }));
@@ -148,10 +149,11 @@ describe('banners', () => {
 
 	test('a file group the server cannot write (parent theme, filter root) keeps its rules read-only', async () => {
 		routes({ 'admin/redirects': index({ groups: [legacyGroup({ writable: false })] }) });
+		const user = userEvent.setup();
 		renderScreen();
 		const about = await rowOf('/about-us');
 		for (const name of ['Edit /about-us', 'Delete /about-us', 'Duplicate /about-us']) {
-			expect((within(about).getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+			expect((await rowButton(user, '/about-us', name)).disabled).toBe(true);
 		}
 		expect((within(about).getByRole('switch') as HTMLButtonElement).disabled).toBe(true);
 		// Adding is still possible: the dialog offers a new group.
@@ -235,7 +237,7 @@ describe('banners', () => {
 		const about = await rowOf('/about-us');
 		expect(within(about).getByText(/the file is outside the theme the screen writes to/)).toBeTruthy();
 		for (const name of ['Edit /about-us', 'Delete /about-us', 'Duplicate /about-us']) {
-			expect((within(about).getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+			expect((await rowButton(user, '/about-us', name)).disabled).toBe(true);
 		}
 		const spring = await rowOf('/spring');
 		expect(within(spring).getByText('Read-only: file modifications are disabled')).toBeTruthy();
@@ -288,5 +290,64 @@ describe('banners', () => {
 		renderScreen();
 		await waitFor(() => expect(screen.getByText(/Nope/)).toBeTruthy());
 		expect(calls()[0].url).toBe('admin/redirects');
+	});
+});
+
+describe('redesign states', () => {
+	test('rules list: tab count, filter pills, code ink, origin line and the footer', async () => {
+		allTabs();
+		const user = userEvent.setup();
+		renderScreen();
+		await rulesTable();
+		expect(screen.getByRole('tab', { name: /^Rules/ }).textContent).toBe('Rules7');
+		const code = screen.getByRole('combobox', { name: 'Code' });
+		expect(code.getAttribute('data-active')).toBe('false');
+		expect(code.textContent).toBe('Code');
+		await user.click(code);
+		await user.click(await screen.findByRole('option', { name: '410' }));
+		expect(code.getAttribute('data-active')).toBe('true');
+		expect(code.textContent).toBe('Code 410');
+		const gone = await rowOf('/gone-forever');
+		expect(within(gone).getByText('410').parentElement?.className).toContain('text-warning');
+		expect(within(gone).getByText('Error page').className).toContain('text-muted-foreground');
+		expect(screen.getByText(/^1 rule in 1 group/)).toBeTruthy();
+		await user.click(code);
+		await user.click(await screen.findByRole('option', { name: 'All codes' }));
+		const promo = await rowOf('/promo');
+		expect(within(promo).getByText('temp')).toBeTruthy();
+		expect(within(await rowOf('/about-us')).getByText('File')).toBeTruthy();
+	});
+
+	test('the row menu holds reorder, duplicate and delete; Edit stays in the row', async () => {
+		allTabs();
+		const user = userEvent.setup();
+		renderScreen();
+		const about = await rowOf('/about-us');
+		expect(within(about).getByRole('button', { name: 'Edit /about-us' }).textContent).toBe('Edit');
+		expect(within(about).queryByRole('button', { name: 'Delete /about-us' })).toBeNull();
+		await user.click(within(about).getByRole('button', { name: 'More actions for /about-us' }));
+		const menu = await screen.findByRole('dialog');
+		expect(within(menu).getAllByRole('button').map((b) => b.textContent)).toEqual(['Move up', 'Move down', 'Duplicate', 'Delete']);
+	});
+
+	test('404s: period chips set the From date; the aside counts and links to Settings', async () => {
+		allTabs();
+		const user = userEvent.setup();
+		renderScreen('&tab=404s');
+		await screen.findByRole('table', { name: '404s by URL' });
+		expect(screen.getByRole('radio', { name: 'All time' }).getAttribute('aria-checked')).toBe('true');
+		await user.click(screen.getByRole('radio', { name: 'Last 7 days' }));
+		const from = screen.getByLabelText('From') as HTMLInputElement;
+		expect(from.value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+		await waitFor(() => expect(calls().some((c) => c.url.startsWith('admin/redirects/404?') && c.url.includes(`from=${from.value}`))).toBe(true));
+		expect(screen.getByRole('radio', { name: 'Last 7 days' }).getAttribute('aria-checked')).toBe('true');
+		await user.click(screen.getByRole('radio', { name: 'All time' }));
+		expect(from.value).toBe('');
+
+		const summary = screen.getByRole('complementary', { name: '404 summary' });
+		expect(within(summary).getByText('Distinct paths')).toBeTruthy();
+		expect(within(summary).getByText('Logs are pruned after 7 days.')).toBeTruthy();
+		await user.click(within(summary).getByRole('button', { name: 'Change in Settings' }));
+		expect(screen.getByRole('tab', { name: 'Settings' }).getAttribute('aria-selected')).toBe('true');
 	});
 });

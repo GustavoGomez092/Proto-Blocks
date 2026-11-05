@@ -196,6 +196,20 @@ export async function rowOf(source: string): Promise<HTMLElement> {
 	return within(table).getByText(source).closest('tr') as HTMLElement;
 }
 
+/**
+ * A rule row's action button: Edit sits in the row, the rest in its "More
+ * actions" menu, which is opened when the button is not already showing.
+ */
+export async function rowButton(user: ReturnType<typeof userEvent.setup>, source: string, name: string): Promise<HTMLButtonElement> {
+	const row = await rowOf(source);
+	const shown = within(row).queryByRole('button', { name }) ?? screen.queryByRole('button', { name });
+	if (shown) {
+		return shown as HTMLButtonElement;
+	}
+	await user.click(within(row).getByRole('button', { name: `More actions for ${source}` }));
+	return (await screen.findByRole('button', { name })) as HTMLButtonElement;
+}
+
 /** Opens a Radix select by its label and picks an option. */
 export async function choose(user: ReturnType<typeof userEvent.setup>, label: string | RegExp, option: string | RegExp) {
 	await user.click(screen.getByRole('combobox', { name: label }));

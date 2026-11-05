@@ -519,9 +519,11 @@ function ExportPanel({ index }: { index: RedirectsIndex }) {
 export default function ImportExportTab(props: TabProps) {
 	const { runWrites, busy, dialogs } = useWriteFlow(props.reload);
 	return (
-		<div className="grid gap-4">
-			<FileImport {...props} runWrites={runWrites} busy={busy} />
-			<PluginImport {...props} runWrites={runWrites} busy={busy} />
+		<div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+			<div className="grid min-w-0 gap-6">
+				<FileImport {...props} runWrites={runWrites} busy={busy} />
+				<PluginImport {...props} runWrites={runWrites} busy={busy} />
+			</div>
 			<ExportPanel index={props.index} />
 			{dialogs}
 		</div>

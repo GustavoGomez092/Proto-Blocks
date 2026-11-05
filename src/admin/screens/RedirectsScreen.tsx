@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { __ } from '@wordpress/i18n';
 import { toast } from 'sonner';
 import { DatabaseIcon, LoaderCircleIcon, PauseCircleIcon, PowerOffIcon, TriangleAlertIcon } from 'lucide-react';
@@ -13,6 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/admin/components/ui/alert
 import { Button } from '@/admin/components/ui/button';
 import { Skeleton } from '@/admin/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/admin/components/ui/tabs';
+import { interpolate } from '@/admin/lib/interpolate';
 import { asApiError, useRedirectsIndex } from '@/admin/redirects/api';
 import { RedirectsTab } from '@/admin/redirects/RedirectsTab';
 
@@ -49,6 +50,27 @@ function writeView(view: View): void {
 	}
 	window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
 }
+
+/** Header line per tab. */
+const DESCRIPTIONS: Record<Tab, ReactNode> = {
+	redirects: interpolate(
+		/* translators: %s: the folder name proto-redirects/ */
+		__('Rules live in %s in the theme, so git tracks them. Hits and logs stay in the database.', 'proto-blocks'),
+		<code className="font-mono text-micro text-link">proto-redirects/</code>
+	),
+	'404s': __('Pages visitors asked for that don’t exist. Turn a 404 into a rule in one click.', 'proto-blocks'),
+	log: __('Every redirect the site served, newest first. Stored in the database.', 'proto-blocks'),
+	import: __('Bring rules in from a file or another plugin, or export them to share.', 'proto-blocks'),
+	settings: interpolate(
+		/* translators: %s: the file name proto-redirects/settings.jsonc */
+		__('Defaults, logging, headers and the canonical host, saved to %s.', 'proto-blocks'),
+		<code className="font-mono text-micro text-link">proto-redirects/settings.jsonc</code>
+	),
+};
+
+/** Header tabs (design): 10/14 padding, a 2px navy rule under the active one, no pill. */
+const TAB =
+	'h-auto flex-none rounded-none border-0 border-b-2 border-transparent px-3.5 py-2.5 text-body after:hidden data-[state=active]:border-primary';
 
 /** Issues the post monitor keeps (`monitor_unwritable`, `monitor_rule_disabled`, …) get their own alert. */
 const isMonitorIssue = (issue: { code: string }) => issue.code.startsWith('monitor_');
@@ -114,13 +136,7 @@ export default function RedirectsScreen() {
 
 	const onEditHandled = useCallback(() => setEditRequest(null), []);
 
-	const header = (
-		<PageHeader
-			title={title}
-			eyebrow={__('Content model', 'proto-blocks')}
-			description={__('Redirect rules live in proto-redirects/ in the theme, so git tracks them. Hits and logs stay in the database.', 'proto-blocks')}
-		/>
-	);
+	const header = <PageHeader title={title} eyebrow={__('Site', 'proto-blocks')} description={DESCRIPTIONS.redirects} />;
 
 	if (error && !index) {
 		return (
@@ -155,9 +171,35 @@ export default function RedirectsScreen() {
 	const issues = Array.isArray(index.issues) ? index.issues : [];
 	const monitorIssues = issues.filter(isMonitorIssue);
 
+	const ruleCount = index.groups.reduce((sum, group) => sum + group.rules.length, 0);
+
 	return (
-		<div className="grid gap-6 [&>header]:mb-0">
-			{header}
+		<Tabs value={view.tab} onValueChange={(tab) => go({ tab: tab as Tab, slug: view.slug })} className="grid gap-6 [&>header]:mb-0">
+			<PageHeader
+				title={title}
+				eyebrow={__('Site', 'proto-blocks')}
+				description={DESCRIPTIONS[view.tab]}
+				nav={
+					<TabsList variant="line" aria-label={__('Redirects sections', 'proto-blocks')} className="h-auto gap-1 p-0">
+						<TabsTrigger value="redirects" className={TAB}>
+							{__('Rules', 'proto-blocks')}
+							<span className="text-micro font-normal text-muted-foreground tabular-nums">{ruleCount}</span>
+						</TabsTrigger>
+						<TabsTrigger value="404s" className={TAB}>
+							{__('404s', 'proto-blocks')}
+						</TabsTrigger>
+						<TabsTrigger value="log" className={TAB}>
+							{__('Log', 'proto-blocks')}
+						</TabsTrigger>
+						<TabsTrigger value="import" className={TAB}>
+							{__('Import / Export', 'proto-blocks')}
+						</TabsTrigger>
+						<TabsTrigger value="settings" className={TAB}>
+							{__('Settings', 'proto-blocks')}
+						</TabsTrigger>
+					</TabsList>
+				}
+			/>
 			{writeReason !== null ? (
 				<ReadOnlyBanner reason={writeReason} description={__('Rules and settings cannot be changed here. The 404s and the redirect log still work; they are stored in the database.', 'proto-blocks')} />
 			) : index.createTarget.writable === false ? (
@@ -193,21 +235,13 @@ export default function RedirectsScreen() {
 				</Alert>
 			) : null}
 			<IssueList issues={issues.filter((issue) => !isMonitorIssue(issue))} />
-			<Tabs value={view.tab} onValueChange={(tab) => go({ tab: tab as Tab, slug: view.slug })}>
-				<TabsList variant="line" aria-label={__('Redirects sections', 'proto-blocks')}>
-					<TabsTrigger value="redirects">{__('Redirects', 'proto-blocks')}</TabsTrigger>
-					<TabsTrigger value="404s">{__('404s', 'proto-blocks')}</TabsTrigger>
-					<TabsTrigger value="log">{__('Log', 'proto-blocks')}</TabsTrigger>
-					<TabsTrigger value="import">{__('Import / Export', 'proto-blocks')}</TabsTrigger>
-					<TabsTrigger value="settings">{__('Settings', 'proto-blocks')}</TabsTrigger>
-				</TabsList>
-				<TabsContent value="redirects" className="pt-4">
+				<TabsContent value="redirects">
 					<RedirectsTab {...props} slug={view.slug} onSlug={(slug) => go({ tab: 'redirects', slug })} editRequest={editRequest} onEditHandled={onEditHandled} />
 				</TabsContent>
 				{view.tab !== 'redirects' ? (
-					<TabsContent value={view.tab} className="pt-4">
+					<TabsContent value={view.tab}>
 						<Suspense fallback={<TabFallback />}>
-							{view.tab === '404s' ? <NotFoundTab {...props} /> : null}
+							{view.tab === '404s' ? <NotFoundTab {...props} onSettings={() => go({ tab: 'settings', slug: null })} /> : null}
 							{view.tab === 'log' ? (
 								<LogTab
 									{...props}
@@ -222,7 +256,6 @@ export default function RedirectsScreen() {
 						</Suspense>
 					</TabsContent>
 				) : null}
-			</Tabs>
-		</div>
+		</Tabs>
 	);
 }
