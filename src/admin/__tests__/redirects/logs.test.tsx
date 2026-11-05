@@ -13,21 +13,23 @@ const grouped = {
 	],
 	total: 2,
 };
-// `search=/missing` also returns /missing-page: only exact matches are deleted.
+// `?url=` is the server's exact filter: only /missing comes back.
 const hits = {
 	rows: [
 		{ id: 11, created: '2026-11-04 09:00:00', url: '/missing', method: 'GET', ip: null, agent: 'Firefox', referrer: 'https://google.com/' },
 		{ id: 12, created: '2026-11-03 09:00:00', url: '/missing', method: 'HEAD', ip: null, agent: 'curl', referrer: null },
-		{ id: 13, created: '2026-11-03 08:00:00', url: '/missing-page', method: 'GET', ip: null, agent: 'curl', referrer: null },
 	],
-	total: 3,
+	total: 2,
+	page: 1,
+	perPage: 10,
+	pages: 1,
+	groupBy: null,
 };
 
 function notFoundRoutes(extra = {}) {
 	return routes({
-		'admin/redirects/404?group_by=url&page=1&per_page=50': grouped,
-		'admin/redirects/404?search=%2Fmissing&per_page=200': hits,
-		'admin/redirects/404?search=%2Fmissing&per_page=10': hits,
+		'admin/redirects/404?group_by=url&page=1&per_page=50': { ...grouped, page: 1, perPage: 50, pages: 1, groupBy: 'url' },
+		'admin/redirects/404?url=%2Fmissing&per_page=10': hits,
 		'DELETE admin/redirects/404': { deleted: 2 },
 		...extra,
 	});
@@ -50,7 +52,8 @@ describe('404s', () => {
 
 		await waitFor(() => expect(calls().some((c) => c.method === 'DELETE')).toBe(true));
 		const order = writes().map((c) => `${c.method} ${c.url}`);
-		expect(order).toEqual(['POST admin/schema-files/redirects/legacy-site', 'DELETE admin/redirects/404?ids[]=11&ids[]=12']);
+		expect(order).toEqual(['POST admin/schema-files/redirects/legacy-site', 'DELETE admin/redirects/404?url=%2Fmissing']);
+		expect(await screen.findByText('Deleted 2 404 entries.')).toBeTruthy();
 		expect(readRules(fileWrites()[0].data?.text ?? '').slice(-1)[0]).toMatchObject({ from: '/missing', to: '/found' });
 		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 	});
@@ -104,7 +107,9 @@ describe('404s', () => {
 
 		await user.click(screen.getByRole('button', { name: 'Delete 404s of /missing' }));
 		await user.click(await screen.findByRole('button', { name: 'Delete' }));
-		await waitFor(() => expect(calls().some((c) => c.url === 'admin/redirects/404?ids[]=11&ids[]=12')).toBe(true));
+		await waitFor(() => expect(calls().some((c) => c.method === 'DELETE' && c.url === 'admin/redirects/404?url=%2Fmissing')).toBe(true));
+		// Never the "contains" search: /missing-page keeps its rows.
+		expect(calls().some((c) => c.url.includes('search=%2Fmissing'))).toBe(false);
 
 		await user.click(screen.getByRole('button', { name: 'Clear all' }));
 		await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Clear all' }));

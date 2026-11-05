@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/admin/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/admin/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/admin/components/ui/tooltip';
-import { asApiError, type GroupWrite } from './api';
+import { asApiError, deleteHitRows, type GroupWrite } from './api';
 import { actionLabel, conditionLabel, CONDITIONS } from './codes';
 import { addRule, moveRule, newRuleId, readRules, removeRule, setRuleEnabled } from './edits';
 import { GroupMenu } from './GroupMenu';
@@ -511,9 +511,18 @@ export function RedirectsTab({
 						const group = groups.find((g) => g.slug === slugOf) as Group;
 						return groupWrite(group, (text) => [...rules].sort((a, b) => b.index - a.index).reduce((out, rule) => removeRule(out, refOf(rule)), text));
 					});
-					void runWrites(writes, _n('Redirect deleted.', 'Redirects deleted.', list.length, 'proto-blocks')).then((ok) => {
-						if (ok) {
-							setSelected(new Set());
+					void runWrites(writes, _n('Redirect deleted.', 'Redirects deleted.', list.length, 'proto-blocks')).then(async (ok) => {
+						if (!ok) {
+							return;
+						}
+						setSelected(new Set());
+						if (index.db.tables === false) {
+							return;
+						}
+						// The rules are gone from the files; their hit rows go too. The delete stands either way.
+						const { failed, error } = await deleteHitRows(list.filter((rule) => rule.origin === 'file'));
+						if (failed > 0) {
+							toast.warning(_n('The hit count of the deleted rule was not cleared.', 'The hit counts of the deleted rules were not cleared.', failed, 'proto-blocks'), { description: error?.message });
 						}
 					});
 				}}

@@ -87,12 +87,21 @@ export interface Group {
 	origin: 'file' | 'php';
 	double: { file: string; php: string } | null;
 	writable: boolean;
+	/**
+	 * Why the group cannot be saved from the screen: `php` (declared in PHP;
+	 * its rules can be copied into a file group), `read_only` (a file outside
+	 * the writer's roots, e.g. a parent theme), `not_writable`, `file_mods`,
+	 * `multisite`. Null when writable.
+	 */
+	readOnlyReason?: GroupReadOnlyReason | null;
 	/** sha256 of the file; null for the PHP group. */
 	hash: string | null;
 	defaults?: GroupDefaults;
 	source?: string;
 	rules: Rule[];
 }
+
+export type GroupReadOnlyReason = 'php' | 'read_only' | 'not_writable' | 'file_mods' | 'multisite';
 
 export type LogRetention = number;
 export type IpPolicy = 'none' | 'masked' | 'full';
@@ -143,23 +152,34 @@ export interface RedirectsIndex {
 	db: { tables: boolean; orphans: number };
 }
 
+export type TestStage = 'init' | '404';
+
 export interface TraceStep {
 	group: string;
 	ruleId: string;
 	result: 'matched' | 'skipped';
+	/** Matcher code: matched, else, disabled, no_match, no_source, regex_error, condition_false, unsafe_target, unknown_condition, unknown_action. */
 	reason: string;
+	/** The pass it was evaluated in: on `init`, or again as a 404. */
+	stage?: TestStage;
 }
 
-/** GET admin/redirects/test?url=. */
+/** GET admin/redirects/test?url=&loggedIn=. */
 export interface TestResult {
 	matched: boolean;
+	/** The pass the rule fired in; null when nothing fired. */
+	stage?: TestStage | null;
 	group: string | null;
 	ruleId: string | null;
 	action: RuleAction | null;
 	code: number | null;
 	target: string | null;
+	/** `matched`, or `else` when the fallback target fired. */
+	reason?: string | null;
 	trace: TraceStep[];
-	/** Optional server note, e.g. that login/role used the admin's session. */
+	/** Whether login and role conditions saw the signed-in user (false with loggedIn=0). */
+	loggedIn?: boolean;
+	/** Server note on what the test can and cannot see. */
 	note?: string;
 }
 
@@ -195,9 +215,15 @@ export interface NotFoundGroupRow {
 	lastReferrer: string | null;
 }
 
+/** GET admin/redirects/log and admin/redirects/404. */
 export interface Paged<T> {
 	rows: T[];
 	total: number;
+	page?: number;
+	perPage?: number;
+	pages?: number;
+	/** 404 only: `url` when grouped. */
+	groupBy?: 'url' | null;
 }
 
 export interface ParsedRow {
@@ -205,6 +231,8 @@ export interface ParsedRow {
 	status: 'new' | 'duplicate' | 'invalid';
 	reason: string | null;
 	line?: number;
+	/** Readable text for `reason` (or the validator's warning on a new row). */
+	message?: string | null;
 }
 
 /** POST admin/redirects/import/parse. */
@@ -219,6 +247,22 @@ export interface PluginImporter {
 	cleanupHint: string | null;
 	/** Plugin basename, when the source is a plugin that can be deactivated. */
 	plugin?: string | null;
+	/** Every basename the importer covers. */
+	plugins?: string[];
+	/** The basenames currently active. */
+	active?: string[];
+	/** The current user has activate_plugins. */
+	canDeactivate?: boolean;
+}
+
+/** POST admin/redirects/import/plugins/<id>/preview. */
+export interface PluginPreview {
+	id?: string;
+	label?: string;
+	groups: Record<string, FileGroup>;
+	/** Rows the importer could not convert, with their reason and message. */
+	skipped?: ParsedRow[];
+	cleanupHint?: string | null;
 }
 
 export type DuplicateMode = 'skip' | 'replace' | 'add';

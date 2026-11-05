@@ -325,13 +325,15 @@ describe('writes', () => {
 	});
 
 	test('delete, move down and duplicate', async () => {
-		routes();
+		routes({ 'DELETE admin/redirects/hits': { deleted: true } });
 		const user = userEvent.setup();
 		renderScreen();
 		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Delete /about-us' }));
 		await user.click(await screen.findByRole('button', { name: 'Delete 1 redirect' }));
 		await waitFor(() => expect(posts()).toHaveLength(1));
 		expect(readRules(posts()[0].data?.text ?? '').map((r) => r.from)).toEqual(['^/blog/(\\d+)/(.*)$', '/promo', '/members', '/gone-forever']);
+		// Then the rule's hit row goes (query string: adminDelete sends no body).
+		await waitFor(() => expect(writes().map((c) => `${c.method} ${c.url}`)).toEqual(['POST admin/schema-files/redirects/legacy-site', 'DELETE admin/redirects/hits?group=legacy-site&ruleId=r_00000001']));
 
 		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Move /about-us down' }));
 		await waitFor(() => expect(posts()).toHaveLength(2));
@@ -504,6 +506,119 @@ describe('test box', () => {
 		fail = true;
 		await user.click(screen.getByRole('button', { name: 'Test' }));
 		expect(await screen.findByText('Enter a URL on this site.')).toBeTruthy();
+	});
+});
+
+describe('hit rows of deleted rules', () => {
+	test('a 404 (no row) is ignored; another failure warns but the delete stands', async () => {
+		let status = 404;
+		routes({
+			'DELETE admin/redirects/hits': () => {
+				throw { code: status === 404 ? 'rest_no_route' : 'proto_blocks_db', message: 'Database is gone.', data: { status } };
+			},
+		});
+		const user = userEvent.setup();
+		renderScreen();
+		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Delete /about-us' }));
+		await user.click(await screen.findByRole('button', { name: 'Delete 1 redirect' }));
+		await waitFor(() => expect(writes().some((c) => c.method === 'DELETE')).toBe(true));
+		expect((await screen.findAllByText('Redirect deleted.')).length).toBeGreaterThan(0);
+		expect(screen.queryByText('The hit count of the deleted rule was not cleared.')).toBeNull();
+
+		status = 500;
+		await user.click(within(await rowOf('/promo')).getByRole('button', { name: 'Delete /promo' }));
+		await user.click(await screen.findByRole('button', { name: 'Delete 1 redirect' }));
+		expect((await screen.findAllByText('The hit count of the deleted rule was not cleared.')).length).toBeGreaterThan(0);
+		expect(screen.getAllByText('Database is gone.').length).toBeGreaterThan(0);
+		expect(posts()).toHaveLength(2);
+	});
+
+	test('bulk delete clears each rule; a failed file write or missing tables sends nothing', async () => {
+		routes({ 'DELETE admin/redirects/hits': { deleted: true } });
+		const user = userEvent.setup();
+		renderScreen();
+		await user.click(within(await rowOf('/about-us')).getByRole('checkbox', { name: 'Select /about-us' }));
+		await user.click(within(await rowOf('/gone-forever')).getByRole('checkbox', { name: 'Select /gone-forever' }));
+		// r_0000000p is not a server rule id (not hex): the route would refuse it, so it is not sent.
+		await user.click(within(await rowOf('/spring')).getByRole('checkbox', { name: 'Select /spring' }));
+		await user.click(within(screen.getByRole('region', { name: 'Bulk actions' })).getByRole('button', { name: 'Delete' }));
+		await user.click(await screen.findByRole('button', { name: 'Delete 3 redirects' }));
+		await waitFor(() => expect(writes().filter((c) => c.method === 'DELETE')).toHaveLength(2));
+		expect((await screen.findAllByText('Redirects deleted.')).length).toBeGreaterThan(0);
+		expect(writes().filter((c) => c.method === 'DELETE').map((c) => c.url).sort()).toEqual([
+			'admin/redirects/hits?group=legacy-site&ruleId=r_00000001',
+			'admin/redirects/hits?group=legacy-site&ruleId=r_1a2b3c4d',
+		]);
+
+		document.body.innerHTML = '';
+		(jest.requireMock('@wordpress/api-fetch') as { default: jest.Mock }).default.mockClear();
+		routes({
+			'POST admin/schema-files/redirects/legacy-site': () => {
+				throw { code: 'proto_blocks_write_failed', message: 'Disk full.', data: { status: 500 } };
+			},
+		});
+		renderScreen();
+		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Delete /about-us' }));
+		await user.click(await screen.findByRole('button', { name: 'Delete 1 redirect' }));
+		expect((await screen.findAllByText('Disk full.')).length).toBeGreaterThan(0);
+		expect(writes().some((c) => c.method === 'DELETE')).toBe(false);
+
+		document.body.innerHTML = '';
+		(jest.requireMock('@wordpress/api-fetch') as { default: jest.Mock }).default.mockClear();
+		routes({ 'admin/redirects': index({ db: { tables: false, orphans: 0 } }) });
+		renderScreen();
+		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Delete /about-us' }));
+		await user.click(await screen.findByRole('button', { name: 'Delete 1 redirect' }));
+		await waitFor(() => expect(posts()).toHaveLength(1));
+		expect((await screen.findAllByText('Redirect deleted.')).length).toBeGreaterThan(0);
+		expect(writes().some((c) => c.method === 'DELETE')).toBe(false);
+	});
+});
+
+describe('test box shapes', () => {
+	test('stage, reason, loggedIn and per-step stage are shown; "as a visitor" sends loggedIn=0', async () => {
+		const paths: string[] = [];
+		routes({
+			'admin/redirects/test': (_body: unknown, path: string) => {
+				paths.push(path);
+				return {
+					matched: true,
+					stage: '404',
+					group: 'legacy-site',
+					ruleId: 'r_00000004',
+					action: 'url',
+					code: 301,
+					target: '/login',
+					reason: 'else',
+					trace: [
+						{ group: 'legacy-site', ruleId: 'r_00000001', result: 'skipped', reason: 'no_match', stage: 'init' },
+						{ group: 'legacy-site', ruleId: 'r_00000004', result: 'matched', reason: 'else', stage: '404' },
+					],
+					loggedIn: !path.includes('loggedIn=0'),
+					note: 'Evaluated without redirecting.',
+				};
+			},
+		});
+		const user = userEvent.setup();
+		renderScreen();
+		await rowOf('/about-us');
+		await user.type(screen.getByRole('textbox', { name: 'URL to test' }), '/members');
+		await user.click(screen.getByRole('button', { name: 'Test' }));
+		expect(await screen.findByText('Login and role conditions were checked as you (signed in).')).toBeTruthy();
+		expect(paths[0]).toBe('admin/redirects/test?url=%2Fmembers');
+		const trace = screen.getByRole('table', { name: 'Evaluation trace' });
+		expect(within(trace).getByText('On request')).toBeTruthy();
+		expect(within(trace).getByText('As a 404')).toBeTruthy();
+		expect(within(trace).getByText('Source does not match')).toBeTruthy();
+		// The overall stage badge plus the trace cell.
+		expect(screen.getAllByText('As a 404')).toHaveLength(2);
+		expect(screen.getAllByText('Source matched, condition false: the fallback target fires')).toHaveLength(2);
+		expect(screen.getByText('Evaluated without redirecting.')).toBeTruthy();
+
+		await user.click(screen.getByRole('checkbox', { name: 'Test as a visitor (signed out)' }));
+		await user.click(screen.getByRole('button', { name: 'Test' }));
+		expect(await screen.findByText('Login and role conditions were checked as a signed-out visitor.')).toBeTruthy();
+		expect(paths[1]).toBe('admin/redirects/test?url=%2Fmembers&loggedIn=0');
 	});
 });
 
