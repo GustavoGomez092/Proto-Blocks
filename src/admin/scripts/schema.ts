@@ -51,6 +51,39 @@ export const TARGET_KINDS: TargetKind[] = [
 	{ kind: 'url:', label: __('URL path (glob with *)', 'proto-blocks'), placeholder: '/landing/*' },
 ];
 
+/** Short chip labels per kind ("page:" → "Page"); valued kinds are shown as "Page · about". */
+const TARGET_SHORT: Record<string, string> = {
+	all: __('All pages', 'proto-blocks'),
+	front_page: __('Front page', 'proto-blocks'),
+	home: __('Blog index', 'proto-blocks'),
+	search: __('Search results', 'proto-blocks'),
+	'404': __('Not found (404)', 'proto-blocks'),
+	archive: __('Any archive', 'proto-blocks'),
+	singular: __('Any single post or page', 'proto-blocks'),
+	'singular:': __('Single', 'proto-blocks'),
+	'post_type:': __('Post type', 'proto-blocks'),
+	'page:': __('Page', 'proto-blocks'),
+	'post:': __('Post', 'proto-blocks'),
+	'taxonomy:': __('Taxonomy', 'proto-blocks'),
+	'term:': __('Term', 'proto-blocks'),
+	'url:': __('URL', 'proto-blocks'),
+};
+
+/** A readable label for a target string: "all" → "All pages", "page:about" → "Page · about". Unknown kinds stay as written. */
+export function targetLabel(target: string): string {
+	if (TARGET_SHORT[target] !== undefined && !target.endsWith(':')) {
+		return TARGET_SHORT[target];
+	}
+	const colon = target.indexOf(':');
+	if (colon > 0) {
+		const kind = target.slice(0, colon + 1);
+		if (TARGET_SHORT[kind] !== undefined) {
+			return `${TARGET_SHORT[kind]} · ${target.slice(colon + 1)}`;
+		}
+	}
+	return target;
+}
+
 /** The target string for a kind and its value ("page:" + "about"). */
 export function buildTarget(kind: string, value: string): string {
 	return kind.endsWith(':') ? kind + value.trim() : kind;

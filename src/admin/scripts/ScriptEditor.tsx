@@ -22,7 +22,7 @@ import { formFromData, newScriptText, scriptText, type ScriptForm } from './edit
 import { PlacementBuilder } from './PlacementBuilder';
 import { scriptErrors, SLUG_PATTERN, slugFromTitle, snippetError } from './schema';
 import { ScriptsReadOnlyBanner } from './ScriptsReadOnlyBanner';
-import { LOCATIONS, SNIPPET_FILES, type Location, type SavePayload, type SaveResponse, type ScriptDetail, type ScriptsWriteReason } from './types';
+import { LOCATIONS, SNIPPET_FILES, type Location, type SavePayload, type SaveResponse, type ScriptDetail, type ScriptRow, type ScriptsWriteReason } from './types';
 
 const EMPTY_SNIPPETS: Record<Location, string> = { head: '', bodyOpen: '', bodyClose: '' };
 
@@ -101,6 +101,10 @@ export function ScriptEditor({
 }: {
 	slug: string | null;
 	roles: { slug: string; name: string }[];
+	/** Every listed script (for "Prints before"). */
+	items?: ScriptRow[];
+	/** Empty-state template the create form starts from. */
+	template?: string | null;
 	writeReason: ScriptsWriteReason;
 	onBack: () => void;
 	onSaved: (slug: string) => void;
