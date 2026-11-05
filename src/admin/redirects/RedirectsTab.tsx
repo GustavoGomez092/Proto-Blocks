@@ -325,7 +325,7 @@ export function RedirectsTab({
 						)
 					}
 				>
-					{__('Add one here, or declare it in PHP:', 'proto-blocks')} <code className="font-mono text-micro text-link">proto_redirect('/old', '/new');</code>
+					{__('Add one here, or declare it in PHP:', 'proto-blocks')} <code className="font-mono text-micro text-link">{"proto_redirect('/old', '/new');"}</code>
 				</EmptyCallout>
 			) : (
 				<Panel className="overflow-x-auto">
@@ -431,7 +431,7 @@ export function RedirectsTab({
 										</TableCell>
 										<TableCell className="text-right whitespace-nowrap">
 											<span className="inline-flex items-center gap-0.5">
-												<Button variant="ghost" size="icon-sm" aria-label={sprintf(/* translators: %s: rule source. */ __('Edit %s', 'proto-blocks'), label)} {...writeGuard(readOnly, busy)} onClick={() => setDialog({ rule, group: group.origin === 'file' && group.writable ? group.slug : defaultGroup(index) })}>
+												<Button variant="ghost" size="icon-sm" aria-label={sprintf(/* translators: %s: rule source. */ __('Edit %s', 'proto-blocks'), label)} {...writeGuard(readOnly, busy || (group.origin === 'file' && !group.writable))} onClick={() => setDialog({ rule, group: group.origin === 'file' ? group.slug : defaultGroup(index) })}>
 													<PencilIcon aria-hidden="true" />
 												</Button>
 												<Button variant="ghost" size="icon-sm" aria-label={sprintf(/* translators: %s: rule source. */ __('Move %s up', 'proto-blocks'), label)} {...writeGuard(readOnly, !editable || busy || rule.index === 0)} onClick={() => void runWrites([groupWrite(group, (text) => moveRule(text, refOf(rule), -1))])}>

@@ -337,7 +337,7 @@ function same(a: unknown, b: unknown): boolean {
 	return JSON.stringify(a) === JSON.stringify(b);
 }
 
-function at(data: unknown, path: string[]): unknown {
+function valueAt(data: unknown, path: string[]): unknown {
 	return path.reduce<unknown>((node, key) => (isPlainObject(node) ? node[key] : undefined), data);
 }
 
@@ -360,8 +360,8 @@ export function applySettingsEdits(text: string, defaults: Record<string, unknow
 				walk(value, next);
 				continue;
 			}
-			const inFile = at(fileData, next);
-			const current = inFile !== undefined ? inFile : at(defaults, next);
+			const inFile = valueAt(fileData, next);
+			const current = inFile !== undefined ? inFile : valueAt(defaults, next);
 			if (!same(current, value)) {
 				changes.push({ path: next, value });
 			}

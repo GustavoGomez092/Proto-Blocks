@@ -133,6 +133,18 @@ describe('banners', () => {
 		expect((screen.getByRole('button', { name: 'Add redirect' }) as HTMLButtonElement).disabled).toBe(true);
 	});
 
+	test('a file group the server cannot write (parent theme, filter root) keeps its rules read-only', async () => {
+		routes({ 'admin/redirects': index({ groups: [legacyGroup({ writable: false })] }) });
+		renderScreen();
+		const about = await rowOf('/about-us');
+		for (const name of ['Edit /about-us', 'Delete /about-us', 'Duplicate /about-us']) {
+			expect((within(about).getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+		}
+		expect((within(about).getByRole('switch') as HTMLButtonElement).disabled).toBe(true);
+		// Adding is still possible: the dialog offers a new group.
+		expect((screen.getByRole('button', { name: 'Add redirect' }) as HTMLButtonElement).disabled).toBe(false);
+	});
+
 	test('coexistence: paused banner with an Import button that opens the import tab', async () => {
 		routes({ 'admin/redirects': index({ paused: true }), 'admin/redirects/import/plugins': [] });
 		const user = userEvent.setup();

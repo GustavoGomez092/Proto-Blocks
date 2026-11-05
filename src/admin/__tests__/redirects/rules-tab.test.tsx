@@ -105,7 +105,7 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		const [post] = posts();
 		expect(post.url).toBe('admin/schema-files/redirects/legacy-site');
 		expect(post.data?.hash).toBe('h-legacy');
-		const added = readRules(post.data?.text ?? '').at(-1);
+		const added = readRules(post.data?.text ?? '').slice(-1)[0];
 		expect(added).toEqual({ id: expect.stringMatching(/^r_[a-f0-9]{8}$/), from: '/shop', to: 'https://shop.example.test/', code: 302 });
 		expect(post.data?.text).toContain('// End of rules.');
 		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -254,7 +254,7 @@ describe('writes', () => {
 		await submit(user, dialog);
 		await waitFor(() => expect(posts()).toHaveLength(1));
 		expect(posts()[0].url).toBe('admin/schema-files/redirects/legacy-site');
-		expect(readRules(posts()[0].data?.text ?? '').at(-1)).toEqual({ id: 'r_0000beef', from: '/php-old', to: '/php-new' });
+		expect(readRules(posts()[0].data?.text ?? '').slice(-1)[0]).toEqual({ id: 'r_0000beef', from: '/php-old', to: '/php-new' });
 	});
 
 	test('delete, move down and duplicate', async () => {

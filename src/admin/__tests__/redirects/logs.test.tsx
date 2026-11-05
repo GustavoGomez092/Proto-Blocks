@@ -51,7 +51,7 @@ describe('404s', () => {
 		await waitFor(() => expect(calls().some((c) => c.method === 'DELETE')).toBe(true));
 		const order = writes().map((c) => `${c.method} ${c.url}`);
 		expect(order).toEqual(['POST admin/schema-files/redirects/legacy-site', 'DELETE admin/redirects/404?ids[]=11&ids[]=12']);
-		expect(readRules(fileWrites()[0].data?.text ?? '').at(-1)).toMatchObject({ from: '/missing', to: '/found' });
+		expect(readRules(fileWrites()[0].data?.text ?? '').slice(-1)[0]).toMatchObject({ from: '/missing', to: '/found' });
 		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 	});
 
@@ -77,7 +77,7 @@ describe('404s', () => {
 		renderScreen('&tab=404s');
 		await user.click(await screen.findByRole('button', { name: 'Ignore /wp-login.bak' }));
 		await waitFor(() => expect(fileWrites()).toHaveLength(1));
-		expect(readRules(fileWrites()[0].data?.text ?? '').at(-1)).toEqual({ id: expect.stringMatching(/^r_[a-f0-9]{8}$/), from: '/wp-login.bak', action: 'nothing' });
+		expect(readRules(fileWrites()[0].data?.text ?? '').slice(-1)[0]).toEqual({ id: expect.stringMatching(/^r_[a-f0-9]{8}$/), from: '/wp-login.bak', action: 'nothing' });
 
 		document.body.innerHTML = '';
 		jestClear();
