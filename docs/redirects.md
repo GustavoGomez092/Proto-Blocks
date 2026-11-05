@@ -425,7 +425,7 @@ When a published watched post changes its path, the monitor appends a rule to th
 
 - Names match `^[A-Za-z0-9-]{1,100}$`.
 - Values are strings of 1000 characters at most. CR, LF and control characters are refused.
-- `Set-Cookie`, `Location`, `Status`, `Content-Length` and `Transfer-Encoding` are refused as names.
+- `Set-Cookie`, `Location`, `Status`, `Content-Length`, `Transfer-Encoding` and `Refresh` (a meta-refresh redirect that would skip the target-safety rules) are refused as names.
 - Every refusal is `invalid_header`. A rule's header with the same name as a `headers.redirect` header replaces it.
 
 **Canonical.**

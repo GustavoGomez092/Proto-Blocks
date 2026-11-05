@@ -37,6 +37,8 @@ final class HeadersTest extends EngineTestCase
             'Status forbidden' => ['Status', '200', false],
             'Content-Length forbidden' => ['Content-Length', '0', false],
             'Transfer-Encoding forbidden' => ['Transfer-Encoding', 'chunked', false],
+            'Refresh forbidden' => ['Refresh', '0;url=https://evil.test', false],
+            'refresh lower forbidden' => ['refresh', '5', false],
         ];
     }
 

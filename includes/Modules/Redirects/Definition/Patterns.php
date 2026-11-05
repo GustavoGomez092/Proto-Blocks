@@ -17,7 +17,7 @@ final class Patterns
     public const HEADER_NAME = '/^[A-Za-z0-9-]{1,100}$/D';
     public const HEADER_VALUE_MAX = 1000;
     /** Lower-cased names a rule or the settings may never send. */
-    public const FORBIDDEN_HEADERS = ['set-cookie', 'location', 'status', 'content-length', 'transfer-encoding'];
+    public const FORBIDDEN_HEADERS = ['set-cookie', 'location', 'status', 'content-length', 'transfer-encoding', 'refresh'];
 
     private const ASCII_HOST = '/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/Di';
     private const UNICODE_HOST = '/^(?=.{1,253}$)[\p{L}\p{N}](?:[\p{L}\p{N}-]{0,61}[\p{L}\p{N}])?(?:\.[\p{L}\p{N}](?:[\p{L}\p{N}-]{0,61}[\p{L}\p{N}])?)*$/Du';

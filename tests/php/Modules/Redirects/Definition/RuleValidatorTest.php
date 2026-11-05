@@ -250,7 +250,7 @@ final class RuleValidatorTest extends TestCase
     public function testHeaderRules(): void
     {
         self::assertSame([], self::codes(['from' => '/a', 'to' => '/b', 'headers' => ['X-Robots-Tag' => 'noindex']]));
-        foreach ([['Set-Cookie', 'a=1'], ['location', '/x'], ['Status', '200'], ['Content-Length', '1'], ['Transfer-Encoding', 'chunked'], ['X Bad', 'v'], ['X-Ok', "a\r\nb"], ['X-Ok', str_repeat('a', 1001)]] as [$name, $value]) {
+        foreach ([['Set-Cookie', 'a=1'], ['location', '/x'], ['Status', '200'], ['Content-Length', '1'], ['Transfer-Encoding', 'chunked'], ['Refresh', '0;url=https://evil.test'], ['X Bad', 'v'], ['X-Ok', "a\r\nb"], ['X-Ok', str_repeat('a', 1001)]] as [$name, $value]) {
             $codes = self::codes(['from' => '/a', 'to' => '/b', 'headers' => [$name => $value]]);
             self::assertCount(1, $codes, $name);
             self::assertStringStartsWith('invalid_header@/headers/', $codes[0]);
