@@ -25,5 +25,9 @@ TDD, one commit per finding, `composer test` green at every commit.
   target is built from the home host and port. An unknown host is redirected only
   when a configured step (https, alias) would fire; `www` never fires for it.
 - M4: without `manage_options` the rule is left alone and a `monitor_conflict`
-  warning names the post and the rule. The move rule itself is still written
-  (the reviewer suggested skipping it; the ruling keeps it).
+  warning names the post and the rule. The move rule that would chain into
+  the kept rule is NOT written (writing it would create a chain, or a loop
+  when the kept rule points back at the old path, e.g. a rename back inside
+  the monitor group). Moves without a conflict (and an `associated` rule whose
+  own target does not conflict) are still written. PHP-declared rules keep
+  the existing notice for everyone (nobody can disable them).

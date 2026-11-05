@@ -43,6 +43,9 @@ final class MonitorTest extends TestCase
         $GLOBALS['pb_test_posts'] = [];
         $GLOBALS['pb_test_permalinks'] = [];
         unset($GLOBALS['pb_test_home_url']);
+        // An administrator saves the post unless a test says otherwise (loop avoidance needs manage_options).
+        $GLOBALS['pb_test_current_user'] = 1;
+        $GLOBALS['pb_test_caps'] = [1 => ['manage_options'], 2 => ['edit_published_posts']];
         $this->registry = self::registry([]);
     }
 
@@ -54,7 +57,7 @@ final class MonitorTest extends TestCase
         $GLOBALS['pb_test_hooks'] = [];
         $GLOBALS['pb_test_posts'] = [];
         $GLOBALS['pb_test_permalinks'] = [];
-        unset($GLOBALS['pb_test_now'], $GLOBALS['pb_test_home_url']);
+        unset($GLOBALS['pb_test_now'], $GLOBALS['pb_test_home_url'], $GLOBALS['pb_test_current_user'], $GLOBALS['pb_test_caps']);
     }
 
     // ------------------------------------------------------------------ doubles
@@ -485,6 +488,63 @@ final class MonitorTest extends TestCase
         self::assertCount(1, $issues);
         self::assertSame('monitor_rule_disabled', $issues[0]->code);
         self::assertStringContainsString('functions.php:12', $issues[0]->message);
+    }
+
+    public function testAnAuthorCannotDisableAnAdministratorsRule(): void
+    {
+        $GLOBALS['pb_test_current_user'] = 2; // edit_published_posts, no manage_options
+        $legacy = $this->seedGroup('legacy', [['id' => 'r_0000000a', 'from' => '/pricing/', 'to' => '/plans/']]);
+        $this->registry = self::registry([$legacy]);
+        $this->move($this->monitor(), 5, 'http://example.test/old/', 'http://example.test/pricing/');
+
+        self::assertStringStartsWith('// hand comment', (string) file_get_contents($this->root . '/proto-redirects/legacy/redirects.jsonc'), 'the rule file is untouched');
+        self::assertNull($this->file('modified-posts'), 'the move rule would chain into the kept rule');
+        self::assertSame(0, $this->serialized);
+
+        $issues = $this->monitor()->issues();
+        self::assertCount(1, $issues);
+        self::assertSame('monitor_conflict', $issues[0]->code);
+        self::assertSame(Issue::WARNING, $issues[0]->level);
+        self::assertSame('legacy', $issues[0]->slug);
+        self::assertSame($legacy['source'], $issues[0]->source);
+        foreach (['Hello world', 'post 5', '/old/', '/pricing/', 'r_0000000a', '"legacy"'] as $needle) {
+            self::assertStringContainsString($needle, $issues[0]->message);
+        }
+    }
+
+    public function testAnAdministratorStillDisablesTheLoopingRule(): void
+    {
+        $legacy = $this->seedGroup('legacy', [['id' => 'r_0000000a', 'from' => '/pricing/', 'to' => '/plans/']]);
+        $this->registry = self::registry([$legacy]);
+        $this->move($this->monitor(), 5, 'http://example.test/old/', 'http://example.test/pricing/');
+
+        self::assertFalse($this->file('legacy')['rules'][0]['enabled']);
+        self::assertSame('/old/', $this->file('modified-posts')['rules'][0]['from']);
+        self::assertSame(['monitor_rule_disabled'], array_map(static fn(Issue $i): string => $i->code, $this->monitor()->issues()));
+    }
+
+    public function testAnAuthorsMoveWithoutConflictIsStillWritten(): void
+    {
+        $GLOBALS['pb_test_current_user'] = 2;
+        $legacy = $this->seedGroup('legacy', [['id' => 'r_0000000a', 'from' => '/elsewhere/', 'to' => '/plans/']]);
+        $this->registry = self::registry([$legacy]);
+        $this->move($this->monitor(), 5, 'http://example.test/old/', 'http://example.test/new/');
+
+        self::assertSame('/new/', $this->file('modified-posts')['rules'][0]['to']);
+        self::assertSame([], $this->monitor()->issues());
+    }
+
+    public function testAnAuthorsAssociatedRuleIsKeptWhenOnlyTheMainMoveConflicts(): void
+    {
+        $GLOBALS['pb_test_current_user'] = 2;
+        $legacy = $this->seedGroup('legacy', [['id' => 'r_0000000a', 'from' => '/new/', 'to' => '/x']]);
+        $this->registry = self::registry([$legacy]);
+        $this->move($this->monitor(['monitor' => ['postTypes' => ['post'], 'associated' => '/feed/']]), 5, 'http://example.test/old/', 'http://example.test/new/');
+
+        self::assertTrue($this->file('legacy')['rules'][0]['enabled']);
+        $rules = $this->file('modified-posts')['rules'];
+        self::assertSame([['/old/feed/', '/new/feed/']], array_map(static fn(array $r): array => [$r['from'], $r['to']], $rules));
+        self::assertSame(['monitor_conflict'], array_map(static fn(Issue $i): string => $i->code, $this->monitor()->issues()));
     }
 
     public function testAssociatedTargetLoopIsAvoidedToo(): void

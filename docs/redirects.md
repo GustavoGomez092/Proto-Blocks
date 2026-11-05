@@ -155,7 +155,7 @@ The writers (screen, CLI, monitor) omit a flag that equals its effective default
 | PHP | `duplicate_php` | warning | The same PHP group slug twice. |
 | PHP | `invalid_slug` | error | A PHP group slug that is invalid, `settings` or `php`. |
 | Precedence | `double_declaration` | warning | The same group or rule in PHP and in a file. |
-| Monitor | `monitor_unwritable`, `monitor_rule_disabled` | warning | See [permalink monitor](#permalink-monitor). |
+| Monitor | `monitor_unwritable`, `monitor_rule_disabled`, `monitor_conflict` | warning | See [permalink monitor](#permalink-monitor). |
 
 At run time the engine also records `unsafe_target`, `self_loop` and `regex_error` (see [safety rules](#safety-rules)). They are not file findings.
 
@@ -407,7 +407,7 @@ When a published watched post changes its path, the monitor appends a rule to th
 - It remembers the permalink on `pre_post_update` and compares on `post_updated` priority 11.
 - Both statuses must be `publish`, the type must be watched and the old path must not be `/`.
 - Paths are percent-decoded (the engine matches decoded paths), taken relative to the site's home path, and a permalink on another host is ignored.
-- If an enabled non-regex rule in any file group already has `from` equal to the new path, that rule is set `enabled: false` in its own file to avoid a loop, with a `monitor_rule_disabled` notice. Regex rules are never touched. A PHP rule cannot be written, so the notice says where it is declared. The trash rule does not trigger this (it is disabled and targets `/`).
+- If an enabled non-regex rule in any file group already has `from` equal to the new path, that rule is set `enabled: false` in its own file to avoid a loop, with a `monitor_rule_disabled` notice. Regex rules are never touched. A PHP rule cannot be written, so the notice says where it is declared. The trash rule does not trigger this (it is disabled and targets `/`). Disabling a rule needs `manage_options` from the user who saved the post: for anyone else (an author renaming their own post) the rule is left alone, the move rule that would chain into it is not added, and a `monitor_conflict` warning names the post and the rule.
 - A rule already in the monitor group with the same source is updated in place, so moving a post twice does not pile up rules.
 - `monitor.associated` appends a second rule with the suffix on both sides.
 - `monitor.trash` appends a disabled rule to `/` when a watched post is trashed.
