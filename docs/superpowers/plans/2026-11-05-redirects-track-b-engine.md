@@ -60,5 +60,16 @@ Everything lives under `includes/Modules/Redirects/Engine/` and
   `init` (an `error` 404 is intentional, not a missing page) or a `nothing` rule matched.
 - **Environment.** WP-CLI and XML-RPC are read from constants through an optional
   `$environment` callable on `FrontController` so tests can drive them.
+- **Canonical scope.** Canonical runs only for requests the engine runs for (not excluded,
+  not admin/CLI/cron/XML-RPC), so a REST call or a wp-login.php POST is never 301'd; relocate
+  additionally keeps its protected paths if the exclusion filter is loosened.
+- **`error` and the main query.** `$wp_query->set_404()` at `init` is undone when WordPress runs
+  its own query, so the Dispatcher also hooks `wp` (priority 1000) to set the 404 state and the
+  status again; 410/451 are re-sent at `send_headers` too, as the spec says.
+- **Log entry shape.** `RedirectLogger::logRedirect()` receives `url, target, code, group, ruleId,
+  redirectBy, method, agent, referrer, reason, request` (the `Request` object, for IP resolution
+  and header capture). Documented on the interface.
+- **Self-loop target vs `$` in targets.** A non-regex target is never substituted; core's
+  `wp_sanitize_redirect` strips a literal `$`.
 - **Settings in tests.** `Definition\Settings` is Track A's; tests use a private
   `EngineTestCase::settings()` with the spec §1 defaults.

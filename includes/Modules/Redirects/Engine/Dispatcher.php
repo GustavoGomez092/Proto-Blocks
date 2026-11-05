@@ -145,6 +145,12 @@ final class Dispatcher
         }
     }
 
+    /** A request WordPress resolved to a 404 that no rule handled. */
+    public function log404(Request $r): void
+    {
+        $this->log?->log404($r);
+    }
+
     /**
      * Records refused targets in the redirect log (code 0), once per request.
      *
