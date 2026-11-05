@@ -41,17 +41,19 @@ final class Monitor
     private \Closure $serialize;
 
     /**
-     * @param object               $registry  the module Registry (`rules()`, `group()`, optional `invalidate()`)
      * @param array<string, mixed> $settings  full module settings
-     * @param \Closure(array<string, mixed>): string|null $serialize defaults to Serializer::group()
+     * @param (\Closure(array<string, mixed>): string)|null $serialize tests only; defaults to
+     *        Serializer::group() against the site defaults (`settings.defaults`), so a written
+     *        group repeats only the flags that differ from the site
      */
     public function __construct(
-        private readonly object $registry,
+        private readonly Registry $registry,
         private readonly SchemaFileWriter $writer,
         private readonly array $settings,
         ?\Closure $serialize = null
     ) {
-        $this->serialize = $serialize ?? static fn(array $group): string => Serializer::group($group);
+        $inherited = is_array($settings['defaults'] ?? null) ? $settings['defaults'] : null;
+        $this->serialize = $serialize ?? static fn(array $group): string => Serializer::group($group, $inherited);
     }
 
     /** Hooks in only when at least one post type is watched. */
@@ -228,9 +230,7 @@ final class Monitor
         foreach ($notices as $notice) {
             $this->record('monitor_rule_disabled', $notice['message'], $notice['source'], $notice['slug']);
         }
-        if (method_exists($this->registry, 'invalidate')) {
-            $this->registry->invalidate();
-        }
+        $this->registry->invalidate();
     }
 
     /** A group loaded from a file must be that same file in a writable root; a new group (no source) always passes. */
