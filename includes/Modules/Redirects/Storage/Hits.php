@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Modules\Redirects\Storage;
 
+use ProtoBlocks\Modules\Redirects\Engine\HitRecorder;
+
 /**
  * Hit counts per (group, rule id). One bounded upsert per matched request.
- * Implements Track B's `Engine\HitRecorder` (clause added at integration).
+ * The engine's HitRecorder: the Dispatcher decides whether a rule counts
+ * (its `log` flag); record() only honours the site-wide `trackHits`.
  */
-final class Hits
+final class Hits implements HitRecorder
 {
     private const GROUP_PATTERN = '/^[a-z][a-z0-9_-]{0,59}\z/D';
     private const RULE_PATTERN = '/^r_[a-f0-9]{8}\z/D';
