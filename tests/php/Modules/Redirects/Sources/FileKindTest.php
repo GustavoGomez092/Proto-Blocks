@@ -67,7 +67,7 @@ JSONC;
     {
         self::assertNull(SchemaFileWriter::slugError('redirects', 'legacy-site'));
         self::assertNull(SchemaFileWriter::slugError('redirects', str_repeat('a', 60)));
-        foreach (['settings', str_repeat('a', 61), 'Legacy', '../x', "a\n", '1a', ''] as $bad) {
+        foreach (['settings', 'php', str_repeat('a', 61), 'Legacy', '../x', "a\n", '1a', ''] as $bad) {
             self::assertSame('pattern', SchemaFileWriter::slugError('redirects', $bad), $bad);
         }
         self::assertNull(SchemaFileWriter::slugError('redirect-settings', 'settings'));

@@ -115,7 +115,7 @@ final class Settings
             }
         }
         $out['monitor']['postTypes'] = $types;
-        if (is_string($monitor['group'] ?? null) && preg_match(GroupValidator::SLUG_PATTERN, $monitor['group']) === 1) {
+        if (is_string($monitor['group'] ?? null) && preg_match(GroupValidator::FILE_SLUG_PATTERN, $monitor['group']) === 1) {
             $out['monitor']['group'] = $monitor['group'];
         }
         if (is_bool($monitor['trash'] ?? null)) {

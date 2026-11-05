@@ -14,6 +14,14 @@ use ProtoBlocks\Modules\Redirects\Definition\SettingsValidator;
  */
 final class SettingsTest extends TestCase
 {
+    public function testMonitorGroupCannotBeAReservedSlug(): void
+    {
+        foreach (['php', 'settings'] as $reserved) {
+            self::assertSame('modified-posts', Settings::merge(['monitor' => ['group' => $reserved]])['monitor']['group'], $reserved);
+        }
+        self::assertSame('php-moves', Settings::merge(['monitor' => ['group' => 'php-moves']])['monitor']['group']);
+    }
+
     /** The spec's settings.jsonc example. */
     private const SPEC_EXAMPLE = <<<'JSONC'
 // proto-redirects/settings.jsonc — every key optional

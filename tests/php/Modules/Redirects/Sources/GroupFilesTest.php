@@ -109,6 +109,16 @@ final class GroupFilesTest extends RedirectsTestCase
         self::assertStringContainsString('Split the group', $files->issues()[0]->message);
     }
 
+    public function testPhpFolderIsReservedForThePhpDeclaredGroup(): void
+    {
+        $this->put($this->child, 'proto-redirects/php/redirects.jsonc', '{"rules": [{"from": "/a", "to": "/b"}]}');
+        $files = $this->files();
+
+        self::assertSame([], $files->groups());
+        self::assertSame(['error:invalid_slug'], self::issueCodes($files->issues()));
+        self::assertStringContainsString('proto_redirect()', $files->issues()[0]->message);
+    }
+
     public function testInvalidAndReservedSlugFoldersAreSkipped(): void
     {
         $this->put($this->parent, 'proto-redirects/Bad Name/redirects.jsonc', '{}');
@@ -208,7 +218,7 @@ final class GroupFilesTest extends RedirectsTestCase
 
     public function testFilesAreDataNeverExecuted(): void
     {
-        $this->put($this->parent, 'proto-redirects/php/redirects.jsonc', '<?php $GLOBALS["pb_redirects_executed"] = true; ?>');
+        $this->put($this->parent, 'proto-redirects/exec/redirects.jsonc', '<?php $GLOBALS["pb_redirects_executed"] = true; ?>');
         $files = $this->files();
 
         self::assertSame([], $files->groups());

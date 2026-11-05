@@ -787,7 +787,7 @@ final class RedirectCommand extends WP_CLI_Command
         $totals = ['added' => 0, 'replaced' => 0, 'skipped' => 0, 'invalid' => 0];
         foreach ($plan as $slug => $entry) {
             $slug = (string) $slug;
-            if (preg_match(GroupValidator::SLUG_PATTERN, $slug) !== 1) {
+            if (preg_match(GroupValidator::FILE_SLUG_PATTERN, $slug) !== 1) {
                 WP_CLI::warning(sprintf('"%s" is not a valid group slug; its %d rule(s) were not imported. Pass --group.', Commands::safeArg($slug), count($entry['rows'])));
                 continue;
             }

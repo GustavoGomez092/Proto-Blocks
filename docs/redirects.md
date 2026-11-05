@@ -76,7 +76,7 @@ The same holds for a broken child-theme file and the parent theme's group of tha
 }
 ```
 
-- The folder name is the group slug: `^[a-z][a-z0-9_-]*$`, 60 characters at most. `settings` is reserved because it is the settings file.
+- The folder name is the group slug: `^[a-z][a-z0-9_-]*$`, 60 characters at most. `settings` is reserved because it is the settings file, and `php` because it names the group of `proto_redirect()` rules.
 - `redirects.json` is accepted. When both exist, `.jsonc` wins with the `both_extensions` warning.
 - A child theme's group beats the parent's group of the same slug.
 - The `proto_blocks_schema_paths` filter adds read-only roots, as for every other kind. The screen and the command line never write a group read from such a root or from the parent theme: they refuse instead of shadowing it.
@@ -144,7 +144,7 @@ The writers (screen, CLI, monitor) omit a flag that equals its effective default
 | Settings | `invalid_host` | error | A `canonical.aliases` entry that is not a bare host name. |
 | Settings | `invalid_url` | error | `canonical.relocate` is not an absolute http(s) URL without query or fragment. |
 | Settings | `invalid_ip` | error | A `log.trustedProxies` entry that is not an IP address or CIDR range. |
-| Discovery | `invalid_slug` | error | A folder name that is not a group slug, including `settings`. The folder is skipped. |
+| Discovery | `invalid_slug` | error | A folder name that is not a group slug, including `settings` and `php`. The folder is skipped. |
 | Discovery | `path_outside_root` | error | A file or folder resolves outside its root. |
 | Discovery | `file_too_large` | error | The file is over 256 KB. |
 | Discovery | `unreadable` | error | The file could not be read. |
