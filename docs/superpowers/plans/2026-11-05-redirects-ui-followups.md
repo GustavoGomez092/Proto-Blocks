@@ -19,3 +19,8 @@ Spec: `docs/superpowers/specs/2026-11-05-redirects-design.md` §6, §11. Builds 
 - **404 exact delete** uses `?url=` (server `deleteByUrl`), and the expanded hits list uses the exact `url` filter instead of `search` + client filtering.
 - **Read-only file groups** (`readOnlyReason` `read_only`, `not_writable`, `file_mods`, `multisite`) keep their rules locked; the reason is shown in the group menu and on the group cell. PHP rules (`readOnlyReason: php`) stay editable through the copy-into-a-file-group dialog.
 - **Tables missing**: a screen-level alert (every tab: hits, logs and 404s all need the tables) with "Create tables"; the Settings button stays.
+- **Hit rows are only cleared for server-shaped ids** (`r_` + 8 hex): the route refuses anything else with 400, so a rule id that does not match is not sent. Nothing is sent when `db.tables` is false or the file write failed.
+- **`readOnlyReason` wins** over a stale `writable: true`; an older response without it is inferred (`php` for PHP groups, `not_writable` for `writable: false`).
+- **Monitor issues** (`code` starting `monitor_`) are pulled out of the declarations list into their own "post monitor" alert, so a monitor problem is not read as a broken declaration.
+- **Deactivate after import** is offered only when the importer names a plugin, the user has `activate_plugins` (`canDeactivate`) and the plugin is active; a network-activated plugin (`skipped[].reason = network`) warns instead of claiming success.
+- **Download names**: the `Content-Disposition` name is reduced to a bare file name (no folders, no control characters) before it reaches `a.download`; a network failure or a non-JSON error page toasts like any other non-2xx.
