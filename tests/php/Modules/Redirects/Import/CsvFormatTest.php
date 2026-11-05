@@ -134,6 +134,13 @@ final class CsvFormatTest extends TestCase
         $this->assertSame('invalid_target', $rows[0]['reason']);
     }
 
+    public function testSourceWithALineBreakIsRefused(): void
+    {
+        $rows = (new CsvFormat())->parse("\"/a\nRewriteRule ^ /evil\",/c\n");
+        $this->assertSame('invalid_source', $rows[0]['reason']);
+        $this->assertSame([], $rows[0]['rule']);
+    }
+
     public function testRegexThatDoesNotCompileIsInvalid(): void
     {
         $rows = (new CsvFormat())->parse("/a(,/b,1,301\n");

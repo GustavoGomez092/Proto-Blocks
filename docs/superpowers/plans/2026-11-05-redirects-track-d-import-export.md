@@ -30,3 +30,7 @@ Pure PHP, no dependency on Tracks A/B/C. Namespace `ProtoBlocks\Modules\Redirect
 - Apache/Nginx/Netlify exporters refuse (comment `# skipped: …`) any rule whose values contain control characters, so nothing can inject directives. Patterns use `^/?` so they work both in `.htaccess` and server context. No `server {}` wrapper in the Nginx export (it is meant to be included inside one). Netlify exports only literal rules and `^/prefix/(.*)$` regexes.
 - JSON export: groups in evaluation order, registry keys (`group`, `origin`, `source`, `index`) and null / empty-headers keys dropped, two-space indent, optional settings via the constructor.
 - Plugin importers expose rows they could not convert through `AbstractPluginImporter::skipped()` (not on the interface, which is fixed by the contract).
+- Every importer refuses a source holding a control character (`invalid_source`), and targets with one are `invalid_target`, so nothing read from a file can carry a line break into a server config or a header.
+- Apache export does not add `QSD` (not in the spec's flag list, Apache 2.4+ only): outside `QSA`, Apache's own default of passing the query through applies. Nginx export ends non-`pass` targets with `?` so nginx drops the request's arguments, matching `exact`/`ignore`.
+- `Patterns::quote()` escapes only PCRE metacharacters (not `-`, `=`, `/`), keeping exported server files readable.
+- `NetlifyExporter::extension()` is `''`: the file must be named `_redirects`; the REST layer names the download.

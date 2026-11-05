@@ -159,6 +159,13 @@ final class JsonFormatTest extends TestCase
         $this->assertSame(['trackHits' => false], $format->parseSettings($text));
     }
 
+    public function testControlCharactersInSourcesAreRefused(): void
+    {
+        $own = (new JsonFormat())->parse('{"rules":[{"from":"/a\\nb","to":"/c"}]}');
+        $this->assertSame('invalid_source', $own[0]['reason']);
+        $this->assertSame('invalid_source', self::one(['url' => "/a\tb", 'action_type' => 'url', 'action_code' => 301, 'action_data' => ['url' => '/c']])['reason']);
+    }
+
     public function testSingleGroupFile(): void
     {
         $groups = (new JsonFormat())->parseGroups('{"title":"One","rules":[{"from":"/a","to":"/b"}]}');
