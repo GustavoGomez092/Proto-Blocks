@@ -32,8 +32,14 @@ export function PageHeader({
 	actions,
 	eyebrow,
 	back,
+	titleSlot,
 }: {
 	title: string;
+	/**
+	 * Replaces the visible h1 (the h1 stays for assistive technology), e.g. the
+	 * script editor's inline title input.
+	 */
+	titleSlot?: ReactNode;
 	description?: ReactNode;
 	actions?: ReactNode;
 	/** Section after "Proto-Blocks · ", e.g. "Diagnostics". Omit for the bare product name. */
@@ -63,7 +69,14 @@ export function PageHeader({
 							: __('Proto-Blocks', 'proto-blocks')}
 					</Eyebrow>
 					)}
-					<h1 className="text-title font-semibold text-balance text-foreground">{title}</h1>
+					{titleSlot ? (
+						<>
+							<h1 className="sr-only">{title}</h1>
+							{titleSlot}
+						</>
+					) : (
+						<h1 className="text-title font-semibold text-balance text-foreground">{title}</h1>
+					)}
 					{description ? <p className="text-label text-muted-foreground">{description}</p> : null}
 				</div>
 			</div>

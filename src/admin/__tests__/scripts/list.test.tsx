@@ -148,6 +148,22 @@ describe('scripts list', () => {
 		expect(screen.getByRole('button', { name: 'View Google Tag Manager' })).toBeTruthy();
 	});
 
+	test('an empty-state template opens the create form prefilled; Blank opens it empty', async () => {
+		mockApi({ 'admin/scripts': index({ items: [] }) });
+		renderScreen();
+		await userEvent.click(await screen.findByRole('button', { name: /^Google Tag Manager/ }));
+		await waitFor(() => expect(window.location.search).toContain('new=1&template=gtm'));
+		expect(((await screen.findByRole('textbox', { name: 'Script title' })) as HTMLInputElement).value).toBe('Google Tag Manager');
+		expect((screen.getByRole('textbox', { name: 'In <head>' }) as HTMLTextAreaElement).value).toContain("'GTM-XXXX'");
+
+		document.body.innerHTML = '';
+		mockApi({ 'admin/scripts': index({ items: [] }) });
+		renderScreen();
+		await userEvent.click(await screen.findByRole('button', { name: /^Blank script/ }));
+		expect(((await screen.findByRole('textbox', { name: 'Script title' })) as HTMLInputElement).value).toBe('');
+		expect(window.location.search).not.toContain('template=');
+	});
+
 	test('read-only empty state: the template tiles are disabled', async () => {
 		mockApi({ 'admin/scripts': index({ items: [], canWrite: false, writeReason: 'file_mods' }) });
 		renderScreen();

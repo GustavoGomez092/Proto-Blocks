@@ -41,7 +41,7 @@ describe('placement builder', () => {
 		await userEvent.type(screen.getByLabelText('Include target value'), 'about');
 		await userEvent.click(screen.getByRole('button', { name: 'Add to include' }));
 		expect(last?.include).toEqual(['page:about']);
-		expect(within(screen.getByRole('list', { name: 'Include' })).getByText('page:about')).toBeTruthy();
+		expect(within(screen.getByRole('list', { name: 'Include' })).getByText('Page · about')).toBeTruthy();
 
 		await userEvent.selectOptions(screen.getByLabelText('Exclude target kind'), '404');
 		expect(screen.queryByLabelText('Exclude target value')).toBeNull();
@@ -78,7 +78,7 @@ describe('placement builder', () => {
 	test('logged-in radio and role checkboxes', async () => {
 		render(<Harness initial={normalizeWhere({})} />);
 		expect(screen.getByRole('radio', { name: 'Anyone' }).getAttribute('aria-checked')).toBe('true');
-		await userEvent.click(screen.getByRole('radio', { name: 'Logged in only' }));
+		await userEvent.click(screen.getByRole('radio', { name: 'Logged in' }));
 		expect(last?.loggedIn).toBe(true);
 		await userEvent.click(screen.getByRole('radio', { name: 'Anyone' }));
 		expect(last?.loggedIn).toBeNull();
@@ -90,7 +90,7 @@ describe('placement builder', () => {
 		await userEvent.click(within(never).getByRole('checkbox', { name: 'Administrator' }));
 		expect(last?.excludeRoles).toEqual(['administrator']);
 
-		await userEvent.click(screen.getByRole('radio', { name: 'Logged out only' }));
+		await userEvent.click(screen.getByRole('radio', { name: 'Logged out' }));
 		expect(screen.getByRole('alert').textContent).toMatch(/would never run/);
 	});
 
