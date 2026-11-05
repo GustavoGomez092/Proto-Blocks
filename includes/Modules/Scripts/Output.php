@@ -185,7 +185,12 @@ final class Output
         } else {
             unset($stored[$theme]);
         }
-        update_option(self::BODY_OPEN_OPTION, $stored, false);
+        // Autoloaded while set (read on every front-end page), absent otherwise.
+        if ($stored === []) {
+            delete_option(self::BODY_OPEN_OPTION);
+        } else {
+            update_option(self::BODY_OPEN_OPTION, $stored, true);
+        }
     }
 
     /**

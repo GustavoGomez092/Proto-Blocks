@@ -194,6 +194,7 @@ final class OutputTest extends ScriptsTestCase
         ob_end_clean();
         $theme = basename($this->root);
         self::assertSame([$theme => true], $GLOBALS['pb_test_options'][Output::BODY_OPEN_OPTION]);
+        self::assertTrue($GLOBALS['pb_test_autoload'][Output::BODY_OPEN_OPTION], 'autoloaded: read on every page');
 
         $issues = Output::bodyOpenIssues($scripts);
         self::assertSame(['missing_body_open'], array_map(static fn ($i): string => $i->code, $issues));
@@ -201,15 +202,17 @@ final class OutputTest extends ScriptsTestCase
 
         // The theme fires it on a later page: the warning goes away.
         do_action('wp_body_open');
-        $writes = $GLOBALS['pb_test_update_calls'] ?? 0;
         $output->printBodyClose();
-        self::assertSame([], $GLOBALS['pb_test_options'][Output::BODY_OPEN_OPTION]);
+        self::assertArrayNotHasKey(Output::BODY_OPEN_OPTION, $GLOBALS['pb_test_options'], 'deleted, not stored empty');
         self::assertSame([], Output::bodyOpenIssues($scripts));
 
         // Unchanged state: no write.
+        $GLOBALS['pb_test_options'][Output::BODY_OPEN_OPTION] = [basename($this->root) => true];
+        $GLOBALS['pb_test_actions'] = [];
         $writes = $GLOBALS['pb_test_update_calls'] ?? 0;
         $output->printBodyClose();
         self::assertSame($writes, $GLOBALS['pb_test_update_calls'] ?? 0);
+        self::assertSame(true, $GLOBALS['pb_test_autoload'][Output::BODY_OPEN_OPTION] ?? true);
     }
 
     public function testBodyOpenNotRecordedInVetoedContexts(): void

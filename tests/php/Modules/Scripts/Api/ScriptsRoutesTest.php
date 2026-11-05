@@ -312,4 +312,22 @@ final class ScriptsRoutesTest extends ContentModelRoutesTestCase
         self::assertFileExists($this->root . '/proto-scripts/gtm/script.jsonc');
         self::assertDirectoryDoesNotExist($this->root . '/proto-scripts/other');
     }
+
+    public function testSnippetFailureAfterTheMetadataSaveReturnsTheNewHash(): void
+    {
+        $this->gtm();
+        $outside = sys_get_temp_dir() . '/pb-scripts-victim-' . bin2hex(random_bytes(4));
+        file_put_contents($outside, 'keep');
+        symlink($outside, $this->root . '/proto-scripts/gtm/body-open.html');
+        try {
+            $text = (string) file_get_contents($this->root . '/proto-scripts/gtm/script.jsonc');
+            $error = $this->routes()->save(self::req('gtm', ['text' => $text . ' ', 'hash' => SchemaFileWriter::hash($text), 'snippets' => ['bodyOpen' => '<noscript></noscript>']]));
+            self::assertWpError('proto_blocks_path_outside_root', 403, $error);
+            self::assertSame(SchemaFileWriter::hash($text . ' '), $error->get_error_data()['hash']);
+            self::assertSame('bodyOpen', $error->get_error_data()['location']);
+            self::assertSame('keep', file_get_contents($outside), 'the link target is untouched');
+        } finally {
+            @unlink($outside);
+        }
+    }
 }
