@@ -32,7 +32,7 @@ final class SchemaFileWriter
      * validator, slug pattern, decoder, template. Not FileLoader::FOLDERS:
      * the Registry stays type/taxonomy/options only.
      *
-     * @var array<string, array{folder: string, basename: string, validate: \Closure, slugPattern: string, decode: ?\Closure, template: ?\Closure}>
+     * @var array<string, array{folder: string, basename: string, validate: \Closure, slugPattern: string, decode: ?\Closure, template: ?\Closure, flat: bool}>
      */
     private static array $extended = [];
 
@@ -111,8 +111,14 @@ final class SchemaFileWriter
      * confinement, symlink refusal, atomic swap) is the same as for a type.
      * Registering a kind again replaces it.
      *
+     * A `flat` kind is one file per root, `<root>/<folder>/<basename>.jsonc|.json`
+     * (no slug folder; its only slug is the basename unless slugPattern says
+     * otherwise). It may share its folder with one non-flat kind (the
+     * redirects settings file beside the group folders), and delete() never
+     * removes that folder.
+     *
      * @param \Closure(array<string|int, mixed>): list<array{path: string, message: string}> $validate
-     * @param array{slugPattern?: string, decode?: \Closure(string): array<string|int, mixed>, template?: \Closure(string, string): string} $options
+     * @param array{slugPattern?: string, decode?: \Closure(string): array<string|int, mixed>, template?: \Closure(string, string): string, flat?: bool} $options
      *        slugPattern: anchored regex with `D` (default EXTENDED_SLUG_PATTERN); decode: throws JsoncException;
      *        template: fn(slug, name): text served for a file that does not exist yet
      * @throws \InvalidArgumentException on a kind, folder or basename the writer cannot address safely
@@ -125,14 +131,16 @@ final class SchemaFileWriter
         if (preg_match(self::SEGMENT_PATTERN, $folder) !== 1 || preg_match(self::SEGMENT_PATTERN, $basename) !== 1) {
             throw new \InvalidArgumentException('An extended kind needs a plain folder and basename.');
         }
+        $flat = ($options['flat'] ?? false) === true;
         $taken = in_array($folder, FileLoader::FOLDERS, true);
         foreach (self::$extended as $other => $spec) {
-            $taken = $taken || ($other !== $kind && $spec['folder'] === $folder);
+            // A flat kind and a slug-folder kind address different paths and may share a folder.
+            $taken = $taken || ($other !== $kind && $spec['folder'] === $folder && $spec['flat'] === $flat);
         }
         if ($taken) {
             throw new \InvalidArgumentException(sprintf('The folder "%s" belongs to another kind.', $folder));
         }
-        $pattern = $options['slugPattern'] ?? self::EXTENDED_SLUG_PATTERN;
+        $pattern = $options['slugPattern'] ?? ($flat ? '/^' . preg_quote($basename, '/') . '$/D' : self::EXTENDED_SLUG_PATTERN);
         if (!is_string($pattern) || !str_ends_with($pattern, 'D') || @preg_match($pattern, '') === false) {
             throw new \InvalidArgumentException('The slug pattern must be a valid regex with the D modifier.');
         }
@@ -146,6 +154,7 @@ final class SchemaFileWriter
             'slugPattern' => $pattern,
             'decode' => $decode instanceof \Closure ? $decode : null,
             'template' => $template instanceof \Closure ? $template : null,
+            'flat' => $flat,
         ];
     }
 
@@ -416,6 +425,11 @@ final class SchemaFileWriter
             );
         }
 
+        if (self::$extended[$kind]['flat'] ?? false) {
+            // The folder of a flat kind holds other kinds' folders: never removed.
+            return ['deleted' => $path, 'kept' => []];
+        }
+
         $kept = [];
         $own = [];
         foreach (scandir($dir) ?: [] as $entry) {
@@ -502,7 +516,9 @@ final class SchemaFileWriter
     {
         $folder = self::$extended[$kind]['folder'] ?? FileLoader::FOLDERS[$kind];
         $basename = self::$extended[$kind]['basename'] ?? FileLoader::BASENAMES[$kind];
-        $base = $root . '/' . $folder . '/' . $slug . '/' . $basename;
+        $base = (self::$extended[$kind]['flat'] ?? false)
+            ? $root . '/' . $folder . '/' . $basename
+            : $root . '/' . $folder . '/' . $slug . '/' . $basename;
 
         return [$base . '.jsonc', $base . '.json'];
     }
