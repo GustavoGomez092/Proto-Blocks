@@ -305,21 +305,21 @@ wp proto-blocks redirect <subcommand>
 | Subcommand | Flags | Purpose |
 |---|---|---|
 | `list` | `--group=<slug>`, `--format=table\|json\|csv` | every rule |
-| `add <from> [<to>]` | `--code=`, `--group=`, `--regex`, `--when=<type>`, `--when-value=`, `--action=`, `--query=`, `--title=` | append a rule to a group file |
-| `delete <id>` | `--group=` | remove a rule |
+| `add <from> [<to>]` | `--code=`, `--group=<slug>` (default `redirects`, created when missing), `--regex`, `--when=<type>`, `--when-value=` (comma-separated for `ip` and `language`), `--when-name=` (header and cookie conditions), `--action=`, `--query=`, `--title=` | append a rule to a group file. A rule with the same id (source, condition and action) in the group is refused. |
+| `delete <id>` | `--group=` | remove a rule and its hit row |
 | `enable <id>`, `disable <id>` | | toggle a rule |
-| `group list` | | every group |
-| `group create <title>` | | a new group file |
+| `group list` | `--format=table\|json\|csv` | every group |
+| `group create <title>` | `--slug=`, `--position=` (default 10) | a new group file |
 | `group enable <slug>`, `group disable <slug>` | | toggle a group |
-| `group delete <slug>` | | delete a group file |
-| `validate` | | check every group and the settings file. Also part of `wp proto-blocks validate`. |
-| `test <url>` | `--logged-in` | which rule fires for a URL, with a trace. Nothing is redirected. |
-| `import <file>` | `--format=csv\|json\|apache\|redirects`, `--group=`, `--duplicates=skip\|replace\|add`, `--dry-run` | import a file |
-| `import-plugin <id>` | `--group=`, `--dry-run` | import another plugin's redirects |
-| `export [<file>\|-]` | `--format=csv\|json\|apache\|nginx\|redirects`, `--group=` | write an export to a file, or to stdout with `-` |
-| `log` | `--404`, `--limit=`, `--clear` | read or clear the redirect log, or the 404 log with `--404` |
-| `prune` | | remove hit rows whose rule no longer exists |
-| `db install\|status\|drop` | `--yes` | create, check or drop the three tables |
+| `group delete <slug>` | `--yes` | delete a group file (refused without `--yes`) |
+| `validate` | `--format=table\|json\|csv` | check every group and the settings file. Also part of `wp proto-blocks validate`. |
+| `test <url>` | `--logged-in`, `--format=table\|json` | which rule fires for a URL (a path or an http(s) URL), with a trace. Nothing is redirected. `--logged-in` evaluates as the `--user`, else the first administrator. |
+| `import <file>` | `--format=csv\|json\|apache\|redirects` (detected when left out), `--group=` (default `imported`; without it a JSON export keeps its groups), `--duplicates=skip\|replace\|add`, `--dry-run` | import a file of 5 MB at most. Invalid rows are warned and left out. |
+| `import-plugin <id>` | `--group=` (default: the plugin's own groups), `--duplicates=`, `--dry-run` | import another plugin's redirects (`redirection`, `simple-301-redirects`, `safe-redirect-manager`, `rank-math`, `yoast`, `old-slugs`) |
+| `export [<file>\|-]` | `--format=csv\|json\|apache\|nginx\|redirects` (default `csv`), `--group=`, `--force` | write an export to a file (refused when it exists unless `--force`), or to stdout with `-` or no file |
+| `log` | `--404`, `--limit=` (1 to 200, default 20), `--clear`, `--format=` | read or clear the redirect log, or the 404 log with `--404` |
+| `prune` | | remove hit rows whose rule no longer exists, then run log retention once |
+| `db install\|status\|drop` | `--yes` (drop) | create, check or drop the three tables. `status` also shows the schema version and the orphan hit count. |
 
 ```bash
 wp proto-blocks redirect add /old /new --code=301 --group=legacy-site
@@ -329,7 +329,10 @@ wp proto-blocks redirect export --format=apache -
 ```
 
 - File writes need file modifications on, and on multisite a network administrator, as for every writing command.
-- Writes go through the server-side serializer. Hand-written comments inside the rules array of an edited group file are lost. The file header says so.
+- Writes read the group file's raw data and serialise it again, so hand-written comments inside the rules array of an edited group file are lost. The serializer omits flags that equal their defaults.
+- The CLI refuses to edit a file that is not valid JSONC, a group declared only in PHP (it names the call site), and a group read from the parent theme or a `proto_blocks_schema_paths` root, which it cannot write.
+- `import` and `import-plugin` check every row with the file validator, then write each group once. `--dry-run` prints what would change per group.
+- `log`, `prune` and `db status` need the tables; run `db install` first when they are missing.
 - Pass `--logged-in` to `redirect test` to evaluate `login` and `role` conditions as a logged-in visitor.
 - `db drop` is the only way to drop the tables. Deactivating the plugin keeps them.
 

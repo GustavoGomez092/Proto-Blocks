@@ -24,7 +24,8 @@ Related: [content model files](content-model-files.md), [post types](post-types.
 | `admin/*` read routes | `manage_options` |
 | `admin/*` routes that write files | `manage_options`, `DISALLOW_FILE_MODS` and `DISALLOW_FILE_EDIT` false, and `is_super_admin()` on multisite |
 | `admin/scripts/<slug>` write routes, and writes and deletes on `admin/schema-files/script/<slug>` | the file-write gate, and `unfiltered_html` |
-| `admin/redirects/import/deactivate` | `activate_plugins` |
+| other `admin/redirects/*` routes | `manage_options` only: they write no theme file, so the file-write gate does not apply (rule and settings files are written through `admin/schema-files/*`, which has it) |
+| `admin/redirects/import/deactivate` | `manage_options` and `activate_plugins` |
 | `options/<slug>` | a logged-in user with the page's declared capability |
 | `fields/errors` | the object's edit capability (`edit_post`, `edit_term`, `edit_user`, or the page capability) |
 | `fields/relationship`, `blocks`, `blocks/<name>`, `preview`, `controls/options` | `edit_posts` |
@@ -52,6 +53,7 @@ File mods win when both apply.
 | 403 | `proto_blocks_protected_option` | a settings page save targets a protected option |
 | 404 | `proto_blocks_not_found` | no such type, taxonomy, file or field group |
 | 404 | `proto_blocks_options_page_not_found` | no settings page with that slug |
+| 400, 403, 404, 413, 500 | `proto_blocks_invalid_url`, `proto_blocks_nothing_to_delete`, `proto_blocks_invalid_rule`, `proto_blocks_invalid_format`, `proto_blocks_unknown_format`, `proto_blocks_import_empty`, `proto_blocks_upload_failed`, `proto_blocks_invalid_plugin`, `proto_blocks_forbidden`, `proto_blocks_importer_not_found`, `proto_blocks_group_not_found`, `proto_blocks_import_too_large`, `proto_blocks_db_install_failed` | the `admin/redirects/*` routes, see [Redirects](#redirects) |
 | 409 | `proto_blocks_conflict` | the file changed on disk since it was loaded (`data.hash`: the current hash) |
 | 409 | `proto_blocks_needs_confirmation` | a save affects existing content (`data.guardrails`) |
 | 409 | `proto_blocks_confirm_required` | a delete needs `confirm=<slug>` (`data.content`) |
@@ -438,7 +440,10 @@ It resolves the slug through the registry only and returns no option values.
 ## Redirects
 
 Guide: [redirects](redirects.md).
-Reads need `manage_options`. Writes to files go through the file-write gate and the existing `admin/schema-files/redirects/<slug>` and `admin/schema-files/redirect-settings/settings` routes.
+Every `admin/redirects/*` route needs `manage_options`, and `import/deactivate` also needs `activate_plugins`.
+No route in this group writes a theme file, so none is behind the file-write gate: log and hit changes, previews and `db/install` work on a read-only host.
+Rule and settings files are written through the existing `admin/schema-files/redirects/<slug>` and `admin/schema-files/redirect-settings/settings` routes, which have the gate.
+The settings file is a flat kind: it has no slug folder, and its slug in the route is the fixed word `settings`.
 
 ### GET `admin/redirects`
 
@@ -448,51 +453,68 @@ Reads need `manage_options`. Writes to files go through the file-write gate and 
   "paused": false,
   "createTarget": { "path": "wp-content/themes/acme/proto-redirects", "writable": true, "reason": null },
   "groups": [
-    { "slug": "legacy-site", "title": "Legacy site", "enabled": true, "position": 10, "origin": "file", "double": null,
-      "writable": true, "hash": "3b0c...",
+    { "slug": "legacy-site", "title": "Legacy site", "enabled": true, "position": 10, "defaults": { "ignoreCase": true, "ignoreTrailingSlash": true, "query": "exact" },
+      "origin": "file", "source": "wp-content/themes/acme/proto-redirects/legacy-site/redirects.jsonc", "double": null,
+      "writable": true, "readOnlyReason": null, "hash": "3b0c...",
       "rules": [ { "id": "r_8f3a2c1d", "from": "/about-us", "to": "/about", "hits": 12, "lastHit": "2026-11-05 10:00:00", "issues": [] } ] }
   ],
   "settings": { },
-  "settingsFile": { "exists": true, "hash": "9a1d...", "writable": true },
+  "settingsFile": { "exists": true, "hash": "9a1d...", "writable": true, "path": "wp-content/themes/acme/proto-redirects/settings.jsonc" },
   "issues": [],
   "db": { "tables": true, "orphans": 0 }
 }
 ```
 
-`paused` is true while the Redirection plugin is active and `coexist` is false.
-Each rule carries the keys of the file plus `hits`, `lastHit` and `issues`.
+- `paused` is true while the Redirection plugin is active and `coexist` is false.
+- `moduleEnabled` is false when the `proto_blocks_modules` filter switched the module off; the other keys are then empty.
+- A group's `origin` is `file` or `php`. `writable` is false for a PHP group (`readOnlyReason: "php"`), for a group read from the parent theme or a filter root (`read_only`), and for the usual write reasons (`file_mods`, `multisite`, `not_writable`). `double` names both locations when a file and a PHP call declare the group. `hash` is the SHA-256 the schema-files route reports for the same text.
+- Each rule carries its normalised keys plus `group`, `origin`, `source`, `index`, `hits`, `lastHit` and `issues`.
+- Findings tied to a rule (same group and rule id, or a `/rules/<index>` message) sit in that rule's `issues`. The rest are in the top-level `issues`. Each issue has `level`, `code`, `message`, `source`, `slug`, `kind` and, for a rule, `key`. Paths are relative and messages are scrubbed of server paths.
+- `db.orphans` counts hit rows whose group and rule no longer exist.
 
-### GET `admin/redirects/test?url=`
+### GET `admin/redirects/test?url=&loggedIn=`
 
 ```json
-{ "matched": true, "group": "legacy-site", "ruleId": "r_8f3a2c1d", "action": "url", "code": 301, "target": "/about",
-  "trace": [ { "group": "legacy-site", "ruleId": "r_8f3a2c1d", "result": "matched", "reason": "" } ] }
+{ "matched": true, "stage": "init", "group": "legacy-site", "ruleId": "r_8f3a2c1d", "action": "url", "code": 301, "target": "/about", "reason": "matched",
+  "trace": [ { "stage": "init", "group": "legacy-site", "ruleId": "r_8f3a2c1d", "result": "matched", "reason": "matched" } ],
+  "loggedIn": true,
+  "note": "Evaluated without redirecting. Login and role conditions are checked against you ..." }
 ```
 
-It evaluates without redirecting. `login` and `role` conditions use the calling admin's session, and the response says so.
+- `url` is a path starting with `/` or an absolute http(s) URL, 2000 characters at most (else `400 proto_blocks_invalid_url`).
+- It evaluates the `init` stage, then, when nothing fires, the `404` stage (`stage: "404"`), with the request treated as not found. The trace lists every rule of every enabled group, including disabled ones (`reason: "disabled"`), with its `stage`. Rules that only belong to the other stage are left out.
+- `login` and `role` conditions use the calling admin's session. `loggedIn=0` (or `false`, `no`) evaluates as a visitor; `note` says which. `header`, `cookie`, `agent`, `referrer` and `ip` conditions see an empty request.
+- Nothing is redirected, logged or counted.
 
 ### Logs
 
 | Method | Route | Notes |
 |---|---|---|
-| GET | `admin/redirects/log`, `admin/redirects/404` | query: `page`, `per_page` (5 to 200), `search`, `code`, `rule`, `from`, `to`, `group_by=url` |
-| DELETE | `admin/redirects/log`, `admin/redirects/404` | body or query: `ids[]`, or `all=1` with the current filter |
-| GET | `admin/redirects/log/export?format=csv`, `admin/redirects/404/export?format=csv` | CSV, formula-escaped |
+| GET | `admin/redirects/log`, `admin/redirects/404` | query: `page`, `per_page` (5 to 200, default 50), `search`, `from`, `to` (dates), and for the log `code`, `rule` (`r_xxxxxxxx` or `group/r_xxxxxxxx`), `group`. The 404 route also takes `url` and `group_by=url`. |
+| DELETE | `admin/redirects/log`, `admin/redirects/404` | `ids[]` (or a comma list), or `all=1` with the current filters. The 404 route also accepts `?url=<exact url>` to delete every row of that URL. Neither: `400 proto_blocks_nothing_to_delete`. Returns `{ "deleted": n }`. |
+| GET | `admin/redirects/log/export`, `admin/redirects/404/export` | CSV download of the filtered rows. `format` may only be `csv`. |
+
+List responses are `{ "rows": [...], "total": n, "page": 1, "perPage": 50, "pages": 1 }`, and the 404 route adds `"groupBy": "url"` or `null`.
+A log row is camelCase: `id`, `created` (UTC), `url`, `target`, `code`, `group`, `ruleId`, `redirectBy`, `method`, `ip`, `agent`, `referrer`, `request` (the stored headers, when enabled). A `group_by=url` 404 row is `{ url, count, lastSeen, lastReferrer }`.
+Downloads are CSV with formula-escaped cells (a leading `=`, `+`, `-`, `@`, tab or CR, ASCII or full-width, gets a `[FORMULA] ` prefix), sent as attachments with `X-Content-Type-Options: nosniff`, `Cache-Control: no-store` and `X-Proto-Blocks-Download: 1`. A `rest_pre_serve_request` filter prints that body raw instead of JSON-encoding it.
 
 ### Hits, import, export, tables
 
 | Method | Route | Purpose |
 |---|---|---|
-| POST | `admin/redirects/hits/reset` | body `{group, ruleId}` |
-| POST | `admin/redirects/hits/prune` | remove orphan hit rows |
-| POST | `admin/redirects/import/parse` | multipart upload or `{format, text}`. Returns `{ rules: [{rule, status, reason}], groups? }`. |
-| GET | `admin/redirects/import/plugins` | importers whose data is present on this site |
-| POST | `admin/redirects/import/plugins/<id>/preview` | preview one plugin's rules |
-| POST | `admin/redirects/import/deactivate` | deactivate the source plugin. Needs `activate_plugins`. |
-| GET | `admin/redirects/export?format=csv\|json\|apache\|nginx\|redirects&group=` | file response |
-| POST | `admin/redirects/db/install` | create the three tables |
+| DELETE | `admin/redirects/hits` | body or query `{group, ruleId}`: remove the rule's hit row. Returns `{ "deleted": true }`. |
+| POST | `admin/redirects/hits/reset` | body `{group, ruleId}`: zero the row. Returns `{ "reset": true }`. |
+| POST | `admin/redirects/hits/prune` | remove orphan hit rows. Returns `{ "deleted": n }`. |
+| POST | `admin/redirects/import/parse` | multipart `file`, or `{format, text, filename}`; optional `group`. Returns `{ "format": "csv", "rules": [...], "groups": {...} }`. Writes nothing. |
+| GET | `admin/redirects/import/plugins` | `{ "importers": [ { id, label, cleanupHint, plugin, plugins, active, canDeactivate } ] }` for importers whose data is present on this site. |
+| POST | `admin/redirects/import/plugins/<id>/preview` | `{ id, label, groups: { slug: group }, skipped: [...], cleanupHint }`. Writes nothing. |
+| POST | `admin/redirects/import/deactivate` | body `{id}` (optional `plugin`, one of the importer's plugin files). Needs `activate_plugins`. Returns `{ deactivated, skipped }`; a network-active plugin is skipped with reason `network`. |
+| GET | `admin/redirects/export?format=csv\|json\|apache\|nginx\|redirects&group=` | file download (default `csv`). Unknown format: `400 proto_blocks_invalid_format`. Unknown group: `404 proto_blocks_group_not_found`. |
+| POST | `admin/redirects/db/install` | create the three tables. Returns `{ "tables": true }`, or `500 proto_blocks_db_install_failed`. |
 
-Uploads are capped at 5 MB. Nothing in an upload is executed.
+An import row is `{ rule, status, reason, line, message }`. `status` is `new`, `duplicate` or `invalid`. `reason` is a stable machine code (`too_large`, `self_redirect`, `empty_source`, `missing_target`, `invalid_code`, `invalid_json`, `unsupported_*`, or a validator code such as `invalid_target`) and `message` is English text. Every `new` row is re-checked with the same validator as a file write, then duplicates are marked against the target `group` (every group when none is given). `groups` appears when the file holds several groups, as `{ slug: group }`.
+JSON exports of every group carry the settings; a one-group JSON export does not. The Netlify download is named `_redirects`; other downloads are `proto-redirects-<group|all>-<date>.<ext>`.
+Uploads are capped at 5 MB (`413 proto_blocks_import_too_large`). An upload that is empty, not a real upload or has an error is `400 proto_blocks_upload_failed` or `proto_blocks_import_empty`; an unrecognised format is `400 proto_blocks_unknown_format`. Nothing in an upload is executed.
 
 ## Scripts
 

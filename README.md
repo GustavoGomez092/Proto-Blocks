@@ -1267,7 +1267,7 @@ Debug mode enables:
 
 Since 2.15.0 Proto-Blocks also declares a site's content model: post types, taxonomies, custom fields and settings pages. Since 2.16.0 the same pattern covers redirects and head/body scripts.
 Each is a line of PHP or a small JSONC file in the theme, edited from an admin UI that writes the same files.
-Nothing about the content model is stored in the database. The redirect module keeps only hit counts, the redirect log and the 404 log there (three tables); no rule or setting is ever stored.
+Nothing about the content model is stored in the database. The redirect module keeps only hit counts, the redirect log and the 404 log there (three tables, plus a schema-version option and the permalink monitor's warnings); no rule or setting is ever stored.
 
 | Feature | File | PHP | Admin | Guide |
 |---|---|---|---|---|
@@ -1560,7 +1560,7 @@ Proto-Blocks provides several hooks for customization:
 | `proto_blocks_schema_paths` | Add roots searched for `proto-types/`, `proto-taxonomies/`, `proto-fields/`, `proto-options/`, `proto-redirects/`, `proto-scripts/` | `$paths` (array) |
 | `proto_blocks_redirects_excluded` | Exclude more requests from redirect matching and 404 logging | `$excluded` (bool), `$request` |
 | `proto_blocks_redirects_priority` | `init` priority of the main redirect pass (default 10) | `$priority` (int) |
-| `proto_blocks_redirects_canonical_target` | Change the https/www/alias/relocate target | `$target`, `$request` |
+| `proto_blocks_redirects_canonical_target` | Change the https/www/alias/relocate target | `$target`, `$request`, `$settings` |
 | `proto_blocks_redirects_log_404` | Return false to skip logging a 404 | `$log` (bool), `$request` |
 | `proto_blocks_redirects_nothing` | Action fired when a `nothing` rule matches | `$rule`, `$request` |
 | `proto_blocks_scripts_markers` | Return false to drop the `<!-- proto-blocks: slug -->` markers | `$markers` (bool), `$slug`, `$location` |
