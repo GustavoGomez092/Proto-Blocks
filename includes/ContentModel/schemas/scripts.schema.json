@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "proto-blocks/scripts.schema.json",
+  "title": "Proto-Blocks script declaration (proto-scripts/<slug>/script.jsonc)",
+  "$defs": {
+    "script": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title"],
+      "properties": {
+        "$schema": { "type": "string" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 100, "pattern": "^[^<>]*$" },
+        "enabled": { "type": "boolean" },
+        "priority": { "$ref": "#/$defs/priority" },
+        "priorities": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "head": { "$ref": "#/$defs/priority" },
+            "bodyOpen": { "$ref": "#/$defs/priority" },
+            "bodyClose": { "$ref": "#/$defs/priority" }
+          }
+        },
+        "head": { "$ref": "#/$defs/location" },
+        "bodyOpen": { "$ref": "#/$defs/location" },
+        "bodyClose": { "$ref": "#/$defs/location" },
+        "where": { "$ref": "#/$defs/where" }
+      }
+    },
+    "priority": { "type": "integer", "minimum": -100000, "maximum": 100000 },
+    "location": {
+      "anyOf": [
+        { "type": "string", "maxLength": 262144 },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file"],
+          "properties": { "file": { "type": "string", "maxLength": 64 } }
+        }
+      ]
+    },
+    "where": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "include": { "$ref": "#/$defs/targets" },
+        "exclude": { "$ref": "#/$defs/targets" },
+        "loggedIn": { "type": ["boolean", "null"] },
+        "roles": { "$ref": "#/$defs/roles" },
+        "excludeRoles": { "$ref": "#/$defs/roles" }
+      }
+    },
+    "targets": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/target" } },
+    "target": {
+      "type": "string",
+      "maxLength": 200,
+      "pattern": "^(?:all|front_page|home|search|404|archive|singular|(?:singular|post_type):[a-z0-9_-]{1,20}|(?:page|post):[A-Za-z0-9_%/-]{1,190}|taxonomy:[a-z0-9_-]{1,32}|term:[a-z0-9_-]{1,32}:[A-Za-z0-9_%-]{1,160}|url:/[^\\s<>\"]{0,195})$"
+    },
+    "roles": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,100}$" }
+    }
+  }
+}

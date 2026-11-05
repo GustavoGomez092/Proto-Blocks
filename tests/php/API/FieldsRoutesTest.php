@@ -283,6 +283,7 @@ JSONC);
         $GLOBALS['pb_test_filters']['proto_blocks_modules'][] = static fn(array $defaults): array => ['fields' => false] + $defaults;
         (new Manager($this->registry()))->boot();
 
+        // Other modules (scripts, redirects) add kinds of their own; only field-group must be absent.
         self::assertNotContains('field-group', SchemaFileWriter::extendedKinds());
         $route = $schemaRoute();
         self::assertStringNotContainsString('field-group', $route);
