@@ -10,21 +10,22 @@ use ProtoBlocks\ContentModel\Issue;
 use ProtoBlocks\ContentModel\Jsonc;
 use ProtoBlocks\ContentModel\SchemaFileWriter;
 use ProtoBlocks\Modules\Redirects\Monitor;
+use ProtoBlocks\Modules\Redirects\Registry;
 use ProtoBlocks\Tests\ContentModel\SafeFileTest;
 
 require_once __DIR__ . '/../../ContentModel/SafeFileTest.php';
 
 /**
- * The monitor against a real SchemaFileWriter on a temp theme, a stand-in
- * registry (Track A's Registry contract: rules(), group(), invalidate()) and
- * a JSON stand-in for Serializer::group().
+ * The monitor against a real SchemaFileWriter on a temp theme, a real
+ * Registry over injected groups (Registry::fromArrays) and a JSON stand-in
+ * for Serializer::group() (the default serializer is tested separately).
  */
 final class MonitorTest extends TestCase
 {
     private const NOW = 1793882096; // 2026-11-05 12:34:56 UTC
 
     private string $root;
-    private object $registry;
+    private Registry $registry;
     private int $serialized = 0;
 
     protected function setUp(): void
@@ -59,48 +60,27 @@ final class MonitorTest extends TestCase
     // ------------------------------------------------------------------ doubles
 
     /**
+     * A real Registry over the given groups, already built, so invalidated()
+     * can tell whether the monitor dropped its cache.
+     *
      * @param list<array<string, mixed>> $groups normalised groups (Track A shape)
      */
-    private static function registry(array $groups): object
+    private static function registry(array $groups): Registry
     {
-        return new class ($groups) {
-            public int $invalidated = 0;
+        $files = array_values(array_filter($groups, static fn(array $g): bool => ($g['origin'] ?? 'file') === 'file'));
+        $php = array_values(array_filter($groups, static fn(array $g): bool => ($g['origin'] ?? 'file') === 'php'));
+        $registry = Registry::fromArrays($files, $php, []);
+        $registry->groups();
 
-            /** @param list<array<string, mixed>> $groups */
-            public function __construct(public array $groups)
-            {
-            }
+        return $registry;
+    }
 
-            /** @return list<array<string, mixed>> */
-            public function rules(): array
-            {
-                $out = [];
-                foreach ($this->groups as $group) {
-                    if (($group['enabled'] ?? true) !== true) {
-                        continue;
-                    }
-                    foreach ($group['rules'] as $i => $rule) {
-                        $out[] = $rule + ['group' => $group['slug'], 'origin' => $group['origin'], 'source' => $group['source'], 'index' => $i];
-                    }
-                }
-                return $out;
-            }
+    /** Whether the monitor invalidated the registry (its build cache is gone). */
+    private function invalidated(): bool
+    {
+        $built = new \ReflectionProperty(Registry::class, 'built');
 
-            public function group(string $slug): ?array
-            {
-                foreach ($this->groups as $group) {
-                    if ($group['slug'] === $slug) {
-                        return $group;
-                    }
-                }
-                return null;
-            }
-
-            public function invalidate(): void
-            {
-                $this->invalidated++;
-            }
-        };
+        return $built->getValue($this->registry) === null;
     }
 
     /** @param array<string, mixed> $settings */
@@ -215,7 +195,7 @@ final class MonitorTest extends TestCase
         self::assertSame(301, $rule['code']);
         self::assertSame('url', $rule['action']);
         self::assertMatchesRegularExpression('/^r_[a-f0-9]{8}$/', $rule['id']);
-        self::assertSame(1, $this->registry->invalidated);
+        self::assertTrue($this->invalidated());
     }
 
     public function testRuleIsAppendedToAnExistingGroupKeepingItsRules(): void
@@ -584,7 +564,7 @@ final class MonitorTest extends TestCase
 
         self::assertNull($this->file('modified-posts'));
         self::assertSame(0, $this->serialized);
-        self::assertSame(0, $this->registry->invalidated);
+        self::assertFalse($this->invalidated());
         $issues = $this->monitor()->issues();
         self::assertCount(1, $issues);
         self::assertSame('monitor_unwritable', $issues[0]->code);
@@ -649,6 +629,23 @@ final class MonitorTest extends TestCase
         self::assertCount(20, $monitor->issues());
         $monitor->clearIssues();
         self::assertSame([], $monitor->issues());
+    }
+
+    public function testDefaultSerializerWritesAgainstTheSiteDefaults(): void
+    {
+        $settings = [
+            'monitor' => ['postTypes' => ['post'], 'group' => 'modified-posts'],
+            'defaults' => ['ignoreCase' => false, 'ignoreTrailingSlash' => true, 'query' => 'ignore'],
+        ];
+        $monitor = new Monitor($this->registry, new SchemaFileWriter([$this->root], true), $settings);
+        $this->move($monitor, 5, 'http://example.test/old/', 'http://example.test/new/');
+
+        $text = (string) file_get_contents($this->root . '/proto-redirects/modified-posts/redirects.jsonc');
+        $file = Jsonc::decode($text);
+        self::assertArrayNotHasKey('defaults', $file, 'the new group inherits the site defaults instead of pinning them');
+        self::assertArrayNotHasKey('ignoreCase', $file['rules'][0]);
+        self::assertArrayNotHasKey('query', $file['rules'][0]);
+        self::assertSame('/old/', $file['rules'][0]['from']);
     }
 
     public function testExistingFileIsOverwrittenWithItsCurrentHash(): void

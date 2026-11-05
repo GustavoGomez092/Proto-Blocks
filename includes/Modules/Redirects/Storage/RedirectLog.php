@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Modules\Redirects\Storage;
 
+use ProtoBlocks\Modules\Redirects\Engine\RedirectLogger;
+
 /**
- * The redirect log (`{prefix}proto_redirect_log`). Implements Track B's
- * `Engine\RedirectLogger` (clause added at integration); log404() hands the
- * 404 to NotFoundLog so one logger object serves the dispatcher.
+ * The redirect log (`{prefix}proto_redirect_log`) and the engine's
+ * RedirectLogger: log404() hands the 404 to NotFoundLog so one logger object
+ * serves the dispatcher. Whether a rule is logged at all (`log: false`) is
+ * the Dispatcher's call; this class only honours `settings['log']`.
  *
  * logRedirect() entry keys: `url` (defaults to the request URL), `target`,
  * `code`, `group`, `ruleId`, `redirectBy` (default `proto-blocks`), `request`
  * (a RequestSnapshot array or the engine's Request; default $_SERVER).
  */
-final class RedirectLog extends LogTable
+final class RedirectLog extends LogTable implements RedirectLogger
 {
     private ?NotFoundLog $notFound = null;
 

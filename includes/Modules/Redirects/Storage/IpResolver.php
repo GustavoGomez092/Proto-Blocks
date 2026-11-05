@@ -94,8 +94,11 @@ final class IpResolver
     }
 
     /**
-     * Whether $ip lies in $cidr (`addr/prefix`, or a bare address meaning a full-length prefix).
-     * Families never mix; anything malformed is false.
+     * Whether $ip lies in $cidr (`addr/prefix`, or a bare address meaning a
+     * full-length prefix). The module's one CIDR implementation (the `ip`
+     * condition delegates here). Families never mix, except that an
+     * IPv4-mapped IPv6 address (::ffff:a.b.c.d) on one side and an IPv4
+     * address on the other compare as IPv4. Anything malformed is false.
      */
     public static function inCidr(string $ip, string $cidr): bool
     {
@@ -109,7 +112,7 @@ final class IpResolver
             return false;
         }
         $network = @inet_pton($parts[0]);
-        if ($network === false || strlen($network) !== strlen($address)) {
+        if ($network === false) {
             return false;
         }
         $bits = strlen($network) * 8;
@@ -120,6 +123,16 @@ final class IpResolver
             $prefix = (int) $parts[1];
         } else {
             $prefix = $bits;
+        }
+        if (strlen($network) !== strlen($address)) {
+            if (strlen($network) === 4 && self::isMapped($address)) {
+                $address = substr($address, 12);
+            } elseif (strlen($address) === 4 && self::isMapped($network) && $prefix >= 96) {
+                $network = substr($network, 12);
+                $prefix -= 96;
+            } else {
+                return false;
+            }
         }
 
         $whole = intdiv($prefix, 8);
@@ -133,6 +146,12 @@ final class IpResolver
         $mask = (0xFF << (8 - $rest)) & 0xFF;
 
         return (ord($address[$whole]) & $mask) === (ord($network[$whole]) & $mask);
+    }
+
+    /** A 16-byte address in ::ffff:0:0/96. */
+    private static function isMapped(string $packed): bool
+    {
+        return strlen($packed) === 16 && substr($packed, 0, 12) === str_repeat("\0", 10) . "\xff\xff";
     }
 
     /** @param mixed $list */

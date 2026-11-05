@@ -18,8 +18,9 @@ final class NotFoundLog extends LogTable
     }
 
     /**
-     * Logs a 404 unless `log.notFound` is -1 or `proto_blocks_redirects_log_404`
-     * returns false. Accepts a RequestSnapshot array or the engine's Request.
+     * Logs a 404 unless `log.notFound` is -1. Accepts a RequestSnapshot array
+     * or the engine's Request. The `proto_blocks_redirects_log_404` filter is
+     * applied once, by Engine\FrontController, with the engine's Request.
      */
     public function log404(mixed $request): void
     {
@@ -27,9 +28,6 @@ final class NotFoundLog extends LogTable
             return;
         }
         $snapshot = RequestSnapshot::from($request);
-        if (apply_filters('proto_blocks_redirects_log_404', true, $snapshot) === false) {
-            return;
-        }
 
         $db = $this->db();
         $table = $this->table();

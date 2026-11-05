@@ -171,6 +171,13 @@ final class IpResolverTest extends TestCase
         yield 'empty prefix' => ['192.0.2.1', '192.0.2.1/', false];
         yield 'two slashes' => ['192.0.2.1', '192.0.2.1/24/8', false];
         yield 'whitespace around' => [' 192.0.2.1 ', ' 192.0.2.0/24 ', true];
+        yield 'v4-mapped address in a v4 range' => ['::ffff:192.0.2.5', '192.0.2.0/24', true];
+        yield 'v4-mapped address outside a v4 range' => ['::ffff:192.0.3.5', '192.0.2.0/24', false];
+        yield 'v4 address in a v4-mapped range' => ['192.0.2.5', '::ffff:192.0.2.0/120', true];
+        yield 'v4 address outside a v4-mapped range' => ['192.0.3.5', '::ffff:192.0.2.0/120', false];
+        yield 'v4-mapped range shorter than /96 never matches v4' => ['192.0.2.5', '::ffff:0:0/80', false];
+        yield 'v4-mapped address in a v6 mapped range' => ['::ffff:192.0.2.5', '::ffff:0:0/96', true];
+        yield 'other v6 never matches v4' => ['2001:db8::c000:205', '192.0.2.0/24', false];
     }
 
     #[DataProvider('cidrCases')]

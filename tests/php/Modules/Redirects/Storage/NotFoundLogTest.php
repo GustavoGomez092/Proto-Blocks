@@ -121,16 +121,18 @@ final class NotFoundLogTest extends StorageTestCase
         }
     }
 
-    public function testFilterCanSkipLogging(): void
+    public function testTheLog404FilterIsLeftToTheFrontController(): void
     {
-        $seen = null;
-        $GLOBALS['pb_test_filters']['proto_blocks_redirects_log_404'][] = static function ($log, $snapshot) use (&$seen) {
-            $seen = $snapshot['url'];
+        // FrontController applies it once with the engine's Request; applying it
+        // here again would hand typed callbacks a snapshot array.
+        $calls = 0;
+        $GLOBALS['pb_test_filters']['proto_blocks_redirects_log_404'][] = static function ($log) use (&$calls) {
+            $calls++;
             return false;
         };
         self::log()->log404(self::request());
-        self::assertSame('/wp-config.php.bak', $seen);
-        self::assertSame([], $this->db->calls);
+        self::assertSame(0, $calls);
+        self::assertCount(1, $this->callsOf('insert'));
     }
 
     public function testTruncationAndHeaders(): void
