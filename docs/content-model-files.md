@@ -47,13 +47,13 @@ your-theme/
 | Settings page | `proto-options/` | `page.jsonc` or `page.json` | `^[a-z][a-z0-9-]*$`, 64 characters at most, not reserved |
 | Redirect group | `proto-redirects/` | `redirects.jsonc` or `redirects.json` | `^[a-z][a-z0-9_-]*$`, 60 characters at most, `settings` reserved |
 | Redirect settings | `proto-redirects/` | `settings.jsonc` | none; one file, REST path `redirect-settings/settings` |
-| Script | `proto-scripts/` | `script.jsonc` plus `head.html`, `body-open.html`, `body-close.html` | the content-model slug rule `^[a-z][a-z0-9_-]*$` |
+| Script | `proto-scripts/` | `script.jsonc` plus `head.html`, `body-open.html`, `body-close.html` | `^[a-z][a-z0-9_-]*$`, 32 characters at most |
 
 The reserved slugs are listed in [post types](post-types.md#slug-rules), [taxonomies](taxonomies.md#slug-rules) and [settings pages](settings-pages.md#slug-rules).
 
 Only the declaration file in each folder is read.
 Other files in the folder (an SVG icon, notes) are ignored by the loader.
-The exception is `proto-scripts/<slug>/`: its three `.html` files are the snippets, written through the same confined, atomic writer and capped at 256 KB each. Only those three names are ever read or written. See [scripts](scripts.md).
+The exception is `proto-scripts/<slug>/`: its three `.html` files are the snippets, written through the same confined, atomic writer and capped at 256 KB each. Only those three names are ever read or written. Deleting a script removes the folder only when it holds a valid `script.jsonc` and nothing but those three files. Writes also need `unfiltered_html`. See [scripts](scripts.md).
 
 ## JSONC conventions
 
@@ -262,7 +262,7 @@ On a single site, `manage_options` is enough.
 ## What is stored in the database
 
 Declarations never are.
-The plugin keeps only bookkeeping and the redirect module's runtime data:
+The plugin keeps only bookkeeping, the redirect module's runtime data and one scripts flag:
 
 | Name | Kind | Holds |
 |---|---|---|
@@ -273,6 +273,7 @@ The plugin keeps only bookkeeping and the redirect module's runtime data:
 | `{prefix}proto_redirect_log` | table | the redirect log |
 | `{prefix}proto_404_log` | table | the 404 log |
 | `proto_blocks_redirects_db` | option | `1` once the three tables exist, so they are checked only when it is not `1` |
+| `proto_blocks_scripts_body_open` | option | `{ "<theme>": true }` while the active theme was last seen not firing `wp_body_open`, for the `missing_body_open` warning. Autoloaded while set, deleted otherwise. |
 
 Redirect and script configuration is never stored here.
 Delete the three tables and every redirect still works.

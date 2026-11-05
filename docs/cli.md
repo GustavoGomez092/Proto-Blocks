@@ -339,16 +339,20 @@ Head, body-open and body-close snippets.
 Guide: [scripts](scripts.md).
 
 ```bash
-wp proto-blocks script list
-wp proto-blocks script create <title>
-wp proto-blocks script validate
+wp proto-blocks script list [--format=<table|json|csv>]
+wp proto-blocks script create <title> [--slug=<slug>] [--priority=<n>]
+wp proto-blocks script validate [--format=<table|json|csv>]
 wp proto-blocks script enable <slug>
 wp proto-blocks script disable <slug>
 wp proto-blocks script delete <slug> --confirm=<slug>
 ```
 
-- `create` writes `proto-scripts/<slug>/script.jsonc` into the active theme.
-- `delete` needs `--confirm=<slug>` equal to the slug. It removes the folder only when it holds a valid `script.jsonc` and nothing but the three snippet files.
+- `list` columns: `slug`, `title`, `enabled`, `priority`, `locations`, `where`, `origin`.
+- `create` writes the commented template to `proto-scripts/<slug>/script.jsonc` in the active theme. `--slug` defaults to the slugified title. `--priority` is an integer from -100000 to 100000 (default 10).
+- `validate` prints every finding (`level`, `code`, `slug`, `source`, `message`) and exits 1 when there is an error. It includes the `missing_body_open` warning.
+- `enable` and `disable` edit only `enabled`, keeping comments. A script declared in PHP is refused with a pointer to the code.
+- `delete` needs `--confirm=<slug>` equal to the slug. It removes the folder only when it holds a valid `script.jsonc` and nothing but the three snippet files. Otherwise only `script.jsonc` goes, and a warning lists the files that were kept.
+- The commands skip the `unfiltered_html` check, because the shell user owns the theme files. File-mods and multisite rules still apply. They work while the `scripts` module is off.
 
 ## Blocks
 

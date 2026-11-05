@@ -23,7 +23,7 @@ Related: [content model files](content-model-files.md), [post types](post-types.
 |---|---|
 | `admin/*` read routes | `manage_options` |
 | `admin/*` routes that write files | `manage_options`, `DISALLOW_FILE_MODS` and `DISALLOW_FILE_EDIT` false, and `is_super_admin()` on multisite |
-| `admin/scripts/<slug>` write routes | the file-write gate, and `unfiltered_html` |
+| `admin/scripts/<slug>` write routes, and writes and deletes on `admin/schema-files/script/<slug>` | the file-write gate, and `unfiltered_html` |
 | `admin/redirects/import/deactivate` | `activate_plugins` |
 | `options/<slug>` | a logged-in user with the page's declared capability |
 | `fields/errors` | the object's edit capability (`edit_post`, `edit_term`, `edit_user`, or the page capability) |
@@ -511,33 +511,56 @@ Permission: `manage_options`.
   "roles": [ { "slug": "administrator", "name": "Administrator" } ],
   "items": [
     { "slug": "gtm", "title": "Google Tag Manager", "enabled": true, "priority": 10,
-      "locations": [ "head", "bodyOpen" ], "where": { "include": [ "all" ] },
-      "origin": "file", "double": null, "issues": [] }
+      "priorities": { "head": 1, "bodyOpen": 10, "bodyClose": 10 },
+      "locations": [ "head", "bodyOpen" ],
+      "files": { "head": "head.html", "bodyOpen": "body-open.html", "bodyClose": null },
+      "where": { "include": [ "all" ], "exclude": [], "loggedIn": null, "roles": [], "excludeRoles": [] },
+      "whereSummary": "All pages",
+      "origin": "file", "originLabel": "Proto-Blocks file", "source": "wp-content/themes/acme/proto-scripts/gtm/script.jsonc",
+      "double": null, "editable": true, "readOnlyReason": null, "issues": [] }
   ],
   "issues": []
 }
 ```
 
-`writeReason` is `unfiltered_html` when the user may not post unfiltered HTML, besides the usual read-only reasons.
+- `writeReason` is `file_mods`, `multisite` or `unfiltered_html`, checked in that order, or `null`.
+- `roles` is every role on the site, for the editor's role pickers.
+- `locations` lists the locations that have code. `files` names the snippet file each location uses, or `null`.
+- `editable` is false, with `readOnlyReason`, when the user cannot write or the target is not writable. A script declared only in PHP is never editable (`readOnlyReason: "php"`).
+- With the module off the response is `moduleEnabled: false` with empty `items` and `issues`.
 
 ### GET `admin/scripts/<slug>`
 
-The metadata file as the schema-files route returns it (`text`, `hash`, `data`), plus the snippet texts:
+The result of `admin/schema-files/script/<slug>` (`exists`, `path`, `text`, `hash`, `data`, `writable`, `reason`), plus:
 
 ```json
-{ "snippets": { "head": "<script>...</script>", "bodyOpen": "", "bodyClose": "" } }
+{
+  "snippets": { "head": "<script>...</script>", "bodyOpen": "", "bodyClose": "" },
+  "item": { "slug": "gtm", "...": "the list row, or null when no script has this slug" },
+  "canWrite": true,
+  "writeReason": null
+}
 ```
+
+A slug with no file returns the commented template as `text` (query `name` seeds the title). A script declared only in PHP returns its code in `snippets`. With the module off the route answers `404 proto_blocks_module_disabled`.
 
 ### POST `admin/scripts/<slug>`
 
 Permission: write (*writes files*) and `unfiltered_html`.
 
 ```json
-{ "text": "<script.jsonc text>", "hash": "<hash from GET, or null>", "snippets": { "head": "...", "bodyOpen": "", "bodyClose": "" } }
+{ "text": "<script.jsonc text>", "hash": "<hash from GET, or null>", "snippets": { "head": "...", "bodyOpen": "" } }
 ```
 
-The server writes `script.jsonc` and the three `.html` files in one request and returns `{ "hash": "...", "path": "...", "warnings": [] }`.
-Delete goes through `DELETE admin/schema-files/script/<slug>?confirm=<slug>`.
+- `snippets` is optional and may hold any of `head`, `bodyOpen`, `bodyClose`. A location that is absent is left alone. An empty string deletes that file.
+- Every snippet is checked before anything is written. Then `script.jsonc` is written (validation, hash, atomic swap), then each snippet file.
+- The response is `{ "hash": "...", "path": "...", "created": true, "warnings": [] }`. `created` is true when the file did not exist.
+- Errors: `400 proto_blocks_invalid_slug`, `_invalid_request`, `_invalid_jsonc`, `_schema_invalid`, `_php_in_snippet` (with `location`); `403 proto_blocks_unfiltered_html`, `_file_mods`, `_multisite`, `_path_outside_root`, `_not_writable`; `404 proto_blocks_module_disabled`; `409 proto_blocks_conflict` (with the current `hash`); `413 proto_blocks_file_too_large` (with `location`); `500 proto_blocks_write_failed`.
+- If a snippet fails after `script.jsonc` was saved, the error carries the new `hash` so a retry does not conflict.
+
+### DELETE `admin/schema-files/script/<slug>?confirm=<slug>`
+
+The shared file route; it needs `unfiltered_html` for scripts, like every other write on `script`. When the folder holds a valid `script.jsonc` and nothing but the three snippet files, the folder is removed. Otherwise only `script.jsonc` goes. The response lists what was left behind in `kept`.
 
 ## Admin screens (other)
 
