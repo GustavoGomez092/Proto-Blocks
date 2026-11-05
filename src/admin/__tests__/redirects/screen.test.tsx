@@ -1,7 +1,7 @@
 import '../helpers';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { calls, index, rowButton, legacyGroup, phpGroup, promoGroup, renderScreen, routes, rowOf, rulesTable, setup, writes } from './fixtures';
+import { calls, index, rowButton, legacyGroup, phpGroup, promoGroup, renderScreen, routes, rowOf, rule, rulesTable, setup, writes } from './fixtures';
 
 setup();
 
@@ -183,6 +183,27 @@ describe('banners', () => {
 		expect(await screen.findByText('/a redirects to /b, which redirects again.')).toBeTruthy();
 		expect(screen.queryByText('Redirection is active, Proto-Blocks redirects are paused.')).toBeNull();
 		expect(within(await rowOf('/about-us')).getByText('Declared twice')).toBeTruthy();
+	});
+
+	test('a file rule whose PHP twin was dropped (double_declaration) shows Declared twice', async () => {
+		routes({
+			'admin/redirects': index({
+				groups: [
+					legacyGroup({
+						rules: [
+							rule({
+								issues: [{ level: 'warning', code: 'double_declaration', message: 'The redirect from /about-us declared in PHP at functions.php:30 is also in the file group "legacy-site".', source: 'functions.php:30' }],
+							}),
+							rule({ id: 'r_00000002', from: '/other', to: '/x', index: 1 }),
+						],
+					}),
+				],
+			}),
+		});
+		renderScreen();
+		const twice = within(await rowOf('/about-us')).getByRole('button', { name: /Declared in .*legacy-site\/redirects\.jsonc and in functions\.php:30/ });
+		expect(within(twice).getByText('Declared twice')).toBeTruthy();
+		expect(within(await rowOf('/other')).queryByText('Declared twice')).toBeNull();
 	});
 
 	test('tables missing: Create tables installs them, then the screen reloads', async () => {

@@ -38,6 +38,19 @@ const keyOf = (rule: Pick<Rule, 'group' | 'id'>) => `${rule.group}/${rule.id}`;
 const refOf = (rule: Rule) => ({ id: rule.id, index: rule.index });
 const sourceLabel = (rule: Rule) => rule.from ?? __('(any 404)', 'proto-blocks');
 
+/**
+ * Declared twice (spec §4, §6): the whole group (file and PHP group of one
+ * slug), or this file rule, whose PHP twin was dropped with a
+ * `double_declaration` issue naming the PHP call site.
+ */
+export function doubleOf(group: Group, rule: Rule): { file: string; php: string } | null {
+	if (group.double) {
+		return group.double;
+	}
+	const issue = rule.origin === 'file' ? rule.issues.find((item) => item.code === 'double_declaration') : undefined;
+	return issue ? { file: rule.source, php: issue.source } : null;
+}
+
 /** The rule as it stands in its file (found by id, or by index for a rule written without one). */
 function rawRule(text: string, rule: Rule): FileRule | null {
 	const rules = readRules(text);
@@ -345,6 +358,7 @@ export function RedirectsTab({
 								const editable = fileEditable(group);
 								const guard = writeGuard(readOnly, !editable || busy);
 								const label = sourceLabel(rule);
+								const double = doubleOf(group, rule);
 								const siblings = group.rules.length;
 								const on = rule.enabled && group.enabled;
 								const reason = groupReadOnlyReason(group);
@@ -378,7 +392,7 @@ export function RedirectsTab({
 												<ArrowRightIcon aria-hidden="true" className="size-3.5 flex-none text-faint" />
 												<TargetCell rule={rule} />
 												{rule.when ? <span className="rounded-full bg-brand-soft px-2 text-[11.5px] leading-5 font-medium text-brand-ink">{conditionLabel(rule.when.type)}</span> : null}
-												{group.double ? <DoubleBadge double={group.double} /> : null}
+												{double ? <DoubleBadge double={double} /> : null}
 												{rule.issues.length > 0 ? (
 													<Tooltip>
 														<TooltipTrigger type="button" className="rounded-full" aria-label={rule.issues.map((issue) => issue.message).join(' ')}>

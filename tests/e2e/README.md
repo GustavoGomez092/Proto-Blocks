@@ -55,3 +55,17 @@ the 50-field `perf` group, a term group (`category`), a user group, an `event-ca
 (mount time, keystroke p95/max) and records them as test annotations; budgets: mount <= 600 ms,
 keystroke p95 <= 50 ms and max <= 100 ms, no picker chunk before the relationship "Add" button is used.
 The Fields baselines (`fields-box-*`, `fields-term-form`) are macOS (`-chromium-darwin`).
+
+The Redirects specs (`redirects`, `redirects-visual`) write group files into
+`proto-redirects/` of a fresh pb-e2e-block copy and assert the front end with raw
+requests (`request.fetch(..., { maxRedirects: 0 })`, helpers in `redirects-utils.ts`):
+status, `Location` and `X-Redirect-By`. The `pb-e2e-redirects` mu-plugin declares one
+`proto_redirect()` while the option `pb_e2e_redirects_php` holds its source, and adds
+`tests/e2e/fixtures/redirects-readonly` to `proto_blocks_schema_paths` while
+`pb_e2e_redirects_readonly` is set (a group the screen cannot write). After every test the
+specs remove `proto-redirects/`, both options and every row of the three redirect tables.
+Two host behaviours are pinned: wp-env's Apache answers `%2F` in a path with its own 404
+(AllowEncodedSlashes Off), so the engine's decoding is checked through the test route; and
+Docker Desktop for macOS ignores `chmod` on the bind-mounted site, so the chmod read-only
+test skips itself there (it runs on Linux Docker). The Redirects baselines are macOS
+(`-chromium-darwin`); times and user agents are masked.

@@ -89,7 +89,7 @@ test.describe( 'Scripts screen (visual)', () => {
 
 	test( 'script editor', async ( { page } ) => {
 		await openScreen( page, '&slug=gtm' );
-		await expect( page.getByLabel( 'Title', { exact: true } ) ).toHaveValue(
+		await expect( page.getByLabel( 'Script title', { exact: true } ) ).toHaveValue(
 			'Google Tag Manager'
 		);
 		await expect( page.locator( '#wpbody-content' ) ).toHaveScreenshot(

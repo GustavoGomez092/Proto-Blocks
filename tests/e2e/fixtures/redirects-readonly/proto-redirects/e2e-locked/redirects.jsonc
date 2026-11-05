@@ -1,0 +1,8 @@
+// Read-only fixture group: loaded only while the option pb_e2e_redirects_readonly is set
+// (pb-e2e-redirects mu-plugin adds this folder to proto_blocks_schema_paths).
+{
+  "title": "E2E Locked",
+  "rules": [
+    { "id": "r_e2e10c4d", "from": "/pb-e2e-locked", "to": "/pb-e2e-locked-new" }
+  ]
+}
