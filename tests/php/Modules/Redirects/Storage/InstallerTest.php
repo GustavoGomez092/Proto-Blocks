@@ -89,11 +89,33 @@ final class InstallerTest extends StorageTestCase
         $installer->ensure();
 
         self::assertArrayNotHasKey(Installer::OPTION, $GLOBALS['pb_test_options']);
-        // So the next request tries again.
+        // So a later request tries again, once the back-off has passed.
+        unset($GLOBALS['pb_test_transients'][Installer::RETRY_TRANSIENT]);
         $this->db->queue[] = self::ALL;
         $installer->ensure();
         self::assertCount(6, $GLOBALS['pb_test_dbdelta']);
         self::assertSame('1', $GLOBALS['pb_test_options'][Installer::OPTION]);
+    }
+
+    public function testAFailedCreateBacksOffInsteadOfRetryingEveryRequest(): void
+    {
+        $GLOBALS['pb_test_transients'] = [];
+        $this->db->queue[] = []; // no CREATE grant: nothing was created
+        $installer = new Installer();
+        $installer->ensure();
+
+        self::assertSame(Installer::RETRY_SECONDS, $GLOBALS['pb_test_transients'][Installer::RETRY_TRANSIENT]['expiration']);
+        $calls = count($this->db->calls);
+        $installer->ensure();
+        $installer->ensure();
+        self::assertCount(3, $GLOBALS['pb_test_dbdelta'], 'no dbDelta while backing off');
+        self::assertCount($calls, $this->db->calls, 'no SHOW TABLES either');
+
+        // An explicit install (Settings "Create tables", CLI db install) ignores the back-off and clears it.
+        $this->db->queue[] = self::ALL;
+        self::assertTrue($installer->install());
+        self::assertArrayNotHasKey(Installer::RETRY_TRANSIENT, $GLOBALS['pb_test_transients']);
+        unset($GLOBALS['pb_test_transients']);
     }
 
     public function testMultisiteUsesTheCurrentSitePrefix(): void

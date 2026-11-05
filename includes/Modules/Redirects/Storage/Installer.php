@@ -8,19 +8,26 @@ namespace ProtoBlocks\Modules\Redirects\Storage;
  * Creates, reports on and drops the runtime tables. `ensure()` runs dbDelta
  * only while the `proto_blocks_redirects_db` option is not the current
  * schema version, so it costs one autoloaded option read per request.
+ * When the tables cannot be created (no CREATE grant) it backs off for an
+ * hour (transient RETRY_TRANSIENT) instead of running dbDelta and SHOW
+ * TABLES on every request; install() itself always runs.
  * The prefix is read from `$wpdb` on every call, so on multisite each site
  * gets its own tables after `switch_to_blog()`.
  */
 final class Installer
 {
     public const OPTION = 'proto_blocks_redirects_db';
+    public const RETRY_TRANSIENT = 'proto_blocks_redirects_db_retry';
+    public const RETRY_SECONDS = 3600;
 
     public function ensure(): void
     {
-        if (get_option(self::OPTION) === Schema::VERSION) {
+        if (get_option(self::OPTION) === Schema::VERSION || get_transient(self::RETRY_TRANSIENT) !== false) {
             return;
         }
-        $this->install();
+        if (!$this->install()) {
+            set_transient(self::RETRY_TRANSIENT, 1, self::RETRY_SECONDS);
+        }
     }
 
     /** Runs dbDelta unconditionally; records the version once every table exists. */
@@ -37,6 +44,7 @@ final class Installer
             return false;
         }
         update_option(self::OPTION, Schema::VERSION, true);
+        delete_transient(self::RETRY_TRANSIENT);
 
         return true;
     }

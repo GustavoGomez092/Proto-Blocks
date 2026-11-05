@@ -23,7 +23,9 @@ use ProtoBlocks\Modules\Redirects\Sources\PhpDeclarations;
  * naming the call site). A broken file also drops the PHP group of its slug
  * (fail closed). A group-level error skips the group; a rule-level error
  * drops that rule only. Evaluation order: groups by position, then slug;
- * rules by their position in the group. Built once until invalidate().
+ * rules by their position in the group. Built once until invalidate(), and
+ * only when groups, rules or issues are asked for: settings() alone reads the
+ * settings file and no group file (module boot on every request).
  */
 final class Registry
 {
@@ -44,6 +46,11 @@ final class Registry
 
     /** @var array{groups: list<array<string, mixed>>, settings: array<string, mixed>, issues: list<Issue>}|null */
     private ?array $built = null;
+
+    /** @var array<string, mixed>|null settings() before any build */
+    private ?array $settingsOnly = null;
+
+    private int $builds = 0;
 
     /** @param (\Closure(): GroupFiles)|null $files factory for the file source (default: the theme roots) */
     public function __construct(?\Closure $files = null)
@@ -110,10 +117,29 @@ final class Registry
         return array_values(array_filter($this->rules(), static fn(array $rule): bool => $rule['enabled'] === true));
     }
 
-    /** @return array<string, mixed> fully defaulted settings */
+    /**
+     * Fully defaulted settings. Reads only the settings file (never a group
+     * file) until something builds the registry.
+     *
+     * @return array<string, mixed>
+     */
     public function settings(): array
     {
-        return $this->build()['settings'];
+        if ($this->built !== null) {
+            return $this->built['settings'];
+        }
+        if ($this->settingsOnly === null) {
+            $raw = $this->injected !== null ? $this->injected[2] : ($this->files()->settingsFile()['data'] ?? []);
+            $this->settingsOnly = Settings::merge($raw);
+        }
+
+        return $this->settingsOnly;
+    }
+
+    /** @internal How many times the groups were built (tests: lazy boot, one build per request). */
+    public function buildCount(): int
+    {
+        return $this->builds;
     }
 
     /** The settings file in effect, or null (defaults). */
@@ -132,6 +158,7 @@ final class Registry
     public function invalidate(): void
     {
         $this->built = null;
+        $this->settingsOnly = null;
         $this->files = null;
     }
 
@@ -160,6 +187,7 @@ final class Registry
         if ($this->built !== null) {
             return $this->built;
         }
+        $this->builds++;
         $issues = [];
 
         if ($this->injected !== null) {

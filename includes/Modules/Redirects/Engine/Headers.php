@@ -15,8 +15,8 @@ final class Headers
 {
     public const MAX_VALUE = 1000;
 
-    /** Names that would let a file forge cookies, the redirect itself or the framing. */
-    public const FORBIDDEN = ['set-cookie', 'location', 'status', 'content-length', 'transfer-encoding'];
+    /** Names that would let a file forge cookies, the redirect itself (Location, a meta-refresh Refresh) or the framing. */
+    public const FORBIDDEN = \ProtoBlocks\Modules\Redirects\Definition\Patterns::FORBIDDEN_HEADERS;
 
     /**
      * @param array<string,mixed> $settings

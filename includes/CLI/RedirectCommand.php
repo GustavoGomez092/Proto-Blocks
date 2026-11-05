@@ -787,7 +787,7 @@ final class RedirectCommand extends WP_CLI_Command
         $totals = ['added' => 0, 'replaced' => 0, 'skipped' => 0, 'invalid' => 0];
         foreach ($plan as $slug => $entry) {
             $slug = (string) $slug;
-            if (preg_match(GroupValidator::SLUG_PATTERN, $slug) !== 1) {
+            if (preg_match(GroupValidator::FILE_SLUG_PATTERN, $slug) !== 1) {
                 WP_CLI::warning(sprintf('"%s" is not a valid group slug; its %d rule(s) were not imported. Pass --group.', Commands::safeArg($slug), count($entry['rows'])));
                 continue;
             }
@@ -932,14 +932,21 @@ final class RedirectCommand extends WP_CLI_Command
         $limit = max(1, min(200, (int) ($assoc['limit'] ?? 20)));
         $result = $table->query([], 1, $limit);
         $columns = $notFound ? self::NOT_FOUND_COLUMNS : self::LOG_COLUMNS;
-        $rows = array_map(static function (array $row) use ($columns): array {
+        $format = (string) ($assoc['format'] ?? 'table');
+        // Logged URLs, agents and referrers come from visitors: a csv opened in a
+        // spreadsheet gets the same formula escaping as the REST csv export.
+        $csv = $format === 'csv';
+        $rows = array_map(static function (array $row) use ($columns, $csv): array {
             $out = [];
             foreach ($columns as $c) {
                 $out[$c] = $row[$c] === null ? '' : (string) $row[$c];
+                if ($csv) {
+                    $out[$c] = RedirectsRoutes::csvCell($out[$c]);
+                }
             }
             return $out;
         }, $result['rows']);
-        WP_CLI\Utils\format_items((string) ($assoc['format'] ?? 'table'), $rows, $columns);
+        WP_CLI\Utils\format_items($format, $rows, $columns);
         WP_CLI::log(sprintf('%d of %d row(s) in the %s.', count($rows), $result['total'], $name));
     }
 

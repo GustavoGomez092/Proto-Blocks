@@ -138,6 +138,23 @@ final class MatcherTest extends EngineTestCase
         self::assertSame('r_0000beef', $m->issues()[0]['ruleId']);
     }
 
+    public function testInvalidRegexIsCompiledOnceNotOnEveryEvaluation(): void
+    {
+        $m = self::m([self::rule(['from' => '^/(bad', 'regex' => true, 'id' => 'r_0000beef'])]);
+        $compiled = (new \ReflectionProperty(Matcher::class, 'compiled'))->getValue($m);
+        self::assertSame([0 => false], $compiled, 'a known-bad pattern is remembered as false');
+        self::assertNull($m->match(self::req('/bad')));
+        self::assertNull($m->match(self::req('/bad')));
+    }
+
+    public function testAKnownBadCompiledPatternIsNeverRecompiled(): void
+    {
+        $error = null;
+        $rule = self::rule(['from' => '^/a$', 'regex' => true]);
+        self::assertNull(\ProtoBlocks\Modules\Redirects\Engine\SourceMatcher::matches($rule, self::req('/a'), $error, false));
+        self::assertSame('Invalid or too long pattern', $error);
+    }
+
     public function testBacktrackLimitDoesNotFire(): void
     {
         $jit = ini_get('pcre.jit');

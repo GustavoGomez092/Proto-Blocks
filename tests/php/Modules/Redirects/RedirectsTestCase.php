@@ -37,6 +37,7 @@ abstract class RedirectsTestCase extends TestCase
         ];
         $GLOBALS['pb_test_filters'] = [];
         $GLOBALS['pb_test_hooks'] = [];
+        unset($GLOBALS['pb_test_transients'][\ProtoBlocks\Modules\Redirects\Storage\Installer::RETRY_TRANSIENT]);
         PhpDeclarations::reset();
         SchemaFileWriter::resetKinds();
     }

@@ -6,7 +6,6 @@ namespace ProtoBlocks\Tests\CLI;
 
 require_once __DIR__ . '/wp-stubs.php';
 require_once __DIR__ . '/wp-cli-stub.php';
-require_once __DIR__ . '/../Modules/Redirects/wp-stubs.php';
 require_once __DIR__ . '/../API/stubs/redirects-doubles.php';
 
 use PHPUnit\Framework\TestCase;
@@ -545,6 +544,21 @@ final class RedirectCommandTest extends TestCase
 
         $this->db->queue = [[]];
         self::assertStringContainsString('db install', self::cliError(fn() => $this->command()->log([], [])));
+    }
+
+    public function testLogCsvIsFormulaEscapedOtherFormatsAreNot(): void
+    {
+        $row = ['id' => '5', 'created' => '2026-11-05 10:00:00', 'url' => '/a', 'target' => '=HYPERLINK("https://evil.test")', 'code' => '301', 'redirect_by' => '@sum', 'method' => 'GET'];
+        $this->db->queue = [self::TABLES, 1, [$row]];
+        $this->command()->log([], ['format' => 'csv']);
+        $csv = self::lastTable()[0];
+        self::assertSame(\ProtoBlocks\API\Admin\RedirectsRoutes::FORMULA_PREFIX . '=HYPERLINK("https://evil.test")', $csv['target']);
+        self::assertSame(\ProtoBlocks\API\Admin\RedirectsRoutes::FORMULA_PREFIX . '@sum', $csv['redirectBy']);
+        self::assertSame('/a', $csv['url']);
+
+        $this->db->queue = [self::TABLES, 1, [$row]];
+        $this->command()->log([], ['format' => 'json']);
+        self::assertSame('=HYPERLINK("https://evil.test")', self::lastTable()[0]['target']);
     }
 
     public function testPruneDeletesOrphansAndAppliesRetention(): void

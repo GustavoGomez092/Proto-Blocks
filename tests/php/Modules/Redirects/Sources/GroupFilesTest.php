@@ -109,6 +109,16 @@ final class GroupFilesTest extends RedirectsTestCase
         self::assertStringContainsString('Split the group', $files->issues()[0]->message);
     }
 
+    public function testPhpFolderIsReservedForThePhpDeclaredGroup(): void
+    {
+        $this->put($this->child, 'proto-redirects/php/redirects.jsonc', '{"rules": [{"from": "/a", "to": "/b"}]}');
+        $files = $this->files();
+
+        self::assertSame([], $files->groups());
+        self::assertSame(['error:invalid_slug'], self::issueCodes($files->issues()));
+        self::assertStringContainsString('proto_redirect()', $files->issues()[0]->message);
+    }
+
     public function testInvalidAndReservedSlugFoldersAreSkipped(): void
     {
         $this->put($this->parent, 'proto-redirects/Bad Name/redirects.jsonc', '{}');
@@ -155,6 +165,46 @@ final class GroupFilesTest extends RedirectsTestCase
         self::assertSame('settings', $files->issues()[0]->slug);
     }
 
+    public function testSettingsFileAloneOpensNoGroupFile(): void
+    {
+        $this->put($this->child, 'proto-redirects/settings.jsonc', '{"cache": 24}');
+        for ($i = 0; $i < 50; $i++) {
+            $this->put($this->child, 'proto-redirects/g' . $i . '/redirects.jsonc', '{"rules": []}');
+        }
+        $decoded = 0;
+        $files = new GroupFiles(fn(): array => [$this->parent, $this->child], static function (string $text) use (&$decoded) {
+            $decoded++;
+            return json_decode($text, true, 512, JSON_THROW_ON_ERROR);
+        });
+
+        self::assertSame(['cache' => 24], $files->settingsFile()['data']);
+        self::assertSame(['cache' => 24], $files->settingsFile()['data']);
+        self::assertSame(1, $decoded, 'only settings.jsonc was decoded');
+
+        self::assertCount(50, $files->groups());
+        self::assertSame(52, $decoded, 'the full load reads every group (and the settings file again)');
+        self::assertSame(['cache' => 24], $files->settingsFile()['data']);
+        self::assertSame(52, $decoded);
+    }
+
+    public function testSettingsOnlyReadKeepsFindingsForTheFullLoad(): void
+    {
+        $this->put($this->child, 'proto-redirects/settings.jsonc', '{}');
+        $this->put($this->child, 'proto-redirects/settings.json', '{}');
+        $files = $this->files();
+
+        self::assertSame([], $files->settingsFile()['data']);
+        self::assertSame(['warning:both_extensions'], self::issueCodes($files->issues()), 'reported once, by the full load');
+    }
+
+    public function testSettingsOnlyReadFailsClosedOnABrokenChild(): void
+    {
+        $this->put($this->parent, 'proto-redirects/settings.jsonc', '{"cache": 24}');
+        $this->put($this->child, 'proto-redirects/settings.jsonc', '{"cache": ');
+
+        self::assertNull($this->files()->settingsFile());
+    }
+
     public function testSettingsBothExtensionsAndPathsList(): void
     {
         $a = $this->put($this->parent, 'proto-redirects/settings.jsonc', '{}');
@@ -168,7 +218,7 @@ final class GroupFilesTest extends RedirectsTestCase
 
     public function testFilesAreDataNeverExecuted(): void
     {
-        $this->put($this->parent, 'proto-redirects/php/redirects.jsonc', '<?php $GLOBALS["pb_redirects_executed"] = true; ?>');
+        $this->put($this->parent, 'proto-redirects/exec/redirects.jsonc', '<?php $GLOBALS["pb_redirects_executed"] = true; ?>');
         $files = $this->files();
 
         self::assertSame([], $files->groups());

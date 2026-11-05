@@ -97,7 +97,7 @@
           "additionalProperties": false,
           "properties": {
             "postTypes": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9_-]{1,20}$" } },
-            "group": { "type": "string", "pattern": "^(?!settings$)[a-z][a-z0-9_-]{0,59}$" },
+            "group": { "type": "string", "pattern": "^(?!(?:settings|php)$)[a-z][a-z0-9_-]{0,59}$" },
             "trash": { "type": "boolean" },
             "associated": { "type": "string", "maxLength": 100, "pattern": "^(|/[^\\s<>]*)$" }
           }

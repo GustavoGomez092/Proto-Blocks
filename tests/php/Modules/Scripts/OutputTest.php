@@ -215,6 +215,22 @@ final class OutputTest extends ScriptsTestCase
         self::assertSame(true, $GLOBALS['pb_test_autoload'][Output::BODY_OPEN_OPTION] ?? true);
     }
 
+    public function testAThemeThatFiresBodyOpenReadsNoMissingOption(): void
+    {
+        $GLOBALS['pb_test_options'] = array_diff_key($GLOBALS['pb_test_options'] ?? [], [Output::BODY_OPEN_OPTION => true]);
+        $GLOBALS['pb_test_option_reads'] = [];
+        $output = self::printer([]);
+        do_action('wp_body_open');
+        $writes = $GLOBALS['pb_test_update_calls'] ?? 0;
+
+        $output->recordBodyOpen();
+
+        self::assertNotContains(Output::BODY_OPEN_OPTION, $GLOBALS['pb_test_option_reads'], 'absent: get_option() would query the database');
+        self::assertArrayNotHasKey(Output::BODY_OPEN_OPTION, $GLOBALS['pb_test_options']);
+        self::assertSame($writes, $GLOBALS['pb_test_update_calls'] ?? 0);
+        unset($GLOBALS['pb_test_option_reads']);
+    }
+
     public function testBodyOpenNotRecordedInVetoedContexts(): void
     {
         $GLOBALS['pb_test_is_admin'] = true;

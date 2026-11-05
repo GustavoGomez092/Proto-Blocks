@@ -18,6 +18,7 @@ use ProtoBlocks\Modules\Redirects\Engine\FrontController;
 use ProtoBlocks\Modules\Redirects\Engine\Request;
 use ProtoBlocks\Modules\Redirects\Sources\GroupFiles;
 use ProtoBlocks\Modules\Redirects\Sources\PhpDeclarations;
+use ProtoBlocks\Modules\Redirects\Storage\ExternalRedirects;
 use ProtoBlocks\Modules\Redirects\Storage\Hits;
 use ProtoBlocks\Modules\Redirects\Storage\Installer;
 use ProtoBlocks\Modules\Redirects\Storage\IpResolver;
@@ -48,6 +49,8 @@ final class RedirectsModule implements ModuleInterface
     private ?Monitor $monitor = null;
     private ?Retention $retention = null;
     private string $phpFingerprint = '';
+    /** @var list<Issue> findings of boot() itself (the monitor refused on multisite) */
+    private array $bootIssues = [];
 
     public function __construct(private readonly ContentModelRegistry $contentModel)
     {
@@ -62,13 +65,17 @@ final class RedirectsModule implements ModuleInterface
      * Wires the module (runs on `after_setup_theme` 1 through Modules\Manager):
      * file kinds and PHP sealing; tables on `plugins_loaded` (or now when it
      * already ran); the log-retention cron; the client-IP resolver of the
-     * `ip` condition; the front end unless Coexistence pauses it; the
-     * permalink monitor when `monitor.postTypes` is non-empty.
+     * `ip` condition; the front end unless Coexistence pauses it (with
+     * `log.external`, the x_redirect_by logger of other code's redirects); the
+     * permalink monitor when `monitor.postTypes` is non-empty, never on
+     * multisite (a `monitor_unwritable` warning, reason multisite, instead).
      *
-     * Settings are read here (one registry build per request, shared with the
-     * engine). PHP declarations made between now and the `init` 9 seal make
-     * the registry rebuild once at the seal; the engine reads its rules
-     * lazily on the first match, so it always sees the sealed set.
+     * Only `settings.jsonc` is read here (Registry::settings() opens no group
+     * file), so admin, REST and cron requests that never match pay for one
+     * small read. The groups are built lazily, once, by the first caller that
+     * needs rules or issues (the engine on its first match, REST, CLI, the
+     * monitor); PHP declarations made before the `init` 9 seal invalidate a
+     * build that already happened.
      */
     public function boot(): void
     {
@@ -95,6 +102,10 @@ final class RedirectsModule implements ModuleInterface
         Ip::setResolver(static fn(Request $request): ?string => IpResolver::resolve($request->server, $log));
 
         if (!Coexistence::paused($settings)) {
+            $redirectLog = new RedirectLog($settings);
+            if (($log['external'] ?? false) === true) {
+                (new ExternalRedirects($redirectLog))->register();
+            }
             $dispatcher = new Dispatcher(
                 $settings,
                 self::$headerHandler ?? static function (string $name, string $value): void {
@@ -104,7 +115,7 @@ final class RedirectsModule implements ModuleInterface
                     exit;
                 },
                 new Hits($settings),
-                new RedirectLog($settings)
+                $redirectLog
             );
             $this->front = new FrontController(fn(): array => $this->registry()->enabledRules(), $settings, $dispatcher);
             $this->front->register();
@@ -112,8 +123,16 @@ final class RedirectsModule implements ModuleInterface
 
         $postTypes = $settings['monitor']['postTypes'] ?? [];
         if (is_array($postTypes) && $postTypes !== []) {
-            $this->monitor = new Monitor($this->registry(), new SchemaFileWriter(SchemaPaths::writableRoots(), AdminPage::fileModsAllowed()), $settings);
-            $this->monitor->register();
+            if (is_multisite()) {
+                // A sub-site editor must never write into a theme the whole network shares.
+                $this->bootIssues[] = new Issue(Issue::WARNING, 'monitor_unwritable', __(
+                    'The permalink monitor is off (reason: multisite): it never writes into a theme the network shares. Add moved-post redirects to a group file by hand.',
+                    'proto-blocks'
+                ), (string) ($this->registry()->settingsPath() ?? ''), GroupFiles::SETTINGS_SLUG, GroupFiles::SETTINGS_KIND);
+            } else {
+                $this->monitor = new Monitor($this->registry(), new SchemaFileWriter(SchemaPaths::writableRoots(), AdminPage::fileModsAllowed()), $settings);
+                $this->monitor->register();
+            }
         }
     }
 
@@ -132,6 +151,7 @@ final class RedirectsModule implements ModuleInterface
     /** Plugin activation: create the tables now. */
     public static function activate(): void
     {
+        delete_transient(Installer::RETRY_TRANSIENT); // an explicit activation never waits for the back-off
         (new Installer())->ensure();
     }
 
@@ -147,7 +167,7 @@ final class RedirectsModule implements ModuleInterface
         return $this->front;
     }
 
-    /** Null unless `monitor.postTypes` is non-empty. */
+    /** Null unless `monitor.postTypes` is non-empty; always null on multisite. */
     public function monitor(): ?Monitor
     {
         return $this->monitor;
@@ -263,7 +283,7 @@ final class RedirectsModule implements ModuleInterface
      */
     public function issues(): array
     {
-        return [...$this->registry()->issues(), ...($this->monitor?->issues() ?? [])];
+        return [...$this->registry()->issues(), ...$this->bootIssues, ...($this->monitor?->issues() ?? [])];
     }
 
     /** The content-model registry the module was built with. */

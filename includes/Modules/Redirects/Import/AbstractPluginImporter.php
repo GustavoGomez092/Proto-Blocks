@@ -32,6 +32,28 @@ abstract class AbstractPluginImporter implements PluginImporterInterface
         return $GLOBALS['wpdb'];
     }
 
+    /**
+     * An option's stored value read straight from the options table, not
+     * through get_option(): core's maybe_unserialize() would instantiate any
+     * class named in the data. A serialized array is decoded with
+     * `allowed_classes => false` (objects come back incomplete); anything
+     * else is returned as stored, null when the option is absent.
+     */
+    protected function rawOption(string $name): mixed
+    {
+        $db = $this->db();
+        $raw = $db->get_var($db->prepare("SELECT option_value FROM {$db->options} WHERE option_name = %s LIMIT 1", $name));
+        if (!is_string($raw)) {
+            return null;
+        }
+        if (preg_match('/^a:\d+:\{/', ltrim($raw)) === 1) {
+            $decoded = @unserialize(ltrim($raw), ['allowed_classes' => false]);
+            return is_array($decoded) ? $decoded : null;
+        }
+
+        return $raw;
+    }
+
     protected function tableExists(string $table): bool
     {
         $db = $this->db();
