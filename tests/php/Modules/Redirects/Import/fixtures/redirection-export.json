@@ -1,0 +1,17 @@
+{
+    "plugin": { "version": "5.10.1", "date": "Wed, 05 Nov 2026 10:00:00 +0000" },
+    "groups": [
+        { "id": 1, "name": "Redirections", "module_id": 1, "enabled": true },
+        { "id": 2, "name": "Modified Posts", "module_id": 1, "status": "disabled", "position": 3 }
+    ],
+    "redirects": [
+        { "id": 10, "url": "/second", "match_url": "/second", "match_data": { "source": { "flag_regex": false } }, "action_code": 302, "action_type": "url", "action_data": { "url": "/two" }, "match_type": "url", "title": "", "hits": 4, "regex": false, "group_id": 1, "position": 1, "enabled": true },
+        { "id": 11, "url": "/first", "match_url": "/first", "match_data": { "source": { "flag_case": false, "flag_trailing": false, "flag_query": "exactorder" }, "options": { "log_exclude": true } }, "action_code": 301, "action_type": "url", "action_data": "/one", "match_type": "url", "title": "Old first", "regex": false, "group_id": 1, "position": 0, "enabled": true },
+        { "id": 12, "url": "^/blog/(\\d+)$", "match_data": { "source": { "flag_regex": true } }, "action_code": 308, "action_type": "url", "action_data": { "url": "/news/$1" }, "match_type": "url", "regex": true, "group_id": 1, "position": 2, "status": "disabled" },
+        { "id": 13, "url": "/members", "action_code": 302, "action_type": "url", "action_data": { "logged_in": "/dashboard", "logged_out": "/login" }, "match_type": "login", "regex": false, "group_id": 1, "position": 3, "enabled": true },
+        { "id": 14, "url": "/landing", "action_code": 301, "action_type": "url", "action_data": { "referrer": "google\\.", "regex": true, "url_from": "/landing-google", "url_notfrom": "" }, "match_type": "referrer", "regex": false, "group_id": 1, "position": 4, "enabled": true },
+        { "id": 15, "url": "/gone", "action_code": 410, "action_type": "error", "action_data": { "url": "" }, "match_type": "url", "regex": false, "group_id": 2, "position": 0, "enabled": true },
+        { "id": 16, "url": "/random", "action_code": 301, "action_type": "random", "action_data": { "url": "" }, "match_type": "url", "regex": false, "group_id": 2, "position": 1, "enabled": true },
+        { "id": 17, "url": "/orphan", "action_code": 301, "action_type": "url", "action_data": { "url": "/home" }, "match_type": "url", "regex": false, "group_id": 99, "position": 0, "enabled": true }
+    ]
+}
