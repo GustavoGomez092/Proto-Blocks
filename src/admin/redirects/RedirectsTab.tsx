@@ -35,6 +35,19 @@ const keyOf = (rule: Pick<Rule, 'group' | 'id'>) => `${rule.group}/${rule.id}`;
 const refOf = (rule: Rule) => ({ id: rule.id, index: rule.index });
 const sourceLabel = (rule: Rule) => rule.from ?? __('(any 404)', 'proto-blocks');
 
+/**
+ * Declared twice (spec §4, §6): the whole group (file and PHP group of one
+ * slug), or this file rule, whose PHP twin was dropped with a
+ * `double_declaration` issue naming the PHP call site.
+ */
+export function doubleOf(group: Group, rule: Rule): { file: string; php: string } | null {
+	if (group.double) {
+		return group.double;
+	}
+	const issue = rule.origin === 'file' ? rule.issues.find((item) => item.code === 'double_declaration') : undefined;
+	return issue ? { file: rule.source, php: issue.source } : null;
+}
+
 /** The rule as it stands in its file (found by id, or by index for a rule written without one). */
 function rawRule(text: string, rule: Rule): FileRule | null {
 	const rules = readRules(text);
@@ -417,7 +430,7 @@ export function RedirectsTab({
 										<TableCell className="text-label whitespace-nowrap">{formatDate(rule.lastHit)}</TableCell>
 										<TableCell>
 											<span className="inline-flex flex-wrap items-center gap-1.5">
-												<OriginBadge origin={rule.origin} label={rule.origin === 'php' ? __('PHP', 'proto-blocks') : __('File', 'proto-blocks')} double={group.double} />
+												<OriginBadge origin={rule.origin} label={rule.origin === 'php' ? __('PHP', 'proto-blocks') : __('File', 'proto-blocks')} double={doubleOf(group, rule)} />
 												{rule.issues.length > 0 ? (
 													<Tooltip>
 														<TooltipTrigger type="button" className="rounded-full" aria-label={rule.issues.map((issue) => issue.message).join(' ')}>
