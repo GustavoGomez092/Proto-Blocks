@@ -156,8 +156,21 @@ final class RedirectsModule implements ModuleInterface
     }
 
     /** Plugin deactivation: stop the retention cron; data and tables stay (spec §5). */
-    public static function deactivate(): void
+    /**
+     * Deactivation: unschedule the retention cron. A network-wide
+     * deactivation visits every site, since the events are per site.
+     */
+    public static function deactivate(bool $networkWide = false): void
     {
+        if ($networkWide && function_exists('get_sites') && function_exists('switch_to_blog')) {
+            foreach (get_sites(['fields' => 'ids', 'number' => 0]) as $siteId) {
+                switch_to_blog((int) $siteId);
+                (new Retention())->unschedule();
+                restore_current_blog();
+            }
+
+            return;
+        }
         (new Retention())->unschedule();
     }
 

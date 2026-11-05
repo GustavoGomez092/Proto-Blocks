@@ -116,12 +116,12 @@ register_activation_hook(__FILE__, function (): void {
 });
 
 // Deactivation hook
-register_deactivation_hook(__FILE__, function (): void {
+register_deactivation_hook(__FILE__, function (bool $network_wide = false): void {
     // Flush rewrite rules
     flush_rewrite_rules();
 
-    // Unschedule the redirect log retention cron; tables are kept.
-    \ProtoBlocks\Modules\Redirects\RedirectsModule::deactivate();
+    // Unschedule the redirect log retention cron on every affected site; tables are kept.
+    \ProtoBlocks\Modules\Redirects\RedirectsModule::deactivate($network_wide);
 });
 
 // Uninstall hook is in uninstall.php

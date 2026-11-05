@@ -1269,6 +1269,35 @@ if (!function_exists('deactivate_plugins')) {
     }
 }
 
+// ------------------------------------------------------------------ multisite iteration (shared)
+
+// pb_test_sites = list of site ids (default [1]); switch_to_blog() records the
+// visited ids in pb_test_switched[] and sets pb_test_current_site.
+if (!function_exists('get_sites')) {
+    function get_sites($args = [])
+    {
+        return $GLOBALS['pb_test_sites'] ?? [1];
+    }
+}
+if (!function_exists('switch_to_blog')) {
+    function switch_to_blog($new_blog_id, $deprecated = null)
+    {
+        $GLOBALS['pb_test_switched'][] = (int) $new_blog_id;
+        $GLOBALS['pb_test_current_site'] = (int) $new_blog_id;
+        return true;
+    }
+}
+if (!function_exists('restore_current_blog')) {
+    function restore_current_blog()
+    {
+        $GLOBALS['pb_test_current_site'] = 1;
+        return true;
+    }
+}
+if (!function_exists('get_current_blog_id')) {
+    function get_current_blog_id() { return (int) ($GLOBALS['pb_test_current_site'] ?? 1); }
+}
+
 // ------------------------------------------------------------------ database (shared)
 
 // A recording $wpdb. Tests queue results with $wpdb->queue[] (each call to a
