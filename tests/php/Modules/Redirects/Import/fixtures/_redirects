@@ -1,0 +1,16 @@
+# Netlify redirects
+/home              /
+/blog/*            /news/:splat    301
+/old               /new            302!
+/spa/*             /index.html     200
+/gone              /404.html       410
+/post/:slug        /p/:slug        301
+/store id=:id      /blog/:id       301
+/country           /us             302  Country=us
+https://old.example.com/*  https://new.example.com/:splat  301!
+/proxy             https://api.example.com/  200
+/teapot            /x              299
+/same              /same/
+/lonely
+
+/after-blank       /done

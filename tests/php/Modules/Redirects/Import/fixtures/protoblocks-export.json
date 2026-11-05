@@ -1,0 +1,20 @@
+{
+  // Proto-Blocks export, comments tolerated
+  "groups": {
+    "legacy-site": {
+      "title": "Legacy site",
+      "enabled": true,
+      "position": 5,
+      "defaults": { "ignoreCase": false, "unknown": 1 },
+      "rules": [
+        { "id": "r_8f3a2c1d", "from": "/about-us", "to": "/about", "unknownKey": true },
+        { "from": "/members", "when": { "type": "login" }, "to": "/dashboard", "else": "/login" },
+        { "when": { "type": "404" }, "to": "/", "enabled": false },
+        "not a rule",
+        { "to": "/no-source" },
+      ]
+    },
+    "Bad Slug!": { "rules": [ { "from": "/x", "to": "/y" } ] }
+  },
+  "settings": { "trackHits": false }
+}

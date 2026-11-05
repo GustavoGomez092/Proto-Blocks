@@ -1,0 +1,15 @@
+source,target,regex,code
+/old,/new,0,301
+"/with,comma","/to ""quoted""",0,302
+
+/gone,,0,410
+^/blog/(\d+)$,/news/$1,1,301
+/same,/same/,0,301
+"[FORMULA] =cmd",/safe,0,301
+/multi,"/line
+break",0,301
+/after,/x,,
+/sniff(.*),/y
+/teapot,,0,402
+,/nothing,0,301
+/single
