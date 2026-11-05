@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import { __, _n, sprintf } from '@wordpress/i18n';
 import { toast } from 'sonner';
-import { DownloadIcon, Trash2Icon } from 'lucide-react';
+import { DownloadIcon, SearchIcon, Trash2Icon } from 'lucide-react';
 import { adminDelete } from '@/admin/api';
 import { ConfirmDialog } from '@/admin/components/shell/ConfirmDialog';
 import { Panel } from '@/admin/components/shell/Panel';
@@ -12,6 +12,7 @@ import { Input } from '@/admin/components/ui/input';
 import { Label } from '@/admin/components/ui/label';
 import { Skeleton } from '@/admin/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/admin/components/ui/table';
+import { cn } from '@/admin/lib/utils';
 import { asApiError, download, query, usePaged } from './api';
 import { formatDate, Pager, type TabProps } from './shared';
 import type { LogRow } from './types';
@@ -65,11 +66,12 @@ export default function LogTab({ index, onEditRule }: TabProps & { onEditRule: (
 	return (
 		<div className="grid gap-4">
 			<div className="flex flex-wrap items-end gap-2">
-				<div className="grid min-w-[180px] flex-1 gap-1">
-					<Label htmlFor={ids.search} className="text-caption">
+				<div className="relative max-w-[360px] min-w-[220px] flex-1">
+					<Label htmlFor={ids.search} className="sr-only">
 						{__('URL contains', 'proto-blocks')}
 					</Label>
-					<Input id={ids.search} type="search" value={search} onChange={filter(setSearch)} />
+					<SearchIcon aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+					<Input id={ids.search} type="search" className="h-[38px] ps-9" placeholder={__('URL contains', 'proto-blocks')} value={search} onChange={filter(setSearch)} />
 				</div>
 				<div className="grid w-36 gap-1">
 					<Label htmlFor={ids.rule} className="text-caption">
@@ -95,6 +97,7 @@ export default function LogTab({ index, onEditRule }: TabProps & { onEditRule: (
 					</Label>
 					<Input id={ids.to} type="date" value={to} onChange={filter(setTo)} />
 				</div>
+				<span className="ms-auto flex flex-wrap gap-2">
 				<Button variant="outline" onClick={() => void exportCsv()}>
 					<DownloadIcon aria-hidden="true" />
 					{__('Export CSV', 'proto-blocks')}
@@ -106,6 +109,7 @@ export default function LogTab({ index, onEditRule }: TabProps & { onEditRule: (
 					<Trash2Icon aria-hidden="true" />
 					{__('Clear all', 'proto-blocks')}
 				</Button>
+				</span>
 			</div>
 
 			{list.error && !list.data ? (
@@ -119,11 +123,11 @@ export default function LogTab({ index, onEditRule }: TabProps & { onEditRule: (
 			) : rows.length === 0 ? (
 				<Panel className="p-6 text-label text-muted-foreground">{__('No redirects logged.', 'proto-blocks')}</Panel>
 			) : (
-				<Panel className="overflow-x-auto" aria-busy={list.loading}>
+				<Panel className="overflow-hidden" aria-busy={list.loading}>
 					<Table aria-label={__('Redirect log', 'proto-blocks')}>
 						<TableHeader>
 							<TableRow>
-								<TableHead className="w-8">
+								<TableHead className="w-11 pr-0">
 									<Checkbox
 										aria-label={__('Select all shown entries', 'proto-blocks')}
 										checked={allSelected}
@@ -133,7 +137,7 @@ export default function LogTab({ index, onEditRule }: TabProps & { onEditRule: (
 								<TableHead>{__('Time', 'proto-blocks')}</TableHead>
 								<TableHead>{__('URL', 'proto-blocks')}</TableHead>
 								<TableHead>{__('Target', 'proto-blocks')}</TableHead>
-								<TableHead>{__('Code', 'proto-blocks')}</TableHead>
+								<TableHead className="w-[70px]">{__('Code', 'proto-blocks')}</TableHead>
 								<TableHead>{__('Rule', 'proto-blocks')}</TableHead>
 								<TableHead>{__('Redirect by', 'proto-blocks')}</TableHead>
 								<TableHead>{__('IP', 'proto-blocks')}</TableHead>
@@ -144,7 +148,7 @@ export default function LogTab({ index, onEditRule }: TabProps & { onEditRule: (
 						<TableBody>
 							{rows.map((row) => (
 								<TableRow key={row.id} data-state={selected.has(row.id) ? 'selected' : undefined}>
-									<TableCell>
+									<TableCell className="pr-0 align-top">
 										<Checkbox
 											aria-label={sprintf(/* translators: 1: URL, 2: time. */ __('Select %1$s at %2$s', 'proto-blocks'), row.url, formatDate(row.created))}
 											checked={selected.has(row.id)}
@@ -161,11 +165,11 @@ export default function LogTab({ index, onEditRule }: TabProps & { onEditRule: (
 											}
 										/>
 									</TableCell>
-									<TableCell className="whitespace-nowrap">{formatDate(row.created)}</TableCell>
-									<TableCell className="max-w-[260px] font-mono text-micro break-all whitespace-normal">{row.url}</TableCell>
-									<TableCell className="max-w-[260px] font-mono text-micro break-all whitespace-normal">{row.target ?? '—'}</TableCell>
-									<TableCell className="tabular-nums">{row.code}</TableCell>
-									<TableCell>
+									<TableCell className="py-3 align-top text-label whitespace-nowrap text-muted-foreground">{formatDate(row.created)}</TableCell>
+									<TableCell className="max-w-[260px] py-3 align-top font-mono text-label break-all whitespace-normal">{row.url}</TableCell>
+									<TableCell className="max-w-[260px] py-3 align-top font-mono text-label break-all whitespace-normal">{row.target ?? '—'}</TableCell>
+									<TableCell className={cn('py-3 align-top text-label font-medium tabular-nums', row.code >= 400 && 'text-warning')}>{row.code}</TableCell>
+									<TableCell className="py-3 align-top">
 										{row.group && row.ruleId && known.has(`${row.group}/${row.ruleId}`) ? (
 											<Button variant="link" size="sm" className="font-mono text-micro" aria-label={sprintf(/* translators: %s: rule id. */ __('Edit rule %s', 'proto-blocks'), row.ruleId)} onClick={() => onEditRule(row.group as string, row.ruleId as string)}>
 												{row.ruleId}
@@ -174,10 +178,10 @@ export default function LogTab({ index, onEditRule }: TabProps & { onEditRule: (
 											<span className="font-mono text-micro text-muted-foreground">{row.ruleId ?? '—'}</span>
 										)}
 									</TableCell>
-									<TableCell className="text-label">{row.redirectBy}</TableCell>
-									<TableCell className="font-mono text-micro">{row.ip ?? '—'}</TableCell>
-									<TableCell className="max-w-[220px] text-micro break-all whitespace-normal">{row.agent ?? '—'}</TableCell>
-									<TableCell className="max-w-[220px] text-micro break-all whitespace-normal">{row.referrer ?? '—'}</TableCell>
+									<TableCell className="py-3 align-top text-label text-muted-foreground">{row.redirectBy}</TableCell>
+									<TableCell className="py-3 align-top font-mono text-micro text-muted-foreground">{row.ip ?? '—'}</TableCell>
+									<TableCell className="max-w-[220px] py-3 align-top text-caption break-all whitespace-normal text-muted-foreground">{row.agent ?? '—'}</TableCell>
+									<TableCell className="max-w-[220px] py-3 align-top text-caption break-all whitespace-normal text-muted-foreground">{row.referrer ?? '—'}</TableCell>
 								</TableRow>
 							))}
 						</TableBody>
