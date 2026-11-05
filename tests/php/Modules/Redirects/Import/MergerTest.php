@@ -166,4 +166,36 @@ final class MergerTest extends TestCase
         $this->assertSame('duplicate', $rows[0]['reason']);
         $this->assertSame('empty_source', $rows[3]['reason']);
     }
+
+    public function testAddedIdAvoidsTheDerivedIdOfAnExistingIdLessRule(): void
+    {
+        // The loader derives ids from slug + from + when + action (not the regex
+        // flag), so a regex /a next to an id-less literal /a must get another id.
+        $group = ['slug' => 'legacy', 'rules' => [['from' => '/a', 'to' => '/b']]];
+        $result = Merger::merge($group, [['from' => '/a', 'regex' => true, 'to' => '/c']], 'skip');
+
+        $this->assertSame(1, $result['added']);
+        $derived = \ProtoBlocks\Modules\Redirects\Definition\RuleNormalizer::deriveId('legacy', '/a', null, 'url');
+        $this->assertNotSame($derived, $result['group']['rules'][1]['id']);
+        $errors = \ProtoBlocks\Modules\Redirects\Definition\GroupValidator::validate(['rules' => $result['group']['rules']], [], 'legacy')['errors'];
+        $this->assertSame([], array_column($errors, 'code'), 'the loader reads both rules');
+    }
+
+    public function testReplacingAnIdLessRulePinsTheIdTheLoaderDerives(): void
+    {
+        $group = ['slug' => 'legacy', 'rules' => [['from' => '/a', 'to' => '/b']]];
+        $result = Merger::merge($group, [['from' => '/a', 'to' => '/c']], 'replace');
+
+        $derived = \ProtoBlocks\Modules\Redirects\Definition\RuleNormalizer::deriveId('legacy', '/a', null, 'url');
+        $this->assertSame($derived, $result['group']['rules'][0]['id'], 'hit counts keyed by the derived id stay attached');
+    }
+
+    public function testDuplicateKeyLowerCasesLikeTheLoader(): void
+    {
+        $group = ['slug' => 'legacy', 'rules' => [['id' => 'r_00000001', 'from' => '/Ärger', 'to' => '/b']]];
+        $result = Merger::merge($group, [['from' => '/ärger/', 'to' => '/c']], 'skip');
+
+        $this->assertSame(1, $result['skipped'], 'multibyte case folds like RuleNormalizer::pathKey');
+        $this->assertSame(0, $result['added']);
+    }
 }
