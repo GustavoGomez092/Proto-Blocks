@@ -232,6 +232,32 @@ final class RedirectLogTest extends StorageTestCase
         self::assertSame(['headers' => ['accept' => 'text/html', 'accept-language' => 'en']], json_decode($stored, true));
     }
 
+    /** @return array<string, array{0: string, 1: bool}> */
+    public static function ipHeaderPolicies(): array
+    {
+        return ['none' => ['none', false], 'masked' => ['masked', false], 'full' => ['full', true]];
+    }
+
+    #[DataProvider('ipHeaderPolicies')]
+    public function testIpBearingHeadersFollowTheIpPolicy(string $policy, bool $kept): void
+    {
+        $ipHeaders = [
+            'X-Forwarded-For' => '203.0.113.7', 'CF-Connecting-IP' => '203.0.113.7', 'x-real-ip' => '203.0.113.7',
+            'client-ip' => '203.0.113.7', 'True-Client-IP' => '203.0.113.7', 'forwarded' => 'for=203.0.113.7',
+            'x-forwarded' => '203.0.113.7', 'X-Cluster-Client-IP' => '203.0.113.7', 'via' => '1.1 203.0.113.7',
+            'forwarded-for' => '203.0.113.7',
+        ];
+        self::log(['headers' => true, 'ip' => $policy])->logRedirect(self::entry(['headers' => $ipHeaders + ['accept' => 'text/html']]));
+        $decoded = json_decode((string) $this->inserted()['request'], true);
+
+        if ($kept) {
+            self::assertCount(11, $decoded['headers']);
+            self::assertSame('203.0.113.7', $decoded['headers']['cf-connecting-ip']);
+        } else {
+            self::assertSame(['accept' => 'text/html'], $decoded['headers']);
+        }
+    }
+
     public function testStoredHeadersAreBounded(): void
     {
         $headers = ['x-long' => str_repeat('v', 5000), "bad name" => 'x', 'x-ctl' => "a\r\nSet-Cookie: x"];

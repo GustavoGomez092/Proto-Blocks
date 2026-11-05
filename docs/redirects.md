@@ -317,7 +317,7 @@ Login, admin, cron, XML-RPC and REST are never touched. See [actions and codes](
 | `log.redirects` | Days to keep the redirect log. `-1` do not log, `0` forever, maximum 90. |
 | `log.notFound` | The same for the 404 log. |
 | `log.ip` | `none`, `masked` or `full`. |
-| `log.headers` | Store request headers in the `request` column, minus `authorization`, `cookie`, `set-cookie`, `host`, `proxy-authorization`, `x-wp-nonce`, `x-api-key`, `x-auth-token`, `x-csrf-token` and `x-xsrf-token`. At most 50 headers, each value cut at 1000 characters. |
+| `log.headers` | Store request headers in the `request` column, minus `authorization`, `cookie`, `set-cookie`, `host`, `proxy-authorization`, `x-wp-nonce`, `x-api-key`, `x-auth-token`, `x-csrf-token` and `x-xsrf-token`. Unless `log.ip` is `full`, the headers that carry a client address are dropped too: `x-forwarded-for`, `cf-connecting-ip`, `x-real-ip`, `client-ip`, `true-client-ip`, `forwarded`, `x-forwarded`, `x-cluster-client-ip`, `via`, `forwarded-for` and `x-client-ip`. At most 50 headers, each value cut at 1000 characters. |
 | `log.external` | Reserved. It is validated and shown on the Settings tab, but nothing reads it yet: redirects issued by other plugins or core are not logged. |
 | `log.trustedProxies` | `REMOTE_ADDR` values, single addresses or CIDR ranges (100 at most), allowed to supply a client-IP header. |
 | `log.ipHeaders` | Ordered: `CF-Connecting-IP`, `X-Forwarded-For`, `X-Real-IP`, `Client-IP`, `True-Client-IP`. |
