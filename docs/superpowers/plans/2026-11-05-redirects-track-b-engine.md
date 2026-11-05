@@ -38,10 +38,12 @@ Everything lives under `includes/Modules/Redirects/Engine/` and
 - **Order of rules.** `Matcher` evaluates rules in the order it is given (the Registry's
   evaluation order). `Matcher::order(list<Group>)` flattens groups by position, slug, index
   and drops disabled groups; the Registry may reuse it.
-- **Self-loop guard (rule 4).** The final target (after query pass-through) is turned into a
-  request on the same host and run through this rule's own source test; a target the rule
-  would match again does not fire. This covers "same path, same query under the rule's mode"
-  and also catches `.*` → `/`.
+- **Self-loop guard (rule 4).** The final target (after query pass-through) is compared with the
+  current request: same host, same path under the rule's case/trailing-slash flags, same query
+  (raw for `exactOrder`, parsed and order-free otherwise — also for `ignore`, so a rule that strips
+  a tracking query fires once and stops). A "would this rule match its own target" test was tried
+  and rejected: it stops a `.*` rule from ever firing, contradicting spec §14 ("it wins").
+  A `.*` rule fires once and stops at its own target.
 - **Duplicate query keys.** `a=1&a=2` parses PHP-style (last wins) for `exact`/`ignore`/`pass`;
   `exactOrder` compares the raw string.
 - **Pass-through extras.** Parameters named in the source query are consumed, not appended;
