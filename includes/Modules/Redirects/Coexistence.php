@@ -11,6 +11,9 @@ namespace ProtoBlocks\Modules\Redirects;
  */
 final class Coexistence
 {
+    /** @var (callable(): bool)|null tests only: replaces redirectionActive() for every caller */
+    private static $detector = null;
+
     /**
      * @param array<string, mixed>   $settings fully defaulted settings
      * @param (callable(): bool)|null $detect   tests only: replaces redirectionActive()
@@ -20,6 +23,7 @@ final class Coexistence
         if (($settings['coexist'] ?? false) === true) {
             return false;
         }
+        $detect ??= self::$detector;
 
         return (bool) ($detect !== null ? $detect() : self::redirectionActive());
     }
@@ -28,5 +32,16 @@ final class Coexistence
     public static function redirectionActive(): bool
     {
         return class_exists('Redirection_Admin', false) || defined('REDIRECTION_VERSION');
+    }
+
+    /**
+     * @internal Tests only (a real Redirection_Admin class or constant would
+     * leak into every later test): null restores the real detection.
+     *
+     * @param (callable(): bool)|null $detect
+     */
+    public static function setDetector(?callable $detect): void
+    {
+        self::$detector = $detect;
     }
 }

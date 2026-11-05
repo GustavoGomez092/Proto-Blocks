@@ -4,14 +4,25 @@ declare(strict_types=1);
 
 namespace ProtoBlocks\Modules\Redirects;
 
+use ProtoBlocks\Admin\AdminPage;
 use ProtoBlocks\ContentModel\Issue;
 use ProtoBlocks\ContentModel\Registry as ContentModelRegistry;
 use ProtoBlocks\ContentModel\SchemaFileWriter;
+use ProtoBlocks\ContentModel\SchemaPaths;
 use ProtoBlocks\Modules\ModuleInterface;
 use ProtoBlocks\Modules\Redirects\Definition\GroupValidator;
 use ProtoBlocks\Modules\Redirects\Definition\SettingsValidator;
+use ProtoBlocks\Modules\Redirects\Engine\Conditions\Ip;
+use ProtoBlocks\Modules\Redirects\Engine\Dispatcher;
+use ProtoBlocks\Modules\Redirects\Engine\FrontController;
+use ProtoBlocks\Modules\Redirects\Engine\Request;
 use ProtoBlocks\Modules\Redirects\Sources\GroupFiles;
 use ProtoBlocks\Modules\Redirects\Sources\PhpDeclarations;
+use ProtoBlocks\Modules\Redirects\Storage\Hits;
+use ProtoBlocks\Modules\Redirects\Storage\Installer;
+use ProtoBlocks\Modules\Redirects\Storage\IpResolver;
+use ProtoBlocks\Modules\Redirects\Storage\RedirectLog;
+use ProtoBlocks\Modules\Redirects\Storage\Retention;
 
 /**
  * The redirects module (docs/superpowers/specs/2026-11-05-redirects-design.md).
@@ -27,7 +38,16 @@ final class RedirectsModule implements ModuleInterface
 
     private static ?self $instance = null;
 
+    /** @var (callable(string, string): void)|null tests only: replaces header() */
+    private static $headerHandler = null;
+    /** @var (callable(): void)|null tests only: replaces exit */
+    private static $exitHandler = null;
+
     private ?Registry $redirects = null;
+    private ?FrontController $front = null;
+    private ?Monitor $monitor = null;
+    private ?Retention $retention = null;
+    private string $phpFingerprint = '';
 
     public function __construct(private readonly ContentModelRegistry $contentModel)
     {
@@ -38,20 +58,117 @@ final class RedirectsModule implements ModuleInterface
         return self::ID;
     }
 
+    /**
+     * Wires the module (runs on `after_setup_theme` 1 through Modules\Manager):
+     * file kinds and PHP sealing; tables on `plugins_loaded` (or now when it
+     * already ran); the log-retention cron; the client-IP resolver of the
+     * `ip` condition; the front end unless Coexistence pauses it; the
+     * permalink monitor when `monitor.postTypes` is non-empty.
+     *
+     * Settings are read here (one registry build per request, shared with the
+     * engine). PHP declarations made between now and the `init` 9 seal make
+     * the registry rebuild once at the seal; the engine reads its rules
+     * lazily on the first match, so it always sees the sealed set.
+     */
     public function boot(): void
     {
         self::registerFileKinds();
         add_action('init', [PhpDeclarations::class, 'seal'], self::SEAL_PRIORITY);
+        add_action('init', [$this, 'onSealed'], self::SEAL_PRIORITY);
         add_filter('proto_blocks_declaration_errors', [$this, 'declarationWarnings'], 10, 4);
 
-        // integration: Track C — create or upgrade the tables:
-        //   add_action('plugins_loaded', [new Storage\Installer(), 'ensure']) (or call it now when plugins_loaded already ran).
-        // integration: Track C — log retention cron: (new Storage\Retention(...))->schedule().
-        // integration: Track B — front end, unless Coexistence::paused($this->settings()):
-        //   (new Engine\FrontController($this->registry(), $this->settings(), new Engine\Dispatcher(...)))->register().
-        // integration: Track C — permalink monitor when settings monitor.postTypes is non-empty:
-        //   (new Monitor($this->registry(), new SchemaFileWriter(SchemaPaths::writableRoots(), AdminPage::fileModsAllowed()), $this->settings()))->register().
-        // integration: admin — coexistence notice on the Redirects screen when Coexistence::paused($this->settings()).
+        $installer = new Installer();
+        if (did_action('plugins_loaded') > 0) {
+            $installer->ensure();
+        } else {
+            add_action('plugins_loaded', [$installer, 'ensure']);
+        }
+
+        $settings = $this->settings();
+        $this->phpFingerprint = self::phpFingerprint();
+
+        $this->retention = new Retention($settings);
+        $this->retention->register();
+        $this->retention->schedule();
+
+        $log = is_array($settings['log'] ?? null) ? $settings['log'] : [];
+        Ip::setResolver(static fn(Request $request): ?string => IpResolver::resolve($request->server, $log));
+
+        if (!Coexistence::paused($settings)) {
+            $dispatcher = new Dispatcher(
+                $settings,
+                self::$headerHandler ?? static function (string $name, string $value): void {
+                    header($name . ': ' . $value, true);
+                },
+                self::$exitHandler ?? static function (): never {
+                    exit;
+                },
+                new Hits($settings),
+                new RedirectLog($settings)
+            );
+            $this->front = new FrontController(fn(): array => $this->registry()->enabledRules(), $settings, $dispatcher);
+            $this->front->register();
+        }
+
+        $postTypes = $settings['monitor']['postTypes'] ?? [];
+        if (is_array($postTypes) && $postTypes !== []) {
+            $this->monitor = new Monitor($this->registry(), new SchemaFileWriter(SchemaPaths::writableRoots(), AdminPage::fileModsAllowed()), $settings);
+            $this->monitor->register();
+        }
+    }
+
+    /**
+     * `init` 9, after PhpDeclarations::seal(): rebuild the registry once when
+     * proto_redirect()/proto_redirect_group() ran after boot() read it.
+     */
+    public function onSealed(): void
+    {
+        if ($this->redirects !== null && self::phpFingerprint() !== $this->phpFingerprint) {
+            $this->redirects->invalidate();
+        }
+        $this->phpFingerprint = self::phpFingerprint();
+    }
+
+    /** Plugin activation: create the tables now. */
+    public static function activate(): void
+    {
+        (new Installer())->ensure();
+    }
+
+    /** Plugin deactivation: stop the retention cron; data and tables stay (spec §5). */
+    public static function deactivate(): void
+    {
+        (new Retention())->unschedule();
+    }
+
+    /** Null while paused by Coexistence or before boot(). */
+    public function frontController(): ?FrontController
+    {
+        return $this->front;
+    }
+
+    /** Null unless `monitor.postTypes` is non-empty. */
+    public function monitor(): ?Monitor
+    {
+        return $this->monitor;
+    }
+
+    /**
+     * @internal Tests only: replace header() and exit in the production Dispatcher
+     * built by the next boot(); null restores them.
+     */
+    public static function setResponseHandlers(?callable $header, ?callable $exit): void
+    {
+        self::$headerHandler = $header;
+        self::$exitHandler = $exit;
+    }
+
+    private static function phpFingerprint(): string
+    {
+        return md5((string) json_encode(
+            [PhpDeclarations::rules(), PhpDeclarations::groups(), count(PhpDeclarations::issues())],
+            JSON_PARTIAL_OUTPUT_ON_ERROR
+        ));
     }
 
     /**
@@ -137,10 +254,16 @@ final class RedirectsModule implements ModuleInterface
         return Coexistence::paused($this->settings());
     }
 
-    /** @return list<Issue> */
+    /**
+     * Registry findings (discovery, validation, precedence, chains) and the
+     * permalink monitor's kept notices. Match-time problems (regex limits,
+     * refused targets) are per request and go to the redirect log instead.
+     *
+     * @return list<Issue>
+     */
     public function issues(): array
     {
-        return $this->registry()->issues();
+        return [...$this->registry()->issues(), ...($this->monitor?->issues() ?? [])];
     }
 
     /** The content-model registry the module was built with. */
