@@ -10,7 +10,8 @@ import { adminDelete, adminGet, adminPost, ApiError, restUrl } from '@/admin/api
 import { getBootstrap } from '@/admin/bootstrap';
 import type { FileResult, Guardrail } from '@/admin/content-model/types';
 import { newGroupText } from './edits';
-import type { RedirectsIndex } from './types';
+import { RULE_ID } from './schema';
+import type { Paged, RedirectsIndex } from './types';
 
 export type FileKind = 'redirects' | 'redirect-settings';
 
@@ -118,6 +119,38 @@ export function deleteGroupFile(slug: string): Promise<unknown> {
 	return adminDelete(`${filePath('redirects', slug)}?confirm=${encodeURIComponent(slug)}`);
 }
 
+/**
+ * Drops the hit rows of rules deleted from their files
+ * (`DELETE admin/redirects/hits?group=&ruleId=`; adminDelete sends no body,
+ * WP reads the query). A 404 (no row) is fine. Resolves to the rules whose
+ * rows could not be dropped for another reason.
+ */
+export async function deleteHitRows(rules: { group: string; id: string }[]): Promise<{ failed: number; error: ApiError | null }> {
+	let failed = 0;
+	let last: ApiError | null = null;
+	for (const rule of rules) {
+		if (!RULE_ID.test(rule.id)) {
+			continue;
+		}
+		try {
+			await adminDelete(`admin/redirects/hits${query({ group: rule.group, ruleId: rule.id })}`);
+		} catch (e) {
+			const error = asApiError(e);
+			if (error.status !== 404) {
+				failed++;
+				last = error;
+			}
+		}
+	}
+	return { failed, error: last };
+}
+
+/** Deletes every logged 404 of exactly `url` (`DELETE admin/redirects/404?url=`); resolves to the count. */
+export async function deleteNotFoundUrl(url: string): Promise<number> {
+	const result = await adminDelete<{ deleted?: number }>(`admin/redirects/404${query({ url })}`);
+	return typeof result?.deleted === 'number' ? result.deleted : 0;
+}
+
 /** GET admin/redirects, reloadable. */
 export function useRedirectsIndex() {
 	const [index, setIndex] = useState<RedirectsIndex | null>(null);
@@ -154,7 +187,7 @@ export function useRedirectsIndex() {
 
 /** A paged GET that reloads when `path` changes. */
 export function usePaged<T>(path: string) {
-	const [data, setData] = useState<{ rows: T[]; total: number } | null>(null);
+	const [data, setData] = useState<Paged<T> | null>(null);
 	const [error, setError] = useState<unknown>(null);
 	const [loading, setLoading] = useState(true);
 	const request = useRef(0);
@@ -163,9 +196,17 @@ export function usePaged<T>(path: string) {
 		const id = ++request.current;
 		setLoading(true);
 		try {
-			const result = await adminGet<{ rows?: T[]; total?: number }>(path);
+			const result = await adminGet<Partial<Paged<T>>>(path);
 			if (id === request.current) {
-				setData({ rows: Array.isArray(result?.rows) ? result.rows : [], total: typeof result?.total === 'number' ? result.total : 0 });
+				const total = typeof result?.total === 'number' ? result.total : 0;
+				setData({
+					rows: Array.isArray(result?.rows) ? result.rows : [],
+					total,
+					page: typeof result?.page === 'number' ? result.page : undefined,
+					perPage: typeof result?.perPage === 'number' ? result.perPage : undefined,
+					pages: typeof result?.pages === 'number' ? result.pages : undefined,
+					groupBy: result?.groupBy ?? null,
+				});
 				setError(null);
 			}
 		} catch (e) {
@@ -186,20 +227,31 @@ export function usePaged<T>(path: string) {
 	return { data, error, loading, reload: load };
 }
 
-function filenameFrom(disposition: string | null): string | null {
+/** A header-supplied name as a bare file name: no folders, no control characters; null when nothing usable is left. */
+function safeName(name: string): string | null {
+	// eslint-disable-next-line no-control-regex
+	const base = name.replace(/[\u0000-\u001f\u007f]/g, '').split(/[\\/]/).pop()?.trim() ?? '';
+	return base === '' || base === '.' || base === '..' ? null : base;
+}
+
+/** The file name of a `Content-Disposition` header (`filename*=` first, then `filename=`). */
+export function filenameFrom(disposition: string | null | undefined): string | null {
 	if (!disposition) {
 		return null;
 	}
 	const star = /filename\*=(?:UTF-8'')?([^;]+)/i.exec(disposition);
 	if (star) {
 		try {
-			return decodeURIComponent(star[1].trim().replace(/^"|"$/g, ''));
+			const name = safeName(decodeURIComponent(star[1].trim().replace(/^"|"$/g, '')));
+			if (name) {
+				return name;
+			}
 		} catch {
 			// Fall through to the plain filename.
 		}
 	}
 	const plain = /filename="?([^";]+)"?/i.exec(disposition);
-	return plain ? plain[1].trim() : null;
+	return plain ? safeName(plain[1]) : null;
 }
 
 /**
@@ -208,7 +260,12 @@ function filenameFrom(disposition: string | null): string | null {
  */
 export async function download(path: string, fallbackName: string): Promise<string> {
 	const { restRoot, restNonce } = getBootstrap();
-	const response = await fetch(restUrl(path, restRoot), { headers: { 'X-WP-Nonce': restNonce }, credentials: 'same-origin' });
+	let response: Response;
+	try {
+		response = await fetch(restUrl(path, restRoot), { headers: { 'X-WP-Nonce': restNonce }, credentials: 'same-origin' });
+	} catch (e) {
+		throw new ApiError('proto_blocks_export_failed', e instanceof Error ? e.message : String(e), 0);
+	}
 	if (!response.ok) {
 		let code = 'proto_blocks_export_failed';
 		let message = `HTTP ${response.status}`;
@@ -222,7 +279,7 @@ export async function download(path: string, fallbackName: string): Promise<stri
 		throw new ApiError(code, message, response.status);
 	}
 	const blob = await response.blob();
-	const name = filenameFrom(response.headers.get('Content-Disposition')) ?? fallbackName;
+	const name = filenameFrom(response.headers?.get('Content-Disposition')) ?? fallbackName;
 	const url = URL.createObjectURL(blob);
 	const link = document.createElement('a');
 	link.href = url;

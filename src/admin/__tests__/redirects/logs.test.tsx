@@ -13,21 +13,23 @@ const grouped = {
 	],
 	total: 2,
 };
-// `search=/missing` also returns /missing-page: only exact matches are deleted.
+// `?url=` is the server's exact filter: only /missing comes back.
 const hits = {
 	rows: [
 		{ id: 11, created: '2026-11-04 09:00:00', url: '/missing', method: 'GET', ip: null, agent: 'Firefox', referrer: 'https://google.com/' },
 		{ id: 12, created: '2026-11-03 09:00:00', url: '/missing', method: 'HEAD', ip: null, agent: 'curl', referrer: null },
-		{ id: 13, created: '2026-11-03 08:00:00', url: '/missing-page', method: 'GET', ip: null, agent: 'curl', referrer: null },
 	],
-	total: 3,
+	total: 2,
+	page: 1,
+	perPage: 10,
+	pages: 1,
+	groupBy: null,
 };
 
 function notFoundRoutes(extra = {}) {
 	return routes({
-		'admin/redirects/404?group_by=url&page=1&per_page=50': grouped,
-		'admin/redirects/404?search=%2Fmissing&per_page=200': hits,
-		'admin/redirects/404?search=%2Fmissing&per_page=10': hits,
+		'admin/redirects/404?group_by=url&page=1&per_page=50': { ...grouped, page: 1, perPage: 50, pages: 1, groupBy: 'url' },
+		'admin/redirects/404?url=%2Fmissing&per_page=10': hits,
 		'DELETE admin/redirects/404': { deleted: 2 },
 		...extra,
 	});
@@ -50,7 +52,8 @@ describe('404s', () => {
 
 		await waitFor(() => expect(calls().some((c) => c.method === 'DELETE')).toBe(true));
 		const order = writes().map((c) => `${c.method} ${c.url}`);
-		expect(order).toEqual(['POST admin/schema-files/redirects/legacy-site', 'DELETE admin/redirects/404?ids[]=11&ids[]=12']);
+		expect(order).toEqual(['POST admin/schema-files/redirects/legacy-site', 'DELETE admin/redirects/404?url=%2Fmissing']);
+		expect(await screen.findByText('Deleted 2 404 entries.')).toBeTruthy();
 		expect(readRules(fileWrites()[0].data?.text ?? '').slice(-1)[0]).toMatchObject({ from: '/missing', to: '/found' });
 		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 	});
@@ -104,7 +107,9 @@ describe('404s', () => {
 
 		await user.click(screen.getByRole('button', { name: 'Delete 404s of /missing' }));
 		await user.click(await screen.findByRole('button', { name: 'Delete' }));
-		await waitFor(() => expect(calls().some((c) => c.url === 'admin/redirects/404?ids[]=11&ids[]=12')).toBe(true));
+		await waitFor(() => expect(calls().some((c) => c.method === 'DELETE' && c.url === 'admin/redirects/404?url=%2Fmissing')).toBe(true));
+		// Never the "contains" search: /missing-page keeps its rows.
+		expect(calls().some((c) => c.url.includes('search=%2Fmissing'))).toBe(false);
 
 		await user.click(screen.getByRole('button', { name: 'Clear all' }));
 		await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Clear all' }));
@@ -169,6 +174,55 @@ describe('log', () => {
 		const confirm = await screen.findByRole('alertdialog');
 		await user.click(within(confirm).getByRole('button', { name: 'Clear all' }));
 		await waitFor(() => expect(calls().some((c) => c.method === 'DELETE' && c.url === 'admin/redirects/log?all=1&code=301')).toBe(true));
+	});
+});
+
+describe('log export', () => {
+	test('exports the current filters with the nonce; the server file name is used; a refusal toasts', async () => {
+		routes({ 'admin/redirects/log': { rows: [], total: 0, page: 1, perPage: 50, pages: 0 } });
+		const fetchMock = jest
+			.fn()
+			.mockResolvedValueOnce({ ok: true, status: 200, blob: async () => new Blob(['id\n']), headers: { get: (name: string) => (name === 'Content-Disposition' ? 'attachment; filename="proto-redirect-log-2026-11-05.csv"' : null) } })
+			.mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({ code: 'rest_forbidden', message: 'Sorry, you are not allowed to do that.' }) });
+		const original = { fetch: window.fetch, create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+		window.fetch = fetchMock as unknown as typeof fetch;
+		URL.createObjectURL = jest.fn(() => 'blob:x');
+		URL.revokeObjectURL = jest.fn();
+		const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+		try {
+			const user = userEvent.setup();
+			renderScreen('&tab=log');
+			expect(await screen.findByText('No redirects logged.')).toBeTruthy();
+			await user.type(screen.getByRole('textbox', { name: 'Code' }), '302');
+			await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+			await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+			expect(fetchMock).toHaveBeenNthCalledWith(1, 'https://example.test/wp-json/proto-blocks/v1/admin/redirects/log/export?format=csv&code=302', { headers: { 'X-WP-Nonce': 'nonce-wp_rest' }, credentials: 'same-origin' });
+			expect((click.mock.contexts[0] as HTMLAnchorElement).download).toBe('proto-redirect-log-2026-11-05.csv');
+
+			await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+			expect((await screen.findAllByText('Sorry, you are not allowed to do that.')).length).toBeGreaterThan(0);
+			expect(click).toHaveBeenCalledTimes(1);
+		} finally {
+			click.mockRestore();
+			window.fetch = original.fetch;
+			URL.createObjectURL = original.create;
+			URL.revokeObjectURL = original.revoke;
+		}
+	});
+
+	test('a failed 404 export toasts the server message', async () => {
+		routes({ 'admin/redirects/404': { rows: [{ url: '/missing', count: 1, lastSeen: '2026-11-04 09:00:00', lastReferrer: null }], total: 1 } });
+		const original = window.fetch;
+		window.fetch = jest.fn(async () => ({ ok: false, status: 400, json: async () => ({ code: 'proto_blocks_invalid_format', message: 'Logs export as CSV only.' }) })) as unknown as typeof fetch;
+		try {
+			const user = userEvent.setup();
+			renderScreen('&tab=404s');
+			await screen.findByRole('table', { name: '404s by URL' });
+			await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+			expect((await screen.findAllByText('Logs export as CSV only.')).length).toBeGreaterThan(0);
+		} finally {
+			window.fetch = original;
+		}
 	});
 });
 

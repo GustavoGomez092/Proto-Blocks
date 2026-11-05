@@ -5,7 +5,7 @@
  */
 import type { FieldErrors, Resolver } from 'react-hook-form';
 import { defaultCode } from './codes';
-import { ruleSchema, type RuleCheckOptions } from './schema';
+import { ruleField, ruleSchema, type RuleCheckOptions } from './schema';
 import type { ConditionType, FileRule, GroupDefaults, QueryMode, Rule, RuleAction } from './types';
 
 export const NEW_GROUP = '__new__';
@@ -120,7 +120,7 @@ export function ruleFromForm(values: RuleFormValues, defaults: Required<GroupDef
 		} else if (VALUE_TYPES.includes(type)) {
 			when.value = values.conditionValue.trim();
 		}
-		if (NAME_TYPES.includes(type)) {
+		if (NAME_TYPES.includes(type) && values.conditionName.trim() !== '') {
 			when.name = values.conditionName.trim();
 		}
 		if (REGEX_TYPES.includes(type) && values.conditionRegex) {
@@ -146,26 +146,16 @@ export function ruleFromForm(values: RuleFormValues, defaults: Required<GroupDef
 	return rule;
 }
 
-const FIELD_FOR: Record<string, keyof RuleFormValues> = {
-	from: 'from',
-	to: 'to',
-	else: 'else',
-	code: 'code',
-	title: 'title',
-	'when.value': 'conditionValue',
-	'when.name': 'conditionName',
-};
-
 /** react-hook-form resolver: the rule the form would write, checked by ruleSchema. */
 export function ruleResolver(defaultsFor: (group: string) => Required<GroupDefaults>, options: RuleCheckOptions & { groupError?: (values: RuleFormValues) => string | null } = {}): Resolver<RuleFormValues> {
-	const schema = ruleSchema(options);
 	return async (values) => {
-		const rule = ruleFromForm(values, defaultsFor(values.group), 'r_00000000');
-		const result = schema.safeParse(rule);
+		const defaults = defaultsFor(values.group);
+		const rule = ruleFromForm(values, defaults, 'r_00000000');
+		const result = ruleSchema({ ...options, defaults }).safeParse(rule);
 		const errors: FieldErrors<RuleFormValues> = {};
 		if (!result.success) {
 			for (const issue of result.error.issues) {
-				const field = FIELD_FOR[issue.path.join('.')] ?? 'root';
+				const field = ruleField(issue.path as (string | number)[]);
 				const code = (issue as { params?: { code?: string } }).params?.code ?? 'schema_invalid';
 				if (!(field in errors)) {
 					(errors as Record<string, unknown>)[field] = { type: code, message: issue.message };

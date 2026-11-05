@@ -11,7 +11,7 @@ import { Switch } from '@/admin/components/ui/switch';
 import { deleteGroupFile, type GroupWrite, type WriteOutcome } from './api';
 import { setGroupField } from './edits';
 import { groupSlugError, slugifyGroup } from './schema';
-import { sortedGroups, writeGuard } from './shared';
+import { groupEditable, groupReadOnlyReason, readOnlyReasonLabel, sortedGroups, writeGuard } from './shared';
 import type { Group, RedirectsIndex } from './types';
 
 function GroupRow({
@@ -31,7 +31,8 @@ function GroupRow({
 	const positionId = useId();
 	const [title, setTitle] = useState(group.title);
 	const [position, setPosition] = useState(String(group.position));
-	const editable = group.origin === 'file' && group.writable;
+	const editable = groupEditable(group);
+	const reason = readOnlyReasonLabel(group);
 	const guard = writeGuard(readOnly, !editable || busy);
 
 	useEffect(() => {
@@ -78,7 +79,7 @@ function GroupRow({
 				<code className="font-mono text-micro text-muted-foreground">{group.slug}</code>
 				<div className="flex items-center gap-2">
 					{group.double ? <DoubleBadge double={group.double} /> : null}
-					{group.origin === 'php' ? <span className="text-micro text-muted-foreground">{__('Declared in PHP', 'proto-blocks')}</span> : null}
+					{groupReadOnlyReason(group) === 'php' ? <span className="text-micro text-muted-foreground">{__('Declared in PHP', 'proto-blocks')}</span> : null}
 					<Switch
 						checked={group.enabled}
 						aria-label={sprintf(
@@ -96,6 +97,7 @@ function GroupRow({
 					/>
 				</div>
 			</div>
+			{reason && groupReadOnlyReason(group) !== 'php' ? <p className="text-caption text-muted-foreground">{reason}</p> : null}
 			<form onSubmit={save} className="flex flex-wrap items-end gap-2">
 				<div className="grid min-w-[180px] flex-1 gap-1">
 					<Label htmlFor={titleId} className="text-caption">

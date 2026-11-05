@@ -29,7 +29,7 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		await user.click(within(dialog).getByRole('checkbox', { name: 'Regex' }));
 		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), '/b');
 		await submit(user, dialog);
-		expect(await within(dialog).findByText(/The regular expression does not compile/)).toBeTruthy();
+		expect(await within(dialog).findByText(/The pattern does not compile/)).toBeTruthy();
 		expect(within(dialog).getByRole('textbox', { name: 'Source' }).getAttribute('aria-invalid')).toBe('true');
 		expect(posts()).toEqual([]);
 	});
@@ -50,8 +50,8 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		renderScreen();
 		const dialog = await openAdd(user);
 		await submit(user, dialog);
-		expect(await within(dialog).findByText('Enter the source path.')).toBeTruthy();
-		expect(within(dialog).getByText('Enter the target.')).toBeTruthy();
+		expect(await within(dialog).findByText('A rule needs a source unless its condition is "Page not found (404)".')).toBeTruthy();
+		expect(within(dialog).getByText('A redirect needs a target.')).toBeTruthy();
 		expect(posts()).toEqual([]);
 	});
 
@@ -63,7 +63,7 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		const dialog = await screen.findByRole('dialog', { name: 'Edit redirect' });
 		expect(within(dialog).getByRole('combobox', { name: 'Code' }).textContent).toContain('399 Not a valid code');
 		await submit(user, dialog);
-		expect(await within(dialog).findByText('Choose a code this action supports.')).toBeTruthy();
+		expect(await within(dialog).findByText('A redirect code must be one of 301, 302, 303, 307, 308.')).toBeTruthy();
 		expect(posts()).toEqual([]);
 	});
 
@@ -88,7 +88,7 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		expect(within(dialog).queryByRole('combobox', { name: 'Code' })).toBeNull();
 		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), 'https://other.test/api');
 		await submit(user, dialog);
-		expect(await within(dialog).findByText('Use a path starting with / or a full http:// or https:// URL.')).toBeTruthy();
+		expect(await within(dialog).findByText('A pass-through target must be a path on this site, starting with "/".')).toBeTruthy();
 		expect(posts()).toEqual([]);
 	});
 
@@ -125,8 +125,16 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 		await user.type(within(dialog).getByRole('textbox', { name: 'Source' }), '/a');
 		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), '/b');
 		await submit(user, dialog);
-		expect(await within(dialog).findByText('Enter the header or cookie name.')).toBeTruthy();
-		expect(within(dialog).getByText('Enter a value for this condition.')).toBeTruthy();
+		// The server's order: the value first, then the name.
+		expect(await within(dialog).findByText('Enter a value for this condition.')).toBeTruthy();
+		await user.type(within(dialog).getByRole('textbox', { name: 'Header value' }), 'beta');
+		await submit(user, dialog);
+		expect(await within(dialog).findByText('Enter a header name of letters, digits and "-".')).toBeTruthy();
+		await user.type(within(dialog).getByRole('textbox', { name: 'Header name' }), 'X Beta');
+		await submit(user, dialog);
+		expect(await within(dialog).findByText('Enter a header name of letters, digits and "-".')).toBeTruthy();
+		expect(posts()).toEqual([]);
+		await user.clear(within(dialog).getByRole('textbox', { name: 'Header value' }));
 
 		await choose(user, 'Match condition', 'IP address');
 		expect(within(dialog).queryByRole('textbox', { name: 'Header name' })).toBeNull();
@@ -136,6 +144,65 @@ describe('add/edit dialog validation mirrors the schema codes', () => {
 
 		await choose(user, 'Match condition', 'Logged in');
 		expect(within(dialog).queryByRole('textbox', { name: 'IP addresses or ranges' })).toBeNull();
+	});
+});
+
+describe('a save the server refuses', () => {
+	const refuse = (errors: unknown[]) => () => {
+		throw { code: 'proto_blocks_schema_invalid', message: 'The declaration does not match the schema.', data: { status: 400, errors } };
+	};
+
+	test("each finding for the saved rule renders next to its field; others in the dialog's error", async () => {
+		const added = readRules(legacyText).length;
+		routes({
+			'POST admin/schema-files/redirects/legacy-site': refuse([
+				{ path: `/rules/${added}/to`, code: 'invalid_target', message: 'The target URL needs a host (server).' },
+				{ path: `/rules/${added}/when/value/0`, message: 'Not an IP address or CIDR range (server).' },
+				{ path: '/rules/0/from', code: 'invalid_source', message: 'Broken older rule (server).' },
+			]),
+		});
+		const user = userEvent.setup();
+		renderScreen();
+		const dialog = await openAdd(user);
+		await user.type(within(dialog).getByRole('textbox', { name: 'Source' }), '/shop');
+		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), 'https://shop.test/');
+		await choose(user, 'Match condition', 'IP address');
+		await user.type(within(dialog).getByRole('textbox', { name: 'IP addresses or ranges' }), '10.0.0.1');
+		await submit(user, dialog);
+
+		expect(await within(dialog).findByText('The target URL needs a host (server).')).toBeTruthy();
+		const target = within(dialog).getByRole('textbox', { name: 'Target' });
+		expect(target.getAttribute('aria-invalid')).toBe('true');
+		expect(target.getAttribute('aria-describedby')).toContain(`${target.id}-error`);
+		expect(within(dialog).getByText('Not an IP address or CIDR range (server).')).toBeTruthy();
+		expect(within(dialog).getByRole('alert').textContent).toBe('rules.0.from: Broken older rule (server).');
+		// Handled in the dialog: no toast, the dialog stays open.
+		expect(screen.queryByText('The change was not saved.')).toBeNull();
+		expect(screen.getByRole('dialog', { name: 'Add redirect' })).toBeTruthy();
+	});
+
+	test('editing in place maps by the rule position in the file; a field the dialog hides goes to the general error', async () => {
+		routes({
+			'POST admin/schema-files/redirects/legacy-site': refuse([{ path: '/rules/4/code', message: 'An error code must be one of the list (server).' }]),
+		});
+		const user = userEvent.setup();
+		renderScreen();
+		await user.click(within(await rowOf('/gone-forever')).getByRole('button', { name: 'Edit /gone-forever' }));
+		const dialog = await screen.findByRole('dialog', { name: 'Edit redirect' });
+		await choose(user, 'Action', 'Do nothing');
+		await submit(user, dialog);
+		expect((await within(dialog).findByRole('alert')).textContent).toBe('An error code must be one of the list (server).');
+	});
+
+	test('a refusal without findings is still a toast', async () => {
+		routes({ 'POST admin/schema-files/redirects/legacy-site': refuse([]) });
+		const user = userEvent.setup();
+		renderScreen();
+		const dialog = await openAdd(user);
+		await user.type(within(dialog).getByRole('textbox', { name: 'Source' }), '/shop');
+		await user.type(within(dialog).getByRole('textbox', { name: 'Target' }), '/store');
+		await submit(user, dialog);
+		expect(await screen.findByText('The change was not saved.')).toBeTruthy();
 	});
 });
 
@@ -258,13 +325,15 @@ describe('writes', () => {
 	});
 
 	test('delete, move down and duplicate', async () => {
-		routes();
+		routes({ 'DELETE admin/redirects/hits': { deleted: true } });
 		const user = userEvent.setup();
 		renderScreen();
 		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Delete /about-us' }));
 		await user.click(await screen.findByRole('button', { name: 'Delete 1 redirect' }));
 		await waitFor(() => expect(posts()).toHaveLength(1));
 		expect(readRules(posts()[0].data?.text ?? '').map((r) => r.from)).toEqual(['^/blog/(\\d+)/(.*)$', '/promo', '/members', '/gone-forever']);
+		// Then the rule's hit row goes (query string: adminDelete sends no body).
+		await waitFor(() => expect(writes().map((c) => `${c.method} ${c.url}`)).toEqual(['POST admin/schema-files/redirects/legacy-site', 'DELETE admin/redirects/hits?group=legacy-site&ruleId=r_00000001']));
 
 		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Move /about-us down' }));
 		await waitFor(() => expect(posts()).toHaveLength(2));
@@ -437,6 +506,119 @@ describe('test box', () => {
 		fail = true;
 		await user.click(screen.getByRole('button', { name: 'Test' }));
 		expect(await screen.findByText('Enter a URL on this site.')).toBeTruthy();
+	});
+});
+
+describe('hit rows of deleted rules', () => {
+	test('a 404 (no row) is ignored; another failure warns but the delete stands', async () => {
+		let status = 404;
+		routes({
+			'DELETE admin/redirects/hits': () => {
+				throw { code: status === 404 ? 'rest_no_route' : 'proto_blocks_db', message: 'Database is gone.', data: { status } };
+			},
+		});
+		const user = userEvent.setup();
+		renderScreen();
+		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Delete /about-us' }));
+		await user.click(await screen.findByRole('button', { name: 'Delete 1 redirect' }));
+		await waitFor(() => expect(writes().some((c) => c.method === 'DELETE')).toBe(true));
+		expect((await screen.findAllByText('Redirect deleted.')).length).toBeGreaterThan(0);
+		expect(screen.queryByText('The hit count of the deleted rule was not cleared.')).toBeNull();
+
+		status = 500;
+		await user.click(within(await rowOf('/promo')).getByRole('button', { name: 'Delete /promo' }));
+		await user.click(await screen.findByRole('button', { name: 'Delete 1 redirect' }));
+		expect((await screen.findAllByText('The hit count of the deleted rule was not cleared.')).length).toBeGreaterThan(0);
+		expect(screen.getAllByText('Database is gone.').length).toBeGreaterThan(0);
+		expect(posts()).toHaveLength(2);
+	});
+
+	test('bulk delete clears each rule; a failed file write or missing tables sends nothing', async () => {
+		routes({ 'DELETE admin/redirects/hits': { deleted: true } });
+		const user = userEvent.setup();
+		renderScreen();
+		await user.click(within(await rowOf('/about-us')).getByRole('checkbox', { name: 'Select /about-us' }));
+		await user.click(within(await rowOf('/gone-forever')).getByRole('checkbox', { name: 'Select /gone-forever' }));
+		// r_0000000p is not a server rule id (not hex): the route would refuse it, so it is not sent.
+		await user.click(within(await rowOf('/spring')).getByRole('checkbox', { name: 'Select /spring' }));
+		await user.click(within(screen.getByRole('region', { name: 'Bulk actions' })).getByRole('button', { name: 'Delete' }));
+		await user.click(await screen.findByRole('button', { name: 'Delete 3 redirects' }));
+		await waitFor(() => expect(writes().filter((c) => c.method === 'DELETE')).toHaveLength(2));
+		expect((await screen.findAllByText('Redirects deleted.')).length).toBeGreaterThan(0);
+		expect(writes().filter((c) => c.method === 'DELETE').map((c) => c.url).sort()).toEqual([
+			'admin/redirects/hits?group=legacy-site&ruleId=r_00000001',
+			'admin/redirects/hits?group=legacy-site&ruleId=r_1a2b3c4d',
+		]);
+
+		document.body.innerHTML = '';
+		(jest.requireMock('@wordpress/api-fetch') as { default: jest.Mock }).default.mockClear();
+		routes({
+			'POST admin/schema-files/redirects/legacy-site': () => {
+				throw { code: 'proto_blocks_write_failed', message: 'Disk full.', data: { status: 500 } };
+			},
+		});
+		renderScreen();
+		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Delete /about-us' }));
+		await user.click(await screen.findByRole('button', { name: 'Delete 1 redirect' }));
+		expect((await screen.findAllByText('Disk full.')).length).toBeGreaterThan(0);
+		expect(writes().some((c) => c.method === 'DELETE')).toBe(false);
+
+		document.body.innerHTML = '';
+		(jest.requireMock('@wordpress/api-fetch') as { default: jest.Mock }).default.mockClear();
+		routes({ 'admin/redirects': index({ db: { tables: false, orphans: 0 } }) });
+		renderScreen();
+		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Delete /about-us' }));
+		await user.click(await screen.findByRole('button', { name: 'Delete 1 redirect' }));
+		await waitFor(() => expect(posts()).toHaveLength(1));
+		expect((await screen.findAllByText('Redirect deleted.')).length).toBeGreaterThan(0);
+		expect(writes().some((c) => c.method === 'DELETE')).toBe(false);
+	});
+});
+
+describe('test box shapes', () => {
+	test('stage, reason, loggedIn and per-step stage are shown; "as a visitor" sends loggedIn=0', async () => {
+		const paths: string[] = [];
+		routes({
+			'admin/redirects/test': (_body: unknown, path: string) => {
+				paths.push(path);
+				return {
+					matched: true,
+					stage: '404',
+					group: 'legacy-site',
+					ruleId: 'r_00000004',
+					action: 'url',
+					code: 301,
+					target: '/login',
+					reason: 'else',
+					trace: [
+						{ group: 'legacy-site', ruleId: 'r_00000001', result: 'skipped', reason: 'no_match', stage: 'init' },
+						{ group: 'legacy-site', ruleId: 'r_00000004', result: 'matched', reason: 'else', stage: '404' },
+					],
+					loggedIn: !path.includes('loggedIn=0'),
+					note: 'Evaluated without redirecting.',
+				};
+			},
+		});
+		const user = userEvent.setup();
+		renderScreen();
+		await rowOf('/about-us');
+		await user.type(screen.getByRole('textbox', { name: 'URL to test' }), '/members');
+		await user.click(screen.getByRole('button', { name: 'Test' }));
+		expect(await screen.findByText('Login and role conditions were checked as you (signed in).')).toBeTruthy();
+		expect(paths[0]).toBe('admin/redirects/test?url=%2Fmembers');
+		const trace = screen.getByRole('table', { name: 'Evaluation trace' });
+		expect(within(trace).getByText('On request')).toBeTruthy();
+		expect(within(trace).getByText('As a 404')).toBeTruthy();
+		expect(within(trace).getByText('Source does not match')).toBeTruthy();
+		// The overall stage badge plus the trace cell.
+		expect(screen.getAllByText('As a 404')).toHaveLength(2);
+		expect(screen.getAllByText('Source matched, condition false: the fallback target fires')).toHaveLength(2);
+		expect(screen.getByText('Evaluated without redirecting.')).toBeTruthy();
+
+		await user.click(screen.getByRole('checkbox', { name: 'Test as a visitor (signed out)' }));
+		await user.click(screen.getByRole('button', { name: 'Test' }));
+		expect(await screen.findByText('Login and role conditions were checked as a signed-out visitor.')).toBeTruthy();
+		expect(paths[1]).toBe('admin/redirects/test?url=%2Fmembers&loggedIn=0');
 	});
 });
 

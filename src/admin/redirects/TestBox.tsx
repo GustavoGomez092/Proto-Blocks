@@ -5,17 +5,24 @@ import { adminGet } from '@/admin/api';
 import { Panel, PanelHeader } from '@/admin/components/shell/Panel';
 import { Badge } from '@/admin/components/ui/badge';
 import { Button } from '@/admin/components/ui/button';
+import { Checkbox } from '@/admin/components/ui/checkbox';
 import { Input } from '@/admin/components/ui/input';
 import { Label } from '@/admin/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/admin/components/ui/table';
-import { asApiError } from './api';
-import { actionLabel } from './codes';
+import { asApiError, query } from './api';
+import { actionLabel, stageLabel, traceReasonLabel } from './codes';
 import type { TestResult } from './types';
 
-/** Live "which rule fires for this URL" check (GET admin/redirects/test?url=), with the evaluation trace. */
+/**
+ * Live "which rule fires for this URL" check (GET admin/redirects/test?url=),
+ * with the evaluation trace. "Test as a visitor" passes loggedIn=0 so login
+ * and role conditions see a signed-out request.
+ */
 export function TestBox() {
 	const inputId = useId();
+	const visitorId = useId();
 	const [url, setUrl] = useState('');
+	const [visitor, setVisitor] = useState(false);
 	const [result, setResult] = useState<TestResult | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -28,7 +35,7 @@ export function TestBox() {
 		setBusy(true);
 		setError(null);
 		try {
-			setResult(await adminGet<TestResult>(`admin/redirects/test?url=${encodeURIComponent(url.trim())}`));
+			setResult(await adminGet<TestResult>(`admin/redirects/test${query({ url: url.trim(), loggedIn: visitor ? '0' : null })}`));
 		} catch (e) {
 			setResult(null);
 			setError(asApiError(e).message);
@@ -44,6 +51,12 @@ export function TestBox() {
 				<div className="grid min-w-[240px] flex-1 gap-1.5">
 					<Label htmlFor={inputId}>{__('URL to test', 'proto-blocks')}</Label>
 					<Input id={inputId} value={url} placeholder="/old-page?utm=1" className="font-mono" onChange={(event) => setUrl(event.target.value)} />
+				</div>
+				<div className="flex h-9 items-center gap-2">
+					<Checkbox id={visitorId} checked={visitor} onCheckedChange={(checked) => setVisitor(checked === true)} />
+					<Label htmlFor={visitorId} className="font-normal">
+						{__('Test as a visitor (signed out)', 'proto-blocks')}
+					</Label>
 				</div>
 				<Button type="submit" variant="outline" disabled={busy || url.trim() === ''}>
 					{busy ? <LoaderCircleIcon aria-hidden="true" className="animate-spin motion-reduce:animate-none" /> : null}
@@ -73,11 +86,23 @@ export function TestBox() {
 								{__('No rule fires for this URL.', 'proto-blocks')}
 							</p>
 						)}
+						{result.matched && (result.stage || result.reason) ? (
+							<p className="flex flex-wrap items-center gap-2 text-label">
+								{result.stage ? <Badge variant="secondary">{stageLabel(result.stage)}</Badge> : null}
+								{result.reason ? <span>{traceReasonLabel(result.reason)}</span> : null}
+							</p>
+						) : null}
+						{typeof result.loggedIn === 'boolean' ? (
+							<p className="text-label text-muted-foreground">
+								{result.loggedIn ? __('Login and role conditions were checked as you (signed in).', 'proto-blocks') : __('Login and role conditions were checked as a signed-out visitor.', 'proto-blocks')}
+							</p>
+						) : null}
 						{result.note ? <p className="text-label text-muted-foreground">{result.note}</p> : null}
 						{result.trace.length > 0 ? (
 							<Table aria-label={__('Evaluation trace', 'proto-blocks')}>
 								<TableHeader>
 									<TableRow>
+										<TableHead>{__('Stage', 'proto-blocks')}</TableHead>
 										<TableHead>{__('Group', 'proto-blocks')}</TableHead>
 										<TableHead>{__('Rule', 'proto-blocks')}</TableHead>
 										<TableHead>{__('Result', 'proto-blocks')}</TableHead>
@@ -86,13 +111,14 @@ export function TestBox() {
 								</TableHeader>
 								<TableBody>
 									{result.trace.map((step, i) => (
-										<TableRow key={`${step.group}-${step.ruleId}-${i}`}>
+										<TableRow key={`${step.stage ?? ''}-${step.group}-${step.ruleId}-${i}`}>
+											<TableCell className="text-label whitespace-nowrap">{step.stage ? stageLabel(step.stage) : '—'}</TableCell>
 											<TableCell className="font-mono text-micro">{step.group}</TableCell>
 											<TableCell className="font-mono text-micro">{step.ruleId}</TableCell>
 											<TableCell>
 												<Badge variant={step.result === 'matched' ? 'success' : 'secondary'}>{step.result === 'matched' ? __('Matched', 'proto-blocks') : __('Skipped', 'proto-blocks')}</Badge>
 											</TableCell>
-											<TableCell className="whitespace-normal text-label">{step.reason}</TableCell>
+											<TableCell className="whitespace-normal text-label">{traceReasonLabel(step.reason)}</TableCell>
 										</TableRow>
 									))}
 								</TableBody>
