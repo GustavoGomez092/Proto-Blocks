@@ -1,0 +1,27 @@
+# Proto-Blocks redirects
+# Include inside the server {} block.
+
+# shop: Shop
+location ~* ^/shop/(.*)$ { return 308 /store/$1; }
+
+# legacy-site: Legacy site
+rewrite (?i)^/about-us/?$ /about? permanent;
+rewrite (?i)^/blog/(\d+)/(.*)$ /news/$2? permanent;
+rewrite (?i)^/promo/?$ /sale redirect;
+# skipped: r_00000004 /members: condition "login" has no nginx equivalent
+location ~* ^/gone-forever/?$ { return 410; }
+rewrite (?i)^/old-api/?$ /wp-json/v1/thing? last;
+# skipped: r_00000007 /ignore-me: "nothing" has no nginx equivalent; the request is served as usual
+if ($http_referer ~* "google\.") { rewrite (?i)^/landing/?$ /landing-google? permanent; }
+if ($http_referer !~* "google\.") { rewrite (?i)^/landing/?$ /landing-other? permanent; }
+rewrite (?i)^/formula/?$ /safe? permanent;
+location ~ ^/Case$ { return 307 /Case-Sensitive; }
+if ($args = "q=old") { rewrite (?i)^/search/?$ /find? permanent; }
+location ~* ^/forbidden/?$ { return 403; }
+# skipped: r_0000000e /inject RewriteRule ^ http://evil.test [R]: a value contains a control character
+if ($http_user_agent = "iPhone") { rewrite (?i)^/agent/?$ /mobile? redirect; }
+if ($host = "old.example.com") { rewrite (?i)^/host/?$ https://new.example.com/host? permanent; }
+# skipped: r_00000011 /ip: condition "ip" has no nginx equivalent
+rewrite (?i)^/pct/?$ /a%20b#frag? permanent;
+rewrite "(?i)^/space here/?$" /there? permanent;
+# End Proto-Blocks redirects

@@ -85,6 +85,9 @@ final class CsvFormat implements FormatInterface
         if ($source === '') {
             return ParsedRow::invalid('empty_source', $line);
         }
+        if (Patterns::hasControl($source)) {
+            return ParsedRow::invalid('invalid_source', $line);
+        }
 
         $regexCell = $get('regex');
         $regex = $regexCell === null || $regexCell === ''

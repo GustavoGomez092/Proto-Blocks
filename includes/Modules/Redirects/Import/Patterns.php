@@ -70,14 +70,16 @@ final class Patterns
     /** `/blog/*` → `^/blog/(.*)$`; every other character quoted. */
     public static function wildcard(string $source): string
     {
-        $parts = explode('*', $source);
-        return '^' . implode('(.*)', array_map(static fn(string $p): string => preg_quote($p, '~'), $parts)) . '$';
+        return '^' . implode('(.*)', array_map([self::class, 'quote'], explode('*', $source))) . '$';
     }
 
-    /** A regex-quoted literal that also leaves `/` alone (it is not a delimiter here). */
+    /**
+     * A literal as a regex body: only the PCRE metacharacters are escaped
+     * (`-`, `=`, `/` and friends stay readable in exported server files).
+     */
     public static function quote(string $literal): string
     {
-        return str_replace('\\/', '/', preg_quote($literal, '/'));
+        return (string) preg_replace('/[\\\\.+*?\[\]^$(){}|]/', '\\\\$0', $literal);
     }
 
     /** True when the PCRE body compiles. */

@@ -150,6 +150,9 @@ final class JsonFormat implements FormatInterface
         if (!$is404 && (!is_string($raw['from'] ?? null) || trim($raw['from']) === '')) {
             return ParsedRow::invalid('empty_source', $line, $raw);
         }
+        if (is_string($raw['from'] ?? null) && Patterns::hasControl($raw['from'])) {
+            return ParsedRow::invalid('invalid_source', $line);
+        }
         return ParsedRow::ok($raw, $line);
     }
 

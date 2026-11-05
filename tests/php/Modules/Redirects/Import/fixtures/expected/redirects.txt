@@ -1,0 +1,23 @@
+# Proto-Blocks redirects
+# shop: Shop
+/shop/* /store/:splat 308
+# legacy-site: Legacy site
+/about-us /about 301
+# skipped: r_00000002 ^/blog/(\d+)/(.*)$: only ^/prefix/(.*)$ regexes can be written as a _redirects splat
+/promo /sale 302
+# skipped: r_00000004 /members: condition "login" has no _redirects equivalent
+# skipped: r_00000005 /gone-forever: error responses need a page to serve in _redirects
+/old-api /wp-json/v1/thing 200
+# skipped: r_00000007 /ignore-me: "nothing" has no _redirects equivalent
+# skipped: r_00000008 /landing: condition "referrer" has no _redirects equivalent
+/formula /safe 301
+/Case /Case-Sensitive 307
+# skipped: r_0000000c /search?q=old: query matching needs named placeholders, which are not exported
+# skipped: r_0000000d /forbidden: error responses need a page to serve in _redirects
+# skipped: r_0000000e /inject RewriteRule ^ http://evil.test [R]: a value contains a control character
+# skipped: r_0000000f /agent: condition "agent" has no _redirects equivalent
+# skipped: r_00000010 /host: condition "server" has no _redirects equivalent
+# skipped: r_00000011 /ip: condition "ip" has no _redirects equivalent
+/pct /a%20b#frag 301
+# skipped: r_00000013 /space here: a value holds a space
+# End Proto-Blocks redirects

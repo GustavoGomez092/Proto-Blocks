@@ -70,6 +70,9 @@ final class RedirectionMapper
         if ($from === '' && $matchType !== 'page') {
             return ParsedRow::invalid('empty_source', $line, RawRule::build($rule));
         }
+        if (Patterns::hasControl($from)) {
+            return ParsedRow::invalid('invalid_source', $line);
+        }
 
         // Action and code.
         switch ($actionType) {
