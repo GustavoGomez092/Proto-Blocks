@@ -310,7 +310,14 @@ JSONC;
         self::assertNull($front);
         self::assertSame([], $GLOBALS['pb_test_redirects']);
         self::assertSame([], self::hitUpserts());
-        self::assertArrayNotHasKey('template_redirect', $GLOBALS['pb_test_hooks']);
+        // Other modules (scripts) hook template_redirect too; only the engine must stay off.
+        foreach ($GLOBALS['pb_test_hooks']['template_redirect'] ?? [] as $entry) {
+            $callback = $entry['callback'];
+            self::assertFalse(
+                is_array($callback) && ($callback[0] ?? null) instanceof \ProtoBlocks\Modules\Redirects\Engine\FrontController,
+                'the front controller must not register while paused'
+            );
+        }
         self::assertTrue(RedirectsModule::instance()?->paused());
     }
 
