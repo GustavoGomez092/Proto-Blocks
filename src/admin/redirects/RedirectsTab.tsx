@@ -21,7 +21,7 @@ import { actionLabel, conditionLabel, CONDITIONS } from './codes';
 import { addRule, moveRule, newRuleId, readRules, removeRule, setRuleEnabled } from './edits';
 import { GroupMenu } from './GroupMenu';
 import { RuleDialog } from './RuleDialog';
-import { defaultGroup, formatDate, saveRule, sortedGroups, useWriteFlow, writableGroups, writeGuard, type RuleSubmit, type TabProps } from './shared';
+import { defaultGroup, formatDate, groupEditable, groupReadOnlyReason, readOnlyReasonLabel, saveRule, sortedGroups, useWriteFlow, writableGroups, writeGuard, type RuleSubmit, type TabProps } from './shared';
 import { TestBox } from './TestBox';
 import type { FileRule, Group, Rule } from './types';
 
@@ -136,14 +136,16 @@ export function RedirectsTab({
 		}
 		const row = rows.find(({ rule }) => rule.group === editRequest.group && rule.id === editRequest.id);
 		if (row) {
-			setDialog({ rule: row.rule, group: row.group.origin === 'file' ? row.group.slug : defaultGroup(index) });
+			setDialog({ rule: row.rule, group: groupEditable(row.group) ? row.group.slug : defaultGroup(index) });
 		} else {
 			toast.error(__('That rule is no longer in the files.', 'proto-blocks'));
 		}
 		onEditHandled();
 	}, [editRequest, rows, index, onEditHandled]);
 
-	const fileEditable = (group: Group) => !readOnly && group.origin === 'file' && group.writable;
+	const fileEditable = (group: Group) => !readOnly && groupEditable(group);
+	/** A PHP rule is edited by copying it into a file group; a locked file group's rules are not edited at all. */
+	const canEdit = (group: Group) => groupEditable(group) || groupReadOnlyReason(group) === 'php';
 	const groupWrite = (group: Group, edit: (text: string) => string): GroupWrite => ({ slug: group.slug, expectedHash: group.hash, edit });
 
 	const save: RuleSubmit = (values, rule, refused) =>
@@ -409,6 +411,7 @@ export function RedirectsTab({
 										<TableCell className="text-label">
 											{group.title}
 											{!group.enabled ? <span className="block text-micro">{__('(group off)', 'proto-blocks')}</span> : null}
+											{groupReadOnlyReason(group) !== null && groupReadOnlyReason(group) !== 'php' ? <span className="block max-w-[200px] text-micro whitespace-normal text-muted-foreground">{readOnlyReasonLabel(group)}</span> : null}
 										</TableCell>
 										<TableCell className="text-right tabular-nums">{rule.hits}</TableCell>
 										<TableCell className="text-label whitespace-nowrap">{formatDate(rule.lastHit)}</TableCell>
@@ -430,7 +433,7 @@ export function RedirectsTab({
 										</TableCell>
 										<TableCell className="text-right whitespace-nowrap">
 											<span className="inline-flex items-center gap-0.5">
-												<Button variant="ghost" size="icon-sm" aria-label={sprintf(/* translators: %s: rule source. */ __('Edit %s', 'proto-blocks'), label)} {...writeGuard(readOnly, busy || (group.origin === 'file' && !group.writable))} onClick={() => setDialog({ rule, group: group.origin === 'file' ? group.slug : defaultGroup(index) })}>
+												<Button variant="ghost" size="icon-sm" aria-label={sprintf(/* translators: %s: rule source. */ __('Edit %s', 'proto-blocks'), label)} {...writeGuard(readOnly, busy || !canEdit(group))} onClick={() => setDialog({ rule, group: groupEditable(group) ? group.slug : defaultGroup(index) })}>
 													<PencilIcon aria-hidden="true" />
 												</Button>
 												<Button variant="ghost" size="icon-sm" aria-label={sprintf(/* translators: %s: rule source. */ __('Move %s up', 'proto-blocks'), label)} {...writeGuard(readOnly, !editable || busy || rule.index === 0)} onClick={() => void runWrites([groupWrite(group, (text) => moveRule(text, refOf(rule), -1))])}>

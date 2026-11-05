@@ -16,7 +16,7 @@ import { asApiError, writeInOrder, type GroupWrite, type WriteOutcome } from './
 import { addRule, readRules, removeRule, updateRule } from './edits';
 import { NEW_GROUP, type RuleFormValues } from './rule-form';
 import { ruleFieldErrors, serverFindings, slugifyGroup, type RuleField } from './schema';
-import type { FileRule, Group, RedirectsIndex, Rule } from './types';
+import type { FileRule, Group, GroupReadOnlyReason, RedirectsIndex, Rule } from './types';
 
 export interface TabProps {
 	index: RedirectsIndex;
@@ -35,9 +35,43 @@ export function sortedGroups(index: RedirectsIndex): Group[] {
 	return [...index.groups].sort((a, b) => a.position - b.position || a.slug.localeCompare(b.slug));
 }
 
+/** Whether the screen can save the group's file (a file group, writable, no read-only reason). */
+export function groupEditable(group: Group): boolean {
+	return group.origin === 'file' && group.writable && !group.readOnlyReason;
+}
+
+/** Why a group cannot be saved here (`readOnlyReason`, inferred for an older response). Null when it can. */
+export function groupReadOnlyReason(group: Group): GroupReadOnlyReason | null {
+	if (group.readOnlyReason) {
+		return group.readOnlyReason;
+	}
+	if (group.origin === 'php') {
+		return 'php';
+	}
+	return group.writable ? null : 'not_writable';
+}
+
+/** A short reason for the group cell and the group menu; null for an editable group. */
+export function readOnlyReasonLabel(group: Group): string | null {
+	switch (groupReadOnlyReason(group)) {
+		case null:
+			return null;
+		case 'php':
+			return __('Declared in PHP; edit copies a rule into a file group', 'proto-blocks');
+		case 'read_only':
+			return __('Read-only: the file is outside the theme the screen writes to (a parent theme or a filtered folder)', 'proto-blocks');
+		case 'file_mods':
+			return __('Read-only: file modifications are disabled', 'proto-blocks');
+		case 'multisite':
+			return __('Read-only: only a network admin can change theme files', 'proto-blocks');
+		default:
+			return __('Read-only: the file is not writable', 'proto-blocks');
+	}
+}
+
 /** File groups the UI can write. */
 export function writableGroups(index: RedirectsIndex): Group[] {
-	return sortedGroups(index).filter((group) => group.origin === 'file' && group.writable);
+	return sortedGroups(index).filter(groupEditable);
 }
 
 /** Where a new rule goes by default: the first writable file group, else a new group. */
