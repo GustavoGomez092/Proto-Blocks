@@ -1,15 +1,15 @@
 # Trust and security
 
 > **At a glance**
-> - **What:** who may write what (declaration files, field values, settings), what the getter escapes, and what the plugin refuses.
-> - **Where:** the rules apply to every `proto-types/`, `proto-taxonomies/`, `proto-fields/` and `proto-options/` file and to every stored field value.
+> - **What:** who may write what (declaration files, field values, settings, redirects, scripts), what the getter escapes, and what the plugin refuses.
+> - **Where:** the rules apply to every `proto-types/`, `proto-taxonomies/`, `proto-fields/`, `proto-options/`, `proto-redirects/` and `proto-scripts/` file and to every stored field value.
 > - **PHP:** `proto_field($name, $context, $raw = false)` escapes by default; PHP declarations are trusted code.
 > - **Admin:** every content-model screen needs `manage_options`; file writes also need file mods on and, on multisite, a network administrator.
 > - **CLI:** run as a trusted user (`wp --user=<admin>`) to write `code` values or files on multisite.
 
 This page is the trust boundary in one place, for developers and for AI agents that build sites with the plugin.
 
-Related: [content model files](content-model-files.md), [fields](fields.md#trust-rules), [settings pages](settings-pages.md#trust-rules), [REST API](rest-api.md#permissions).
+Related: [content model files](content-model-files.md), [fields](fields.md#trust-rules), [settings pages](settings-pages.md#trust-rules), [redirects](redirects.md#safety-rules), [scripts](scripts.md#trust-rules), [REST API](rest-api.md#permissions).
 
 ## Two kinds of writes
 
@@ -64,6 +64,33 @@ PHP declarations (`proto_post_type()`, `proto_taxonomy()`, `proto_field_group()`
 - A location rule the plugin does not implement makes the whole group unrenderable; it never shows on every post.
 - An `optionsSource` that cannot be resolved rejects every value.
 - A `pattern` that does not compile fails every value.
+
+### Redirect targets
+
+Redirect files are data, and a rule can still do harm if a target is built from the request.
+The module refuses that case. Full list: [redirects](redirects.md#safety-rules).
+
+- A target written as a path must still be a path after substitution. A leading `//` collapses to `/`. A backslash, a control character or a `scheme:` prefix makes the rule not fire. Capture groups cannot make an open redirect.
+- A target written absolute keeps its host. If substitution changes it, the rule does not fire.
+- Only `http` and `https` are accepted. The final target goes through `wp_sanitize_redirect()`.
+- A rule whose target is the current request does not fire. A rule whose `to` equals `from` is refused.
+- Regex: compiled at write time, 500 characters at most, `preg_last_error()` checked on every match.
+- Headers: names match `^[A-Za-z0-9-]{1,100}$`, CR and LF are refused, and `Set-Cookie`, `Location`, `Status`, `Content-Length` and `Transfer-Encoding` cannot be set.
+- `pass` is an internal rewrite. It never fetches an external URL.
+- `when.type: "filter"` names a hook, not a callable.
+- Logs: IP storage defaults to `none`, sensitive request headers are never stored, reading logs needs `manage_options`, and CSV exports prefix cells that start with `=`, `+`, `-` or `@`.
+- Importers execute nothing, uploads are capped at 5 MB, and deactivating a source plugin needs `activate_plugins`.
+
+### Scripts raw output
+
+`proto-scripts/` snippets are output exactly as stored on the front end.
+That is the point, and it is a boundary: anyone who can write these files can run JavaScript on every visitor's browser, exactly as someone who can edit the theme.
+
+- Writing a script file needs `manage_options` **and** `unfiltered_html`. Without it the screen is read-only with the reason `unfiltered_html`. `DISALLOW_UNFILTERED_HTML` disables writes site-wide.
+- File-mods and multisite rules apply as for every declaration.
+- A `<?php`, `<?=` or `<?` followed by whitespace in a snippet is refused (`php_in_snippet`). Snippets are never included as PHP.
+- Snippets never render in the admin, feeds, REST, embeds, the customizer preview or the block-editor iframe.
+- Only three fixed file names per script folder are ever read or written (`invalid_snippet_file`).
 
 ## Values
 
@@ -158,7 +185,8 @@ A full-page cache that serves logged-in users must vary by user, because a logge
 
 | Surface | Capability |
 |---|---|
-| Post Types, Taxonomies, Fields, Options Pages screens | `manage_options` |
+| Post Types, Taxonomies, Fields, Options Pages, Redirects, Scripts screens | `manage_options` |
+| Writing a script file | `manage_options` and `unfiltered_html` |
 | A field box on a post / term / user | `edit_post` / `edit_term` (or `edit_terms` to add) / `edit_user` (or `create_users` to add) |
 | A settings page and `options/<slug>` | the page's own capability, verbatim, never widened, plus a logged-in user |
 | The public registration form | none; only groups that name `user_form == register` (or `all`), always sanitised |

@@ -1,17 +1,17 @@
 # Content model files
 
 > **At a glance**
-> - **What:** the rules every declaration file follows: post types, taxonomies, field groups and settings pages.
-> - **Where:** `proto-types/<slug>/type.jsonc`, `proto-taxonomies/<slug>/taxonomy.jsonc`, `proto-fields/<slug>/group.jsonc` and `proto-options/<slug>/page.jsonc` in the theme.
-> - **PHP:** `proto_post_type()`, `proto_taxonomy()`, `proto_field_group()` and `proto_options_page()` declare the same things without a file.
-> - **Admin:** Proto Blocks > Post Types, Taxonomies, Fields and Options Pages read and write these files.
+> - **What:** the rules every declaration file follows: post types, taxonomies, field groups, settings pages, redirects and scripts.
+> - **Where:** `proto-types/<slug>/type.jsonc`, `proto-taxonomies/<slug>/taxonomy.jsonc`, `proto-fields/<slug>/group.jsonc`, `proto-options/<slug>/page.jsonc`, `proto-redirects/<group>/redirects.jsonc` and `proto-scripts/<slug>/script.jsonc` in the theme.
+> - **PHP:** `proto_post_type()`, `proto_taxonomy()`, `proto_field_group()`, `proto_options_page()`, `proto_redirect()` and `proto_script()` declare the same things without a file.
+> - **Admin:** Proto Blocks > Post Types, Taxonomies, Fields, Options Pages, Redirects and Scripts read and write these files.
 > - **CLI:** `wp proto-blocks validate` checks every declaration; `wp proto-blocks fields validate` checks field groups.
 
 Declarations are data in files.
 Nothing about the content model is ever stored in the database.
 The admin screens edit the same files a developer edits by hand.
 
-Related: [post types](post-types.md), [taxonomies](taxonomies.md), [fields](fields.md), [settings pages](settings-pages.md), [trust and security](trust-and-security.md), [REST API](rest-api.md), [CLI](cli.md).
+Related: [post types](post-types.md), [taxonomies](taxonomies.md), [fields](fields.md), [settings pages](settings-pages.md), [redirects](redirects.md), [scripts](scripts.md), [trust and security](trust-and-security.md), [REST API](rest-api.md), [CLI](cli.md).
 
 ## File layout
 
@@ -29,6 +29,14 @@ your-theme/
     event-details/group.jsonc     standalone field group (or an ACF Tools export)
   proto-options/
     theme-settings/page.jsonc     settings page "theme-settings"
+  proto-redirects/
+    settings.jsonc                redirect module settings (one file, optional)
+    legacy-site/redirects.jsonc   one group of redirect rules, ordered
+  proto-scripts/
+    gtm/script.jsonc              script metadata and placement
+    gtm/head.html                 raw snippet for <head> (optional)
+    gtm/body-open.html            raw snippet after <body> (optional)
+    gtm/body-close.html           raw snippet before </body> (optional)
 ```
 
 | Kind | Folder | File name | Slug rule |
@@ -37,11 +45,15 @@ your-theme/
 | Taxonomy | `proto-taxonomies/` | `taxonomy.jsonc` or `taxonomy.json` | `^[a-z][a-z0-9_-]*$`, 32 characters at most, not reserved |
 | Field group | `proto-fields/` | `group.jsonc` or `group.json` | `^[a-z][a-z0-9_-]{0,31}$` |
 | Settings page | `proto-options/` | `page.jsonc` or `page.json` | `^[a-z][a-z0-9-]*$`, 64 characters at most, not reserved |
+| Redirect group | `proto-redirects/` | `redirects.jsonc` or `redirects.json` | `^[a-z][a-z0-9_-]*$`, 60 characters at most, `settings` reserved |
+| Redirect settings | `proto-redirects/` | `settings.jsonc` | none; one file, REST path `redirect-settings/settings` |
+| Script | `proto-scripts/` | `script.jsonc` plus `head.html`, `body-open.html`, `body-close.html` | the content-model slug rule `^[a-z][a-z0-9_-]*$` |
 
 The reserved slugs are listed in [post types](post-types.md#slug-rules), [taxonomies](taxonomies.md#slug-rules) and [settings pages](settings-pages.md#slug-rules).
 
 Only the declaration file in each folder is read.
 Other files in the folder (an SVG icon, notes) are ignored by the loader.
+The exception is `proto-scripts/<slug>/`: its three `.html` files are the snippets, written through the same confined, atomic writer and capped at 256 KB each. Only those three names are ever read or written. See [scripts](scripts.md).
 
 ## JSONC conventions
 
@@ -250,13 +262,20 @@ On a single site, `manage_options` is enough.
 ## What is stored in the database
 
 Declarations never are.
-The plugin keeps only bookkeeping:
+The plugin keeps only bookkeeping and the redirect module's runtime data:
 
 | Name | Kind | Holds |
 |---|---|---|
 | `proto_blocks_rewrite_hash` | option | `{ "<theme>": "<sha1>" }` of the registered rewrite settings, to flush rewrite rules once when they change |
 | `proto_blocks_external_menus` | transient (1 hour) | menu slugs and titles of other plugins, for the Options Pages screen |
 | `proto_fields_err_*` | transients (5 minutes) | the last save's field validation errors, per object and user |
+| `{prefix}proto_redirect_hits` | table | hit count and last hit per redirect rule |
+| `{prefix}proto_redirect_log` | table | the redirect log |
+| `{prefix}proto_404_log` | table | the 404 log |
+| `proto_blocks_redirects_db` | option | `1` once the three tables exist, so they are checked only when it is not `1` |
 
+Redirect and script configuration is never stored here.
+Delete the three tables and every redirect still works.
+See [redirects](redirects.md#redirect-log-and-404-log).
 Field values are ordinary post, term and user meta, and options.
 See [fields](fields.md#storage) and [settings pages](settings-pages.md#storage-and-option-names).
