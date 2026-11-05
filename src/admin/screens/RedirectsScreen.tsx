@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { __ } from '@wordpress/i18n';
-import { PauseCircleIcon, PowerOffIcon } from 'lucide-react';
+import { toast } from 'sonner';
+import { DatabaseIcon, LoaderCircleIcon, PauseCircleIcon, PowerOffIcon, TriangleAlertIcon } from 'lucide-react';
+import { adminPost } from '@/admin/api';
 import { getWriteReason } from '@/admin/bootstrap';
 import { IssueList } from '@/admin/components/content-model/IssueList';
 import { PageHeader } from '@/admin/components/shell/PageHeader';
@@ -11,7 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/admin/components/ui/alert
 import { Button } from '@/admin/components/ui/button';
 import { Skeleton } from '@/admin/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/admin/components/ui/tabs';
-import { useRedirectsIndex } from '@/admin/redirects/api';
+import { asApiError, useRedirectsIndex } from '@/admin/redirects/api';
 import { RedirectsTab } from '@/admin/redirects/RedirectsTab';
 
 // The default tab ships with the screen; the others load when opened.
@@ -46,6 +48,39 @@ function writeView(view: View): void {
 		url.searchParams.set('slug', view.slug);
 	}
 	window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+}
+
+/** Issues the post monitor keeps (`monitor_unwritable`, `monitor_rule_disabled`, …) get their own alert. */
+const isMonitorIssue = (issue: { code: string }) => issue.code.startsWith('monitor_');
+
+/** The hits, logs and 404 tables are missing: one button creates them (POST admin/redirects/db/install). */
+function TablesMissing({ reload }: { reload: () => Promise<void> | void }) {
+	const [busy, setBusy] = useState(false);
+	const install = async () => {
+		setBusy(true);
+		try {
+			await adminPost('admin/redirects/db/install');
+			toast.success(__('Redirect tables created.', 'proto-blocks'));
+			await reload();
+		} catch (e) {
+			toast.error(__('The tables were not created.', 'proto-blocks'), { description: asApiError(e).message });
+		} finally {
+			setBusy(false);
+		}
+	};
+	return (
+		<Alert variant="warning" role="status">
+			<DatabaseIcon aria-hidden="true" />
+			<AlertTitle className="line-clamp-none">{__('The redirect tables are missing', 'proto-blocks')}</AlertTitle>
+			<AlertDescription>
+				<p>{__('Rules still run from the theme files, but hits, the redirect log and the 404 log are not recorded until the tables exist.', 'proto-blocks')}</p>
+				<Button size="sm" variant="outline" className="mt-2" disabled={busy} onClick={() => void install()}>
+					{busy ? <LoaderCircleIcon aria-hidden="true" className="animate-spin motion-reduce:animate-none" /> : null}
+					{__('Create tables', 'proto-blocks')}
+				</Button>
+			</AlertDescription>
+		</Alert>
+	);
 }
 
 function TabFallback() {
@@ -117,6 +152,8 @@ export default function RedirectsScreen() {
 
 	const readOnly = writeReason !== null || index.createTarget.writable === false;
 	const props = { index, reload, readOnly };
+	const issues = Array.isArray(index.issues) ? index.issues : [];
+	const monitorIssues = issues.filter(isMonitorIssue);
 
 	return (
 		<div className="grid gap-6 [&>header]:mb-0">
@@ -138,7 +175,24 @@ export default function RedirectsScreen() {
 					</AlertDescription>
 				</Alert>
 			) : null}
-			<IssueList issues={index.issues} />
+			{index.db?.tables === false ? <TablesMissing reload={reload} /> : null}
+			{monitorIssues.length > 0 ? (
+				<Alert variant="warning" role="status">
+					<TriangleAlertIcon aria-hidden="true" />
+					<AlertTitle className="line-clamp-none">{__('The post monitor needs attention', 'proto-blocks')}</AlertTitle>
+					<AlertDescription>
+						<ul className="grid w-full gap-1.5" aria-label={__('Post monitor issues', 'proto-blocks')}>
+							{monitorIssues.map((issue, i) => (
+								<li key={`${issue.code}-${i}`} className="grid gap-0.5">
+									<span className="text-foreground">{issue.message}</span>
+									{issue.source ? <code className="font-mono text-caption break-all text-muted-foreground">{issue.source}</code> : null}
+								</li>
+							))}
+						</ul>
+					</AlertDescription>
+				</Alert>
+			) : null}
+			<IssueList issues={issues.filter((issue) => !isMonitorIssue(issue))} />
 			<Tabs value={view.tab} onValueChange={(tab) => go({ tab: tab as Tab, slug: view.slug })}>
 				<TabsList variant="line" aria-label={__('Redirects sections', 'proto-blocks')}>
 					<TabsTrigger value="redirects">{__('Redirects', 'proto-blocks')}</TabsTrigger>

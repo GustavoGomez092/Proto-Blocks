@@ -79,12 +79,41 @@ describe('settings', () => {
 		await user.type(screen.getByRole('textbox', { name: 'Every front-end response' }), 'Set-Cookie: a=1');
 		await user.type(screen.getByRole('textbox', { name: 'Trusted proxies' }), '10.0.0.1, nope');
 		await user.click(screen.getByRole('button', { name: 'Save settings' }));
-		expect(await screen.findByText('Enter host names only, without http:// or a path.')).toBeTruthy();
+		expect(await screen.findByText('Enter host names only, without http://, a port or a path.')).toBeTruthy();
 		expect(screen.getByText('Write one header per line as Name: value.')).toBeTruthy();
-		expect(screen.getByText('The header "Set-Cookie" is not allowed or its value has line breaks.')).toBeTruthy();
+		expect(screen.getByText('The Set-Cookie header cannot be set here.')).toBeTruthy();
 		expect(screen.getByText('Enter IP addresses or CIDR ranges.')).toBeTruthy();
 		expect(screen.getByRole('textbox', { name: 'Alias hosts' }).getAttribute('aria-invalid')).toBe('true');
 		expect(settingsPosts()).toEqual([]);
+	});
+
+	test('a refused save shows each server finding next to its field', async () => {
+		routes({
+			'admin/schema-files/redirect-settings/settings': settingsFile(),
+			'POST admin/schema-files/redirect-settings/settings': () => {
+				throw {
+					code: 'proto_blocks_schema_invalid',
+					message: 'The declaration does not match the schema.',
+					data: {
+						status: 400,
+						errors: [
+							{ path: '/canonical/aliases/0', message: 'An alias is a host name only (server).' },
+							{ path: '/$schema', message: 'Bad schema key (server).' },
+						],
+					},
+				};
+			},
+		});
+		const user = userEvent.setup();
+		renderScreen('&tab=settings');
+		await screen.findByRole('button', { name: 'Save settings' });
+		await user.type(screen.getByRole('textbox', { name: 'Alias hosts' }), 'old.test');
+		await user.click(screen.getByRole('button', { name: 'Save settings' }));
+		expect(await screen.findByText('An alias is a host name only (server).')).toBeTruthy();
+		expect(screen.getByRole('textbox', { name: 'Alias hosts' }).getAttribute('aria-invalid')).toBe('true');
+		// A finding with no field of its own goes to the toast.
+		expect(await screen.findByText('The settings were not saved.')).toBeTruthy();
+		expect(screen.getByText('Bad schema key (server).')).toBeTruthy();
 	});
 
 	test('an unchanged form writes nothing', async () => {

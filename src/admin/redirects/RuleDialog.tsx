@@ -13,7 +13,7 @@ import { ACTIONS, actionLabel, codeMeaning, codesFor, conditionFields, condition
 import { newRuleId } from './edits';
 import { effectiveDefaults, formFromRule, NEW_GROUP, ruleFromForm, ruleResolver, type RuleFormValues } from './rule-form';
 import { groupSlugError, ruleWarnings, slugifyGroup } from './schema';
-import { writableGroups } from './shared';
+import { writableGroups, type RuleRefusal, type RuleSubmit } from './shared';
 import type { FileRule, RedirectsIndex, Rule, RuleAction } from './types';
 
 function siteHost(): string | undefined {
@@ -121,8 +121,8 @@ export function RuleDialog({
 	/** Group to select; defaults to the rule's own (file) group or the first writable one. */
 	group: string;
 	title?: string;
-	/** Resolves true when the rule was saved; the dialog then closes. */
-	onSubmit: (values: RuleFormValues, rule: FileRule) => Promise<boolean>;
+	/** Resolves true when the rule was saved; the dialog then closes. A refused save reports its field errors back. */
+	onSubmit: RuleSubmit;
 }) {
 	const groups = writableGroups(index);
 	const taken = index.groups.map((g) => g.slug);
@@ -177,7 +177,24 @@ export function RuleDialog({
 		const id = rule?.id ?? newRuleId(index.groups.flatMap((g) => g.rules.map((r) => r.id)));
 		const slug = submitted.group === NEW_GROUP ? slugifyGroup(submitted.newGroupTitle) : submitted.group;
 		const next = ruleFromForm(submitted, defaultsFor(slug), id, { headers: rule?.headers });
-		if (await onSubmit(submitted, next)) {
+		const refused = (fieldErrors: RuleRefusal) => {
+			const shown = { to: showTarget, else: showElse, code: codeOptions.length > 0, conditionValue: fields.value, conditionName: fields.name };
+			const hidden: string[] = [];
+			for (const [field, message] of Object.entries(fieldErrors)) {
+				if (message === undefined) {
+					continue;
+				}
+				if (field === 'root' || shown[field as keyof typeof shown] === false) {
+					hidden.push(message);
+				} else {
+					form.setError(field as keyof RuleFormValues, { type: 'server', message }, { shouldFocus: true });
+				}
+			}
+			if (hidden.length > 0) {
+				form.setError('root.server', { type: 'server', message: hidden.join(' ') });
+			}
+		};
+		if (await onSubmit(submitted, next, refused)) {
 			onOpenChange(false);
 		}
 	});
@@ -382,9 +399,9 @@ export function RuleDialog({
 							</Field>
 						) : null}
 					</div>
-					{errors.root?.message ? (
+					{errors.root?.message || errors.root?.server?.message ? (
 						<p role="alert" className="text-label text-destructive">
-							{errors.root.message}
+							{[errors.root?.message, errors.root?.server?.message].filter(Boolean).join(' ')}
 						</p>
 					) : null}
 

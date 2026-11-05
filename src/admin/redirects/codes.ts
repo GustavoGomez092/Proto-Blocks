@@ -147,3 +147,43 @@ export function queryLabel(mode: QueryMode): string {
 			return __('Ignore and pass to the target', 'proto-blocks');
 	}
 }
+
+/** The matcher's per-rule reason codes (GET admin/redirects/test trace); an unknown code is shown as is. */
+export function traceReasonLabel(reason: string): string {
+	switch (reason) {
+		case 'matched':
+			return __('Matched', 'proto-blocks');
+		case 'else':
+			return __('Source matched, condition false: the fallback target fires', 'proto-blocks');
+		case 'disabled':
+			return __('Rule or group disabled', 'proto-blocks');
+		case 'no_match':
+			return __('Source does not match', 'proto-blocks');
+		case 'no_source':
+			return __('No source', 'proto-blocks');
+		case 'regex_error':
+			return __('The regular expression failed', 'proto-blocks');
+		case 'condition_false':
+			return __('Condition not met', 'proto-blocks');
+		case 'unsafe_target':
+			return __('Target refused as unsafe', 'proto-blocks');
+		case 'unknown_condition':
+			return __('Unknown condition', 'proto-blocks');
+		case 'unknown_action':
+			return __('Unknown action', 'proto-blocks');
+		default:
+			return reason;
+	}
+}
+
+/** The evaluation pass of the test route: `init` (every request) or `404` (WordPress found no page). */
+export function stageLabel(stage: string): string {
+	switch (stage) {
+		case 'init':
+			return __('On request', 'proto-blocks');
+		case '404':
+			return __('As a 404', 'proto-blocks');
+		default:
+			return stage;
+	}
+}

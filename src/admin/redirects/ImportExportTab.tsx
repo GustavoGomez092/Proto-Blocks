@@ -18,7 +18,7 @@ import { detectFormat, groupTextFrom, mergeRules } from './import';
 import { NEW_GROUP } from './rule-form';
 import { groupSlugError, slugifyGroup } from './schema';
 import { defaultGroup, sortedGroups, useWriteFlow, writableGroups, writeGuard, type TabProps } from './shared';
-import type { DuplicateMode, ExportFormat, FileGroup, FileRule, ParsedRow, ParseResult, PluginImporter, RedirectsIndex } from './types';
+import type { DuplicateMode, ExportFormat, FileGroup, FileRule, ParsedRow, ParseResult, PluginImporter, PluginPreview, RedirectsIndex } from './types';
 
 const EXPORT_FORMATS: [ExportFormat, string, string][] = [
 	['csv', 'CSV', 'redirects.csv'],
@@ -80,7 +80,7 @@ function PreviewTable({ rows, label }: { rows: ParsedRow[]; label: string }) {
 							<TableCell className="whitespace-normal">
 								<span className="flex flex-wrap items-center gap-1.5">
 									{statusBadge(row.status)}
-									{row.reason ? <span className="text-micro text-muted-foreground">{row.reason}</span> : null}
+									{row.message || row.reason ? <span className="text-micro text-muted-foreground">{row.message || row.reason}</span> : null}
 								</span>
 							</TableCell>
 						</TableRow>
@@ -301,6 +301,7 @@ function PluginImport({ index, readOnly, runWrites, busy, reload }: TabProps & {
 	const [importers, setImporters] = useState<PluginImporter[] | null>(null);
 	const [active, setActive] = useState<PluginImporter | null>(null);
 	const [preview, setPreview] = useState<Record<string, FileGroup> | null>(null);
+	const [skipped, setSkipped] = useState<ParsedRow[]>([]);
 	const [mode, setMode] = useState<DuplicateMode>('skip');
 	const [deactivate, setDeactivate] = useState(false);
 	const [loading, setLoading] = useState(false);
@@ -308,10 +309,10 @@ function PluginImport({ index, readOnly, runWrites, busy, reload }: TabProps & {
 
 	useEffect(() => {
 		let live = true;
-		adminGet<{ importers?: PluginImporter[] } | PluginImporter[]>('admin/redirects/import/plugins')
+		adminGet<{ importers?: PluginImporter[] }>('admin/redirects/import/plugins')
 			.then((result) => {
 				if (live) {
-					setImporters(Array.isArray(result) ? result : Array.isArray(result?.importers) ? result.importers : []);
+					setImporters(Array.isArray(result?.importers) ? result.importers : []);
 				}
 			})
 			.catch(() => live && setImporters([]));
@@ -323,11 +324,13 @@ function PluginImport({ index, readOnly, runWrites, busy, reload }: TabProps & {
 	const load = async (importer: PluginImporter) => {
 		setActive(importer);
 		setPreview(null);
+		setSkipped([]);
 		setDeactivate(false);
 		setLoading(true);
 		try {
-			const result = await adminPost<{ groups?: Record<string, FileGroup> }>(`admin/redirects/import/plugins/${encodeURIComponent(importer.id)}/preview`);
-			setPreview(result?.groups ?? {});
+			const result = await adminPost<Partial<PluginPreview>>(`admin/redirects/import/plugins/${encodeURIComponent(importer.id)}/preview`);
+			setPreview(result?.groups && typeof result.groups === 'object' && !Array.isArray(result.groups) ? result.groups : {});
+			setSkipped(Array.isArray(result?.skipped) ? result.skipped : []);
 		} catch (e) {
 			toast.error(__('The preview failed.', 'proto-blocks'), { description: asApiError(e).message });
 			setActive(null);
@@ -351,8 +354,14 @@ function PluginImport({ index, readOnly, runWrites, busy, reload }: TabProps & {
 		toast.success(summary(counts));
 		if (deactivate) {
 			try {
-				await adminPost('admin/redirects/import/deactivate', { id: active.id });
-				toast.success(sprintf(/* translators: %s: plugin name. */ __('%s deactivated.', 'proto-blocks'), active.label));
+				const result = await adminPost<{ deactivated?: string[]; skipped?: { plugin: string; reason: string }[] }>('admin/redirects/import/deactivate', { id: active.id });
+				if (Array.isArray(result?.deactivated) && result.deactivated.length > 0) {
+					toast.success(sprintf(/* translators: %s: plugin name. */ __('%s deactivated.', 'proto-blocks'), active.label));
+				} else if (result?.skipped?.some((row) => row.reason === 'network')) {
+					toast.warning(sprintf(/* translators: %s: plugin name. */ __('%s is network-activated; deactivate it from the network admin.', 'proto-blocks'), active.label));
+				} else {
+					toast.info(sprintf(/* translators: %s: plugin name. */ __('%s was not active.', 'proto-blocks'), active.label));
+				}
 				await reload();
 			} catch (e) {
 				toast.error(__('The plugin was not deactivated.', 'proto-blocks'), { description: asApiError(e).message });
@@ -360,7 +369,10 @@ function PluginImport({ index, readOnly, runWrites, busy, reload }: TabProps & {
 		}
 		setActive(null);
 		setPreview(null);
+		setSkipped([]);
 	};
+
+	const canDeactivate = active !== null && active.canDeactivate !== false && Boolean(active.plugin) && (active.active === undefined || active.active.length > 0);
 
 	return (
 		<Panel aria-labelledby="pb-redirects-plugins">
@@ -405,9 +417,21 @@ function PluginImport({ index, readOnly, runWrites, busy, reload }: TabProps & {
 								<PreviewTable rows={(group.rules ?? []).map((rule) => ({ rule, status: 'new', reason: null }))} label={sprintf(/* translators: %s: group title. */ __('Preview of %s', 'proto-blocks'), group.title ?? slug)} />
 							</div>
 						))}
+						{skipped.length > 0 ? (
+							<div className="grid gap-1.5">
+								<p className="text-label">
+									{sprintf(
+										/* translators: %d: number of rows. */
+										_n('%d row cannot be imported:', '%d rows cannot be imported:', skipped.length, 'proto-blocks'),
+										skipped.length
+									)}
+								</p>
+								<PreviewTable rows={skipped.map((row) => ({ ...row, rule: row.rule ?? {}, status: 'invalid' as const }))} label={sprintf(/* translators: %s: plugin name. */ __('Rows of %s that are skipped', 'proto-blocks'), active.label)} />
+							</div>
+						) : null}
 						{active.cleanupHint ? <p className="text-label text-muted-foreground">{active.cleanupHint}</p> : null}
 						<DuplicateChoice value={mode} onChange={setMode} name={__('Duplicates', 'proto-blocks')} />
-						{active.plugin !== null && active.plugin !== undefined ? (
+						{canDeactivate ? (
 							<div className="flex items-center gap-2">
 								<Checkbox id={deactivateId} checked={deactivate} onCheckedChange={(checked) => setDeactivate(checked === true)} />
 								<Label htmlFor={deactivateId} className="font-normal">

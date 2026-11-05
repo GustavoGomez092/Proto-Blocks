@@ -2,7 +2,7 @@ import { Fragment, useId, useState } from 'react';
 import { __, _n, sprintf } from '@wordpress/i18n';
 import { toast } from 'sonner';
 import { ChevronDownIcon, ChevronRightIcon, DownloadIcon, EyeOffIcon, PlusIcon, Trash2Icon } from 'lucide-react';
-import { adminDelete, adminGet } from '@/admin/api';
+import { adminDelete } from '@/admin/api';
 import { ConfirmDialog } from '@/admin/components/shell/ConfirmDialog';
 import { Panel } from '@/admin/components/shell/Panel';
 import { ScreenError } from '@/admin/components/shell/ScreenError';
@@ -11,40 +11,25 @@ import { Input } from '@/admin/components/ui/input';
 import { Label } from '@/admin/components/ui/label';
 import { Skeleton } from '@/admin/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/admin/components/ui/table';
-import { asApiError, download, query, usePaged } from './api';
+import { asApiError, deleteNotFoundUrl, download, query, usePaged } from './api';
 import { addRule, newRuleId } from './edits';
 import { RuleDialog } from './RuleDialog';
-import type { RuleFormValues } from './rule-form';
-import { defaultGroup, formatDate, Pager, ruleWrites, useWriteFlow, writableGroups, writeGuard, type TabProps } from './shared';
-import type { FileRule, NotFoundGroupRow, NotFoundRow, Paged } from './types';
+import { defaultGroup, formatDate, Pager, saveRule, useWriteFlow, writableGroups, writeGuard, type RuleSubmit, type TabProps } from './shared';
+import type { FileRule, NotFoundGroupRow, NotFoundRow } from './types';
 
 const PER_PAGE = 50;
 const BASE = 'admin/redirects/404';
 
-/** Every logged hit of exactly `url` (the list's search is "contains"). */
-async function hitsOf(url: string, perPage = 200): Promise<NotFoundRow[]> {
-	const result = await adminGet<Paged<NotFoundRow>>(BASE + query({ search: url, per_page: perPage }));
-	return (Array.isArray(result?.rows) ? result.rows : []).filter((row) => row.url === url);
-}
-
-/** Deletes the logged hits of exactly `url`. */
-export async function deleteHitsOf(url: string): Promise<number> {
-	const ids = (await hitsOf(url)).map((row) => row.id);
-	if (ids.length > 0) {
-		await adminDelete(BASE + query({ ids }));
-	}
-	return ids.length;
-}
-
+/** The latest hits of exactly `url` (`?url=` is an exact filter; `search` is "contains"). */
 function Hits({ url }: { url: string }) {
-	const { data, error, loading } = usePaged<NotFoundRow>(BASE + query({ search: url, per_page: 10 }));
+	const { data, error, loading } = usePaged<NotFoundRow>(BASE + query({ url, per_page: 10 }));
 	if (error) {
 		return <p className="text-label text-destructive">{asApiError(error).message}</p>;
 	}
 	if (loading && !data) {
 		return <Skeleton className="h-6 w-full" />;
 	}
-	const rows = (data?.rows ?? []).filter((row) => row.url === url);
+	const rows = data?.rows ?? [];
 	return (
 		<Table aria-label={sprintf(/* translators: %s: URL. */ __('Recent hits of %s', 'proto-blocks'), url)}>
 			<TableHeader>
@@ -93,7 +78,7 @@ export default function NotFoundTab({ index, reload, readOnly }: TabProps) {
 
 	const removeUrl = async (url: string) => {
 		try {
-			const count = await deleteHitsOf(url);
+			const count = await deleteNotFoundUrl(url);
 			toast.success(sprintf(/* translators: %d: number of log rows. */ _n('Deleted %d 404 entry.', 'Deleted %d 404 entries.', count, 'proto-blocks'), count));
 		} catch (e) {
 			toast.error(__('Could not delete the 404 entries.', 'proto-blocks'), { description: asApiError(e).message });
@@ -111,9 +96,9 @@ export default function NotFoundTab({ index, reload, readOnly }: TabProps) {
 		refresh();
 	};
 
-	const saveRedirect = async (values: RuleFormValues, rule: FileRule) => {
+	const saveRedirect: RuleSubmit = async (values, rule, refused) => {
 		const url = adding;
-		const ok = await runWrites(ruleWrites(index, null, values, rule), __('Redirect added.', 'proto-blocks'));
+		const ok = await saveRule(runWrites, index, null, values, rule, __('Redirect added.', 'proto-blocks'), refused);
 		if (ok && url) {
 			await removeUrl(url);
 		}
@@ -255,7 +240,7 @@ export default function NotFoundTab({ index, reload, readOnly }: TabProps) {
 							})}
 						</TableBody>
 					</Table>
-					<Pager page={page} perPage={PER_PAGE} total={list.data.total} onPage={setPage} label={__('404 pages', 'proto-blocks')} />
+					<Pager page={page} perPage={list.data.perPage ?? PER_PAGE} total={list.data.total} onPage={setPage} label={__('404 pages', 'proto-blocks')} />
 				</Panel>
 			)}
 

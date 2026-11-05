@@ -1,7 +1,7 @@
 import '../helpers';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { calls, index, legacyGroup, renderScreen, routes, rowOf, rulesTable, setup, writes } from './fixtures';
+import { calls, index, legacyGroup, phpGroup, promoGroup, renderScreen, routes, rowOf, rulesTable, setup, writes } from './fixtures';
 
 setup();
 
@@ -85,6 +85,19 @@ describe('tabs', () => {
 		expect(within(table).queryByText('/about-us')).toBeNull();
 	});
 
+	test('?tab=log on load renders the log tab, selected, without the rules table', async () => {
+		allTabs();
+		renderScreen('&tab=log');
+		expect(await screen.findByRole('table', { name: 'Redirect log' })).toBeTruthy();
+		expect(screen.getByRole('tab', { name: 'Log' }).getAttribute('aria-selected')).toBe('true');
+		expect(screen.queryByRole('table', { name: 'Redirect rules' })).toBeNull();
+		expect(calls().some((c) => c.url.startsWith('admin/redirects/log?'))).toBe(true);
+		// An unknown tab falls back to the rules.
+		document.body.innerHTML = '';
+		renderScreen('&tab=nope');
+		expect(await rulesTable()).toBeTruthy();
+	});
+
 	test('log rule link opens the rule in the edit dialog', async () => {
 		allTabs();
 		const user = userEvent.setup();
@@ -146,7 +159,7 @@ describe('banners', () => {
 	});
 
 	test('coexistence: paused banner with an Import button that opens the import tab', async () => {
-		routes({ 'admin/redirects': index({ paused: true }), 'admin/redirects/import/plugins': [] });
+		routes({ 'admin/redirects': index({ paused: true }), 'admin/redirects/import/plugins': { importers: [] } });
 		const user = userEvent.setup();
 		renderScreen();
 		expect(await screen.findByText('Redirection is active, Proto-Blocks redirects are paused.')).toBeTruthy();
@@ -168,6 +181,97 @@ describe('banners', () => {
 		expect(await screen.findByText('/a redirects to /b, which redirects again.')).toBeTruthy();
 		expect(screen.queryByText('Redirection is active, Proto-Blocks redirects are paused.')).toBeNull();
 		expect(within(await rowOf('/about-us')).getByText('Declared twice')).toBeTruthy();
+	});
+
+	test('tables missing: Create tables installs them, then the screen reloads', async () => {
+		let tables = false;
+		let installs = 0;
+		routes({
+			'admin/redirects': () => index({ db: { tables, orphans: 0 } }),
+			'POST admin/redirects/db/install': () => {
+				installs++;
+				if (installs === 1) {
+					throw { code: 'proto_blocks_db_install_failed', message: "Check the database user's CREATE privilege.", data: { status: 500 } };
+				}
+				tables = true;
+				return { tables: true };
+			},
+		});
+		const user = userEvent.setup();
+		renderScreen();
+		expect(await screen.findByText('The redirect tables are missing')).toBeTruthy();
+		// Database only: a read-only theme does not disable it.
+		await user.click(screen.getByRole('button', { name: 'Create tables' }));
+		expect((await screen.findAllByText("Check the database user's CREATE privilege.")).length).toBeGreaterThan(0);
+		expect(screen.getByText('The redirect tables are missing')).toBeTruthy();
+
+		await user.click(screen.getByRole('button', { name: 'Create tables' }));
+		await waitFor(() => expect(screen.queryByText('The redirect tables are missing')).toBeNull());
+		expect(calls().filter((c) => c.url === 'admin/redirects')).toHaveLength(2);
+		expect(writes().map((c) => `${c.method} ${c.url}`)).toEqual(['POST admin/redirects/db/install', 'POST admin/redirects/db/install']);
+	});
+
+	test('tables missing shows on a read-only site too, and on every tab', async () => {
+		allTabs();
+		routes({ 'admin/redirects': index({ db: { tables: false, orphans: 0 } }), 'admin/redirects/log': { rows: [], total: 0 } });
+		renderScreen('&tab=log', { fileModsAllowed: false });
+		expect(await screen.findByText('The redirect tables are missing')).toBeTruthy();
+		expect((screen.getByRole('button', { name: 'Create tables' }) as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	test('readOnlyReason: a locked file group says why and its rules are locked; a PHP group edits by copying', async () => {
+		routes({
+			'admin/redirects': index({
+				groups: [
+					legacyGroup({ writable: false, readOnlyReason: 'read_only' }),
+					// Defensive: a reason wins over a stale writable flag.
+					promoGroup({ readOnlyReason: 'file_mods' }),
+					{ ...phpGroup(), readOnlyReason: 'php' },
+				],
+			}),
+		});
+		const user = userEvent.setup();
+		renderScreen();
+		const about = await rowOf('/about-us');
+		expect(within(about).getByText(/the file is outside the theme the screen writes to/)).toBeTruthy();
+		for (const name of ['Edit /about-us', 'Delete /about-us', 'Duplicate /about-us']) {
+			expect((within(about).getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+		}
+		const spring = await rowOf('/spring');
+		expect(within(spring).getByText('Read-only: file modifications are disabled')).toBeTruthy();
+		expect((within(spring).getByRole('button', { name: 'Edit /spring' }) as HTMLButtonElement).disabled).toBe(true);
+		const php = await rowOf('/php-old');
+		expect((within(php).getByRole('button', { name: 'Edit /php-old' }) as HTMLButtonElement).disabled).toBe(false);
+
+		await user.click(screen.getByRole('button', { name: 'Groups' }));
+		const dialog = await screen.findByRole('dialog', { name: 'Groups' });
+		expect(within(dialog).getByText(/the file is outside the theme the screen writes to/)).toBeTruthy();
+		expect((within(dialog).getByRole('switch', { name: 'Enable group Legacy site' }) as HTMLButtonElement).disabled).toBe(true);
+		expect((within(dialog).getByRole('switch', { name: 'Enable group Promo' }) as HTMLButtonElement).disabled).toBe(true);
+	});
+
+	test('monitor issues get their own alert; other issues stay in the declarations list', async () => {
+		routes({
+			'admin/redirects': index({
+				issues: [
+					{ level: 'warning', code: 'monitor_unwritable', message: 'The monitor could not write proto-redirects/modified-posts/redirects.jsonc.', source: 'proto-redirects/modified-posts/redirects.jsonc' },
+					{ level: 'warning', code: 'redirect_chain', message: '/a redirects to /b, which redirects again.', source: '' },
+				],
+			}),
+		});
+		renderScreen();
+		const monitor = await screen.findByRole('list', { name: 'Post monitor issues' });
+		expect(screen.getByText('The post monitor needs attention')).toBeTruthy();
+		expect(within(monitor).getByText('The monitor could not write proto-redirects/modified-posts/redirects.jsonc.')).toBeTruthy();
+		expect(within(monitor).queryByText('/a redirects to /b, which redirects again.')).toBeNull();
+		expect(screen.getByText('/a redirects to /b, which redirects again.')).toBeTruthy();
+		expect(screen.getByText('Check these declarations')).toBeTruthy();
+
+		document.body.innerHTML = '';
+		routes({ 'admin/redirects': index({ issues: [{ level: 'warning', code: 'monitor_rule_disabled', message: 'A monitor rule was disabled.', source: '' }] }) });
+		renderScreen();
+		expect(await screen.findByText('A monitor rule was disabled.')).toBeTruthy();
+		expect(screen.queryByText('Check these declarations')).toBeNull();
 	});
 
 	test('module disabled and load error', async () => {
