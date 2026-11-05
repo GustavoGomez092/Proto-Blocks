@@ -31,3 +31,29 @@ TDD, one commit per finding, `composer test` green at every commit.
   the monitor group). Moves without a conflict (and an `associated` rule whose
   own target does not conflict) are still written. PHP-declared rules keep
   the existing notice for everyone (nobody can disable them).
+- M2: `masked` strips the IP-bearing headers too (ruling); `x-client-ip` is
+  stripped as well (the reviewer listed it).
+- M3: `ExternalRedirects` is registered only while the module is not paused
+  for the Redirection plugin (paused means "no redirects, no logging").
+- M5: Registry::settings() reads the settings file alone until a build; the
+  optional transient cache of the normalised rules was not added.
+- Low 1: `Refresh` is forbidden; `Content-Type` is NOT (the reviewer said
+  "probably"; refusing it would change documented header behaviour without a
+  concrete attack). `src/admin/redirects/schema.ts` FORBIDDEN_HEADERS still
+  lacks `refresh` (client file, outside this track): the server refuses it.
+- Low 2: `php` is reserved for group FILES only (GroupValidator::FILE_SLUG_PATTERN:
+  folders, the writer kind, `monitor.group`, CLI import, the JSON schema);
+  SLUG_PATTERN still accepts `php` because log, hit and REST filters must match
+  the PHP group's rows.
+- Low 5: kept the documented storage ("autoloaded while set, deleted
+  otherwise"); the absent option is detected through wp_load_alloptions()
+  instead of storing `[]`.
+- Low 6: a failed table creation backs off one hour (transient
+  `proto_blocks_redirects_db_retry`); install() and plugin activation ignore it.
+  docs/redirects.md updated.
+- Low 7 NOT changed: network-wide deactivation would need proto-blocks.php
+  (a wired file) to pass `$network_wide` and a loop over every site, which
+  core discourages on large networks; the orphan cron events are harmless
+  (their callback is gone while the plugin is inactive and the event is
+  rescheduled once on reactivation).
+- Low 12: `$_REQUEST` is rebuilt as `array_merge($_GET, $_POST)`; documented.
