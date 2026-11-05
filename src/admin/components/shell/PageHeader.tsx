@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { __, sprintf } from '@wordpress/i18n';
 import { ArrowLeftIcon } from 'lucide-react';
 import { Eyebrow } from '@/admin/components/shell/Signals';
+import { cn } from '@/admin/lib/utils';
 
 /** The Proto-Blocks mark: a navy tile with four blocks, one teal. */
 export function LogoMark({ size = 44 }: { size?: number }) {
@@ -33,6 +34,7 @@ export function PageHeader({
 	eyebrow,
 	back,
 	titleSlot,
+	nav,
 }: {
 	title: string;
 	/**
@@ -46,10 +48,12 @@ export function PageHeader({
 	eyebrow?: string;
 	/** Replaces the eyebrow with a mono back link ("← All post types") on edit screens. */
 	back?: { label: string; onClick: () => void };
+	/** Section tabs drawn at the header's bottom edge, on its hairline (the Redirects screen). */
+	nav?: ReactNode;
 }) {
 	return (
-		<header className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-b pt-6 pb-5">
-			<div className="flex min-w-0 items-center gap-4">
+		<header className={cn('mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-b pt-6', nav ? 'pb-0' : 'pb-5')}>
+			<div className={cn('flex min-w-0 items-center gap-4', nav && 'pb-5')}>
 				<LogoMark />
 				<div className="grid min-w-0 gap-0.5">
 					{back ? (
@@ -80,7 +84,8 @@ export function PageHeader({
 					{description ? <p className="text-label text-muted-foreground">{description}</p> : null}
 				</div>
 			</div>
-			{actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+			{actions ? <div className={cn('flex flex-wrap items-center gap-2', nav && 'pb-5')}>{actions}</div> : null}
+			{nav ? <div className="-mb-px max-w-full min-w-0 overflow-x-auto">{nav}</div> : null}
 		</header>
 	);
 }

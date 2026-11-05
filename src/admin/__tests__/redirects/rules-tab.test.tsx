@@ -3,7 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { parseJsonc } from '@/admin/content-model/jsonc';
 import { readRules } from '@/admin/redirects/edits';
-import { calls, choose, file, index, legacyGroup, legacyText, promoGroup, phpGroup, promoText, renderScreen, routes, rowOf, rule, setup, writes } from './fixtures';
+import { calls, choose, rowButton, file, index, legacyGroup, legacyText, promoGroup, phpGroup, promoText, renderScreen, routes, rowOf, rule, setup, writes } from './fixtures';
 
 setup();
 
@@ -328,19 +328,19 @@ describe('writes', () => {
 		routes({ 'DELETE admin/redirects/hits': { deleted: true } });
 		const user = userEvent.setup();
 		renderScreen();
-		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Delete /about-us' }));
+		await user.click(await rowButton(user, '/about-us', 'Delete /about-us'));
 		await user.click(await screen.findByRole('button', { name: 'Delete 1 redirect' }));
 		await waitFor(() => expect(posts()).toHaveLength(1));
 		expect(readRules(posts()[0].data?.text ?? '').map((r) => r.from)).toEqual(['^/blog/(\\d+)/(.*)$', '/promo', '/members', '/gone-forever']);
 		// Then the rule's hit row goes (query string: adminDelete sends no body).
 		await waitFor(() => expect(writes().map((c) => `${c.method} ${c.url}`)).toEqual(['POST admin/schema-files/redirects/legacy-site', 'DELETE admin/redirects/hits?group=legacy-site&ruleId=r_00000001']));
 
-		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Move /about-us down' }));
+		await user.click(await rowButton(user, '/about-us', 'Move /about-us down'));
 		await waitFor(() => expect(posts()).toHaveLength(2));
 		expect(readRules(posts()[1].data?.text ?? '').map((r) => r.id).slice(0, 2)).toEqual(['r_00000002', 'r_00000001']);
-		expect((within(await rowOf('/about-us')).getByRole('button', { name: 'Move /about-us up' }) as HTMLButtonElement).disabled).toBe(true);
+		expect((await rowButton(user, '/about-us', 'Move /about-us up')).disabled).toBe(true);
 
-		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Duplicate /about-us' }));
+		await user.click(await rowButton(user, '/about-us', 'Duplicate /about-us'));
 		await waitFor(() => expect(posts()).toHaveLength(3));
 		const dup = readRules(posts()[2].data?.text ?? '');
 		expect(dup[1]).toEqual({ id: expect.stringMatching(/^r_[a-f0-9]{8}$/), from: '/about-us', to: '/about' });
@@ -519,14 +519,14 @@ describe('hit rows of deleted rules', () => {
 		});
 		const user = userEvent.setup();
 		renderScreen();
-		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Delete /about-us' }));
+		await user.click(await rowButton(user, '/about-us', 'Delete /about-us'));
 		await user.click(await screen.findByRole('button', { name: 'Delete 1 redirect' }));
 		await waitFor(() => expect(writes().some((c) => c.method === 'DELETE')).toBe(true));
 		expect((await screen.findAllByText('Redirect deleted.')).length).toBeGreaterThan(0);
 		expect(screen.queryByText('The hit count of the deleted rule was not cleared.')).toBeNull();
 
 		status = 500;
-		await user.click(within(await rowOf('/promo')).getByRole('button', { name: 'Delete /promo' }));
+		await user.click(await rowButton(user, '/promo', 'Delete /promo'));
 		await user.click(await screen.findByRole('button', { name: 'Delete 1 redirect' }));
 		expect((await screen.findAllByText('The hit count of the deleted rule was not cleared.')).length).toBeGreaterThan(0);
 		expect(screen.getAllByText('Database is gone.').length).toBeGreaterThan(0);
@@ -558,7 +558,7 @@ describe('hit rows of deleted rules', () => {
 			},
 		});
 		renderScreen();
-		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Delete /about-us' }));
+		await user.click(await rowButton(user, '/about-us', 'Delete /about-us'));
 		await user.click(await screen.findByRole('button', { name: 'Delete 1 redirect' }));
 		expect((await screen.findAllByText('Disk full.')).length).toBeGreaterThan(0);
 		expect(writes().some((c) => c.method === 'DELETE')).toBe(false);
@@ -567,7 +567,7 @@ describe('hit rows of deleted rules', () => {
 		(jest.requireMock('@wordpress/api-fetch') as { default: jest.Mock }).default.mockClear();
 		routes({ 'admin/redirects': index({ db: { tables: false, orphans: 0 } }) });
 		renderScreen();
-		await user.click(within(await rowOf('/about-us')).getByRole('button', { name: 'Delete /about-us' }));
+		await user.click(await rowButton(user, '/about-us', 'Delete /about-us'));
 		await user.click(await screen.findByRole('button', { name: 'Delete 1 redirect' }));
 		await waitFor(() => expect(posts()).toHaveLength(1));
 		expect((await screen.findAllByText('Redirect deleted.')).length).toBeGreaterThan(0);
