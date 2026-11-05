@@ -1,0 +1,373 @@
+{
+  "groups": {
+    "off": {
+      "title": "Switched off",
+      "enabled": false,
+      "position": 1,
+      "defaults": {
+        "ignoreCase": true,
+        "ignoreTrailingSlash": true,
+        "query": "exact"
+      },
+      "rules": [
+        {
+          "id": "r_00000041",
+          "title": "",
+          "enabled": true,
+          "from": "/off",
+          "regex": false,
+          "to": "/on",
+          "code": 301,
+          "action": "url",
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        }
+      ]
+    },
+    "shop": {
+      "title": "Shop",
+      "enabled": true,
+      "position": 5,
+      "defaults": {
+        "ignoreCase": true,
+        "ignoreTrailingSlash": true,
+        "query": "exact"
+      },
+      "rules": [
+        {
+          "id": "r_00000021",
+          "title": "",
+          "enabled": true,
+          "from": "^/shop/(.*)$",
+          "regex": true,
+          "to": "/store/$1",
+          "code": 308,
+          "action": "url",
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_00000022",
+          "title": "",
+          "enabled": false,
+          "from": "/cart",
+          "regex": false,
+          "to": "/basket",
+          "code": 301,
+          "action": "url",
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        }
+      ]
+    },
+    "legacy-site": {
+      "title": "Legacy site",
+      "enabled": true,
+      "position": 10,
+      "defaults": {
+        "ignoreCase": true,
+        "ignoreTrailingSlash": true,
+        "query": "exact"
+      },
+      "rules": [
+        {
+          "id": "r_00000001",
+          "title": "",
+          "enabled": true,
+          "from": "/about-us",
+          "regex": false,
+          "to": "/about",
+          "code": 301,
+          "action": "url",
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_00000002",
+          "title": "Old blog",
+          "enabled": true,
+          "from": "^/blog/(\\d+)/(.*)$",
+          "regex": true,
+          "to": "/news/$2",
+          "code": 301,
+          "action": "url",
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_00000003",
+          "title": "",
+          "enabled": true,
+          "from": "/promo",
+          "regex": false,
+          "to": "/sale",
+          "code": 302,
+          "action": "url",
+          "query": "pass",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_00000004",
+          "title": "",
+          "enabled": true,
+          "from": "/members",
+          "regex": false,
+          "to": "/dashboard",
+          "else": "/login",
+          "code": 302,
+          "action": "url",
+          "when": {
+            "type": "login"
+          },
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_00000005",
+          "title": "",
+          "enabled": true,
+          "from": "/gone-forever",
+          "regex": false,
+          "code": 410,
+          "action": "error",
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_00000006",
+          "title": "",
+          "enabled": true,
+          "from": "/old-api",
+          "regex": false,
+          "to": "/wp-json/v1/thing",
+          "action": "pass",
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_00000007",
+          "title": "",
+          "enabled": true,
+          "from": "/ignore-me",
+          "regex": false,
+          "action": "nothing",
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_00000008",
+          "title": "",
+          "enabled": true,
+          "from": "/landing",
+          "regex": false,
+          "to": "/landing-google",
+          "else": "/landing-other",
+          "code": 301,
+          "action": "url",
+          "when": {
+            "type": "referrer",
+            "value": "google\\.",
+            "regex": true
+          },
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_00000009",
+          "title": "",
+          "enabled": false,
+          "regex": false,
+          "to": "/",
+          "code": 301,
+          "action": "url",
+          "when": {
+            "type": "404"
+          },
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_0000000a",
+          "title": "=HYPERLINK(\"http://evil.test\")",
+          "enabled": true,
+          "from": "/formula",
+          "regex": false,
+          "to": "/safe",
+          "code": 301,
+          "action": "url",
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_0000000b",
+          "title": "",
+          "enabled": true,
+          "from": "/Case",
+          "regex": false,
+          "to": "/Case-Sensitive",
+          "code": 307,
+          "action": "url",
+          "query": "exact",
+          "ignoreCase": false,
+          "ignoreTrailingSlash": false,
+          "log": true
+        },
+        {
+          "id": "r_0000000c",
+          "title": "",
+          "enabled": true,
+          "from": "/search?q=old",
+          "regex": false,
+          "to": "/find",
+          "code": 301,
+          "action": "url",
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_0000000d",
+          "title": "",
+          "enabled": true,
+          "from": "/forbidden",
+          "regex": false,
+          "code": 403,
+          "action": "error",
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_0000000e",
+          "title": "",
+          "enabled": true,
+          "from": "/inject\nRewriteRule ^ http://evil.test [R]",
+          "regex": false,
+          "to": "/x",
+          "code": 301,
+          "action": "url",
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_0000000f",
+          "title": "",
+          "enabled": true,
+          "from": "/agent",
+          "regex": false,
+          "to": "/mobile",
+          "code": 302,
+          "action": "url",
+          "when": {
+            "type": "agent",
+            "value": "iPhone",
+            "regex": false
+          },
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_00000010",
+          "title": "",
+          "enabled": true,
+          "from": "/host",
+          "regex": false,
+          "to": "https://new.example.com/host",
+          "code": 301,
+          "action": "url",
+          "when": {
+            "type": "server",
+            "value": "old.example.com"
+          },
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_00000011",
+          "title": "",
+          "enabled": true,
+          "from": "/ip",
+          "regex": false,
+          "to": "/x",
+          "code": 301,
+          "action": "url",
+          "when": {
+            "type": "ip",
+            "value": [
+              "1.2.3.4"
+            ]
+          },
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_00000012",
+          "title": "＠full-width, \"quoted\"",
+          "enabled": true,
+          "from": "/pct",
+          "regex": false,
+          "to": "/a%20b#frag",
+          "code": 301,
+          "action": "url",
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true
+        },
+        {
+          "id": "r_00000013",
+          "title": "-minus",
+          "enabled": true,
+          "from": "/space here",
+          "regex": false,
+          "to": "/there",
+          "code": 301,
+          "action": "url",
+          "query": "exact",
+          "ignoreCase": true,
+          "ignoreTrailingSlash": true,
+          "log": true,
+          "headers": {
+            "X-Robots-Tag": "noindex"
+          }
+        }
+      ]
+    }
+  }
+}

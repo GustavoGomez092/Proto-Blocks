@@ -1,0 +1,47 @@
+# Legacy redirects
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+RewriteRule ^old-page/?$ /new-page [NC,R=301,L]
+RewriteRule ^exact$ /target [R=302,L]
+RewriteRule ^blog/(\d+)/(.*)$ /news/$2 [R=301,L,QSA]
+RewriteCond %{HTTP_REFERER} google\. [NC]
+RewriteRule ^landing$ /landing-google [R,L]
+RewriteCond %{HTTP_USER_AGENT} ^Mozilla/5\.0$
+RewriteRule ^agent$ /ua [R=307,L]
+RewriteCond %{HTTP_HOST} ^old\.example\.com$ [NC]
+RewriteRule ^(.*)$ https://new.example.com/$1 [R=permanent,L]
+RewriteCond %{QUERY_STRING} ^id=5$
+RewriteRule ^product$ /item-5 [R=301,L]
+RewriteRule ^forbidden$ - [F]
+RewriteRule ^gone$ - [G,L]
+RewriteRule ^internal$ /index.php?page=internal [L]
+RewriteRule ^stop$ - [L]
+RewriteRule ^/?$ /home [R=301,L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^unsupported$ /x [R=301,L]
+RewriteRule ^proxy$ http://backend/ [P]
+RewriteRule ^srvvar$ /%{HTTP_HOST}/x [R=301,L]
+RewriteRule ^long \
+    /continued [R=301,L]
+</IfModule>
+
+Redirect 301 /a /b
+Redirect permanent /perm /perm-new
+Redirect /bare /bare-new
+Redirect gone /gone-alias
+Redirect seeother /see /other
+RedirectMatch 410 ^/gone/(.*)
+RedirectMatch 301 ^/cat/(.*)$ /category/$1
+RedirectPermanent /rp /rp-new
+RedirectTemp /rt /rt-new
+Header set X-Frame-Options DENY
+
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress

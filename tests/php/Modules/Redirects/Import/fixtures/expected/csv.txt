@@ -1,0 +1,18 @@
+source,target,regex,code,type,hits,title,status,group
+/off,/on,0,301,url,0,,disabled,off
+^/shop/(.*)$,/store/$1,1,308,url,7,,active,shop
+/cart,/basket,0,301,url,0,,disabled,shop
+/about-us,/about,0,301,url,42,,active,legacy-site
+^/blog/(\d+)/(.*)$,/news/$2,1,301,url,0,Old blog,active,legacy-site
+/promo,/sale,0,302,url,0,,active,legacy-site
+/gone-forever,,0,410,error,0,,active,legacy-site
+/old-api,/wp-json/v1/thing,0,,pass,0,,active,legacy-site
+/ignore-me,,0,,nothing,0,,active,legacy-site
+/formula,/safe,0,301,url,0,"[FORMULA] =HYPERLINK(""http://evil.test"")",active,legacy-site
+/Case,/Case-Sensitive,0,307,url,0,,active,legacy-site
+/search?q=old,/find,0,301,url,0,,active,legacy-site
+/forbidden,,0,403,error,0,,active,legacy-site
+"/inject
+RewriteRule ^ http://evil.test [R]",/x,0,301,url,0,,active,legacy-site
+/pct,/a%20b#frag,0,301,url,0,"[FORMULA] ＠full-width, ""quoted""",active,legacy-site
+/space here,/there,0,301,url,0,[FORMULA] -minus,active,legacy-site
