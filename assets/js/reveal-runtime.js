@@ -78,12 +78,20 @@
   // up, nothing is revealed and no watchdog runs, so motion that waits for the overlay is not snapped to its end
   // underneath it. The theme dispatches `proto:intro-complete` on document when it hands control back (its own
   // safety net fires it too); a 10 s backstop here covers an overlay that never does.
+  //
+  // The theme marks the overlay with `html.proto-intro-active`, but its intro script can run after this file when
+  // a consent tool or optimizer defers scripts (Cookiebot's auto-blocking mode releases them after DOMContentLoaded,
+  // in document order). So a visible overlay counts on its own during the first seconds of the page, before the
+  // class can have arrived; after that the class (or the overlay's own `is-hidden`) decides.
   var INTRO_BACKSTOP = 10000;
+  var INTRO_GRACE = 3000;
   function introActive() {
     var html = document.documentElement;
     if (html.classList.contains('proto-intro-skip')) return false;
     var overlay = document.querySelector('.proto-intro');
-    return !!(overlay && !overlay.classList.contains('is-hidden') && html.classList.contains('proto-intro-active'));
+    if (!overlay || overlay.classList.contains('is-hidden')) return false;
+    if (html.classList.contains('proto-intro-active')) return true;
+    return !!(window.performance && performance.now() < INTRO_GRACE);
   }
   function bootAfterIntro() {
     if (!introActive()) { boot(); return; }

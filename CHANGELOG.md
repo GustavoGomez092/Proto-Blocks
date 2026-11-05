@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.16.1 — 2026-11-05
+
+### Fixed
+- **Reveal runtime: the intro overlay is honoured even when the theme's intro script runs late.** `reveal-runtime.js` only treated the overlay as active once the theme had added `html.proto-intro-active`. A consent tool or optimizer that defers scripts (Cookiebot's auto-blocking mode releases them after DOMContentLoaded, in document order) ran the runtime before the intro script, so it booted as if there were no intro and its 1.5 s watchdog force-revealed the hero under the overlay; the hero then never animated. A visible `.proto-intro` now counts on its own for the first 3 s of the page (the same grace pb-motion uses), after which the class, or the overlay's `is-hidden`, decides.
+
 ## 2.16.0 — 2026-11-05
 
 ### Added
