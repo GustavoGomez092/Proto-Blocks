@@ -257,5 +257,7 @@ final class Dispatcher
             parse_str($query, $get);
         }
         $_GET = function_exists('wp_slash') ? (array) wp_slash($get) : $get;
+        // As wp_magic_quotes() builds it: the (already slashed) POST wins over GET.
+        $_REQUEST = array_merge($_GET, isset($_POST) && is_array($_POST) ? $_POST : []);
     }
 }

@@ -218,6 +218,28 @@ final class DispatcherTest extends EngineTestCase
         self::assertCount(1, $this->hits->calls);
     }
 
+    public function testPassRebuildsRequestFromTheNewGetAndThePost(): void
+    {
+        $get = $_GET ?? [];
+        $post = $_POST ?? [];
+        $request = $_REQUEST ?? [];
+        try {
+            $_GET = ['old' => '1'];
+            $_POST = ['form' => 'x', 'a' => 'from-post'];
+            $_REQUEST = ['old' => '1', 'form' => 'x'];
+            $this->dispatcher()->dispatch(['rule' => self::rule(['action' => 'pass']), 'target' => '/inner?a=1&q=o\'k', 'action' => 'pass', 'code' => null, 'reason' => 'matched'], self::req('/x'));
+
+            self::assertArrayNotHasKey('old', $_REQUEST, 'no stale parameter');
+            self::assertSame('x', $_REQUEST['form']);
+            self::assertSame('from-post', $_REQUEST['a'], 'POST wins, as in wp_magic_quotes()');
+            self::assertSame($_GET['q'], $_REQUEST['q'], 'slashed like $_GET');
+        } finally {
+            $_GET = $get;
+            $_POST = $post;
+            $_REQUEST = $request;
+        }
+    }
+
     public function testPassWithoutQuery(): void
     {
         $this->dispatcher()->dispatch(['rule' => self::rule(['action' => 'pass']), 'target' => '/inner', 'action' => 'pass', 'code' => null, 'reason' => 'matched'], self::req('/x'));

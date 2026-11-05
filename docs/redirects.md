@@ -193,7 +193,7 @@ Matched sends the request to `to`; not matched goes to `else`, or falls through 
 |---|---|
 | `url` | `wp_redirect($target, $code, 'proto-blocks')`, then `exit`. Core sends `X-Redirect-By: proto-blocks`. 301 and 308 get `Cache-Control` and `Expires` per the `cache` setting. 302, 303 and 307 get `nocache_headers()`. Rule `headers` and `headers.redirect` are sent first. |
 | `error` | Sends the status line, `nocache_headers()` and `X-Redirect-By`, sets the query to 404 and renders the theme's 404 template. WordPress resets the query when it runs its own, so the status and the 404 state are applied again on `wp` (priority 1000), and 410 and 451 are sent once more at `send_headers` so caches see them. |
-| `pass` | An internal rewrite. `to` must be a path. `REQUEST_URI`, `PATH_INFO`, `QUERY_STRING` and `$_GET` are replaced and WordPress parses the new request. The canonical redirect is suppressed. An absolute `to` is `invalid_target`. Proto-Blocks never proxies an external URL. |
+| `pass` | An internal rewrite. `to` must be a path. `REQUEST_URI`, `PATH_INFO`, `QUERY_STRING` and `$_GET` are replaced (and `$_REQUEST` rebuilt from the new `$_GET` and `$_POST`) and WordPress parses the new request. The canonical redirect is suppressed. An absolute `to` is `invalid_target`. Proto-Blocks never proxies an external URL. |
 | `nothing` | Stops processing. Suppresses 404 logging and the canonical redirect for this request. Fires the `proto_blocks_redirects_nothing` action with the rule and the request. It is never written to the redirect log (it still counts a hit unless `log` is false). |
 
 In the redirect log a `url` rule is logged with its code, an `error` rule with its error code, and a `pass` rule with code 200.
