@@ -13,6 +13,7 @@
   var LEGACY = 'data-animate';
   var MANUAL_GRACE = 1500; // ms a manual block gets to reveal itself after entering view
   var LOAD_BACKSTOP = 2000; // ms after window load before force-revealing in/above-viewport stragglers
+  var LOAD_CAP = 10000; // longest a manual block's grace waits for window load before it starts anyway
   var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function stateOf(el) {
@@ -26,6 +27,15 @@
     if (el.hasAttribute(ATTR)) el.setAttribute(ATTR, 'done');
     if (el.hasAttribute(LEGACY)) el.setAttribute(LEGACY, 'done');
     try { el.dispatchEvent(new CustomEvent('proto-blocks:reveal', { bubbles: true })); } catch (e) {}
+  }
+
+  // Run fn once the page has loaded (every script tag has run), or after LOAD_CAP if load never comes.
+  function afterLoad(fn) {
+    if (document.readyState === 'complete') { fn(); return; }
+    var once = false;
+    function go() { if (once) return; once = true; fn(); }
+    window.addEventListener('load', go, { once: true });
+    window.setTimeout(go, LOAD_CAP);
   }
 
   function all() { return document.querySelectorAll('[' + ATTR + '],[' + LEGACY + ']'); }
@@ -44,9 +54,14 @@
           setDone(el);
           io.unobserve(el);
         } else if (st === 'manual') {
-          // Block owns the animation; only backstop if it never finishes.
+          // Block owns the animation; only backstop if it never finishes. The grace starts once the page has
+          // loaded, not when the element enters view: on a slow load the block's view.js may not have arrived
+          // yet, and revealing then shows the finished block only for its script to hide it again to animate it
+          // in (a visible flash). After load every script has run, so a block still not done has failed.
           io.unobserve(el);
-          window.setTimeout(function () { if (stateOf(el) !== 'done') setDone(el); }, MANUAL_GRACE);
+          afterLoad(function () {
+            window.setTimeout(function () { if (stateOf(el) !== 'done') setDone(el); }, MANUAL_GRACE);
+          });
         }
       });
     }, { rootMargin: '0px 0px -8% 0px', threshold: 0.01 });

@@ -26,6 +26,30 @@ editor so content is visible/editable; the runtime handles the rest on the front
 Set the root to `manual`, hide children in CSS while not `done`, run your
 timeline in `view.js`, then set `data-proto-animate="done"`.
 
+**CSS hides. JavaScript only reveals.** Key the hidden state to
+`html.proto-js` (the runtime adds that class to `<html>` from `<head>`, before
+anything is painted) so it applies the instant the block exists, however it
+arrived, and never applies with JS off:
+
+```css
+html.proto-js .my-block[data-proto-animate="manual"] [data-my-part] {
+  opacity: 0;
+  visibility: hidden;
+}
+```
+```js
+gsap.set(parts, { autoAlpha: 0, y: 24 });            // start states inline first
+section.setAttribute('data-proto-animate', 'done');  // lifts the CSS, same tick
+gsap.to(parts, { autoAlpha: 1, y: 0, stagger: 0.08 });
+```
+
+Never hide from a script, including an inline `<script>` inside the block that
+adds a pending class while the section is parsed. It works on a full load, but
+a page transition (proto-blocks-theme's Taxi) imports the new view with its
+scripts inert and runs them after the markup is in the document, so the
+finished block shows for a frame, vanishes and animates in. Reproduce by
+navigating to the page through a link, not by reloading it.
+
 ## Hooking the reveal moment (`proto-blocks:reveal` event)
 When the runtime reveals an element (sets it to `done`), it dispatches a bubbling
 `proto-blocks:reveal` CustomEvent on that element. Listen for it if you want to
@@ -45,8 +69,13 @@ fast path — so a listener always runs regardless of how the element was reveal
 ## Guarantees (you get these for free)
 - Scrolls into view → revealed.
 - `prefers-reduced-motion` → revealed instantly, no motion.
-- JS disabled → `<noscript>` reveals content.
-- Your JS fails / never completes → watchdog reveals after a grace period.
+- JS disabled → a fallback style keyed to `html:not(.proto-js)` reveals
+  content. (Not a `<noscript>`: page transitions parse fetched pages with
+  scripting off, which turned a `<noscript>` style into a live one.)
+- Your JS fails / never completes → watchdog reveals after a grace period. For
+  `manual` the grace (1.5 s) starts once the page has loaded (capped at 10 s),
+  not when the block enters view, so a slow load cannot reveal the block before
+  its `view.js` has even arrived.
 - Editor → resting state (no `pending` added), fully editable.
 
 Legacy `data-animate` is accepted as an alias of `data-proto-animate`.

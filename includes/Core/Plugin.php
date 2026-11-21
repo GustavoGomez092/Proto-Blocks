@@ -522,7 +522,7 @@ final class Plugin
 
         // Tailwind CSS on all frontend pages (fallback for pages without blocks)
         add_action('wp_enqueue_scripts', [$this->getAssets(), 'enqueueFrontendAssets']);
-        add_action('wp_head', [$this->getAssets(), 'printRevealNoscript'], 1);
+        add_action('wp_head', [$this->getAssets(), 'printRevealFallback'], 1);
 
         // Admin page (if in admin)
         if (is_admin()) {

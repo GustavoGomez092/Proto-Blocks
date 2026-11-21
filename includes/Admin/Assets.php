@@ -166,21 +166,45 @@ JS;
     }
 
     /**
-     * No-JS fallback: ensure data-proto-animate pre-state content is visible
-     * when JavaScript is disabled. Printed in wp_head on the frontend.
+     * No-JS fallback for the data-proto-animate pre-state, and the `proto-js`
+     * hook themes key their own pre-animation states to. Printed in wp_head.
+     *
+     * A script adds `proto-js` to <html> before anything is painted; the
+     * fallback style reveals every not-yet-done element only while that class
+     * is absent, so it applies with JS off (or blocked) and never otherwise.
+     *
+     * This replaces a <noscript><style>. Taxi parses fetched pages with
+     * scripting disabled, so <noscript> contents become real elements there and
+     * a page swap could promote the fallback, with its !important, into the
+     * live document and reveal everything early. A plain style keyed to an
+     * <html> class cannot leak: <html> survives swaps, so the class is always
+     * there once JS has run.
+     *
+     * Themes and blocks should key pre-animation CSS to `html.proto-js` too,
+     * rather than hide from a script (see docs/animation.md).
      */
-    public function printRevealNoscript(): void
+    public function printRevealFallback(): void
     {
         if (is_admin()) {
             return;
         }
-        echo '<noscript><style>'
-            . '[data-proto-animate]:not([data-proto-animate="done"]),'
-            . '[data-proto-animate]:not([data-proto-animate="done"]) *,'
-            . '[data-animate]:not([data-animate="done"]),'
-            . '[data-animate]:not([data-animate="done"]) *'
+
+        $js = "document.documentElement.classList.add('proto-js');";
+
+        // The core helper applies wp_inline_script_attributes (CSP nonces).
+        if (function_exists('wp_print_inline_script_tag')) {
+            wp_print_inline_script_tag($js);
+        } else {
+            echo '<script>' . $js . "</script>\n";
+        }
+
+        echo '<style id="proto-blocks-reveal-fallback">'
+            . 'html:not(.proto-js) [data-proto-animate]:not([data-proto-animate="done"]),'
+            . 'html:not(.proto-js) [data-proto-animate]:not([data-proto-animate="done"]) *,'
+            . 'html:not(.proto-js) [data-animate]:not([data-animate="done"]),'
+            . 'html:not(.proto-js) [data-animate]:not([data-animate="done"]) *'
             . '{opacity:1!important;transform:none!important;visibility:visible!important;}'
-            . '</style></noscript>' . "\n";
+            . '</style>' . "\n";
     }
 
     /**

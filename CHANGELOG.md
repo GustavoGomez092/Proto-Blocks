@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.16.2 — 2026-11-20
+
+### Fixed
+- **Reveal runtime: a `manual` block no longer flashes on a slow load.** The watchdog started its 1.5 s grace when the block entered view, so on a slow load it could reveal the block before its `view.js` had arrived; the script then hid the finished block again to animate it in. The grace now starts once the page has loaded (capped at 10 s), when every script has run, so it only ever fires for a block whose script failed.
+- **The no-JS fallback can no longer leak into the page on a transition.** It was a `<noscript><style>`; Taxi parses fetched pages with scripting disabled, so its contents became real elements and a page swap could put the `!important` reveal into the live document. The runtime now adds `proto-js` to `<html>` from `<head>` (through `wp_print_inline_script_tag`, so CSP nonces apply) and the fallback is a plain style keyed to `html:not(.proto-js)`. `Assets::printRevealNoscript()` is now `printRevealFallback()`.
+
+### Added
+- **`html.proto-js`**, the hook for pre-animation CSS. `docs/animation.md`: key hidden states to it in CSS and never hide from a script (an inline `<script>` adding a pending class runs after a page transition has put the block on screen, so it flashes).
+
 ## 2.16.1 — 2026-11-05
 
 ### Fixed
